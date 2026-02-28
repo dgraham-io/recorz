@@ -1,7 +1,7 @@
 /* ==========================================================================
    recorz VM — Linker Script
    Target: QEMU virt machine, RV32I
-   RAM base: 0x80000000
+   RAM base: 0x80000000, 2MB
    ========================================================================== */
 
 OUTPUT_ARCH(riscv)
@@ -29,13 +29,18 @@ SECTIONS
         *(.data.*)
     } > RAM
 
-    .bss : {
+    .bss (NOLOAD) : {
+        . = ALIGN(4);
         __bss_start = .;
         *(.bss)
         *(.bss.*)
         *(COMMON)
+        . = ALIGN(4);
         __bss_end = .;
     } > RAM
+
+    . = ALIGN(4);
+    __heap_start = .;
 
     /* Stack at top of RAM region */
     _stack_top = ORIGIN(RAM) + LENGTH(RAM);

@@ -4,21 +4,31 @@
 # ==========================================================================
 
 PREFIX    = riscv64-elf-
+CC        = $(PREFIX)gcc
 AS        = $(PREFIX)as
 LD        = $(PREFIX)ld
 OBJDUMP   = $(PREFIX)objdump
 OBJCOPY   = $(PREFIX)objcopy
 
+CFLAGS    = -march=rv32i -mabi=ilp32 -ffreestanding -nostdlib \
+            -O2 -Wall -Wextra -Werror \
+            -fno-builtin -fno-stack-protector \
+            -I$(SRCDIR)
 ASFLAGS   = -march=rv32i -mabi=ilp32
-LDFLAGS   = -T link.ld -m elf32lriscv
+LIBGCC    = $(shell $(CC) -march=rv32i -mabi=ilp32 -print-libgcc-file-name)
+LDFLAGS   = -T link.ld -m elf32lriscv -nostdlib
 
 BUILDDIR  = build
 SRCDIR    = src
 
 TARGET    = $(BUILDDIR)/recorz.elf
 
-SRCS      = $(SRCDIR)/boot.S
-OBJS      = $(BUILDDIR)/boot.o
+ASM_SRCS  = $(SRCDIR)/boot.S
+C_SRCS    = $(wildcard $(SRCDIR)/*.c)
+
+ASM_OBJS  = $(patsubst $(SRCDIR)/%.S,$(BUILDDIR)/%.o,$(ASM_SRCS))
+C_OBJS    = $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(C_SRCS))
+OBJS      = $(ASM_OBJS) $(C_OBJS)
 
 QEMU      = qemu-system-riscv32
 QFLAGS    = -machine virt -nographic -bios none -kernel $(TARGET)
@@ -34,8 +44,11 @@ build: $(TARGET)
 $(BUILDDIR)/%.o: $(SRCDIR)/%.S | _builddir
 	$(AS) $(ASFLAGS) -o $@ $<
 
+$(BUILDDIR)/%.o: $(SRCDIR)/%.c | _builddir
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 $(TARGET): $(OBJS)
-	$(LD) $(LDFLAGS) -o $@ $^
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBGCC)
 
 _builddir:
 	mkdir -p $(BUILDDIR)
