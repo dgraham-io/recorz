@@ -128,7 +128,7 @@ IMAGE_ENTRY_FORMAT = "<4sHHHHHH"
 IMAGE_ENTRY_KIND_DOIT = 1
 
 SEED_MAGIC = b"RCZS"
-SEED_VERSION = 4
+SEED_VERSION = 5
 SEED_HEADER_FORMAT = "<4sHHHHHH"
 SEED_BINDING_FORMAT = "<HH"
 SEED_OBJECT_HEADER_FORMAT = "<BBH"
@@ -149,10 +149,11 @@ SEED_OBJECT_BITMAP_FACTORY = 8
 SEED_OBJECT_TEXT_LAYOUT = 9
 SEED_OBJECT_TEXT_STYLE = 10
 SEED_OBJECT_TEXT_METRICS = 11
+SEED_OBJECT_TEXT_BEHAVIOR = 12
 
 SEED_ROOT_DEFAULT_FORM = 1
 SEED_ROOT_FRAMEBUFFER_BITMAP = 2
-SEED_ROOT_GLYPH_FALLBACK_BITMAP = 3
+SEED_ROOT_TRANSCRIPT_BEHAVIOR = 3
 SEED_ROOT_TRANSCRIPT_LAYOUT = 4
 SEED_ROOT_TRANSCRIPT_STYLE = 5
 SEED_ROOT_TRANSCRIPT_METRICS = 6
@@ -401,6 +402,15 @@ def build_seed_manifest() -> bytes:
             ],
         )
     )
+    seed_objects.append(
+        (
+            SEED_OBJECT_TEXT_BEHAVIOR,
+            [
+                (SEED_FIELD_OBJECT_INDEX, 10 + 32),
+                (SEED_FIELD_SMALL_INTEGER, 1),
+            ],
+        )
+    )
 
     global_bindings = [
         (GLOBAL_VALUES["RECORZ_MVP_GLOBAL_TRANSCRIPT"], 0),
@@ -413,10 +423,10 @@ def build_seed_manifest() -> bytes:
     root_bindings = [
         (SEED_ROOT_DEFAULT_FORM, 9),
         (SEED_ROOT_FRAMEBUFFER_BITMAP, 8),
-        (SEED_ROOT_GLYPH_FALLBACK_BITMAP, 10 + 32),
+        (SEED_ROOT_TRANSCRIPT_BEHAVIOR, len(seed_objects) - 1),
         (SEED_ROOT_TRANSCRIPT_LAYOUT, 6),
         (SEED_ROOT_TRANSCRIPT_STYLE, 7),
-        (SEED_ROOT_TRANSCRIPT_METRICS, len(seed_objects) - 1),
+        (SEED_ROOT_TRANSCRIPT_METRICS, len(seed_objects) - 2),
     ]
     glyph_object_indices = [10 + glyph_index for glyph_index in range(128)]
 

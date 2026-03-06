@@ -28,6 +28,8 @@
 #define TEXT_STYLE_FIELD_FOREGROUND_COLOR 1U
 #define TEXT_METRICS_FIELD_CELL_WIDTH 0U
 #define TEXT_METRICS_FIELD_CELL_HEIGHT 1U
+#define TEXT_BEHAVIOR_FIELD_FALLBACK_BITMAP 0U
+#define TEXT_BEHAVIOR_FIELD_CLEAR_ON_OVERFLOW 1U
 
 #define BITMAP_STORAGE_FRAMEBUFFER 1U
 #define BITMAP_STORAGE_GLYPH_MONO 2U
@@ -96,6 +98,7 @@ static uint16_t glyph_fallback_handle = 0U;
 static uint16_t transcript_layout_handle = 0U;
 static uint16_t transcript_style_handle = 0U;
 static uint16_t transcript_metrics_handle = 0U;
+static uint16_t transcript_behavior_handle = 0U;
 static uint32_t mono_bitmap_pool[MONO_BITMAP_LIMIT][MONO_BITMAP_MAX_HEIGHT];
 static uint16_t mono_bitmap_count = 0U;
 static uint32_t cursor_x = 0U;
@@ -332,6 +335,23 @@ static const struct recorz_mvp_heap_object *transcript_metrics_object(void) {
 
 static uint32_t transcript_metrics_u32(uint8_t index, const char *message) {
     return small_integer_u32(heap_get_field(transcript_metrics_object(), index), message);
+}
+
+static const struct recorz_mvp_heap_object *transcript_behavior_object(void) {
+    const struct recorz_mvp_heap_object *object =
+        (const struct recorz_mvp_heap_object *)heap_object(transcript_behavior_handle);
+
+    if (object->kind != RECORZ_MVP_OBJECT_TEXT_BEHAVIOR) {
+        machine_panic("transcript behavior root is not a text behavior object");
+    }
+    return object;
+}
+
+static uint32_t transcript_clear_on_overflow(void) {
+    return small_integer_u32(
+        heap_get_field(transcript_behavior_object(), TEXT_BEHAVIOR_FIELD_CLEAR_ON_OVERFLOW),
+        "text behavior clear-on-overflow is not a small integer"
+    );
 }
 
 static uint32_t char_width(void) {
@@ -662,7 +682,7 @@ static void form_clear(const struct recorz_mvp_heap_object *form) {
 static void form_newline(const struct recorz_mvp_heap_object *form) {
     cursor_x = text_left_margin();
     cursor_y += char_height() + text_line_spacing();
-    if (cursor_y + char_height() >= bitmap_height(bitmap_for_form(form))) {
+    if (transcript_clear_on_overflow() && cursor_y + char_height() >= bitmap_height(bitmap_for_form(form))) {
         form_clear(form);
     }
 }
@@ -768,6 +788,7 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
 
     default_form_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_DEFAULT_FORM]);
     framebuffer_bitmap_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_FRAMEBUFFER_BITMAP]);
+    transcript_behavior_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_BEHAVIOR]);
     transcript_layout_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_LAYOUT]);
     transcript_style_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_STYLE]);
     transcript_metrics_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS]);
@@ -782,7 +803,16 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
     for (glyph_index = 0U; glyph_index < 128U; ++glyph_index) {
         glyph_bitmap_handles[glyph_index] = 0U;
     }
-    glyph_fallback_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_GLYPH_FALLBACK_BITMAP]);
+    {
+        struct recorz_mvp_value fallback_value =
+            heap_get_field(transcript_behavior_object(), TEXT_BEHAVIOR_FIELD_FALLBACK_BITMAP);
+        const struct recorz_mvp_heap_object *fallback_bitmap = heap_object_for_value(fallback_value);
+
+        if (fallback_bitmap->kind != RECORZ_MVP_OBJECT_BITMAP) {
+            machine_panic("text behavior fallback bitmap is not a bitmap");
+        }
+        glyph_fallback_handle = (uint16_t)fallback_value.integer;
+    }
     for (code_index = 0U; code_index < seed->glyph_code_count; ++code_index) {
         uint16_t glyph_object_index = seed->glyph_object_indices_by_code[code_index];
         if (glyph_object_index == RECORZ_MVP_SEED_INVALID_OBJECT_INDEX) {

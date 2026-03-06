@@ -28,7 +28,7 @@ SECTION_NAMES = {
 ROOT_NAMES = {
     mvp.SEED_ROOT_DEFAULT_FORM: "default_form",
     mvp.SEED_ROOT_FRAMEBUFFER_BITMAP: "framebuffer_bitmap",
-    mvp.SEED_ROOT_GLYPH_FALLBACK_BITMAP: "glyph_fallback_bitmap",
+    mvp.SEED_ROOT_TRANSCRIPT_BEHAVIOR: "transcript_behavior",
     mvp.SEED_ROOT_TRANSCRIPT_LAYOUT: "transcript_layout",
     mvp.SEED_ROOT_TRANSCRIPT_STYLE: "transcript_style",
     mvp.SEED_ROOT_TRANSCRIPT_METRICS: "transcript_metrics",
