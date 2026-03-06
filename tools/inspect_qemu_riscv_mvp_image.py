@@ -68,6 +68,8 @@ def inspect_program_manifest(blob: bytes) -> dict[str, object]:
 def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
     header_size = struct.calcsize(mvp.SEED_HEADER_FORMAT)
     object_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
+    object_header_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
+    field_size = struct.calcsize(mvp.SEED_FIELD_FORMAT)
     binding_size = struct.calcsize(mvp.SEED_BINDING_FORMAT)
     if len(blob) < header_size:
         raise ImageInspectionError("seed manifest is truncated")
@@ -89,6 +91,7 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
         raise ImageInspectionError("seed manifest size mismatch")
 
     offset = header_size
+    objects: list[dict[str, object]] = []
     class_descriptor_count = 0
     class_link_count = 0
     for _ in range(object_count):
@@ -97,11 +100,54 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
             raise ImageInspectionError("seed manifest field count exceeds object field capacity")
         if class_index != mvp.SEED_INVALID_OBJECT_INDEX and class_index >= object_count:
             raise ImageInspectionError("seed manifest class index is out of range")
+        fields: list[tuple[int, int]] = []
+        field_offset = offset + object_header_size
+        for _field_index in range(4):
+            fields.append(struct.unpack_from(mvp.SEED_FIELD_FORMAT, blob, field_offset))
+            field_offset += field_size
         if class_index != mvp.SEED_INVALID_OBJECT_INDEX:
             class_link_count += 1
         if object_kind == mvp.SEED_OBJECT_CLASS:
             class_descriptor_count += 1
+        objects.append(
+            {
+                "object_kind": object_kind,
+                "field_count": field_count,
+                "class_index": class_index,
+                "fields": fields,
+            }
+        )
         offset += object_size
+
+    for object_summary in objects:
+        class_index = int(object_summary["class_index"])
+        if class_index == mvp.SEED_INVALID_OBJECT_INDEX:
+            raise ImageInspectionError("seed manifest object is missing a class link")
+        class_summary = objects[class_index]
+        if class_summary["object_kind"] != mvp.SEED_OBJECT_CLASS:
+            raise ImageInspectionError("seed manifest class link does not point at a class")
+        metaclass_index = int(class_summary["class_index"])
+        if metaclass_index == mvp.SEED_INVALID_OBJECT_INDEX:
+            raise ImageInspectionError("seed manifest class is missing a metaclass link")
+        if objects[metaclass_index]["object_kind"] != mvp.SEED_OBJECT_CLASS:
+            raise ImageInspectionError("seed manifest metaclass link does not point at a class")
+        if int(class_summary["field_count"]) <= mvp.CLASS_FIELD_INSTANCE_KIND:
+            raise ImageInspectionError("seed manifest class descriptor is missing an instance kind")
+        instance_kind_field = class_summary["fields"][mvp.CLASS_FIELD_INSTANCE_KIND]
+        if instance_kind_field[0] != mvp.SEED_FIELD_SMALL_INTEGER:
+            raise ImageInspectionError("seed manifest class instance kind field is invalid")
+        if instance_kind_field[1] != object_summary["object_kind"]:
+            raise ImageInspectionError("seed manifest class instance kind does not match object kind")
+        if int(class_summary["field_count"]) > mvp.CLASS_FIELD_SUPERCLASS:
+            superclass_field = class_summary["fields"][mvp.CLASS_FIELD_SUPERCLASS]
+            if superclass_field[0] == mvp.SEED_FIELD_OBJECT_INDEX:
+                superclass_index = superclass_field[1]
+                if superclass_index < 0 or superclass_index >= object_count:
+                    raise ImageInspectionError("seed manifest class superclass index is out of range")
+                if objects[superclass_index]["object_kind"] != mvp.SEED_OBJECT_CLASS:
+                    raise ImageInspectionError("seed manifest class superclass is not a class")
+            elif superclass_field[0] != mvp.SEED_FIELD_NIL:
+                raise ImageInspectionError("seed manifest class superclass field is invalid")
 
     globals_summary: dict[str, int] = {}
     for _ in range(global_binding_count):
@@ -264,7 +310,7 @@ def render_summary(summary: dict[str, object]) -> str:
     seed = summary["seed"]
     lines.append(
         "seed: "
-        f"objects={seed['object_count']} classes={seed['class_descriptor_count']} "
+        f"objects={seed['object_count']} classes={seed['class_descriptor_count']} class_links={seed['class_link_count']} "
         f"globals={seed['global_binding_count']} roots={seed['root_binding_count']} "
         f"glyph_codes={seed['glyph_code_count']} default_form={seed['roots']['default_form']}"
     )

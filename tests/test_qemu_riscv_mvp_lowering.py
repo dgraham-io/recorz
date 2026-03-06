@@ -202,13 +202,24 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             glyph_code_count,
             reserved,
         ) = struct.unpack_from(mvp.SEED_HEADER_FORMAT, manifest, 0)
-        object_bytes = object_count * (struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT)))
+        object_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
+        object_bytes = object_count * object_size
         global_binding_offset = struct.calcsize(mvp.SEED_HEADER_FORMAT) + object_bytes
         first_global_binding = struct.unpack_from(mvp.SEED_BINDING_FORMAT, manifest, global_binding_offset)
         first_root_binding = struct.unpack_from(
             mvp.SEED_BINDING_FORMAT,
             manifest,
             global_binding_offset + (global_binding_count * struct.calcsize(mvp.SEED_BINDING_FORMAT)),
+        )
+        first_object_header = struct.unpack_from(
+            mvp.SEED_OBJECT_HEADER_FORMAT,
+            manifest,
+            struct.calcsize(mvp.SEED_HEADER_FORMAT),
+        )
+        class_class_header = struct.unpack_from(
+            mvp.SEED_OBJECT_HEADER_FORMAT,
+            manifest,
+            struct.calcsize(mvp.SEED_HEADER_FORMAT) + (140 * object_size),
         )
         first_glyph_object_index = struct.unpack_from(
             "<H",
@@ -225,6 +236,8 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(root_binding_count, 6)
         self.assertEqual(glyph_code_count, 128)
         self.assertEqual(reserved, 0)
+        self.assertEqual(first_object_header, (mvp.SEED_OBJECT_TRANSCRIPT, 0, 141))
+        self.assertEqual(class_class_header, (mvp.SEED_OBJECT_CLASS, 2, 140))
         self.assertEqual(first_global_binding, (mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_TRANSCRIPT"], 0))
         self.assertEqual(first_root_binding, (mvp.SEED_ROOT_DEFAULT_FORM, 9))
         self.assertEqual(first_glyph_object_index, 10)

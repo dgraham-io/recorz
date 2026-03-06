@@ -60,3 +60,9 @@
 - Reused the seed object header to carry class indices, updated the target seed loader and heap bootstrap to install those class links, and kept the runtime message surface unchanged.
 - Extended the image inspector and tests to validate class links and report the number of seeded class descriptors.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v`, `make -C platform/qemu-riscv64 clean all`, and `make -C platform/qemu-riscv64 inspect-image`.
+
+## 2026-03-06 - Boot-Time Class Graph Validation
+- Made the seeded built-in class layer active at boot by validating that every seeded object has a class link, that class links point to class descriptors, and that each class descriptor's instance-kind field matches the object's runtime kind.
+- Extended the host-side image inspector to validate the same class graph and report both class-descriptor count and total class-link count for the seed image.
+- Added targeted manifest assertions for the first built-in object/class link and the class-class descriptor shape.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v`, `make -C platform/qemu-riscv64 clean all`, and `make -C platform/qemu-riscv64 inspect-image`.

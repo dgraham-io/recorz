@@ -110,6 +110,8 @@ static char print_buffer[PRINT_BUFFER_SIZE];
 
 static uint16_t seeded_handles[HEAP_LIMIT];
 
+static uint32_t small_integer_u32(struct recorz_mvp_value value, const char *message);
+
 static struct recorz_mvp_value nil_value(void) {
     return (struct recorz_mvp_value){RECORZ_MVP_VALUE_NIL, 0, 0};
 }
@@ -229,6 +231,19 @@ static void heap_set_class(uint16_t handle, uint16_t class_handle) {
     object->class_handle = class_handle;
 }
 
+static const struct recorz_mvp_heap_object *class_object_for_heap_object(const struct recorz_mvp_heap_object *object) {
+    const struct recorz_mvp_heap_object *class_object;
+
+    if (object->class_handle == 0U) {
+        machine_panic("seed object is missing a class link");
+    }
+    class_object = (const struct recorz_mvp_heap_object *)heap_object(object->class_handle);
+    if (class_object->kind != RECORZ_MVP_OBJECT_CLASS) {
+        machine_panic("seed object class link does not point at a class");
+    }
+    return class_object;
+}
+
 static uint16_t seed_handle_at(const struct recorz_mvp_seed *seed, uint16_t index) {
     if (index >= seed->object_count) {
         machine_panic("seed object index out of range");
@@ -254,6 +269,47 @@ static struct recorz_mvp_value seed_field_value(
     }
     machine_panic("unknown seed field kind");
     return nil_value();
+}
+
+static uint32_t class_instance_kind(const struct recorz_mvp_heap_object *class_object) {
+    return small_integer_u32(
+        heap_get_field(class_object, CLASS_FIELD_INSTANCE_KIND),
+        "class instance kind is not a small integer"
+    );
+}
+
+static void validate_class_superclass(const struct recorz_mvp_heap_object *class_object) {
+    struct recorz_mvp_value superclass_value = heap_get_field(class_object, CLASS_FIELD_SUPERCLASS);
+    const struct recorz_mvp_heap_object *superclass_object;
+
+    if (superclass_value.kind == RECORZ_MVP_VALUE_NIL) {
+        return;
+    }
+    if (superclass_value.kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("class superclass is not a class object");
+    }
+    superclass_object = heap_object_for_value(superclass_value);
+    if (superclass_object->kind != RECORZ_MVP_OBJECT_CLASS) {
+        machine_panic("class superclass is not a class object");
+    }
+}
+
+static void validate_seed_class_graph(const struct recorz_mvp_seed *seed) {
+    uint16_t seed_index;
+
+    for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
+        const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(seeded_handles[seed_index]);
+        const struct recorz_mvp_heap_object *class_object = class_object_for_heap_object(object);
+        const struct recorz_mvp_heap_object *metaclass_object = class_object_for_heap_object(class_object);
+
+        if (metaclass_object->kind != RECORZ_MVP_OBJECT_CLASS) {
+            machine_panic("class metaclass link does not point at a class");
+        }
+        validate_class_superclass(class_object);
+        if (class_instance_kind(class_object) != object->kind) {
+            machine_panic("seed object class instance kind does not match object kind");
+        }
+    }
 }
 
 static uint32_t bitmap_row_mask(uint32_t width) {
@@ -796,6 +852,7 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
             );
         }
     }
+    validate_seed_class_graph(seed);
 
     for (global_index = 0U; global_index <= RECORZ_MVP_GLOBAL_BITMAP; ++global_index) {
         global_handles[global_index] = 0U;
