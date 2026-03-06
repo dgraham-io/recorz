@@ -965,6 +965,43 @@ static struct recorz_mvp_value literal_value(const struct recorz_mvp_literal *li
     return nil_value();
 }
 
+static void dispatch_transcript_send(uint8_t selector, struct recorz_mvp_value receiver, const char *text) {
+    if (selector == RECORZ_MVP_SELECTOR_SHOW) {
+        form_write_string(default_form_object(), text);
+        push(receiver);
+        return;
+    }
+    if (selector == RECORZ_MVP_SELECTOR_CR) {
+        form_newline(default_form_object());
+        push(receiver);
+        return;
+    }
+    machine_panic("unsupported Transcript selector");
+}
+
+static void dispatch_display_send(uint8_t selector, struct recorz_mvp_value receiver, const char *text) {
+    if (selector == RECORZ_MVP_SELECTOR_DEFAULT_FORM) {
+        push(form_value());
+        return;
+    }
+    if (selector == RECORZ_MVP_SELECTOR_CLEAR) {
+        form_clear(default_form_object());
+        push(receiver);
+        return;
+    }
+    if (selector == RECORZ_MVP_SELECTOR_WRITE_STRING) {
+        form_write_string(default_form_object(), text);
+        push(receiver);
+        return;
+    }
+    if (selector == RECORZ_MVP_SELECTOR_NEWLINE) {
+        form_newline(default_form_object());
+        push(receiver);
+        return;
+    }
+    machine_panic("unsupported Display selector");
+}
+
 static void dispatch_form_send(
     const struct recorz_mvp_heap_object *object,
     uint8_t selector,
@@ -1054,39 +1091,12 @@ static void dispatch_send(const struct recorz_mvp_program *program, uint8_t sele
             return;
         }
         if (primitive_kind == RECORZ_MVP_OBJECT_TRANSCRIPT) {
-            if (selector == RECORZ_MVP_SELECTOR_SHOW) {
-                form_write_string(default_form_object(), text);
-                push(receiver);
-                return;
-            }
-            if (selector == RECORZ_MVP_SELECTOR_CR) {
-                form_newline(default_form_object());
-                push(receiver);
-                return;
-            }
-            machine_panic("unsupported Transcript selector");
+            dispatch_transcript_send(selector, receiver, text);
+            return;
         }
         if (primitive_kind == RECORZ_MVP_OBJECT_DISPLAY) {
-            if (selector == RECORZ_MVP_SELECTOR_DEFAULT_FORM) {
-                push(form_value());
-                return;
-            }
-            if (selector == RECORZ_MVP_SELECTOR_CLEAR) {
-                form_clear(default_form_object());
-                push(receiver);
-                return;
-            }
-            if (selector == RECORZ_MVP_SELECTOR_WRITE_STRING) {
-                form_write_string(default_form_object(), text);
-                push(receiver);
-                return;
-            }
-            if (selector == RECORZ_MVP_SELECTOR_NEWLINE) {
-                form_newline(default_form_object());
-                push(receiver);
-                return;
-            }
-            machine_panic("unsupported Display selector");
+            dispatch_display_send(selector, receiver, text);
+            return;
         }
         if (primitive_kind == RECORZ_MVP_OBJECT_BITBLT) {
             if (selector == RECORZ_MVP_SELECTOR_FILL_FORM_COLOR) {
