@@ -1002,6 +1002,93 @@ static void dispatch_display_send(uint8_t selector, struct recorz_mvp_value rece
     machine_panic("unsupported Display selector");
 }
 
+static void dispatch_bitblt_send(uint8_t selector, const struct recorz_mvp_value arguments[]) {
+    if (selector == RECORZ_MVP_SELECTOR_FILL_FORM_COLOR) {
+        const struct recorz_mvp_heap_object *form;
+
+        if (arguments[0].kind != RECORZ_MVP_VALUE_OBJECT) {
+            machine_panic("BitBlt fillForm:color: expects a form receiver argument");
+        }
+        if (arguments[1].kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+            machine_panic("BitBlt fillForm:color: expects a small integer color");
+        }
+        form = heap_object_for_value(arguments[0]);
+        if (primitive_kind_for_heap_object(form) != RECORZ_MVP_OBJECT_FORM) {
+            machine_panic("BitBlt fillForm:color: expects a form");
+        }
+        fill_form_color(form, (uint32_t)arguments[1].integer);
+        push(arguments[0]);
+        return;
+    }
+    if (selector == RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE) {
+        const struct recorz_mvp_heap_object *source_bitmap;
+        const struct recorz_mvp_heap_object *dest_form;
+
+        require_bitblt_copy_operands_at(arguments, 0U, 1U, &source_bitmap, &dest_form);
+        bitblt_copy_mono_bitmap_to_form(
+            source_bitmap,
+            dest_form,
+            0U,
+            0U,
+            bitmap_width(source_bitmap),
+            bitmap_height(source_bitmap),
+            small_integer_u32(arguments[2], "BitBlt copy x must be a non-negative small integer"),
+            small_integer_u32(arguments[3], "BitBlt copy y must be a non-negative small integer"),
+            small_integer_u32(arguments[4], "BitBlt copy scale must be a non-negative small integer"),
+            text_foreground_color(),
+            0U,
+            1U
+        );
+        push(arguments[1]);
+        return;
+    }
+    if (selector == RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR) {
+        const struct recorz_mvp_heap_object *source_bitmap;
+        const struct recorz_mvp_heap_object *dest_form;
+
+        require_bitblt_copy_operands_at(arguments, 0U, 1U, &source_bitmap, &dest_form);
+        bitblt_copy_mono_bitmap_to_form(
+            source_bitmap,
+            dest_form,
+            0U,
+            0U,
+            bitmap_width(source_bitmap),
+            bitmap_height(source_bitmap),
+            small_integer_u32(arguments[2], "BitBlt copy x must be a non-negative small integer"),
+            small_integer_u32(arguments[3], "BitBlt copy y must be a non-negative small integer"),
+            small_integer_u32(arguments[4], "BitBlt copy scale must be a non-negative small integer"),
+            small_integer_u32(arguments[5], "BitBlt copy color must be a non-negative small integer"),
+            0U,
+            1U
+        );
+        push(arguments[1]);
+        return;
+    }
+    if (selector == RECORZ_MVP_SELECTOR_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR) {
+        const struct recorz_mvp_heap_object *source_bitmap;
+        const struct recorz_mvp_heap_object *dest_form;
+
+        require_bitblt_copy_operands_at(arguments, 0U, 5U, &source_bitmap, &dest_form);
+        bitblt_copy_mono_bitmap_to_form(
+            source_bitmap,
+            dest_form,
+            small_integer_u32(arguments[1], "BitBlt copy sourceX must be a non-negative small integer"),
+            small_integer_u32(arguments[2], "BitBlt copy sourceY must be a non-negative small integer"),
+            small_integer_u32(arguments[3], "BitBlt copy width must be a non-negative small integer"),
+            small_integer_u32(arguments[4], "BitBlt copy height must be a non-negative small integer"),
+            small_integer_u32(arguments[6], "BitBlt copy x must be a non-negative small integer"),
+            small_integer_u32(arguments[7], "BitBlt copy y must be a non-negative small integer"),
+            small_integer_u32(arguments[8], "BitBlt copy scale must be a non-negative small integer"),
+            small_integer_u32(arguments[9], "BitBlt copy color must be a non-negative small integer"),
+            0U,
+            1U
+        );
+        push(arguments[5]);
+        return;
+    }
+    machine_panic("unsupported BitBlt selector");
+}
+
 static void dispatch_form_send(
     const struct recorz_mvp_heap_object *object,
     uint8_t selector,
@@ -1099,86 +1186,8 @@ static void dispatch_send(const struct recorz_mvp_program *program, uint8_t sele
             return;
         }
         if (primitive_kind == RECORZ_MVP_OBJECT_BITBLT) {
-            if (selector == RECORZ_MVP_SELECTOR_FILL_FORM_COLOR) {
-                const struct recorz_mvp_heap_object *form;
-                if (arguments[0].kind != RECORZ_MVP_VALUE_OBJECT) {
-                    machine_panic("BitBlt fillForm:color: expects a form receiver argument");
-                }
-                if (arguments[1].kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
-                    machine_panic("BitBlt fillForm:color: expects a small integer color");
-                }
-                form = heap_object_for_value(arguments[0]);
-                if (primitive_kind_for_heap_object(form) != RECORZ_MVP_OBJECT_FORM) {
-                    machine_panic("BitBlt fillForm:color: expects a form");
-                }
-                fill_form_color(form, (uint32_t)arguments[1].integer);
-                push(arguments[0]);
-                return;
-            }
-            if (selector == RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE) {
-                const struct recorz_mvp_heap_object *source_bitmap;
-                const struct recorz_mvp_heap_object *dest_form;
-                require_bitblt_copy_operands_at(arguments, 0U, 1U, &source_bitmap, &dest_form);
-                bitblt_copy_mono_bitmap_to_form(
-                    source_bitmap,
-                    dest_form,
-                    0U,
-                    0U,
-                    bitmap_width(source_bitmap),
-                    bitmap_height(source_bitmap),
-                    small_integer_u32(arguments[2], "BitBlt copy x must be a non-negative small integer"),
-                    small_integer_u32(arguments[3], "BitBlt copy y must be a non-negative small integer"),
-                    small_integer_u32(arguments[4], "BitBlt copy scale must be a non-negative small integer"),
-                    text_foreground_color(),
-                    0U,
-                    1U
-                );
-                push(arguments[1]);
-                return;
-            }
-            if (selector == RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR) {
-                const struct recorz_mvp_heap_object *source_bitmap;
-                const struct recorz_mvp_heap_object *dest_form;
-                require_bitblt_copy_operands_at(arguments, 0U, 1U, &source_bitmap, &dest_form);
-                bitblt_copy_mono_bitmap_to_form(
-                    source_bitmap,
-                    dest_form,
-                    0U,
-                    0U,
-                    bitmap_width(source_bitmap),
-                    bitmap_height(source_bitmap),
-                    small_integer_u32(arguments[2], "BitBlt copy x must be a non-negative small integer"),
-                    small_integer_u32(arguments[3], "BitBlt copy y must be a non-negative small integer"),
-                    small_integer_u32(arguments[4], "BitBlt copy scale must be a non-negative small integer"),
-                    small_integer_u32(arguments[5], "BitBlt copy color must be a non-negative small integer"),
-                    0U,
-                    1U
-                );
-                push(arguments[1]);
-                return;
-            }
-            if (selector == RECORZ_MVP_SELECTOR_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR) {
-                const struct recorz_mvp_heap_object *source_bitmap;
-                const struct recorz_mvp_heap_object *dest_form;
-                require_bitblt_copy_operands_at(arguments, 0U, 5U, &source_bitmap, &dest_form);
-                bitblt_copy_mono_bitmap_to_form(
-                    source_bitmap,
-                    dest_form,
-                    small_integer_u32(arguments[1], "BitBlt copy sourceX must be a non-negative small integer"),
-                    small_integer_u32(arguments[2], "BitBlt copy sourceY must be a non-negative small integer"),
-                    small_integer_u32(arguments[3], "BitBlt copy width must be a non-negative small integer"),
-                    small_integer_u32(arguments[4], "BitBlt copy height must be a non-negative small integer"),
-                    small_integer_u32(arguments[6], "BitBlt copy x must be a non-negative small integer"),
-                    small_integer_u32(arguments[7], "BitBlt copy y must be a non-negative small integer"),
-                    small_integer_u32(arguments[8], "BitBlt copy scale must be a non-negative small integer"),
-                    small_integer_u32(arguments[9], "BitBlt copy color must be a non-negative small integer"),
-                    0U,
-                    1U
-                );
-                push(arguments[5]);
-                return;
-            }
-            machine_panic("unsupported BitBlt selector");
+            dispatch_bitblt_send(selector, arguments);
+            return;
         }
         if (primitive_kind == RECORZ_MVP_OBJECT_GLYPHS) {
             if (selector == RECORZ_MVP_SELECTOR_AT) {
