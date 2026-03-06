@@ -965,6 +965,62 @@ static struct recorz_mvp_value literal_value(const struct recorz_mvp_literal *li
     return nil_value();
 }
 
+static void dispatch_form_send(
+    const struct recorz_mvp_heap_object *object,
+    uint8_t selector,
+    struct recorz_mvp_value receiver,
+    const char *text
+) {
+    if (selector == RECORZ_MVP_SELECTOR_CLEAR) {
+        form_clear(object);
+        push(receiver);
+        return;
+    }
+    if (selector == RECORZ_MVP_SELECTOR_WRITE_STRING) {
+        form_write_string(object, text);
+        push(receiver);
+        return;
+    }
+    if (selector == RECORZ_MVP_SELECTOR_NEWLINE) {
+        form_newline(object);
+        push(receiver);
+        return;
+    }
+    if (selector == RECORZ_MVP_SELECTOR_BITS) {
+        push(heap_get_field(object, FORM_FIELD_BITS));
+        return;
+    }
+    if (selector == RECORZ_MVP_SELECTOR_WIDTH) {
+        push(heap_get_field(bitmap_for_form(object), BITMAP_FIELD_WIDTH));
+        return;
+    }
+    if (selector == RECORZ_MVP_SELECTOR_HEIGHT) {
+        push(heap_get_field(bitmap_for_form(object), BITMAP_FIELD_HEIGHT));
+        return;
+    }
+    machine_panic("unsupported Form selector");
+}
+
+static void dispatch_bitmap_send(const struct recorz_mvp_heap_object *object, uint8_t selector) {
+    if (selector == RECORZ_MVP_SELECTOR_WIDTH) {
+        push(heap_get_field(object, BITMAP_FIELD_WIDTH));
+        return;
+    }
+    if (selector == RECORZ_MVP_SELECTOR_HEIGHT) {
+        push(heap_get_field(object, BITMAP_FIELD_HEIGHT));
+        return;
+    }
+    machine_panic("unsupported Bitmap selector");
+}
+
+static void dispatch_class_send(const struct recorz_mvp_heap_object *object, uint8_t selector) {
+    if (selector == RECORZ_MVP_SELECTOR_INSTANCE_KIND) {
+        push(heap_get_field(object, CLASS_FIELD_INSTANCE_KIND));
+        return;
+    }
+    machine_panic("unsupported Class selector");
+}
+
 static void dispatch_send(const struct recorz_mvp_program *program, uint8_t selector, uint16_t argument_count) {
     struct recorz_mvp_value arguments[MAX_SEND_ARGS];
     struct recorz_mvp_value receiver;
@@ -1144,52 +1200,16 @@ static void dispatch_send(const struct recorz_mvp_program *program, uint8_t sele
             machine_panic("unsupported Bitmap factory selector");
         }
         if (primitive_kind == RECORZ_MVP_OBJECT_FORM) {
-            if (selector == RECORZ_MVP_SELECTOR_CLEAR) {
-                form_clear(object);
-                push(receiver);
-                return;
-            }
-            if (selector == RECORZ_MVP_SELECTOR_WRITE_STRING) {
-                form_write_string(object, text);
-                push(receiver);
-                return;
-            }
-            if (selector == RECORZ_MVP_SELECTOR_NEWLINE) {
-                form_newline(object);
-                push(receiver);
-                return;
-            }
-            if (selector == RECORZ_MVP_SELECTOR_BITS) {
-                push(heap_get_field(object, FORM_FIELD_BITS));
-                return;
-            }
-            if (selector == RECORZ_MVP_SELECTOR_WIDTH) {
-                push(heap_get_field(bitmap_for_form(object), BITMAP_FIELD_WIDTH));
-                return;
-            }
-            if (selector == RECORZ_MVP_SELECTOR_HEIGHT) {
-                push(heap_get_field(bitmap_for_form(object), BITMAP_FIELD_HEIGHT));
-                return;
-            }
-            machine_panic("unsupported Form selector");
+            dispatch_form_send(object, selector, receiver, text);
+            return;
         }
         if (primitive_kind == RECORZ_MVP_OBJECT_BITMAP) {
-            if (selector == RECORZ_MVP_SELECTOR_WIDTH) {
-                push(heap_get_field(object, BITMAP_FIELD_WIDTH));
-                return;
-            }
-            if (selector == RECORZ_MVP_SELECTOR_HEIGHT) {
-                push(heap_get_field(object, BITMAP_FIELD_HEIGHT));
-                return;
-            }
-            machine_panic("unsupported Bitmap selector");
+            dispatch_bitmap_send(object, selector);
+            return;
         }
         if (primitive_kind == RECORZ_MVP_OBJECT_CLASS) {
-            if (selector == RECORZ_MVP_SELECTOR_INSTANCE_KIND) {
-                push(heap_get_field(object, CLASS_FIELD_INSTANCE_KIND));
-                return;
-            }
-            machine_panic("unsupported Class selector");
+            dispatch_class_send(object, selector);
+            return;
         }
         machine_panic("unsupported heap object kind");
     }
