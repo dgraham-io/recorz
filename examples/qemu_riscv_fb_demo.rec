@@ -19,4 +19,7 @@ form newline.
 form writeString: 'PIXELS: '.
 form writeString: pixels printString.
 form newline.
+form writeString: 'FORM KIND: '.
+form writeString: form class instanceKind printString.
+form newline.
 form writeString: 'RAMFB ONLINE.'

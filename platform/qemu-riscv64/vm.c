@@ -93,6 +93,7 @@ static struct recorz_mvp_value stack[STACK_LIMIT];
 static struct recorz_mvp_heap_object heap[HEAP_LIMIT];
 static uint32_t stack_size = 0U;
 static uint16_t heap_size = 0U;
+static uint16_t class_handles_by_kind[RECORZ_MVP_OBJECT_CLASS + 1U];
 static uint16_t global_handles[RECORZ_MVP_GLOBAL_BITMAP + 1U];
 static uint16_t default_form_handle = 0U;
 static uint16_t framebuffer_bitmap_handle = 0U;
@@ -111,6 +112,7 @@ static char print_buffer[PRINT_BUFFER_SIZE];
 static uint16_t seeded_handles[HEAP_LIMIT];
 
 static uint32_t small_integer_u32(struct recorz_mvp_value value, const char *message);
+static void heap_set_class(uint16_t handle, uint16_t class_handle);
 
 static struct recorz_mvp_value nil_value(void) {
     return (struct recorz_mvp_value){RECORZ_MVP_VALUE_NIL, 0, 0};
@@ -189,6 +191,15 @@ static uint16_t heap_allocate(uint8_t kind) {
         heap[heap_size].fields[field_index] = nil_value();
     }
     ++heap_size;
+    return handle;
+}
+
+static uint16_t heap_allocate_seeded_class(uint8_t kind) {
+    uint16_t handle = heap_allocate(kind);
+
+    if (kind <= RECORZ_MVP_OBJECT_CLASS && class_handles_by_kind[kind] != 0U) {
+        heap_set_class(handle, class_handles_by_kind[kind]);
+    }
     return handle;
 }
 
@@ -308,6 +319,25 @@ static void validate_seed_class_graph(const struct recorz_mvp_seed *seed) {
         validate_class_superclass(class_object);
         if (class_instance_kind(class_object) != object->kind) {
             machine_panic("seed object class instance kind does not match object kind");
+        }
+    }
+}
+
+static void initialize_class_handle_cache(const struct recorz_mvp_seed *seed) {
+    uint16_t seed_index;
+    uint16_t kind;
+
+    for (kind = 0U; kind <= RECORZ_MVP_OBJECT_CLASS; ++kind) {
+        class_handles_by_kind[kind] = 0U;
+    }
+    for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
+        const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(seeded_handles[seed_index]);
+
+        if (object->kind > RECORZ_MVP_OBJECT_CLASS || object->class_handle == 0U) {
+            continue;
+        }
+        if (class_handles_by_kind[object->kind] == 0U) {
+            class_handles_by_kind[object->kind] = object->class_handle;
         }
     }
 }
@@ -798,7 +828,7 @@ static struct recorz_mvp_value allocate_mono_bitmap_value(uint32_t width, uint32
         machine_panic("bitmap height out of supported range");
     }
     storage_id = mono_bitmap_storage_allocate(height);
-    bitmap_handle = heap_allocate(RECORZ_MVP_OBJECT_BITMAP);
+    bitmap_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_BITMAP);
     heap_set_field(bitmap_handle, BITMAP_FIELD_WIDTH, small_integer_value((int32_t)width));
     heap_set_field(bitmap_handle, BITMAP_FIELD_HEIGHT, small_integer_value((int32_t)height));
     heap_set_field(bitmap_handle, BITMAP_FIELD_STORAGE_KIND, small_integer_value((int32_t)BITMAP_STORAGE_HEAP_MONO));
@@ -813,7 +843,7 @@ static struct recorz_mvp_value allocate_form_from_bits_value(struct recorz_mvp_v
     if (bitmap->kind != RECORZ_MVP_OBJECT_BITMAP) {
         machine_panic("Form fromBits: expects a bitmap");
     }
-    form_handle = heap_allocate(RECORZ_MVP_OBJECT_FORM);
+    form_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_FORM);
     heap_set_field(form_handle, FORM_FIELD_BITS, bits_value);
     return object_value(form_handle);
 }
@@ -853,6 +883,7 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
         }
     }
     validate_seed_class_graph(seed);
+    initialize_class_handle_cache(seed);
 
     for (global_index = 0U; global_index <= RECORZ_MVP_GLOBAL_BITMAP; ++global_index) {
         global_handles[global_index] = 0U;
@@ -956,6 +987,11 @@ static void dispatch_send(const struct recorz_mvp_program *program, uint8_t sele
 
     if (receiver.kind == RECORZ_MVP_VALUE_OBJECT) {
         object = heap_object_for_value(receiver);
+        if (selector == RECORZ_MVP_SELECTOR_CLASS) {
+            class_object_for_heap_object(object);
+            push(object_value(object->class_handle));
+            return;
+        }
         if (object->kind == RECORZ_MVP_OBJECT_TRANSCRIPT) {
             if (selector == RECORZ_MVP_SELECTOR_SHOW) {
                 form_write_string(default_form_object(), text);
@@ -1142,6 +1178,13 @@ static void dispatch_send(const struct recorz_mvp_program *program, uint8_t sele
                 return;
             }
             machine_panic("unsupported Bitmap selector");
+        }
+        if (object->kind == RECORZ_MVP_OBJECT_CLASS) {
+            if (selector == RECORZ_MVP_SELECTOR_INSTANCE_KIND) {
+                push(heap_get_field(object, CLASS_FIELD_INSTANCE_KIND));
+                return;
+            }
+            machine_panic("unsupported Class selector");
         }
         machine_panic("unsupported heap object kind");
     }

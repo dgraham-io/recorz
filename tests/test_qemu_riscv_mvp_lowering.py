@@ -67,6 +67,16 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertIn("RECORZ_MVP_SELECTOR_HEIGHT", selectors)
         self.assertIn("RECORZ_MVP_SELECTOR_MULTIPLY", selectors)
 
+    def test_lowers_heap_object_class_introspection(self) -> None:
+        program = mvp.build_program(
+            "| form | form := Display defaultForm. form class instanceKind printString"
+        )
+        selectors = [instruction.operand_a for instruction in program.instructions if instruction.opcode == mvp.OP_SEND]
+        self.assertEqual(program.lexical_count, 1)
+        self.assertIn("RECORZ_MVP_SELECTOR_CLASS", selectors)
+        self.assertIn("RECORZ_MVP_SELECTOR_INSTANCE_KIND", selectors)
+        self.assertIn("RECORZ_MVP_SELECTOR_PRINT_STRING", selectors)
+
     def test_lowers_bitmap_and_form_factories(self) -> None:
         program = mvp.build_program(
             "| scratch | scratch := Form fromBits: (Bitmap monoWidth: 24 height: 24). BitBlt fillForm: scratch color: 0"
