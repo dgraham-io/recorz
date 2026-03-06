@@ -146,11 +146,12 @@ SEED_OBJECT_BITBLT = 5
 SEED_OBJECT_GLYPHS = 6
 SEED_OBJECT_FORM_FACTORY = 7
 SEED_OBJECT_BITMAP_FACTORY = 8
+SEED_OBJECT_TEXT_LAYOUT = 9
 
 SEED_ROOT_DEFAULT_FORM = 1
 SEED_ROOT_FRAMEBUFFER_BITMAP = 2
 SEED_ROOT_GLYPH_FALLBACK_BITMAP = 3
-SEED_INVALID_OBJECT_INDEX = 0xFFFF
+SEED_ROOT_TRANSCRIPT_LAYOUT = 4
 
 BITMAP_STORAGE_FRAMEBUFFER = 1
 BITMAP_STORAGE_GLYPH_MONO = 2
@@ -344,6 +345,15 @@ def build_seed_manifest() -> bytes:
         (SEED_OBJECT_FORM_FACTORY, []),
         (SEED_OBJECT_BITMAP_FACTORY, []),
         (
+            SEED_OBJECT_TEXT_LAYOUT,
+            [
+                (SEED_FIELD_SMALL_INTEGER, 24),
+                (SEED_FIELD_SMALL_INTEGER, 24),
+                (SEED_FIELD_SMALL_INTEGER, 4),
+                (SEED_FIELD_SMALL_INTEGER, 2),
+            ],
+        ),
+        (
             SEED_OBJECT_BITMAP,
             [
                 (SEED_FIELD_SMALL_INTEGER, 640),
@@ -355,7 +365,7 @@ def build_seed_manifest() -> bytes:
         (
             SEED_OBJECT_FORM,
             [
-                (SEED_FIELD_OBJECT_INDEX, 6),
+                (SEED_FIELD_OBJECT_INDEX, 7),
             ],
         ),
     ]
@@ -381,11 +391,12 @@ def build_seed_manifest() -> bytes:
         (GLOBAL_VALUES["RECORZ_MVP_GLOBAL_BITMAP"], 5),
     ]
     root_bindings = [
-        (SEED_ROOT_DEFAULT_FORM, 7),
-        (SEED_ROOT_FRAMEBUFFER_BITMAP, 6),
-        (SEED_ROOT_GLYPH_FALLBACK_BITMAP, 8 + 32),
+        (SEED_ROOT_DEFAULT_FORM, 8),
+        (SEED_ROOT_FRAMEBUFFER_BITMAP, 7),
+        (SEED_ROOT_GLYPH_FALLBACK_BITMAP, 9 + 32),
+        (SEED_ROOT_TRANSCRIPT_LAYOUT, 6),
     ]
-    glyph_object_indices = [8 + glyph_index for glyph_index in range(128)]
+    glyph_object_indices = [9 + glyph_index for glyph_index in range(128)]
 
     manifest = bytearray(
         struct.pack(

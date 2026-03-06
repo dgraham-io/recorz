@@ -220,14 +220,14 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(struct.calcsize(mvp.SEED_HEADER_FORMAT), 16)
         self.assertEqual(magic, mvp.SEED_MAGIC)
         self.assertEqual(version, mvp.SEED_VERSION)
-        self.assertEqual(object_count, 136)
+        self.assertEqual(object_count, 137)
         self.assertEqual(global_binding_count, 6)
-        self.assertEqual(root_binding_count, 3)
+        self.assertEqual(root_binding_count, 4)
         self.assertEqual(glyph_code_count, 128)
         self.assertEqual(reserved, 0)
         self.assertEqual(first_global_binding, (mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_TRANSCRIPT"], 0))
-        self.assertEqual(first_root_binding, (mvp.SEED_ROOT_DEFAULT_FORM, 7))
-        self.assertEqual(first_glyph_object_index, 8)
+        self.assertEqual(first_root_binding, (mvp.SEED_ROOT_DEFAULT_FORM, 8))
+        self.assertEqual(first_glyph_object_index, 9)
 
     def test_rejects_unsupported_globals(self) -> None:
         with self.assertRaises(mvp.LoweringError):

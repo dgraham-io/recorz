@@ -65,6 +65,7 @@ enum recorz_mvp_object_kind {
     RECORZ_MVP_OBJECT_GLYPHS = 6,
     RECORZ_MVP_OBJECT_FORM_FACTORY = 7,
     RECORZ_MVP_OBJECT_BITMAP_FACTORY = 8,
+    RECORZ_MVP_OBJECT_TEXT_LAYOUT = 9,
 };
 
 enum recorz_mvp_seed_field_kind {
@@ -77,6 +78,7 @@ enum recorz_mvp_seed_root {
     RECORZ_MVP_SEED_ROOT_DEFAULT_FORM = 1,
     RECORZ_MVP_SEED_ROOT_FRAMEBUFFER_BITMAP = 2,
     RECORZ_MVP_SEED_ROOT_GLYPH_FALLBACK_BITMAP = 3,
+    RECORZ_MVP_SEED_ROOT_TRANSCRIPT_LAYOUT = 4,
 };
 
 struct recorz_mvp_instruction {
@@ -114,7 +116,7 @@ struct recorz_mvp_seed {
     const struct recorz_mvp_seed_object *objects;
     uint16_t object_count;
     uint16_t global_object_indices[RECORZ_MVP_GLOBAL_BITMAP + 1];
-    uint16_t root_object_indices[RECORZ_MVP_SEED_ROOT_GLYPH_FALLBACK_BITMAP + 1];
+    uint16_t root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_LAYOUT + 1];
     const uint16_t *glyph_object_indices_by_code;
     uint16_t glyph_code_count;
 };

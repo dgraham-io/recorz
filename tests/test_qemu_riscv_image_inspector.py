@@ -43,11 +43,12 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         self.assertEqual(summary["entry"]["program_section"], "program")
         self.assertEqual(summary["program"]["instruction_count"], 7)
         self.assertEqual(summary["program"]["literal_count"], 1)
-        self.assertEqual(summary["seed"]["object_count"], 136)
+        self.assertEqual(summary["seed"]["object_count"], 137)
         self.assertEqual(summary["seed"]["global_binding_count"], 6)
-        self.assertEqual(summary["seed"]["root_binding_count"], 3)
+        self.assertEqual(summary["seed"]["root_binding_count"], 4)
         self.assertEqual(summary["seed"]["globals"]["Transcript"], 0)
-        self.assertEqual(summary["seed"]["roots"]["default_form"], 7)
+        self.assertEqual(summary["seed"]["roots"]["default_form"], 8)
+        self.assertEqual(summary["seed"]["roots"]["transcript_layout"], 6)
         self.assertEqual(summary["seed"]["glyph_code_count"], 128)
 
     def test_rejects_profile_mismatch(self) -> None:

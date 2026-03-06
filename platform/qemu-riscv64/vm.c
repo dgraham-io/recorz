@@ -17,12 +17,6 @@
 
 #define GLYPH_WIDTH 5U
 #define GLYPH_HEIGHT 7U
-#define TEXT_PIXEL_SCALE 2U
-#define CHAR_WIDTH ((GLYPH_WIDTH + 1U) * TEXT_PIXEL_SCALE)
-#define CHAR_HEIGHT ((GLYPH_HEIGHT + 1U) * TEXT_PIXEL_SCALE)
-#define LEFT_MARGIN 24U
-#define TOP_MARGIN 24U
-#define LINE_SPACING 4U
 #define TEXT_BACKGROUND_COLOR 0x00486020U
 #define TEXT_FOREGROUND_COLOR 0x00f2f2f2U
 
@@ -31,6 +25,10 @@
 #define BITMAP_FIELD_HEIGHT 1U
 #define BITMAP_FIELD_STORAGE_KIND 2U
 #define BITMAP_FIELD_STORAGE_ID 3U
+#define TEXT_LAYOUT_FIELD_LEFT_MARGIN 0U
+#define TEXT_LAYOUT_FIELD_TOP_MARGIN 1U
+#define TEXT_LAYOUT_FIELD_LINE_SPACING 2U
+#define TEXT_LAYOUT_FIELD_PIXEL_SCALE 3U
 
 #define BITMAP_STORAGE_FRAMEBUFFER 1U
 #define BITMAP_STORAGE_GLYPH_MONO 2U
@@ -96,10 +94,11 @@ static uint16_t default_form_handle = 0U;
 static uint16_t framebuffer_bitmap_handle = 0U;
 static uint16_t glyph_bitmap_handles[128];
 static uint16_t glyph_fallback_handle = 0U;
+static uint16_t transcript_layout_handle = 0U;
 static uint32_t mono_bitmap_pool[MONO_BITMAP_LIMIT][MONO_BITMAP_MAX_HEIGHT];
 static uint16_t mono_bitmap_count = 0U;
-static uint32_t cursor_x = LEFT_MARGIN;
-static uint32_t cursor_y = TOP_MARGIN;
+static uint32_t cursor_x = 0U;
+static uint32_t cursor_y = 0U;
 static char print_buffer[PRINT_BUFFER_SIZE];
 
 static uint16_t seeded_handles[HEAP_LIMIT];
@@ -260,6 +259,48 @@ static uint32_t small_integer_u32(struct recorz_mvp_value value, const char *mes
     return (uint32_t)value.integer;
 }
 
+static const struct recorz_mvp_heap_object *transcript_layout_object(void) {
+    const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(transcript_layout_handle);
+
+    if (object->kind != RECORZ_MVP_OBJECT_TEXT_LAYOUT) {
+        machine_panic("transcript layout root is not a text layout");
+    }
+    return object;
+}
+
+static uint32_t transcript_layout_u32(uint8_t index, const char *message) {
+    return small_integer_u32(heap_get_field(transcript_layout_object(), index), message);
+}
+
+static uint32_t text_left_margin(void) {
+    return transcript_layout_u32(TEXT_LAYOUT_FIELD_LEFT_MARGIN, "text layout left margin is not a small integer");
+}
+
+static uint32_t text_top_margin(void) {
+    return transcript_layout_u32(TEXT_LAYOUT_FIELD_TOP_MARGIN, "text layout top margin is not a small integer");
+}
+
+static uint32_t text_line_spacing(void) {
+    return transcript_layout_u32(TEXT_LAYOUT_FIELD_LINE_SPACING, "text layout line spacing is not a small integer");
+}
+
+static uint32_t text_pixel_scale(void) {
+    uint32_t scale = transcript_layout_u32(TEXT_LAYOUT_FIELD_PIXEL_SCALE, "text layout pixel scale is not a small integer");
+
+    if (scale == 0U) {
+        machine_panic("text layout pixel scale must be non-zero");
+    }
+    return scale;
+}
+
+static uint32_t char_width(void) {
+    return (GLYPH_WIDTH + 1U) * text_pixel_scale();
+}
+
+static uint32_t char_height(void) {
+    return (GLYPH_HEIGHT + 1U) * text_pixel_scale();
+}
+
 static uint32_t bitmap_width(const struct recorz_mvp_heap_object *bitmap) {
     return small_integer_u32(heap_get_field(bitmap, BITMAP_FIELD_WIDTH), "bitmap width is not a small integer");
 }
@@ -355,8 +396,8 @@ static const struct recorz_mvp_heap_object *default_form_object(void) {
 }
 
 static void reset_text_cursor(void) {
-    cursor_x = LEFT_MARGIN;
-    cursor_y = TOP_MARGIN;
+    cursor_x = text_left_margin();
+    cursor_y = text_top_margin();
 }
 
 static const struct recorz_mvp_heap_object *glyph_bitmap_for_char(char ch) {
@@ -572,9 +613,9 @@ static void form_clear(const struct recorz_mvp_heap_object *form) {
 }
 
 static void form_newline(const struct recorz_mvp_heap_object *form) {
-    cursor_x = LEFT_MARGIN;
-    cursor_y += CHAR_HEIGHT + LINE_SPACING;
-    if (cursor_y + CHAR_HEIGHT >= bitmap_height(bitmap_for_form(form))) {
+    cursor_x = text_left_margin();
+    cursor_y += char_height() + text_line_spacing();
+    if (cursor_y + char_height() >= bitmap_height(bitmap_for_form(form))) {
         form_clear(form);
     }
 }
@@ -590,7 +631,7 @@ static void form_write_string(const struct recorz_mvp_heap_object *form, const c
             ++text;
             continue;
         }
-        if (cursor_x + CHAR_WIDTH >= form_width) {
+        if (cursor_x + char_width() >= form_width) {
             form_newline(form);
         }
         glyph_bitmap = glyph_bitmap_for_char(*text);
@@ -603,12 +644,12 @@ static void form_write_string(const struct recorz_mvp_heap_object *form, const c
             bitmap_height(glyph_bitmap),
             cursor_x,
             cursor_y,
-            TEXT_PIXEL_SCALE,
+            text_pixel_scale(),
             TEXT_FOREGROUND_COLOR,
             TEXT_BACKGROUND_COLOR,
             0U
         );
-        cursor_x += CHAR_WIDTH;
+        cursor_x += char_width();
         ++text;
     }
 }
@@ -680,6 +721,7 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
 
     default_form_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_DEFAULT_FORM]);
     framebuffer_bitmap_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_FRAMEBUFFER_BITMAP]);
+    transcript_layout_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_LAYOUT]);
     if (heap_get_field(heap_object(default_form_handle), FORM_FIELD_BITS).kind != RECORZ_MVP_VALUE_OBJECT ||
         (uint16_t)heap_get_field(heap_object(default_form_handle), FORM_FIELD_BITS).integer != framebuffer_bitmap_handle) {
         machine_panic("seed default form does not point at the framebuffer bitmap");
