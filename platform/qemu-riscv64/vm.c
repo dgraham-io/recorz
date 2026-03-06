@@ -289,6 +289,10 @@ static uint32_t class_instance_kind(const struct recorz_mvp_heap_object *class_o
     );
 }
 
+static uint32_t primitive_kind_for_heap_object(const struct recorz_mvp_heap_object *object) {
+    return class_instance_kind(class_object_for_heap_object(object));
+}
+
 static void validate_class_superclass(const struct recorz_mvp_heap_object *class_object) {
     struct recorz_mvp_value superclass_value = heap_get_field(class_object, CLASS_FIELD_SUPERCLASS);
     const struct recorz_mvp_heap_object *superclass_object;
@@ -986,13 +990,14 @@ static void dispatch_send(const struct recorz_mvp_program *program, uint8_t sele
     }
 
     if (receiver.kind == RECORZ_MVP_VALUE_OBJECT) {
+        uint32_t primitive_kind;
         object = heap_object_for_value(receiver);
+        primitive_kind = primitive_kind_for_heap_object(object);
         if (selector == RECORZ_MVP_SELECTOR_CLASS) {
-            class_object_for_heap_object(object);
             push(object_value(object->class_handle));
             return;
         }
-        if (object->kind == RECORZ_MVP_OBJECT_TRANSCRIPT) {
+        if (primitive_kind == RECORZ_MVP_OBJECT_TRANSCRIPT) {
             if (selector == RECORZ_MVP_SELECTOR_SHOW) {
                 form_write_string(default_form_object(), text);
                 push(receiver);
@@ -1005,7 +1010,7 @@ static void dispatch_send(const struct recorz_mvp_program *program, uint8_t sele
             }
             machine_panic("unsupported Transcript selector");
         }
-        if (object->kind == RECORZ_MVP_OBJECT_DISPLAY) {
+        if (primitive_kind == RECORZ_MVP_OBJECT_DISPLAY) {
             if (selector == RECORZ_MVP_SELECTOR_DEFAULT_FORM) {
                 push(form_value());
                 return;
@@ -1027,7 +1032,7 @@ static void dispatch_send(const struct recorz_mvp_program *program, uint8_t sele
             }
             machine_panic("unsupported Display selector");
         }
-        if (object->kind == RECORZ_MVP_OBJECT_BITBLT) {
+        if (primitive_kind == RECORZ_MVP_OBJECT_BITBLT) {
             if (selector == RECORZ_MVP_SELECTOR_FILL_FORM_COLOR) {
                 const struct recorz_mvp_heap_object *form;
                 if (arguments[0].kind != RECORZ_MVP_VALUE_OBJECT) {
@@ -1037,7 +1042,7 @@ static void dispatch_send(const struct recorz_mvp_program *program, uint8_t sele
                     machine_panic("BitBlt fillForm:color: expects a small integer color");
                 }
                 form = heap_object_for_value(arguments[0]);
-                if (form->kind != RECORZ_MVP_OBJECT_FORM) {
+                if (primitive_kind_for_heap_object(form) != RECORZ_MVP_OBJECT_FORM) {
                     machine_panic("BitBlt fillForm:color: expects a form");
                 }
                 fill_form_color(form, (uint32_t)arguments[1].integer);
@@ -1109,14 +1114,14 @@ static void dispatch_send(const struct recorz_mvp_program *program, uint8_t sele
             }
             machine_panic("unsupported BitBlt selector");
         }
-        if (object->kind == RECORZ_MVP_OBJECT_GLYPHS) {
+        if (primitive_kind == RECORZ_MVP_OBJECT_GLYPHS) {
             if (selector == RECORZ_MVP_SELECTOR_AT) {
                 push(glyph_bitmap_value_for_code(small_integer_u32(arguments[0], "Glyphs at: expects a non-negative small integer")));
                 return;
             }
             machine_panic("unsupported Glyphs selector");
         }
-        if (object->kind == RECORZ_MVP_OBJECT_FORM_FACTORY) {
+        if (primitive_kind == RECORZ_MVP_OBJECT_FORM_FACTORY) {
             if (selector == RECORZ_MVP_SELECTOR_FROM_BITS) {
                 if (arguments[0].kind != RECORZ_MVP_VALUE_OBJECT) {
                     machine_panic("Form fromBits: expects a bitmap");
@@ -1126,7 +1131,7 @@ static void dispatch_send(const struct recorz_mvp_program *program, uint8_t sele
             }
             machine_panic("unsupported Form factory selector");
         }
-        if (object->kind == RECORZ_MVP_OBJECT_BITMAP_FACTORY) {
+        if (primitive_kind == RECORZ_MVP_OBJECT_BITMAP_FACTORY) {
             if (selector == RECORZ_MVP_SELECTOR_MONO_WIDTH_HEIGHT) {
                 push(
                     allocate_mono_bitmap_value(
@@ -1138,7 +1143,7 @@ static void dispatch_send(const struct recorz_mvp_program *program, uint8_t sele
             }
             machine_panic("unsupported Bitmap factory selector");
         }
-        if (object->kind == RECORZ_MVP_OBJECT_FORM) {
+        if (primitive_kind == RECORZ_MVP_OBJECT_FORM) {
             if (selector == RECORZ_MVP_SELECTOR_CLEAR) {
                 form_clear(object);
                 push(receiver);
@@ -1168,7 +1173,7 @@ static void dispatch_send(const struct recorz_mvp_program *program, uint8_t sele
             }
             machine_panic("unsupported Form selector");
         }
-        if (object->kind == RECORZ_MVP_OBJECT_BITMAP) {
+        if (primitive_kind == RECORZ_MVP_OBJECT_BITMAP) {
             if (selector == RECORZ_MVP_SELECTOR_WIDTH) {
                 push(heap_get_field(object, BITMAP_FIELD_WIDTH));
                 return;
@@ -1179,7 +1184,7 @@ static void dispatch_send(const struct recorz_mvp_program *program, uint8_t sele
             }
             machine_panic("unsupported Bitmap selector");
         }
-        if (object->kind == RECORZ_MVP_OBJECT_CLASS) {
+        if (primitive_kind == RECORZ_MVP_OBJECT_CLASS) {
             if (selector == RECORZ_MVP_SELECTOR_INSTANCE_KIND) {
                 push(heap_get_field(object, CLASS_FIELD_INSTANCE_KIND));
                 return;
