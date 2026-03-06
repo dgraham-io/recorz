@@ -115,10 +115,11 @@ PROGRAM_LITERAL_HEADER_FORMAT = "<BBHi"
 
 IMAGE_MAGIC = b"RCZI"
 IMAGE_VERSION = 1
-IMAGE_HEADER_FORMAT = "<4sHH"
+IMAGE_HEADER_FORMAT = "<4sHHII"
 IMAGE_SECTION_FORMAT = "<HHII"
 IMAGE_SECTION_PROGRAM = 1
 IMAGE_SECTION_SEED = 2
+IMAGE_FEATURE_FNV1A32 = 1
 
 SEED_MAGIC = b"RCZS"
 SEED_VERSION = 1
@@ -388,6 +389,14 @@ def build_seed_manifest() -> bytes:
     return bytes(manifest)
 
 
+def fnv1a32(data: bytes, *, seed: int = 0x811C9DC5) -> int:
+    value = seed
+    for byte in data:
+        value ^= byte
+        value = (value * 0x01000193) & 0xFFFFFFFF
+    return value
+
+
 def build_image_manifest(program: Program) -> bytes:
     program_manifest = build_program_manifest(program)
     seed_manifest = build_seed_manifest()
@@ -395,6 +404,7 @@ def build_image_manifest(program: Program) -> bytes:
     header_size = struct.calcsize(IMAGE_HEADER_FORMAT) + (section_count * struct.calcsize(IMAGE_SECTION_FORMAT))
     program_offset = header_size
     seed_offset = program_offset + len(program_manifest)
+    feature_flags = IMAGE_FEATURE_FNV1A32
 
     manifest = bytearray(
         struct.pack(
@@ -402,6 +412,8 @@ def build_image_manifest(program: Program) -> bytes:
             IMAGE_MAGIC,
             IMAGE_VERSION,
             section_count,
+            feature_flags,
+            0,
         )
     )
     manifest.extend(
@@ -424,6 +436,15 @@ def build_image_manifest(program: Program) -> bytes:
     )
     manifest.extend(program_manifest)
     manifest.extend(seed_manifest)
+    checksum = fnv1a32(manifest[struct.calcsize(IMAGE_HEADER_FORMAT) :])
+    manifest[: struct.calcsize(IMAGE_HEADER_FORMAT)] = struct.pack(
+        IMAGE_HEADER_FORMAT,
+        IMAGE_MAGIC,
+        IMAGE_VERSION,
+        section_count,
+        feature_flags,
+        checksum,
+    )
     return bytes(manifest)
 
 

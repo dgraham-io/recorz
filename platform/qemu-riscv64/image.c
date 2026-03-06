@@ -11,11 +11,15 @@
 #define RECORZ_MVP_IMAGE_MAGIC_2 'Z'
 #define RECORZ_MVP_IMAGE_MAGIC_3 'I'
 #define RECORZ_MVP_IMAGE_VERSION 1U
-#define RECORZ_MVP_IMAGE_HEADER_SIZE 8U
+#define RECORZ_MVP_IMAGE_HEADER_SIZE 16U
 #define RECORZ_MVP_IMAGE_SECTION_SIZE 12U
 #define RECORZ_MVP_IMAGE_SECTION_LIMIT 8U
 #define RECORZ_MVP_IMAGE_SECTION_PROGRAM 1U
 #define RECORZ_MVP_IMAGE_SECTION_SEED 2U
+#define RECORZ_MVP_IMAGE_FEATURE_FNV1A32 1U
+#define RECORZ_MVP_IMAGE_KNOWN_FEATURES RECORZ_MVP_IMAGE_FEATURE_FNV1A32
+#define RECORZ_MVP_FNV1A32_OFFSET_BASIS 2166136261U
+#define RECORZ_MVP_FNV1A32_PRIME 16777619U
 
 static struct recorz_mvp_boot_image loaded_image;
 
@@ -27,9 +31,22 @@ static uint32_t read_u32_le(const uint8_t *bytes) {
     return (uint32_t)bytes[0] | ((uint32_t)bytes[1] << 8U) | ((uint32_t)bytes[2] << 16U) | ((uint32_t)bytes[3] << 24U);
 }
 
+static uint32_t fnv1a32(const uint8_t *bytes, uint32_t size) {
+    uint32_t index;
+    uint32_t value = RECORZ_MVP_FNV1A32_OFFSET_BASIS;
+
+    for (index = 0U; index < size; ++index) {
+        value ^= (uint32_t)bytes[index];
+        value *= RECORZ_MVP_FNV1A32_PRIME;
+    }
+    return value;
+}
+
 const struct recorz_mvp_boot_image *recorz_mvp_image_load(const uint8_t *blob, uint32_t size) {
     uint16_t section_count;
     uint16_t section_index;
+    uint32_t feature_flags;
+    uint32_t expected_checksum;
     const uint8_t *program_blob = 0;
     const uint8_t *seed_blob = 0;
     uint32_t program_size = 0U;
@@ -48,11 +65,22 @@ const struct recorz_mvp_boot_image *recorz_mvp_image_load(const uint8_t *blob, u
     }
 
     section_count = read_u16_le(blob + 6U);
+    feature_flags = read_u32_le(blob + 8U);
+    expected_checksum = read_u32_le(blob + 12U);
     if (section_count == 0U || section_count > RECORZ_MVP_IMAGE_SECTION_LIMIT) {
         machine_panic("boot image section count is invalid");
     }
+    if ((feature_flags & ~RECORZ_MVP_IMAGE_KNOWN_FEATURES) != 0U) {
+        machine_panic("boot image feature flags are unknown");
+    }
+    if ((feature_flags & RECORZ_MVP_IMAGE_FEATURE_FNV1A32) == 0U) {
+        machine_panic("boot image checksum feature is required");
+    }
     if (size < RECORZ_MVP_IMAGE_HEADER_SIZE + ((uint32_t)section_count * RECORZ_MVP_IMAGE_SECTION_SIZE)) {
         machine_panic("boot image section table is truncated");
+    }
+    if (fnv1a32(blob + RECORZ_MVP_IMAGE_HEADER_SIZE, size - RECORZ_MVP_IMAGE_HEADER_SIZE) != expected_checksum) {
+        machine_panic("boot image checksum mismatch");
     }
 
     for (section_index = 0U; section_index < section_count; ++section_index) {
