@@ -43,9 +43,11 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         self.assertEqual(summary["entry"]["program_section"], "program")
         self.assertEqual(summary["program"]["instruction_count"], 7)
         self.assertEqual(summary["program"]["literal_count"], 1)
-        self.assertEqual(summary["seed"]["object_count"], 153)
-        self.assertEqual(summary["seed"]["class_descriptor_count"], 13)
-        self.assertEqual(summary["seed"]["class_link_count"], 153)
+        self.assertEqual(summary["seed"]["object_count"], 176)
+        self.assertEqual(summary["seed"]["class_descriptor_count"], 14)
+        self.assertEqual(summary["seed"]["class_link_count"], 176)
+        self.assertEqual(summary["seed"]["method_descriptor_count"], 22)
+        self.assertEqual(summary["seed"]["declared_method_count"], 22)
         self.assertEqual(summary["seed"]["global_binding_count"], 6)
         self.assertEqual(summary["seed"]["root_binding_count"], 6)
         self.assertEqual(summary["seed"]["globals"]["Transcript"], 0)
@@ -87,6 +89,18 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
 
         with self.assertRaises(inspector.ImageInspectionError):
             inspector.inspect_image_bytes(bytes(image))
+
+    def test_rejects_method_descriptor_primitive_kind_mismatch(self) -> None:
+        seed = bytearray(mvp.build_seed_manifest())
+        header_size = struct.calcsize(mvp.SEED_HEADER_FORMAT)
+        object_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
+        method_offset = header_size + (154 * object_size) + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
+        primitive_kind_field_offset = method_offset + (2 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
+
+        seed[primitive_kind_field_offset + 1 : primitive_kind_field_offset + 5] = struct.pack("<i", mvp.SEED_OBJECT_DISPLAY)
+
+        with self.assertRaises(inspector.ImageInspectionError):
+            inspector.inspect_seed_manifest(bytes(seed))
 
 
 if __name__ == "__main__":

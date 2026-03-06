@@ -72,6 +72,7 @@ enum recorz_mvp_object_kind {
     RECORZ_MVP_OBJECT_TEXT_METRICS = 11,
     RECORZ_MVP_OBJECT_TEXT_BEHAVIOR = 12,
     RECORZ_MVP_OBJECT_CLASS = 13,
+    RECORZ_MVP_OBJECT_METHOD_DESCRIPTOR = 14,
 };
 
 enum recorz_mvp_seed_field_kind {

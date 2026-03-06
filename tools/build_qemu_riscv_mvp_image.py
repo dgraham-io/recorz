@@ -132,7 +132,7 @@ IMAGE_ENTRY_FORMAT = "<4sHHHHHH"
 IMAGE_ENTRY_KIND_DOIT = 1
 
 SEED_MAGIC = b"RCZS"
-SEED_VERSION = 6
+SEED_VERSION = 7
 SEED_HEADER_FORMAT = "<4sHHHHHH"
 SEED_BINDING_FORMAT = "<HH"
 SEED_OBJECT_HEADER_FORMAT = "<BBH"
@@ -140,6 +140,11 @@ SEED_FIELD_FORMAT = "<Bi"
 SEED_INVALID_OBJECT_INDEX = 0xFFFF
 CLASS_FIELD_SUPERCLASS = 0
 CLASS_FIELD_INSTANCE_KIND = 1
+CLASS_FIELD_METHOD_START = 2
+CLASS_FIELD_METHOD_COUNT = 3
+METHOD_FIELD_SELECTOR = 0
+METHOD_FIELD_ARGUMENT_COUNT = 1
+METHOD_FIELD_PRIMITIVE_KIND = 2
 
 SEED_FIELD_NIL = 0
 SEED_FIELD_SMALL_INTEGER = 1
@@ -158,6 +163,7 @@ SEED_OBJECT_TEXT_STYLE = 10
 SEED_OBJECT_TEXT_METRICS = 11
 SEED_OBJECT_TEXT_BEHAVIOR = 12
 SEED_OBJECT_CLASS = 13
+SEED_OBJECT_METHOD_DESCRIPTOR = 14
 
 SEED_ROOT_DEFAULT_FORM = 1
 SEED_ROOT_FRAMEBUFFER_BITMAP = 2
@@ -199,6 +205,29 @@ class SeedObject:
     object_kind: int
     class_index: int
     fields: list[tuple[int, int]]
+
+
+BUILTIN_METHODS_BY_KIND: dict[int, list[tuple[str, int]]] = {
+    SEED_OBJECT_TRANSCRIPT: [("show:", 1), ("cr", 0)],
+    SEED_OBJECT_DISPLAY: [("defaultForm", 0), ("clear", 0), ("writeString:", 1), ("newline", 0)],
+    SEED_OBJECT_BITBLT: [
+        ("fillForm:color:", 2),
+        ("copyBitmap:toForm:x:y:scale:", 5),
+        ("copyBitmap:toForm:x:y:scale:color:", 6),
+        ("copyBitmap:sourceX:sourceY:width:height:toForm:x:y:scale:color:", 10),
+    ],
+    SEED_OBJECT_GLYPHS: [("at:", 1)],
+    SEED_OBJECT_FORM_FACTORY: [("fromBits:", 1)],
+    SEED_OBJECT_BITMAP_FACTORY: [("monoWidth:height:", 2)],
+    SEED_OBJECT_TEXT_LAYOUT: [],
+    SEED_OBJECT_TEXT_STYLE: [],
+    SEED_OBJECT_BITMAP: [("width", 0), ("height", 0)],
+    SEED_OBJECT_FORM: [("clear", 0), ("writeString:", 1), ("newline", 0), ("bits", 0), ("width", 0), ("height", 0)],
+    SEED_OBJECT_TEXT_METRICS: [],
+    SEED_OBJECT_TEXT_BEHAVIOR: [],
+    SEED_OBJECT_CLASS: [("instanceKind", 0)],
+    SEED_OBJECT_METHOD_DESCRIPTOR: [],
+}
 
 
 class Lowerer:
@@ -437,6 +466,22 @@ def build_seed_manifest() -> bytes:
     text_behavior_index = len(seed_objects) - 1
 
     class_class_index = len(seed_objects)
+    class_kinds_in_order = [
+        SEED_OBJECT_CLASS,
+        SEED_OBJECT_TRANSCRIPT,
+        SEED_OBJECT_DISPLAY,
+        SEED_OBJECT_BITBLT,
+        SEED_OBJECT_GLYPHS,
+        SEED_OBJECT_FORM_FACTORY,
+        SEED_OBJECT_BITMAP_FACTORY,
+        SEED_OBJECT_TEXT_LAYOUT,
+        SEED_OBJECT_TEXT_STYLE,
+        SEED_OBJECT_BITMAP,
+        SEED_OBJECT_FORM,
+        SEED_OBJECT_TEXT_METRICS,
+        SEED_OBJECT_TEXT_BEHAVIOR,
+        SEED_OBJECT_METHOD_DESCRIPTOR,
+    ]
     class_indices = {
         SEED_OBJECT_TRANSCRIPT: class_class_index + 1,
         SEED_OBJECT_DISPLAY: class_class_index + 2,
@@ -450,119 +495,54 @@ def build_seed_manifest() -> bytes:
         SEED_OBJECT_FORM: class_class_index + 10,
         SEED_OBJECT_TEXT_METRICS: class_class_index + 11,
         SEED_OBJECT_TEXT_BEHAVIOR: class_class_index + 12,
+        SEED_OBJECT_METHOD_DESCRIPTOR: class_class_index + 13,
     }
 
     for seed_object in seed_objects:
         seed_object.class_index = class_indices[seed_object.object_kind]
 
-    seed_objects.extend(
-        [
-            SeedObject(
-                SEED_OBJECT_CLASS,
-                class_class_index,
-                [
-                    (SEED_FIELD_NIL, 0),
-                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_CLASS),
-                ],
-            ),
-            SeedObject(
-                SEED_OBJECT_CLASS,
-                class_class_index,
-                [
-                    (SEED_FIELD_NIL, 0),
-                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_TRANSCRIPT),
-                ],
-            ),
-            SeedObject(
-                SEED_OBJECT_CLASS,
-                class_class_index,
-                [
-                    (SEED_FIELD_NIL, 0),
-                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_DISPLAY),
-                ],
-            ),
-            SeedObject(
-                SEED_OBJECT_CLASS,
-                class_class_index,
-                [
-                    (SEED_FIELD_NIL, 0),
-                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_BITBLT),
-                ],
-            ),
-            SeedObject(
-                SEED_OBJECT_CLASS,
-                class_class_index,
-                [
-                    (SEED_FIELD_NIL, 0),
-                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_GLYPHS),
-                ],
-            ),
-            SeedObject(
-                SEED_OBJECT_CLASS,
-                class_class_index,
-                [
-                    (SEED_FIELD_NIL, 0),
-                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_FORM_FACTORY),
-                ],
-            ),
-            SeedObject(
-                SEED_OBJECT_CLASS,
-                class_class_index,
-                [
-                    (SEED_FIELD_NIL, 0),
-                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_BITMAP_FACTORY),
-                ],
-            ),
-            SeedObject(
-                SEED_OBJECT_CLASS,
-                class_class_index,
-                [
-                    (SEED_FIELD_NIL, 0),
-                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_TEXT_LAYOUT),
-                ],
-            ),
-            SeedObject(
-                SEED_OBJECT_CLASS,
-                class_class_index,
-                [
-                    (SEED_FIELD_NIL, 0),
-                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_TEXT_STYLE),
-                ],
-            ),
-            SeedObject(
-                SEED_OBJECT_CLASS,
-                class_class_index,
-                [
-                    (SEED_FIELD_NIL, 0),
-                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_BITMAP),
-                ],
-            ),
-            SeedObject(
-                SEED_OBJECT_CLASS,
-                class_class_index,
-                [
-                    (SEED_FIELD_NIL, 0),
-                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_FORM),
-                ],
-            ),
-            SeedObject(
-                SEED_OBJECT_CLASS,
-                class_class_index,
-                [
-                    (SEED_FIELD_NIL, 0),
-                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_TEXT_METRICS),
-                ],
-            ),
-            SeedObject(
-                SEED_OBJECT_CLASS,
-                class_class_index,
-                [
-                    (SEED_FIELD_NIL, 0),
-                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_TEXT_BEHAVIOR),
-                ],
-            ),
-        ]
-    )
+    method_start_index = class_class_index + len(class_kinds_in_order)
+    method_start_by_kind: dict[int, int] = {}
+    method_count_by_kind: dict[int, int] = {}
+    method_seed_objects: list[SeedObject] = []
+
+    for class_kind in class_kinds_in_order:
+        method_definitions = BUILTIN_METHODS_BY_KIND.get(class_kind, [])
+        method_count_by_kind[class_kind] = len(method_definitions)
+        if method_definitions:
+            method_start_by_kind[class_kind] = method_start_index + len(method_seed_objects)
+        for selector, argument_count in method_definitions:
+            method_seed_objects.append(
+                SeedObject(
+                    SEED_OBJECT_METHOD_DESCRIPTOR,
+                    class_indices[SEED_OBJECT_METHOD_DESCRIPTOR],
+                    [
+                        (SEED_FIELD_SMALL_INTEGER, SELECTOR_VALUES[SELECTOR_IDS[selector]]),
+                        (SEED_FIELD_SMALL_INTEGER, argument_count),
+                        (SEED_FIELD_SMALL_INTEGER, class_kind),
+                    ],
+                )
+            )
+
+    class_seed_objects = [
+        SeedObject(
+            SEED_OBJECT_CLASS,
+            class_class_index,
+            [
+                (SEED_FIELD_NIL, 0),
+                (SEED_FIELD_SMALL_INTEGER, class_kind),
+                (
+                    SEED_FIELD_OBJECT_INDEX if class_kind in method_start_by_kind else SEED_FIELD_NIL,
+                    method_start_by_kind.get(class_kind, 0),
+                ),
+                (SEED_FIELD_SMALL_INTEGER, method_count_by_kind.get(class_kind, 0)),
+            ],
+        )
+        for class_kind in class_kinds_in_order
+    ]
+
+    seed_objects.extend(class_seed_objects)
+    seed_objects.extend(method_seed_objects)
 
     global_bindings = [
         (GLOBAL_VALUES["RECORZ_MVP_GLOBAL_TRANSCRIPT"], 0),
