@@ -1177,6 +1177,163 @@ static void dispatch_class_send(const struct recorz_mvp_heap_object *object, uin
     machine_panic("unsupported Class selector");
 }
 
+typedef void (*recorz_mvp_heap_send_handler)(
+    const struct recorz_mvp_heap_object *object,
+    uint8_t selector,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+);
+
+static void dispatch_transcript_family(
+    const struct recorz_mvp_heap_object *object,
+    uint8_t selector,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)arguments;
+    dispatch_transcript_send(selector, receiver, text);
+}
+
+static void dispatch_display_family(
+    const struct recorz_mvp_heap_object *object,
+    uint8_t selector,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)arguments;
+    dispatch_display_send(selector, receiver, text);
+}
+
+static void dispatch_bitblt_family(
+    const struct recorz_mvp_heap_object *object,
+    uint8_t selector,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)text;
+    dispatch_bitblt_send(selector, arguments);
+}
+
+static void dispatch_glyphs_family(
+    const struct recorz_mvp_heap_object *object,
+    uint8_t selector,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)text;
+    dispatch_glyphs_send(selector, arguments);
+}
+
+static void dispatch_form_factory_family(
+    const struct recorz_mvp_heap_object *object,
+    uint8_t selector,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)text;
+    dispatch_form_factory_send(selector, arguments);
+}
+
+static void dispatch_bitmap_factory_family(
+    const struct recorz_mvp_heap_object *object,
+    uint8_t selector,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)text;
+    dispatch_bitmap_factory_send(selector, arguments);
+}
+
+static void dispatch_form_family(
+    const struct recorz_mvp_heap_object *object,
+    uint8_t selector,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    dispatch_form_send(object, selector, receiver, text);
+}
+
+static void dispatch_bitmap_family(
+    const struct recorz_mvp_heap_object *object,
+    uint8_t selector,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    dispatch_bitmap_send(object, selector);
+}
+
+static void dispatch_class_family(
+    const struct recorz_mvp_heap_object *object,
+    uint8_t selector,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    dispatch_class_send(object, selector);
+}
+
+static const recorz_mvp_heap_send_handler heap_send_handlers[RECORZ_MVP_OBJECT_CLASS + 1U] = {
+    [RECORZ_MVP_OBJECT_TRANSCRIPT] = dispatch_transcript_family,
+    [RECORZ_MVP_OBJECT_DISPLAY] = dispatch_display_family,
+    [RECORZ_MVP_OBJECT_FORM] = dispatch_form_family,
+    [RECORZ_MVP_OBJECT_BITMAP] = dispatch_bitmap_family,
+    [RECORZ_MVP_OBJECT_BITBLT] = dispatch_bitblt_family,
+    [RECORZ_MVP_OBJECT_GLYPHS] = dispatch_glyphs_family,
+    [RECORZ_MVP_OBJECT_FORM_FACTORY] = dispatch_form_factory_family,
+    [RECORZ_MVP_OBJECT_BITMAP_FACTORY] = dispatch_bitmap_factory_family,
+    [RECORZ_MVP_OBJECT_CLASS] = dispatch_class_family,
+};
+
+static void dispatch_heap_object_send(
+    const struct recorz_mvp_heap_object *object,
+    uint32_t primitive_kind,
+    uint8_t selector,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    recorz_mvp_heap_send_handler handler;
+
+    if (selector == RECORZ_MVP_SELECTOR_CLASS) {
+        push(object_value(object->class_handle));
+        return;
+    }
+    if (primitive_kind > RECORZ_MVP_OBJECT_CLASS) {
+        machine_panic("unsupported heap object kind");
+    }
+    handler = heap_send_handlers[primitive_kind];
+    if (handler == 0) {
+        machine_panic("unsupported heap object kind");
+    }
+    handler(object, selector, receiver, arguments, text);
+}
+
 static void dispatch_send(const struct recorz_mvp_program *program, uint8_t selector, uint16_t argument_count) {
     struct recorz_mvp_value arguments[MAX_SEND_ARGS];
     struct recorz_mvp_value receiver;
@@ -1205,47 +1362,8 @@ static void dispatch_send(const struct recorz_mvp_program *program, uint8_t sele
         uint32_t primitive_kind;
         object = heap_object_for_value(receiver);
         primitive_kind = primitive_kind_for_heap_object(object);
-        if (selector == RECORZ_MVP_SELECTOR_CLASS) {
-            push(object_value(object->class_handle));
-            return;
-        }
-        if (primitive_kind == RECORZ_MVP_OBJECT_TRANSCRIPT) {
-            dispatch_transcript_send(selector, receiver, text);
-            return;
-        }
-        if (primitive_kind == RECORZ_MVP_OBJECT_DISPLAY) {
-            dispatch_display_send(selector, receiver, text);
-            return;
-        }
-        if (primitive_kind == RECORZ_MVP_OBJECT_BITBLT) {
-            dispatch_bitblt_send(selector, arguments);
-            return;
-        }
-        if (primitive_kind == RECORZ_MVP_OBJECT_GLYPHS) {
-            dispatch_glyphs_send(selector, arguments);
-            return;
-        }
-        if (primitive_kind == RECORZ_MVP_OBJECT_FORM_FACTORY) {
-            dispatch_form_factory_send(selector, arguments);
-            return;
-        }
-        if (primitive_kind == RECORZ_MVP_OBJECT_BITMAP_FACTORY) {
-            dispatch_bitmap_factory_send(selector, arguments);
-            return;
-        }
-        if (primitive_kind == RECORZ_MVP_OBJECT_FORM) {
-            dispatch_form_send(object, selector, receiver, text);
-            return;
-        }
-        if (primitive_kind == RECORZ_MVP_OBJECT_BITMAP) {
-            dispatch_bitmap_send(object, selector);
-            return;
-        }
-        if (primitive_kind == RECORZ_MVP_OBJECT_CLASS) {
-            dispatch_class_send(object, selector);
-            return;
-        }
-        machine_panic("unsupported heap object kind");
+        dispatch_heap_object_send(object, primitive_kind, selector, receiver, arguments, text);
+        return;
     }
 
     if (receiver.kind == RECORZ_MVP_VALUE_SMALL_INTEGER) {
