@@ -69,6 +69,7 @@ enum recorz_mvp_object_kind {
     RECORZ_MVP_OBJECT_TEXT_STYLE = 10,
     RECORZ_MVP_OBJECT_TEXT_METRICS = 11,
     RECORZ_MVP_OBJECT_TEXT_BEHAVIOR = 12,
+    RECORZ_MVP_OBJECT_CLASS = 13,
 };
 
 enum recorz_mvp_seed_field_kind {
@@ -114,6 +115,7 @@ struct recorz_mvp_seed_field {
 struct recorz_mvp_seed_object {
     uint8_t object_kind;
     uint8_t field_count;
+    uint16_t class_index;
     struct recorz_mvp_seed_field fields[4];
 };
 

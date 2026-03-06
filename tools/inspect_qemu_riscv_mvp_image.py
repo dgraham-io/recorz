@@ -88,7 +88,21 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
     if len(blob) != expected_size:
         raise ImageInspectionError("seed manifest size mismatch")
 
-    offset = header_size + (object_count * object_size)
+    offset = header_size
+    class_descriptor_count = 0
+    class_link_count = 0
+    for _ in range(object_count):
+        object_kind, field_count, class_index = struct.unpack_from(mvp.SEED_OBJECT_HEADER_FORMAT, blob, offset)
+        if field_count > 4:
+            raise ImageInspectionError("seed manifest field count exceeds object field capacity")
+        if class_index != mvp.SEED_INVALID_OBJECT_INDEX and class_index >= object_count:
+            raise ImageInspectionError("seed manifest class index is out of range")
+        if class_index != mvp.SEED_INVALID_OBJECT_INDEX:
+            class_link_count += 1
+        if object_kind == mvp.SEED_OBJECT_CLASS:
+            class_descriptor_count += 1
+        offset += object_size
+
     globals_summary: dict[str, int] = {}
     for _ in range(global_binding_count):
         binding_id, object_index = struct.unpack_from(mvp.SEED_BINDING_FORMAT, blob, offset)
@@ -126,6 +140,8 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
     return {
         "version": version,
         "object_count": object_count,
+        "class_descriptor_count": class_descriptor_count,
+        "class_link_count": class_link_count,
         "global_binding_count": global_binding_count,
         "root_binding_count": root_binding_count,
         "globals": globals_summary,
@@ -248,7 +264,8 @@ def render_summary(summary: dict[str, object]) -> str:
     seed = summary["seed"]
     lines.append(
         "seed: "
-        f"objects={seed['object_count']} globals={seed['global_binding_count']} roots={seed['root_binding_count']} "
+        f"objects={seed['object_count']} classes={seed['class_descriptor_count']} "
+        f"globals={seed['global_binding_count']} roots={seed['root_binding_count']} "
         f"glyph_codes={seed['glyph_code_count']} default_form={seed['roots']['default_form']}"
     )
     return "\n".join(lines)

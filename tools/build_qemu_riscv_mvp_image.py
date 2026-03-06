@@ -128,11 +128,12 @@ IMAGE_ENTRY_FORMAT = "<4sHHHHHH"
 IMAGE_ENTRY_KIND_DOIT = 1
 
 SEED_MAGIC = b"RCZS"
-SEED_VERSION = 5
+SEED_VERSION = 6
 SEED_HEADER_FORMAT = "<4sHHHHHH"
 SEED_BINDING_FORMAT = "<HH"
 SEED_OBJECT_HEADER_FORMAT = "<BBH"
 SEED_FIELD_FORMAT = "<Bi"
+SEED_INVALID_OBJECT_INDEX = 0xFFFF
 
 SEED_FIELD_NIL = 0
 SEED_FIELD_SMALL_INTEGER = 1
@@ -150,6 +151,7 @@ SEED_OBJECT_TEXT_LAYOUT = 9
 SEED_OBJECT_TEXT_STYLE = 10
 SEED_OBJECT_TEXT_METRICS = 11
 SEED_OBJECT_TEXT_BEHAVIOR = 12
+SEED_OBJECT_CLASS = 13
 
 SEED_ROOT_DEFAULT_FORM = 1
 SEED_ROOT_FRAMEBUFFER_BITMAP = 2
@@ -184,6 +186,13 @@ class Program:
     literals: list[Literal]
     instructions: list[Instruction]
     lexical_count: int
+
+
+@dataclass
+class SeedObject:
+    object_kind: int
+    class_index: int
+    fields: list[tuple[int, int]]
 
 
 class Lowerer:
@@ -342,15 +351,16 @@ def build_program_manifest(program: Program) -> bytes:
 
 
 def build_seed_manifest() -> bytes:
-    seed_objects: list[tuple[int, list[tuple[int, int]]]] = [
-        (SEED_OBJECT_TRANSCRIPT, []),
-        (SEED_OBJECT_DISPLAY, []),
-        (SEED_OBJECT_BITBLT, []),
-        (SEED_OBJECT_GLYPHS, []),
-        (SEED_OBJECT_FORM_FACTORY, []),
-        (SEED_OBJECT_BITMAP_FACTORY, []),
-        (
+    seed_objects: list[SeedObject] = [
+        SeedObject(SEED_OBJECT_TRANSCRIPT, SEED_INVALID_OBJECT_INDEX, []),
+        SeedObject(SEED_OBJECT_DISPLAY, SEED_INVALID_OBJECT_INDEX, []),
+        SeedObject(SEED_OBJECT_BITBLT, SEED_INVALID_OBJECT_INDEX, []),
+        SeedObject(SEED_OBJECT_GLYPHS, SEED_INVALID_OBJECT_INDEX, []),
+        SeedObject(SEED_OBJECT_FORM_FACTORY, SEED_INVALID_OBJECT_INDEX, []),
+        SeedObject(SEED_OBJECT_BITMAP_FACTORY, SEED_INVALID_OBJECT_INDEX, []),
+        SeedObject(
             SEED_OBJECT_TEXT_LAYOUT,
+            SEED_INVALID_OBJECT_INDEX,
             [
                 (SEED_FIELD_SMALL_INTEGER, 24),
                 (SEED_FIELD_SMALL_INTEGER, 24),
@@ -358,15 +368,17 @@ def build_seed_manifest() -> bytes:
                 (SEED_FIELD_SMALL_INTEGER, 2),
             ],
         ),
-        (
+        SeedObject(
             SEED_OBJECT_TEXT_STYLE,
+            SEED_INVALID_OBJECT_INDEX,
             [
                 (SEED_FIELD_SMALL_INTEGER, 0x00486020),
                 (SEED_FIELD_SMALL_INTEGER, 0x00F2F2F2),
             ],
         ),
-        (
+        SeedObject(
             SEED_OBJECT_BITMAP,
+            SEED_INVALID_OBJECT_INDEX,
             [
                 (SEED_FIELD_SMALL_INTEGER, 640),
                 (SEED_FIELD_SMALL_INTEGER, 480),
@@ -374,8 +386,9 @@ def build_seed_manifest() -> bytes:
                 (SEED_FIELD_SMALL_INTEGER, 0),
             ],
         ),
-        (
+        SeedObject(
             SEED_OBJECT_FORM,
+            SEED_INVALID_OBJECT_INDEX,
             [
                 (SEED_FIELD_OBJECT_INDEX, 8),
             ],
@@ -383,8 +396,9 @@ def build_seed_manifest() -> bytes:
     ]
     for glyph_index in range(128):
         seed_objects.append(
-            (
+            SeedObject(
                 SEED_OBJECT_BITMAP,
+                SEED_INVALID_OBJECT_INDEX,
                 [
                     (SEED_FIELD_SMALL_INTEGER, 5),
                     (SEED_FIELD_SMALL_INTEGER, 7),
@@ -394,22 +408,154 @@ def build_seed_manifest() -> bytes:
             )
         )
     seed_objects.append(
-        (
+        SeedObject(
             SEED_OBJECT_TEXT_METRICS,
+            SEED_INVALID_OBJECT_INDEX,
             [
                 (SEED_FIELD_SMALL_INTEGER, 6),
                 (SEED_FIELD_SMALL_INTEGER, 8),
             ],
         )
     )
+    text_metrics_index = len(seed_objects) - 1
     seed_objects.append(
-        (
+        SeedObject(
             SEED_OBJECT_TEXT_BEHAVIOR,
+            SEED_INVALID_OBJECT_INDEX,
             [
                 (SEED_FIELD_OBJECT_INDEX, 10 + 32),
                 (SEED_FIELD_SMALL_INTEGER, 1),
             ],
         )
+    )
+    text_behavior_index = len(seed_objects) - 1
+
+    class_class_index = len(seed_objects)
+    class_indices = {
+        SEED_OBJECT_TRANSCRIPT: class_class_index + 1,
+        SEED_OBJECT_DISPLAY: class_class_index + 2,
+        SEED_OBJECT_BITBLT: class_class_index + 3,
+        SEED_OBJECT_GLYPHS: class_class_index + 4,
+        SEED_OBJECT_FORM_FACTORY: class_class_index + 5,
+        SEED_OBJECT_BITMAP_FACTORY: class_class_index + 6,
+        SEED_OBJECT_TEXT_LAYOUT: class_class_index + 7,
+        SEED_OBJECT_TEXT_STYLE: class_class_index + 8,
+        SEED_OBJECT_BITMAP: class_class_index + 9,
+        SEED_OBJECT_FORM: class_class_index + 10,
+        SEED_OBJECT_TEXT_METRICS: class_class_index + 11,
+        SEED_OBJECT_TEXT_BEHAVIOR: class_class_index + 12,
+    }
+
+    for seed_object in seed_objects:
+        seed_object.class_index = class_indices[seed_object.object_kind]
+
+    seed_objects.extend(
+        [
+            SeedObject(
+                SEED_OBJECT_CLASS,
+                class_class_index,
+                [
+                    (SEED_FIELD_NIL, 0),
+                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_CLASS),
+                ],
+            ),
+            SeedObject(
+                SEED_OBJECT_CLASS,
+                class_class_index,
+                [
+                    (SEED_FIELD_NIL, 0),
+                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_TRANSCRIPT),
+                ],
+            ),
+            SeedObject(
+                SEED_OBJECT_CLASS,
+                class_class_index,
+                [
+                    (SEED_FIELD_NIL, 0),
+                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_DISPLAY),
+                ],
+            ),
+            SeedObject(
+                SEED_OBJECT_CLASS,
+                class_class_index,
+                [
+                    (SEED_FIELD_NIL, 0),
+                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_BITBLT),
+                ],
+            ),
+            SeedObject(
+                SEED_OBJECT_CLASS,
+                class_class_index,
+                [
+                    (SEED_FIELD_NIL, 0),
+                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_GLYPHS),
+                ],
+            ),
+            SeedObject(
+                SEED_OBJECT_CLASS,
+                class_class_index,
+                [
+                    (SEED_FIELD_NIL, 0),
+                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_FORM_FACTORY),
+                ],
+            ),
+            SeedObject(
+                SEED_OBJECT_CLASS,
+                class_class_index,
+                [
+                    (SEED_FIELD_NIL, 0),
+                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_BITMAP_FACTORY),
+                ],
+            ),
+            SeedObject(
+                SEED_OBJECT_CLASS,
+                class_class_index,
+                [
+                    (SEED_FIELD_NIL, 0),
+                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_TEXT_LAYOUT),
+                ],
+            ),
+            SeedObject(
+                SEED_OBJECT_CLASS,
+                class_class_index,
+                [
+                    (SEED_FIELD_NIL, 0),
+                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_TEXT_STYLE),
+                ],
+            ),
+            SeedObject(
+                SEED_OBJECT_CLASS,
+                class_class_index,
+                [
+                    (SEED_FIELD_NIL, 0),
+                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_BITMAP),
+                ],
+            ),
+            SeedObject(
+                SEED_OBJECT_CLASS,
+                class_class_index,
+                [
+                    (SEED_FIELD_NIL, 0),
+                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_FORM),
+                ],
+            ),
+            SeedObject(
+                SEED_OBJECT_CLASS,
+                class_class_index,
+                [
+                    (SEED_FIELD_NIL, 0),
+                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_TEXT_METRICS),
+                ],
+            ),
+            SeedObject(
+                SEED_OBJECT_CLASS,
+                class_class_index,
+                [
+                    (SEED_FIELD_NIL, 0),
+                    (SEED_FIELD_SMALL_INTEGER, SEED_OBJECT_TEXT_BEHAVIOR),
+                ],
+            ),
+        ]
     )
 
     global_bindings = [
@@ -423,10 +569,10 @@ def build_seed_manifest() -> bytes:
     root_bindings = [
         (SEED_ROOT_DEFAULT_FORM, 9),
         (SEED_ROOT_FRAMEBUFFER_BITMAP, 8),
-        (SEED_ROOT_TRANSCRIPT_BEHAVIOR, len(seed_objects) - 1),
+        (SEED_ROOT_TRANSCRIPT_BEHAVIOR, text_behavior_index),
         (SEED_ROOT_TRANSCRIPT_LAYOUT, 6),
         (SEED_ROOT_TRANSCRIPT_STYLE, 7),
-        (SEED_ROOT_TRANSCRIPT_METRICS, len(seed_objects) - 2),
+        (SEED_ROOT_TRANSCRIPT_METRICS, text_metrics_index),
     ]
     glyph_object_indices = [10 + glyph_index for glyph_index in range(128)]
 
@@ -442,9 +588,16 @@ def build_seed_manifest() -> bytes:
             0,
         )
     )
-    for object_kind, fields in seed_objects:
-        manifest.extend(struct.pack(SEED_OBJECT_HEADER_FORMAT, object_kind, len(fields), 0))
-        for field_kind, field_value in fields + [(SEED_FIELD_NIL, 0)] * (4 - len(fields)):
+    for seed_object in seed_objects:
+        manifest.extend(
+            struct.pack(
+                SEED_OBJECT_HEADER_FORMAT,
+                seed_object.object_kind,
+                len(seed_object.fields),
+                seed_object.class_index,
+            )
+        )
+        for field_kind, field_value in seed_object.fields + [(SEED_FIELD_NIL, 0)] * (4 - len(seed_object.fields)):
             manifest.extend(struct.pack(SEED_FIELD_FORMAT, field_kind, field_value))
     for binding_id, object_index in global_bindings:
         manifest.extend(struct.pack(SEED_BINDING_FORMAT, binding_id, object_index))

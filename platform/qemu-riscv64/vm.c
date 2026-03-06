@@ -30,6 +30,8 @@
 #define TEXT_METRICS_FIELD_CELL_HEIGHT 1U
 #define TEXT_BEHAVIOR_FIELD_FALLBACK_BITMAP 0U
 #define TEXT_BEHAVIOR_FIELD_CLEAR_ON_OVERFLOW 1U
+#define CLASS_FIELD_SUPERCLASS 0U
+#define CLASS_FIELD_INSTANCE_KIND 1U
 
 #define BITMAP_STORAGE_FRAMEBUFFER 1U
 #define BITMAP_STORAGE_GLYPH_MONO 2U
@@ -51,6 +53,7 @@ struct recorz_mvp_value {
 struct recorz_mvp_heap_object {
     uint8_t kind;
     uint8_t field_count;
+    uint16_t class_handle;
     struct recorz_mvp_value fields[OBJECT_FIELD_LIMIT];
 };
 
@@ -179,6 +182,7 @@ static uint16_t heap_allocate(uint8_t kind) {
     handle = (uint16_t)(heap_size + 1U);
     heap[heap_size].kind = kind;
     heap[heap_size].field_count = 0U;
+    heap[heap_size].class_handle = 0U;
     for (field_index = 0U; field_index < OBJECT_FIELD_LIMIT; ++field_index) {
         heap[heap_size].fields[field_index] = nil_value();
     }
@@ -217,6 +221,12 @@ static struct recorz_mvp_value heap_get_field(const struct recorz_mvp_heap_objec
         machine_panic("missing object field");
     }
     return object->fields[index];
+}
+
+static void heap_set_class(uint16_t handle, uint16_t class_handle) {
+    struct recorz_mvp_heap_object *object = heap_object(handle);
+
+    object->class_handle = class_handle;
 }
 
 static uint16_t seed_handle_at(const struct recorz_mvp_seed *seed, uint16_t index) {
@@ -766,6 +776,14 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
     mono_bitmap_count = 0U;
     for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
         seeded_handles[seed_index] = heap_allocate(seed->objects[seed_index].object_kind);
+    }
+    for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
+        const struct recorz_mvp_seed_object *seed_object = &seed->objects[seed_index];
+
+        if (seed_object->class_index == RECORZ_MVP_SEED_INVALID_OBJECT_INDEX) {
+            continue;
+        }
+        heap_set_class(seeded_handles[seed_index], seed_handle_at(seed, seed_object->class_index));
     }
     for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
         const struct recorz_mvp_seed_object *seed_object = &seed->objects[seed_index];

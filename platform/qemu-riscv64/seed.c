@@ -8,7 +8,7 @@
 #define RECORZ_MVP_SEED_MAGIC_1 'C'
 #define RECORZ_MVP_SEED_MAGIC_2 'Z'
 #define RECORZ_MVP_SEED_MAGIC_3 'S'
-#define RECORZ_MVP_SEED_VERSION 5U
+#define RECORZ_MVP_SEED_VERSION 6U
 #define RECORZ_MVP_SEED_HEADER_SIZE 16U
 #define RECORZ_MVP_SEED_OBJECT_SIZE 24U
 #define RECORZ_MVP_SEED_BINDING_SIZE 4U
@@ -88,9 +88,13 @@ const struct recorz_mvp_seed *recorz_mvp_seed_load(const uint8_t *blob, uint32_t
 
         object->object_kind = blob[offset++];
         object->field_count = blob[offset++];
+        object->class_index = read_u16_le(blob + offset);
         offset += 2U;
         if (object->field_count > 4U) {
             machine_panic("seed manifest field count exceeds object field capacity");
+        }
+        if (object->class_index != RECORZ_MVP_SEED_INVALID_OBJECT_INDEX && object->class_index >= object_count) {
+            machine_panic("seed manifest class index is out of range");
         }
         for (field_index = 0U; field_index < 4U; ++field_index) {
             struct recorz_mvp_seed_field *field = &object->fields[field_index];
