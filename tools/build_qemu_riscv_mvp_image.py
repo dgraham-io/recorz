@@ -119,8 +119,13 @@ IMAGE_HEADER_FORMAT = "<4sHHII8s"
 IMAGE_SECTION_FORMAT = "<HHII"
 IMAGE_SECTION_PROGRAM = 1
 IMAGE_SECTION_SEED = 2
+IMAGE_SECTION_ENTRY = 3
 IMAGE_FEATURE_FNV1A32 = 1
 IMAGE_PROFILE = b"RV64MVP1"
+IMAGE_ENTRY_MAGIC = b"RCZE"
+IMAGE_ENTRY_VERSION = 1
+IMAGE_ENTRY_FORMAT = "<4sHHHHHH"
+IMAGE_ENTRY_KIND_DOIT = 1
 
 SEED_MAGIC = b"RCZS"
 SEED_VERSION = 1
@@ -390,6 +395,19 @@ def build_seed_manifest() -> bytes:
     return bytes(manifest)
 
 
+def build_entry_manifest() -> bytes:
+    return struct.pack(
+        IMAGE_ENTRY_FORMAT,
+        IMAGE_ENTRY_MAGIC,
+        IMAGE_ENTRY_VERSION,
+        IMAGE_ENTRY_KIND_DOIT,
+        0,
+        IMAGE_SECTION_PROGRAM,
+        0,
+        0,
+    )
+
+
 def fnv1a32(data: bytes, *, seed: int = 0x811C9DC5) -> int:
     value = seed
     for byte in data:
@@ -399,11 +417,13 @@ def fnv1a32(data: bytes, *, seed: int = 0x811C9DC5) -> int:
 
 
 def build_image_manifest(program: Program) -> bytes:
+    entry_manifest = build_entry_manifest()
     program_manifest = build_program_manifest(program)
     seed_manifest = build_seed_manifest()
-    section_count = 2
+    section_count = 3
     header_size = struct.calcsize(IMAGE_HEADER_FORMAT) + (section_count * struct.calcsize(IMAGE_SECTION_FORMAT))
-    program_offset = header_size
+    entry_offset = header_size
+    program_offset = entry_offset + len(entry_manifest)
     seed_offset = program_offset + len(program_manifest)
     feature_flags = IMAGE_FEATURE_FNV1A32
 
@@ -416,6 +436,15 @@ def build_image_manifest(program: Program) -> bytes:
             feature_flags,
             0,
             IMAGE_PROFILE,
+        )
+    )
+    manifest.extend(
+        struct.pack(
+            IMAGE_SECTION_FORMAT,
+            IMAGE_SECTION_ENTRY,
+            0,
+            entry_offset,
+            len(entry_manifest),
         )
     )
     manifest.extend(
@@ -436,6 +465,7 @@ def build_image_manifest(program: Program) -> bytes:
             len(seed_manifest),
         )
     )
+    manifest.extend(entry_manifest)
     manifest.extend(program_manifest)
     manifest.extend(seed_manifest)
     checksum = fnv1a32(manifest[struct.calcsize(IMAGE_HEADER_FORMAT) :])

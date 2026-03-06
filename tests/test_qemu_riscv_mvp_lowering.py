@@ -143,29 +143,49 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(operand_a, mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_TRANSCRIPT"])
         self.assertEqual(operand_b, 0)
 
-    def test_builds_image_manifest_with_program_and_seed_sections(self) -> None:
+    def test_builds_image_manifest_with_entry_program_and_seed_sections(self) -> None:
         program = mvp.build_program("Transcript show: 'HELLO'; cr")
         manifest = mvp.build_image_manifest(program)
         magic, version, section_count, feature_flags, checksum, profile = struct.unpack_from(mvp.IMAGE_HEADER_FORMAT, manifest, 0)
-        program_section = struct.unpack_from(
+        entry_section = struct.unpack_from(
             mvp.IMAGE_SECTION_FORMAT,
             manifest,
             struct.calcsize(mvp.IMAGE_HEADER_FORMAT),
         )
-        seed_section = struct.unpack_from(
+        program_section = struct.unpack_from(
             mvp.IMAGE_SECTION_FORMAT,
             manifest,
             struct.calcsize(mvp.IMAGE_HEADER_FORMAT) + struct.calcsize(mvp.IMAGE_SECTION_FORMAT),
         )
+        seed_section = struct.unpack_from(
+            mvp.IMAGE_SECTION_FORMAT,
+            manifest,
+            struct.calcsize(mvp.IMAGE_HEADER_FORMAT) + (2 * struct.calcsize(mvp.IMAGE_SECTION_FORMAT)),
+        )
+        entry_payload = manifest[entry_section[2] : entry_section[2] + entry_section[3]]
+        entry_magic, entry_version, entry_kind, entry_flags, entry_program_section, entry_argument_count, entry_reserved = (
+            struct.unpack_from(mvp.IMAGE_ENTRY_FORMAT, entry_payload, 0)
+        )
 
         self.assertEqual(magic, mvp.IMAGE_MAGIC)
         self.assertEqual(version, mvp.IMAGE_VERSION)
-        self.assertEqual(section_count, 2)
+        self.assertEqual(section_count, 3)
         self.assertEqual(feature_flags, mvp.IMAGE_FEATURE_FNV1A32)
         self.assertEqual(checksum, mvp.fnv1a32(manifest[struct.calcsize(mvp.IMAGE_HEADER_FORMAT) :]))
         self.assertEqual(profile, mvp.IMAGE_PROFILE)
+        self.assertEqual(entry_section[0], mvp.IMAGE_SECTION_ENTRY)
         self.assertEqual(program_section[0], mvp.IMAGE_SECTION_PROGRAM)
         self.assertEqual(seed_section[0], mvp.IMAGE_SECTION_SEED)
+        self.assertEqual(entry_magic, mvp.IMAGE_ENTRY_MAGIC)
+        self.assertEqual(entry_version, mvp.IMAGE_ENTRY_VERSION)
+        self.assertEqual(entry_kind, mvp.IMAGE_ENTRY_KIND_DOIT)
+        self.assertEqual(entry_flags, 0)
+        self.assertEqual(entry_program_section, mvp.IMAGE_SECTION_PROGRAM)
+        self.assertEqual(entry_argument_count, 0)
+        self.assertEqual(entry_reserved, 0)
+        self.assertGreater(entry_section[2], 0)
+        self.assertGreater(entry_section[3], 0)
+        self.assertEqual(program_section[2], entry_section[2] + entry_section[3])
         self.assertGreater(program_section[2], 0)
         self.assertGreater(program_section[3], 0)
         self.assertEqual(seed_section[2], program_section[2] + program_section[3])

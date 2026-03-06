@@ -21,6 +21,7 @@ FEATURE_NAMES = {
     mvp.IMAGE_FEATURE_FNV1A32: "fnv1a32",
 }
 SECTION_NAMES = {
+    mvp.IMAGE_SECTION_ENTRY: "entry",
     mvp.IMAGE_SECTION_PROGRAM: "program",
     mvp.IMAGE_SECTION_SEED: "seed",
 }
@@ -99,6 +100,35 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
     }
 
 
+def inspect_entry_manifest(blob: bytes) -> dict[str, object]:
+    if len(blob) < struct.calcsize(mvp.IMAGE_ENTRY_FORMAT):
+        raise ImageInspectionError("entry manifest is truncated")
+    magic, version, kind, flags, program_section_kind, argument_count, reserved = struct.unpack_from(
+        mvp.IMAGE_ENTRY_FORMAT,
+        blob,
+        0,
+    )
+    if magic != mvp.IMAGE_ENTRY_MAGIC:
+        raise ImageInspectionError("entry manifest magic mismatch")
+    if kind != mvp.IMAGE_ENTRY_KIND_DOIT:
+        raise ImageInspectionError("entry manifest kind is unsupported")
+    if flags != 0:
+        raise ImageInspectionError("entry manifest flags are unsupported")
+    if program_section_kind != mvp.IMAGE_SECTION_PROGRAM:
+        raise ImageInspectionError("entry manifest program section reference is invalid")
+    if argument_count != 0:
+        raise ImageInspectionError("entry manifest argument count is unsupported")
+    if reserved != 0:
+        raise ImageInspectionError("entry manifest reserved field is nonzero")
+    return {
+        "version": version,
+        "kind": "doit",
+        "flags": flags,
+        "program_section": _section_name(program_section_kind),
+        "argument_count": argument_count,
+    }
+
+
 def inspect_image_bytes(blob: bytes) -> dict[str, object]:
     header_size = struct.calcsize(mvp.IMAGE_HEADER_FORMAT)
     section_size = struct.calcsize(mvp.IMAGE_SECTION_FORMAT)
@@ -118,6 +148,7 @@ def inspect_image_bytes(blob: bytes) -> dict[str, object]:
         raise ImageInspectionError("boot image checksum mismatch")
 
     sections: list[dict[str, object]] = []
+    entry_summary: dict[str, object] | None = None
     program_summary: dict[str, object] | None = None
     seed_summary: dict[str, object] | None = None
     offset = header_size
@@ -133,13 +164,15 @@ def inspect_image_bytes(blob: bytes) -> dict[str, object]:
             "offset": section_offset,
             "size": section_length,
         }
-        if kind == mvp.IMAGE_SECTION_PROGRAM:
+        if kind == mvp.IMAGE_SECTION_ENTRY:
+            entry_summary = inspect_entry_manifest(payload)
+        elif kind == mvp.IMAGE_SECTION_PROGRAM:
             program_summary = inspect_program_manifest(payload)
         elif kind == mvp.IMAGE_SECTION_SEED:
             seed_summary = inspect_seed_manifest(payload)
         sections.append(section_info)
 
-    if program_summary is None or seed_summary is None:
+    if entry_summary is None or program_summary is None or seed_summary is None:
         raise ImageInspectionError("boot image is missing required sections")
 
     return {
@@ -151,6 +184,7 @@ def inspect_image_bytes(blob: bytes) -> dict[str, object]:
         "computed_checksum": computed_checksum,
         "profile": profile.decode("ascii"),
         "sections": sections,
+        "entry": entry_summary,
         "program": program_summary,
         "seed": seed_summary,
     }
@@ -167,6 +201,11 @@ def render_summary(summary: dict[str, object]) -> str:
     ]
     for section in summary["sections"]:
         lines.append(f"  - {section['name']} offset={section['offset']} size={section['size']}")
+    entry = summary["entry"]
+    lines.append(
+        "entry: "
+        f"kind={entry['kind']} args={entry['argument_count']} target={entry['program_section']}"
+    )
     program = summary["program"]
     lines.append(
         "program: "
