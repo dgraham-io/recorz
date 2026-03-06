@@ -42,3 +42,9 @@
 - Widened seed field payloads to 32-bit values so the seed can carry full color integers directly without special encoding.
 - Updated the VM bootstrap, seed loader, image inspector, and manifest tests to cover the new style root and shifted seed object indices.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v`, `make -C platform/qemu-riscv64 clean all`, and `make -C platform/qemu-riscv64 inspect-image`.
+
+## 2026-03-06 - Seeded Transcript Metrics
+- Added a seeded transcript-metrics object so transcript cursor advance and wrapping come from image data instead of hardcoded cell-size constants in `vm.c`.
+- Updated the VM to resolve text cell width and height from that seeded root, leaving glyph bitmap assets and the runtime message surface unchanged.
+- Bumped the seed version and updated the seed generator, loader, inspector, and manifest tests to cover the new metrics root.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v`, `make -C platform/qemu-riscv64 clean all`, and `make -C platform/qemu-riscv64 inspect-image`.

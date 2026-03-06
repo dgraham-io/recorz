@@ -15,9 +15,6 @@
 #define MONO_BITMAP_MAX_WIDTH 32U
 #define MONO_BITMAP_MAX_HEIGHT 64U
 
-#define GLYPH_WIDTH 5U
-#define GLYPH_HEIGHT 7U
-
 #define FORM_FIELD_BITS 0U
 #define BITMAP_FIELD_WIDTH 0U
 #define BITMAP_FIELD_HEIGHT 1U
@@ -29,6 +26,8 @@
 #define TEXT_LAYOUT_FIELD_PIXEL_SCALE 3U
 #define TEXT_STYLE_FIELD_BACKGROUND_COLOR 0U
 #define TEXT_STYLE_FIELD_FOREGROUND_COLOR 1U
+#define TEXT_METRICS_FIELD_CELL_WIDTH 0U
+#define TEXT_METRICS_FIELD_CELL_HEIGHT 1U
 
 #define BITMAP_STORAGE_FRAMEBUFFER 1U
 #define BITMAP_STORAGE_GLYPH_MONO 2U
@@ -96,6 +95,7 @@ static uint16_t glyph_bitmap_handles[128];
 static uint16_t glyph_fallback_handle = 0U;
 static uint16_t transcript_layout_handle = 0U;
 static uint16_t transcript_style_handle = 0U;
+static uint16_t transcript_metrics_handle = 0U;
 static uint32_t mono_bitmap_pool[MONO_BITMAP_LIMIT][MONO_BITMAP_MAX_HEIGHT];
 static uint16_t mono_bitmap_count = 0U;
 static uint32_t cursor_x = 0U;
@@ -321,12 +321,31 @@ static uint32_t text_foreground_color(void) {
     );
 }
 
+static const struct recorz_mvp_heap_object *transcript_metrics_object(void) {
+    const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(transcript_metrics_handle);
+
+    if (object->kind != RECORZ_MVP_OBJECT_TEXT_METRICS) {
+        machine_panic("transcript metrics root is not a text metrics object");
+    }
+    return object;
+}
+
+static uint32_t transcript_metrics_u32(uint8_t index, const char *message) {
+    return small_integer_u32(heap_get_field(transcript_metrics_object(), index), message);
+}
+
 static uint32_t char_width(void) {
-    return (GLYPH_WIDTH + 1U) * text_pixel_scale();
+    return transcript_metrics_u32(
+        TEXT_METRICS_FIELD_CELL_WIDTH,
+        "text metrics cell width is not a small integer"
+    ) * text_pixel_scale();
 }
 
 static uint32_t char_height(void) {
-    return (GLYPH_HEIGHT + 1U) * text_pixel_scale();
+    return transcript_metrics_u32(
+        TEXT_METRICS_FIELD_CELL_HEIGHT,
+        "text metrics cell height is not a small integer"
+    ) * text_pixel_scale();
 }
 
 static uint32_t bitmap_width(const struct recorz_mvp_heap_object *bitmap) {
@@ -751,6 +770,7 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
     framebuffer_bitmap_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_FRAMEBUFFER_BITMAP]);
     transcript_layout_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_LAYOUT]);
     transcript_style_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_STYLE]);
+    transcript_metrics_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS]);
     if (heap_get_field(heap_object(default_form_handle), FORM_FIELD_BITS).kind != RECORZ_MVP_VALUE_OBJECT ||
         (uint16_t)heap_get_field(heap_object(default_form_handle), FORM_FIELD_BITS).integer != framebuffer_bitmap_handle) {
         machine_panic("seed default form does not point at the framebuffer bitmap");
