@@ -1089,6 +1089,38 @@ static void dispatch_bitblt_send(uint8_t selector, const struct recorz_mvp_value
     machine_panic("unsupported BitBlt selector");
 }
 
+static void dispatch_glyphs_send(uint8_t selector, const struct recorz_mvp_value arguments[]) {
+    if (selector == RECORZ_MVP_SELECTOR_AT) {
+        push(glyph_bitmap_value_for_code(small_integer_u32(arguments[0], "Glyphs at: expects a non-negative small integer")));
+        return;
+    }
+    machine_panic("unsupported Glyphs selector");
+}
+
+static void dispatch_form_factory_send(uint8_t selector, const struct recorz_mvp_value arguments[]) {
+    if (selector == RECORZ_MVP_SELECTOR_FROM_BITS) {
+        if (arguments[0].kind != RECORZ_MVP_VALUE_OBJECT) {
+            machine_panic("Form fromBits: expects a bitmap");
+        }
+        push(allocate_form_from_bits_value(arguments[0]));
+        return;
+    }
+    machine_panic("unsupported Form factory selector");
+}
+
+static void dispatch_bitmap_factory_send(uint8_t selector, const struct recorz_mvp_value arguments[]) {
+    if (selector == RECORZ_MVP_SELECTOR_MONO_WIDTH_HEIGHT) {
+        push(
+            allocate_mono_bitmap_value(
+                small_integer_u32(arguments[0], "Bitmap monoWidth:height: width must be a non-negative small integer"),
+                small_integer_u32(arguments[1], "Bitmap monoWidth:height: height must be a non-negative small integer")
+            )
+        );
+        return;
+    }
+    machine_panic("unsupported Bitmap factory selector");
+}
+
 static void dispatch_form_send(
     const struct recorz_mvp_heap_object *object,
     uint8_t selector,
@@ -1190,33 +1222,16 @@ static void dispatch_send(const struct recorz_mvp_program *program, uint8_t sele
             return;
         }
         if (primitive_kind == RECORZ_MVP_OBJECT_GLYPHS) {
-            if (selector == RECORZ_MVP_SELECTOR_AT) {
-                push(glyph_bitmap_value_for_code(small_integer_u32(arguments[0], "Glyphs at: expects a non-negative small integer")));
-                return;
-            }
-            machine_panic("unsupported Glyphs selector");
+            dispatch_glyphs_send(selector, arguments);
+            return;
         }
         if (primitive_kind == RECORZ_MVP_OBJECT_FORM_FACTORY) {
-            if (selector == RECORZ_MVP_SELECTOR_FROM_BITS) {
-                if (arguments[0].kind != RECORZ_MVP_VALUE_OBJECT) {
-                    machine_panic("Form fromBits: expects a bitmap");
-                }
-                push(allocate_form_from_bits_value(arguments[0]));
-                return;
-            }
-            machine_panic("unsupported Form factory selector");
+            dispatch_form_factory_send(selector, arguments);
+            return;
         }
         if (primitive_kind == RECORZ_MVP_OBJECT_BITMAP_FACTORY) {
-            if (selector == RECORZ_MVP_SELECTOR_MONO_WIDTH_HEIGHT) {
-                push(
-                    allocate_mono_bitmap_value(
-                        small_integer_u32(arguments[0], "Bitmap monoWidth:height: width must be a non-negative small integer"),
-                        small_integer_u32(arguments[1], "Bitmap monoWidth:height: height must be a non-negative small integer")
-                    )
-                );
-                return;
-            }
-            machine_panic("unsupported Bitmap factory selector");
+            dispatch_bitmap_factory_send(selector, arguments);
+            return;
         }
         if (primitive_kind == RECORZ_MVP_OBJECT_FORM) {
             dispatch_form_send(object, selector, receiver, text);
