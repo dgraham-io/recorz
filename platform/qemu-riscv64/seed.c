@@ -8,12 +8,13 @@
 #define RECORZ_MVP_SEED_MAGIC_1 'C'
 #define RECORZ_MVP_SEED_MAGIC_2 'Z'
 #define RECORZ_MVP_SEED_MAGIC_3 'S'
-#define RECORZ_MVP_SEED_VERSION 1U
-#define RECORZ_MVP_SEED_HEADER_SIZE 32U
+#define RECORZ_MVP_SEED_VERSION 2U
+#define RECORZ_MVP_SEED_HEADER_SIZE 16U
 #define RECORZ_MVP_SEED_OBJECT_SIZE 20U
+#define RECORZ_MVP_SEED_BINDING_SIZE 4U
 
 static struct recorz_mvp_seed_object loaded_objects[RECORZ_MVP_HEAP_LIMIT];
-static uint8_t loaded_glyph_offsets[RECORZ_MVP_GLYPH_CODE_LIMIT];
+static uint16_t loaded_glyph_object_indices[RECORZ_MVP_GLYPH_CODE_LIMIT];
 static struct recorz_mvp_seed loaded_seed;
 
 static uint16_t read_u16_le(const uint8_t *bytes) {
@@ -26,6 +27,8 @@ static int16_t read_i16_le(const uint8_t *bytes) {
 
 const struct recorz_mvp_seed *recorz_mvp_seed_load(const uint8_t *blob, uint32_t size) {
     uint16_t object_count;
+    uint16_t global_binding_count;
+    uint16_t root_binding_count;
     uint16_t glyph_code_count;
     uint16_t global_index;
     uint16_t object_index;
@@ -48,38 +51,29 @@ const struct recorz_mvp_seed *recorz_mvp_seed_load(const uint8_t *blob, uint32_t
         machine_panic("seed manifest object count exceeds heap limit");
     }
 
+    global_binding_count = read_u16_le(blob + 8U);
+    root_binding_count = read_u16_le(blob + 10U);
+    glyph_code_count = read_u16_le(blob + 12U);
     loaded_seed.object_count = object_count;
-    for (global_index = 0U; global_index <= RECORZ_MVP_GLOBAL_BITMAP; ++global_index) {
-        loaded_seed.global_object_indices[global_index] = read_u16_le(blob + 8U + (global_index * 2U));
-    }
-    loaded_seed.default_form_index = read_u16_le(blob + 22U);
-    loaded_seed.framebuffer_bitmap_index = read_u16_le(blob + 24U);
-    loaded_seed.glyph_bitmap_start_index = read_u16_le(blob + 26U);
-    glyph_code_count = read_u16_le(blob + 28U);
     loaded_seed.glyph_code_count = glyph_code_count;
-    loaded_seed.glyph_fallback_offset = blob[30U];
 
     if (glyph_code_count > RECORZ_MVP_GLYPH_CODE_LIMIT) {
         machine_panic("seed manifest glyph code count exceeds table capacity");
     }
-    if (loaded_seed.default_form_index >= object_count || loaded_seed.framebuffer_bitmap_index >= object_count) {
-        machine_panic("seed manifest root index out of range");
-    }
-    if (loaded_seed.glyph_bitmap_start_index >= object_count) {
-        machine_panic("seed manifest glyph bitmap start index out of range");
-    }
-    if ((uint32_t)loaded_seed.glyph_bitmap_start_index + (uint32_t)loaded_seed.glyph_fallback_offset >= object_count) {
-        machine_panic("seed manifest glyph fallback index out of range");
-    }
-    for (global_index = RECORZ_MVP_GLOBAL_TRANSCRIPT; global_index <= RECORZ_MVP_GLOBAL_BITMAP; ++global_index) {
-        if (loaded_seed.global_object_indices[global_index] >= object_count) {
-            machine_panic("seed manifest global object index out of range");
-        }
-    }
 
-    expected_size = RECORZ_MVP_SEED_HEADER_SIZE + ((uint32_t)object_count * RECORZ_MVP_SEED_OBJECT_SIZE) + glyph_code_count;
+    expected_size = RECORZ_MVP_SEED_HEADER_SIZE + ((uint32_t)object_count * RECORZ_MVP_SEED_OBJECT_SIZE) +
+                    ((uint32_t)global_binding_count * RECORZ_MVP_SEED_BINDING_SIZE) +
+                    ((uint32_t)root_binding_count * RECORZ_MVP_SEED_BINDING_SIZE) +
+                    ((uint32_t)glyph_code_count * 2U);
     if (size != expected_size) {
         machine_panic("seed manifest size mismatch");
+    }
+
+    for (global_index = 0U; global_index <= RECORZ_MVP_GLOBAL_BITMAP; ++global_index) {
+        loaded_seed.global_object_indices[global_index] = RECORZ_MVP_SEED_INVALID_OBJECT_INDEX;
+    }
+    for (global_index = 0U; global_index <= RECORZ_MVP_SEED_ROOT_GLYPH_FALLBACK_BITMAP; ++global_index) {
+        loaded_seed.root_object_indices[global_index] = RECORZ_MVP_SEED_INVALID_OBJECT_INDEX;
     }
 
     offset = RECORZ_MVP_SEED_HEADER_SIZE;
@@ -105,18 +99,69 @@ const struct recorz_mvp_seed *recorz_mvp_seed_load(const uint8_t *blob, uint32_t
         }
     }
 
+    for (object_index = 0U; object_index < global_binding_count; ++object_index) {
+        uint16_t binding_id = read_u16_le(blob + offset);
+        uint16_t binding_object_index = read_u16_le(blob + offset + 2U);
+
+        offset += RECORZ_MVP_SEED_BINDING_SIZE;
+        if (binding_id < RECORZ_MVP_GLOBAL_TRANSCRIPT || binding_id > RECORZ_MVP_GLOBAL_BITMAP) {
+            machine_panic("seed manifest global binding id is out of range");
+        }
+        if (binding_object_index >= object_count) {
+            machine_panic("seed manifest global binding object index is out of range");
+        }
+        if (loaded_seed.global_object_indices[binding_id] != RECORZ_MVP_SEED_INVALID_OBJECT_INDEX) {
+            machine_panic("seed manifest has duplicate global bindings");
+        }
+        loaded_seed.global_object_indices[binding_id] = binding_object_index;
+    }
+
+    for (object_index = RECORZ_MVP_GLOBAL_TRANSCRIPT; object_index <= RECORZ_MVP_GLOBAL_BITMAP; ++object_index) {
+        if (loaded_seed.global_object_indices[object_index] == RECORZ_MVP_SEED_INVALID_OBJECT_INDEX) {
+            machine_panic("seed manifest is missing a required global binding");
+        }
+    }
+
+    for (object_index = 0U; object_index < root_binding_count; ++object_index) {
+        uint16_t binding_id = read_u16_le(blob + offset);
+        uint16_t binding_object_index = read_u16_le(blob + offset + 2U);
+
+        offset += RECORZ_MVP_SEED_BINDING_SIZE;
+        if (binding_id < RECORZ_MVP_SEED_ROOT_DEFAULT_FORM ||
+            binding_id > RECORZ_MVP_SEED_ROOT_GLYPH_FALLBACK_BITMAP) {
+            machine_panic("seed manifest root binding id is out of range");
+        }
+        if (binding_object_index >= object_count) {
+            machine_panic("seed manifest root binding object index is out of range");
+        }
+        if (loaded_seed.root_object_indices[binding_id] != RECORZ_MVP_SEED_INVALID_OBJECT_INDEX) {
+            machine_panic("seed manifest has duplicate root bindings");
+        }
+        loaded_seed.root_object_indices[binding_id] = binding_object_index;
+    }
+
+    for (object_index = RECORZ_MVP_SEED_ROOT_DEFAULT_FORM;
+         object_index <= RECORZ_MVP_SEED_ROOT_GLYPH_FALLBACK_BITMAP;
+         ++object_index) {
+        if (loaded_seed.root_object_indices[object_index] == RECORZ_MVP_SEED_INVALID_OBJECT_INDEX) {
+            machine_panic("seed manifest is missing a required root binding");
+        }
+    }
+
     for (object_index = 0U; object_index < RECORZ_MVP_GLYPH_CODE_LIMIT; ++object_index) {
-        loaded_glyph_offsets[object_index] = loaded_seed.glyph_fallback_offset;
+        loaded_glyph_object_indices[object_index] = RECORZ_MVP_SEED_INVALID_OBJECT_INDEX;
     }
     for (object_index = 0U; object_index < glyph_code_count; ++object_index) {
-        uint8_t glyph_offset = blob[offset++];
-        if ((uint32_t)loaded_seed.glyph_bitmap_start_index + glyph_offset >= object_count) {
-            machine_panic("seed manifest glyph object offset out of range");
+        uint16_t glyph_object_index = read_u16_le(blob + offset);
+
+        offset += 2U;
+        if (glyph_object_index >= object_count) {
+            machine_panic("seed manifest glyph object index is out of range");
         }
-        loaded_glyph_offsets[object_index] = glyph_offset;
+        loaded_glyph_object_indices[object_index] = glyph_object_index;
     }
 
     loaded_seed.objects = loaded_objects;
-    loaded_seed.glyph_object_offsets_by_code = loaded_glyph_offsets;
+    loaded_seed.glyph_object_indices_by_code = loaded_glyph_object_indices;
     return &loaded_seed;
 }

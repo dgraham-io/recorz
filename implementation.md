@@ -24,3 +24,9 @@
 - Extended the host-side inspector to display the entry contract and reject malformed entry metadata.
 - Extended the manifest and inspector tests to cover the new entry section and malformed-entry rejection.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v`, `make -C platform/qemu-riscv64 clean all`, and `make -C platform/qemu-riscv64 inspect-image`.
+
+## 2026-03-06 - Seed Binding Tables
+- Replaced the fixed seed-header slots for globals, roots, and glyph offsets with explicit seed binding tables and a glyph object-index table.
+- Updated the target seed loader and VM root initialization to resolve globals and roots from those image-provided tables instead of C-implied header layout.
+- Updated the host-side inspector and tests to decode and validate the new seed format.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v`, `make -C platform/qemu-riscv64 clean all`, and `make -C platform/qemu-riscv64 inspect-image`.

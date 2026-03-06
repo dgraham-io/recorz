@@ -25,6 +25,11 @@ SECTION_NAMES = {
     mvp.IMAGE_SECTION_PROGRAM: "program",
     mvp.IMAGE_SECTION_SEED: "seed",
 }
+ROOT_NAMES = {
+    mvp.SEED_ROOT_DEFAULT_FORM: "default_form",
+    mvp.SEED_ROOT_FRAMEBUFFER_BITMAP: "framebuffer_bitmap",
+    mvp.SEED_ROOT_GLYPH_FALLBACK_BITMAP: "glyph_fallback_bitmap",
+}
 
 
 class ImageInspectionError(RuntimeError):
@@ -58,45 +63,71 @@ def inspect_program_manifest(blob: bytes) -> dict[str, object]:
 
 
 def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
-    if len(blob) < struct.calcsize(mvp.SEED_HEADER_FORMAT):
+    header_size = struct.calcsize(mvp.SEED_HEADER_FORMAT)
+    object_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
+    binding_size = struct.calcsize(mvp.SEED_BINDING_FORMAT)
+    if len(blob) < header_size:
         raise ImageInspectionError("seed manifest is truncated")
     (
         magic,
         version,
         object_count,
-        nil_global,
-        transcript_global,
-        display_global,
-        bitblt_global,
-        glyphs_global,
-        form_global,
-        bitmap_global,
-        default_form_index,
-        framebuffer_bitmap_index,
-        glyph_bitmap_start_index,
+        global_binding_count,
+        root_binding_count,
         glyph_code_count,
-        glyph_fallback_offset,
         _reserved,
     ) = struct.unpack_from(mvp.SEED_HEADER_FORMAT, blob, 0)
     if magic != mvp.SEED_MAGIC:
         raise ImageInspectionError("seed manifest magic mismatch")
+    expected_size = header_size + (object_count * object_size) + (global_binding_count * binding_size) + (
+        root_binding_count * binding_size
+    ) + (glyph_code_count * 2)
+    if len(blob) != expected_size:
+        raise ImageInspectionError("seed manifest size mismatch")
+
+    offset = header_size + (object_count * object_size)
+    globals_summary: dict[str, int] = {}
+    for _ in range(global_binding_count):
+        binding_id, object_index = struct.unpack_from(mvp.SEED_BINDING_FORMAT, blob, offset)
+        offset += binding_size
+        if binding_id == 0:
+            raise ImageInspectionError("seed manifest global binding id is invalid")
+        if object_index >= object_count:
+            raise ImageInspectionError("seed manifest global binding object index is out of range")
+        if binding_id == mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_TRANSCRIPT"]:
+            globals_summary["Transcript"] = object_index
+        elif binding_id == mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_DISPLAY"]:
+            globals_summary["Display"] = object_index
+        elif binding_id == mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_BITBLT"]:
+            globals_summary["BitBlt"] = object_index
+        elif binding_id == mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_GLYPHS"]:
+            globals_summary["Glyphs"] = object_index
+        elif binding_id == mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_FORM"]:
+            globals_summary["Form"] = object_index
+        elif binding_id == mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_BITMAP"]:
+            globals_summary["Bitmap"] = object_index
+        else:
+            raise ImageInspectionError("seed manifest global binding id is unknown")
+
+    roots_summary: dict[str, int] = {}
+    for _ in range(root_binding_count):
+        binding_id, object_index = struct.unpack_from(mvp.SEED_BINDING_FORMAT, blob, offset)
+        offset += binding_size
+        if object_index >= object_count:
+            raise ImageInspectionError("seed manifest root binding object index is out of range")
+        root_name = ROOT_NAMES.get(binding_id)
+        if root_name is None:
+            raise ImageInspectionError("seed manifest root binding id is unknown")
+        roots_summary[root_name] = object_index
+
     return {
         "version": version,
         "object_count": object_count,
-        "globals": {
-            "nil": nil_global,
-            "Transcript": transcript_global,
-            "Display": display_global,
-            "BitBlt": bitblt_global,
-            "Glyphs": glyphs_global,
-            "Form": form_global,
-            "Bitmap": bitmap_global,
-        },
-        "default_form_index": default_form_index,
-        "framebuffer_bitmap_index": framebuffer_bitmap_index,
-        "glyph_bitmap_start_index": glyph_bitmap_start_index,
+        "global_binding_count": global_binding_count,
+        "root_binding_count": root_binding_count,
+        "globals": globals_summary,
+        "roots": roots_summary,
         "glyph_code_count": glyph_code_count,
-        "glyph_fallback_offset": glyph_fallback_offset,
     }
 
 
@@ -214,7 +245,8 @@ def render_summary(summary: dict[str, object]) -> str:
     seed = summary["seed"]
     lines.append(
         "seed: "
-        f"objects={seed['object_count']} glyph_codes={seed['glyph_code_count']} default_form={seed['default_form_index']}"
+        f"objects={seed['object_count']} globals={seed['global_binding_count']} roots={seed['root_binding_count']} "
+        f"glyph_codes={seed['glyph_code_count']} default_form={seed['roots']['default_form']}"
     )
     return "\n".join(lines)
 

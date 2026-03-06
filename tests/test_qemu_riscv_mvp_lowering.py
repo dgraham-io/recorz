@@ -197,35 +197,37 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             magic,
             version,
             object_count,
-            nil_global,
-            transcript_global,
-            display_global,
-            bitblt_global,
-            glyphs_global,
-            form_global,
-            bitmap_global,
-            default_form_index,
-            framebuffer_bitmap_index,
-            glyph_bitmap_start_index,
+            global_binding_count,
+            root_binding_count,
             glyph_code_count,
-            glyph_fallback_offset,
             reserved,
         ) = struct.unpack_from(mvp.SEED_HEADER_FORMAT, manifest, 0)
+        object_bytes = object_count * (struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT)))
+        global_binding_offset = struct.calcsize(mvp.SEED_HEADER_FORMAT) + object_bytes
+        first_global_binding = struct.unpack_from(mvp.SEED_BINDING_FORMAT, manifest, global_binding_offset)
+        first_root_binding = struct.unpack_from(
+            mvp.SEED_BINDING_FORMAT,
+            manifest,
+            global_binding_offset + (global_binding_count * struct.calcsize(mvp.SEED_BINDING_FORMAT)),
+        )
+        first_glyph_object_index = struct.unpack_from(
+            "<H",
+            manifest,
+            global_binding_offset
+            + ((global_binding_count + root_binding_count) * struct.calcsize(mvp.SEED_BINDING_FORMAT)),
+        )[0]
 
-        self.assertEqual(struct.calcsize(mvp.SEED_HEADER_FORMAT), 32)
+        self.assertEqual(struct.calcsize(mvp.SEED_HEADER_FORMAT), 16)
         self.assertEqual(magic, mvp.SEED_MAGIC)
         self.assertEqual(version, mvp.SEED_VERSION)
         self.assertEqual(object_count, 136)
-        self.assertEqual(
-            (nil_global, transcript_global, display_global, bitblt_global, glyphs_global, form_global, bitmap_global),
-            (0, 0, 1, 2, 3, 4, 5),
-        )
-        self.assertEqual(default_form_index, 7)
-        self.assertEqual(framebuffer_bitmap_index, 6)
-        self.assertEqual(glyph_bitmap_start_index, 8)
+        self.assertEqual(global_binding_count, 6)
+        self.assertEqual(root_binding_count, 3)
         self.assertEqual(glyph_code_count, 128)
-        self.assertEqual(glyph_fallback_offset, 32)
         self.assertEqual(reserved, 0)
+        self.assertEqual(first_global_binding, (mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_TRANSCRIPT"], 0))
+        self.assertEqual(first_root_binding, (mvp.SEED_ROOT_DEFAULT_FORM, 7))
+        self.assertEqual(first_glyph_object_index, 8)
 
     def test_rejects_unsupported_globals(self) -> None:
         with self.assertRaises(mvp.LoweringError):

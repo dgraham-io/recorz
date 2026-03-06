@@ -678,8 +678,8 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
         global_handles[global_index] = seed_handle_at(seed, seed->global_object_indices[global_index]);
     }
 
-    default_form_handle = seed_handle_at(seed, seed->default_form_index);
-    framebuffer_bitmap_handle = seed_handle_at(seed, seed->framebuffer_bitmap_index);
+    default_form_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_DEFAULT_FORM]);
+    framebuffer_bitmap_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_FRAMEBUFFER_BITMAP]);
     if (heap_get_field(heap_object(default_form_handle), FORM_FIELD_BITS).kind != RECORZ_MVP_VALUE_OBJECT ||
         (uint16_t)heap_get_field(heap_object(default_form_handle), FORM_FIELD_BITS).integer != framebuffer_bitmap_handle) {
         machine_panic("seed default form does not point at the framebuffer bitmap");
@@ -691,13 +691,13 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
     for (glyph_index = 0U; glyph_index < 128U; ++glyph_index) {
         glyph_bitmap_handles[glyph_index] = 0U;
     }
-    glyph_fallback_handle = seed_handle_at(
-        seed,
-        (uint16_t)(seed->glyph_bitmap_start_index + seed->glyph_fallback_offset)
-    );
+    glyph_fallback_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_GLYPH_FALLBACK_BITMAP]);
     for (code_index = 0U; code_index < seed->glyph_code_count; ++code_index) {
-        uint8_t glyph_offset = seed->glyph_object_offsets_by_code[code_index];
-        glyph_bitmap_handles[code_index] = seed_handle_at(seed, (uint16_t)(seed->glyph_bitmap_start_index + glyph_offset));
+        uint16_t glyph_object_index = seed->glyph_object_indices_by_code[code_index];
+        if (glyph_object_index == RECORZ_MVP_SEED_INVALID_OBJECT_INDEX) {
+            continue;
+        }
+        glyph_bitmap_handles[code_index] = seed_handle_at(seed, glyph_object_index);
     }
     reset_text_cursor();
 }
