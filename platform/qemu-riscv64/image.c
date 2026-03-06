@@ -11,7 +11,7 @@
 #define RECORZ_MVP_IMAGE_MAGIC_2 'Z'
 #define RECORZ_MVP_IMAGE_MAGIC_3 'I'
 #define RECORZ_MVP_IMAGE_VERSION 1U
-#define RECORZ_MVP_IMAGE_HEADER_SIZE 16U
+#define RECORZ_MVP_IMAGE_HEADER_SIZE 24U
 #define RECORZ_MVP_IMAGE_SECTION_SIZE 12U
 #define RECORZ_MVP_IMAGE_SECTION_LIMIT 8U
 #define RECORZ_MVP_IMAGE_SECTION_PROGRAM 1U
@@ -20,6 +20,14 @@
 #define RECORZ_MVP_IMAGE_KNOWN_FEATURES RECORZ_MVP_IMAGE_FEATURE_FNV1A32
 #define RECORZ_MVP_FNV1A32_OFFSET_BASIS 2166136261U
 #define RECORZ_MVP_FNV1A32_PRIME 16777619U
+#define RECORZ_MVP_IMAGE_PROFILE_0 'R'
+#define RECORZ_MVP_IMAGE_PROFILE_1 'V'
+#define RECORZ_MVP_IMAGE_PROFILE_2 '6'
+#define RECORZ_MVP_IMAGE_PROFILE_3 '4'
+#define RECORZ_MVP_IMAGE_PROFILE_4 'M'
+#define RECORZ_MVP_IMAGE_PROFILE_5 'V'
+#define RECORZ_MVP_IMAGE_PROFILE_6 'P'
+#define RECORZ_MVP_IMAGE_PROFILE_7 '1'
 
 static struct recorz_mvp_boot_image loaded_image;
 
@@ -75,6 +83,12 @@ const struct recorz_mvp_boot_image *recorz_mvp_image_load(const uint8_t *blob, u
     }
     if ((feature_flags & RECORZ_MVP_IMAGE_FEATURE_FNV1A32) == 0U) {
         machine_panic("boot image checksum feature is required");
+    }
+    if (blob[16U] != RECORZ_MVP_IMAGE_PROFILE_0 || blob[17U] != RECORZ_MVP_IMAGE_PROFILE_1 ||
+        blob[18U] != RECORZ_MVP_IMAGE_PROFILE_2 || blob[19U] != RECORZ_MVP_IMAGE_PROFILE_3 ||
+        blob[20U] != RECORZ_MVP_IMAGE_PROFILE_4 || blob[21U] != RECORZ_MVP_IMAGE_PROFILE_5 ||
+        blob[22U] != RECORZ_MVP_IMAGE_PROFILE_6 || blob[23U] != RECORZ_MVP_IMAGE_PROFILE_7) {
+        machine_panic("boot image profile mismatch");
     }
     if (size < RECORZ_MVP_IMAGE_HEADER_SIZE + ((uint32_t)section_count * RECORZ_MVP_IMAGE_SECTION_SIZE)) {
         machine_panic("boot image section table is truncated");

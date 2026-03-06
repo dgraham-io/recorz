@@ -105,9 +105,11 @@ def inspect_image_bytes(blob: bytes) -> dict[str, object]:
     if len(blob) < header_size:
         raise ImageInspectionError("boot image is truncated")
 
-    magic, version, section_count, feature_flags, checksum = struct.unpack_from(mvp.IMAGE_HEADER_FORMAT, blob, 0)
+    magic, version, section_count, feature_flags, checksum, profile = struct.unpack_from(mvp.IMAGE_HEADER_FORMAT, blob, 0)
     if magic != mvp.IMAGE_MAGIC:
         raise ImageInspectionError("boot image magic mismatch")
+    if profile != mvp.IMAGE_PROFILE:
+        raise ImageInspectionError("boot image profile mismatch")
     if len(blob) < header_size + (section_count * section_size):
         raise ImageInspectionError("boot image section table is truncated")
 
@@ -147,6 +149,7 @@ def inspect_image_bytes(blob: bytes) -> dict[str, object]:
         "feature_names": _feature_names(feature_flags),
         "checksum": checksum,
         "computed_checksum": computed_checksum,
+        "profile": profile.decode("ascii"),
         "sections": sections,
         "program": program_summary,
         "seed": seed_summary,
@@ -157,6 +160,7 @@ def render_summary(summary: dict[str, object]) -> str:
     lines = [
         "RCZI boot image",
         f"version: {summary['version']}",
+        f"profile: {summary['profile']}",
         f"features: {', '.join(summary['feature_names']) or '(none)'}",
         f"checksum: 0x{int(summary['checksum']):08x}",
         f"sections: {summary['section_count']}",

@@ -115,11 +115,12 @@ PROGRAM_LITERAL_HEADER_FORMAT = "<BBHi"
 
 IMAGE_MAGIC = b"RCZI"
 IMAGE_VERSION = 1
-IMAGE_HEADER_FORMAT = "<4sHHII"
+IMAGE_HEADER_FORMAT = "<4sHHII8s"
 IMAGE_SECTION_FORMAT = "<HHII"
 IMAGE_SECTION_PROGRAM = 1
 IMAGE_SECTION_SEED = 2
 IMAGE_FEATURE_FNV1A32 = 1
+IMAGE_PROFILE = b"RV64MVP1"
 
 SEED_MAGIC = b"RCZS"
 SEED_VERSION = 1
@@ -414,6 +415,7 @@ def build_image_manifest(program: Program) -> bytes:
             section_count,
             feature_flags,
             0,
+            IMAGE_PROFILE,
         )
     )
     manifest.extend(
@@ -444,6 +446,7 @@ def build_image_manifest(program: Program) -> bytes:
         section_count,
         feature_flags,
         checksum,
+        IMAGE_PROFILE,
     )
     return bytes(manifest)
 

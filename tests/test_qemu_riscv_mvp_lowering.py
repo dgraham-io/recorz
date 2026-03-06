@@ -146,7 +146,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
     def test_builds_image_manifest_with_program_and_seed_sections(self) -> None:
         program = mvp.build_program("Transcript show: 'HELLO'; cr")
         manifest = mvp.build_image_manifest(program)
-        magic, version, section_count, feature_flags, checksum = struct.unpack_from(mvp.IMAGE_HEADER_FORMAT, manifest, 0)
+        magic, version, section_count, feature_flags, checksum, profile = struct.unpack_from(mvp.IMAGE_HEADER_FORMAT, manifest, 0)
         program_section = struct.unpack_from(
             mvp.IMAGE_SECTION_FORMAT,
             manifest,
@@ -163,6 +163,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(section_count, 2)
         self.assertEqual(feature_flags, mvp.IMAGE_FEATURE_FNV1A32)
         self.assertEqual(checksum, mvp.fnv1a32(manifest[struct.calcsize(mvp.IMAGE_HEADER_FORMAT) :]))
+        self.assertEqual(profile, mvp.IMAGE_PROFILE)
         self.assertEqual(program_section[0], mvp.IMAGE_SECTION_PROGRAM)
         self.assertEqual(seed_section[0], mvp.IMAGE_SECTION_SEED)
         self.assertGreater(program_section[2], 0)
