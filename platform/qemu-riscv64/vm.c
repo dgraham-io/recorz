@@ -110,9 +110,294 @@ static uint32_t cursor_y = 0U;
 static char print_buffer[PRINT_BUFFER_SIZE];
 
 static uint16_t seeded_handles[HEAP_LIMIT];
+static const char *panic_phase = "idle";
+static uint32_t panic_pc = 0U;
+static struct recorz_mvp_instruction panic_instruction;
+static uint8_t panic_have_instruction = 0U;
+static uint8_t panic_have_send = 0U;
+static uint8_t panic_send_selector = 0U;
+static uint16_t panic_send_argument_count = 0U;
+static struct recorz_mvp_value panic_send_receiver;
+static struct recorz_mvp_value panic_send_arguments[MAX_SEND_ARGS];
 
+static struct recorz_mvp_value nil_value(void);
 static uint32_t small_integer_u32(struct recorz_mvp_value value, const char *message);
 static void heap_set_class(uint16_t handle, uint16_t class_handle);
+
+static void panic_put_u32(uint32_t value) {
+    char digits[10];
+    uint32_t index = 0U;
+
+    if (value == 0U) {
+        machine_putc('0');
+        return;
+    }
+    while (value > 0U && index < 10U) {
+        digits[index++] = (char)('0' + (value % 10U));
+        value /= 10U;
+    }
+    while (index > 0U) {
+        machine_putc(digits[--index]);
+    }
+}
+
+static void panic_put_i32(int32_t value) {
+    if (value < 0) {
+        machine_putc('-');
+        panic_put_u32((uint32_t)(-value));
+        return;
+    }
+    panic_put_u32((uint32_t)value);
+}
+
+static void panic_put_string_sample(const char *text) {
+    uint32_t index = 0U;
+
+    machine_putc('"');
+    if (text == 0) {
+        machine_puts("<null>");
+        machine_putc('"');
+        return;
+    }
+    while (text[index] != '\0' && index < 24U) {
+        char ch = text[index++];
+        if (ch == '\n') {
+            machine_puts("\\n");
+            continue;
+        }
+        if (ch == '\r') {
+            machine_puts("\\r");
+            continue;
+        }
+        if (ch == '"' || ch == '\\') {
+            machine_putc('\\');
+            machine_putc(ch);
+            continue;
+        }
+        if (ch < 32 || ch > 126) {
+            machine_putc('?');
+            continue;
+        }
+        machine_putc(ch);
+    }
+    if (text[index] != '\0') {
+        machine_puts("...");
+    }
+    machine_putc('"');
+}
+
+static const char *opcode_name(uint8_t opcode) {
+    switch (opcode) {
+        case RECORZ_MVP_OP_PUSH_GLOBAL:
+            return "pushGlobal";
+        case RECORZ_MVP_OP_PUSH_LITERAL:
+            return "pushLiteral";
+        case RECORZ_MVP_OP_SEND:
+            return "send";
+        case RECORZ_MVP_OP_DUP:
+            return "dup";
+        case RECORZ_MVP_OP_POP:
+            return "pop";
+        case RECORZ_MVP_OP_RETURN:
+            return "return";
+        case RECORZ_MVP_OP_PUSH_NIL:
+            return "pushNil";
+        case RECORZ_MVP_OP_PUSH_LEXICAL:
+            return "pushLexical";
+        case RECORZ_MVP_OP_STORE_LEXICAL:
+            return "storeLexical";
+    }
+    return "unknown";
+}
+
+static const char *selector_name(uint8_t selector) {
+    switch (selector) {
+        case RECORZ_MVP_SELECTOR_SHOW:
+            return "show:";
+        case RECORZ_MVP_SELECTOR_CR:
+            return "cr";
+        case RECORZ_MVP_SELECTOR_WRITE_STRING:
+            return "writeString:";
+        case RECORZ_MVP_SELECTOR_NEWLINE:
+            return "newline";
+        case RECORZ_MVP_SELECTOR_DEFAULT_FORM:
+            return "defaultForm";
+        case RECORZ_MVP_SELECTOR_CLEAR:
+            return "clear";
+        case RECORZ_MVP_SELECTOR_WIDTH:
+            return "width";
+        case RECORZ_MVP_SELECTOR_HEIGHT:
+            return "height";
+        case RECORZ_MVP_SELECTOR_ADD:
+            return "+";
+        case RECORZ_MVP_SELECTOR_SUBTRACT:
+            return "-";
+        case RECORZ_MVP_SELECTOR_MULTIPLY:
+            return "*";
+        case RECORZ_MVP_SELECTOR_PRINT_STRING:
+            return "printString";
+        case RECORZ_MVP_SELECTOR_BITS:
+            return "bits";
+        case RECORZ_MVP_SELECTOR_FILL_FORM_COLOR:
+            return "fillForm:color:";
+        case RECORZ_MVP_SELECTOR_AT:
+            return "at:";
+        case RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE:
+            return "copyBitmap:toForm:x:y:scale:";
+        case RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR:
+            return "copyBitmap:toForm:x:y:scale:color:";
+        case RECORZ_MVP_SELECTOR_MONO_WIDTH_HEIGHT:
+            return "monoWidth:height:";
+        case RECORZ_MVP_SELECTOR_FROM_BITS:
+            return "fromBits:";
+        case RECORZ_MVP_SELECTOR_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR:
+            return "copyBitmap:sourceX:sourceY:width:height:toForm:x:y:scale:color:";
+        case RECORZ_MVP_SELECTOR_CLASS:
+            return "class";
+        case RECORZ_MVP_SELECTOR_INSTANCE_KIND:
+            return "instanceKind";
+    }
+    return "unknown";
+}
+
+static const char *object_kind_name(uint8_t kind) {
+    switch (kind) {
+        case RECORZ_MVP_OBJECT_TRANSCRIPT:
+            return "Transcript";
+        case RECORZ_MVP_OBJECT_DISPLAY:
+            return "Display";
+        case RECORZ_MVP_OBJECT_FORM:
+            return "Form";
+        case RECORZ_MVP_OBJECT_BITMAP:
+            return "Bitmap";
+        case RECORZ_MVP_OBJECT_BITBLT:
+            return "BitBlt";
+        case RECORZ_MVP_OBJECT_GLYPHS:
+            return "Glyphs";
+        case RECORZ_MVP_OBJECT_FORM_FACTORY:
+            return "FormFactory";
+        case RECORZ_MVP_OBJECT_BITMAP_FACTORY:
+            return "BitmapFactory";
+        case RECORZ_MVP_OBJECT_TEXT_LAYOUT:
+            return "TextLayout";
+        case RECORZ_MVP_OBJECT_TEXT_STYLE:
+            return "TextStyle";
+        case RECORZ_MVP_OBJECT_TEXT_METRICS:
+            return "TextMetrics";
+        case RECORZ_MVP_OBJECT_TEXT_BEHAVIOR:
+            return "TextBehavior";
+        case RECORZ_MVP_OBJECT_CLASS:
+            return "Class";
+    }
+    return "UnknownObject";
+}
+
+static void panic_put_value(struct recorz_mvp_value value) {
+    if (value.kind == RECORZ_MVP_VALUE_NIL) {
+        machine_puts("nil");
+        return;
+    }
+    if (value.kind == RECORZ_MVP_VALUE_SMALL_INTEGER) {
+        machine_puts("smallInteger(");
+        panic_put_i32(value.integer);
+        machine_putc(')');
+        return;
+    }
+    if (value.kind == RECORZ_MVP_VALUE_STRING) {
+        machine_puts("string(");
+        panic_put_string_sample(value.string);
+        machine_putc(')');
+        return;
+    }
+    if (value.kind == RECORZ_MVP_VALUE_OBJECT) {
+        uint16_t handle = (uint16_t)value.integer;
+
+        machine_puts("object#");
+        panic_put_u32((uint32_t)handle);
+        if (handle == 0U || handle > heap_size) {
+            machine_puts("(invalid)");
+            return;
+        }
+        machine_puts("(");
+        machine_puts(object_kind_name(heap[handle - 1U].kind));
+        machine_putc(')');
+        return;
+    }
+    machine_puts("value(kind=");
+    panic_put_u32((uint32_t)value.kind);
+    machine_putc(')');
+}
+
+static void remember_send_context(
+    uint8_t selector,
+    uint16_t argument_count,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[]
+) {
+    uint32_t index;
+
+    panic_have_send = 1U;
+    panic_send_selector = selector;
+    panic_send_argument_count = argument_count;
+    panic_send_receiver = receiver;
+    for (index = 0U; index < MAX_SEND_ARGS; ++index) {
+        panic_send_arguments[index] = nil_value();
+    }
+    for (index = 0U; index < argument_count; ++index) {
+        panic_send_arguments[index] = arguments[index];
+    }
+}
+
+static void vm_panic_hook(const char *message) {
+    uint32_t dump_count;
+    uint32_t slot;
+
+    (void)message;
+    machine_puts("vm: phase=");
+    machine_puts(panic_phase);
+    machine_puts("\n");
+    if (panic_have_instruction) {
+        machine_puts("vm: pc=");
+        panic_put_u32(panic_pc);
+        machine_puts(" opcode=");
+        machine_puts(opcode_name(panic_instruction.opcode));
+        machine_puts(" operand_a=");
+        panic_put_u32((uint32_t)panic_instruction.operand_a);
+        machine_puts(" operand_b=");
+        panic_put_u32((uint32_t)panic_instruction.operand_b);
+        machine_puts("\n");
+    }
+    if (panic_have_send) {
+        machine_puts("vm: send selector=");
+        machine_puts(selector_name(panic_send_selector));
+        machine_puts(" args=");
+        panic_put_u32((uint32_t)panic_send_argument_count);
+        machine_puts("\n");
+        machine_puts("vm: receiver=");
+        panic_put_value(panic_send_receiver);
+        machine_puts("\n");
+        for (slot = 0U; slot < panic_send_argument_count; ++slot) {
+            machine_puts("vm: arg[");
+            panic_put_u32(slot);
+            machine_puts("]=");
+            panic_put_value(panic_send_arguments[slot]);
+            machine_puts("\n");
+        }
+    }
+    machine_puts("vm: stack_size=");
+    panic_put_u32(stack_size);
+    machine_puts("\n");
+    dump_count = stack_size < 4U ? stack_size : 4U;
+    for (slot = 0U; slot < dump_count; ++slot) {
+        uint32_t index = stack_size - 1U - slot;
+
+        machine_puts("vm: stack_top[");
+        panic_put_u32(slot);
+        machine_puts("]=");
+        panic_put_value(stack[index]);
+        machine_puts("\n");
+    }
+}
 
 static struct recorz_mvp_value nil_value(void) {
     return (struct recorz_mvp_value){RECORZ_MVP_VALUE_NIL, 0, 0};
@@ -1339,6 +1624,7 @@ static void dispatch_send(const struct recorz_mvp_program *program, uint8_t sele
     struct recorz_mvp_value receiver;
     const char *text = 0;
     const struct recorz_mvp_heap_object *object = 0;
+    uint16_t send_argument_count = argument_count;
     (void)program;
 
     if (argument_count > MAX_SEND_ARGS) {
@@ -1350,6 +1636,8 @@ static void dispatch_send(const struct recorz_mvp_program *program, uint8_t sele
         --argument_count;
     }
     receiver = pop_value();
+    panic_phase = "send";
+    remember_send_context(selector, send_argument_count, receiver, arguments);
 
     if (selector == RECORZ_MVP_SELECTOR_SHOW || selector == RECORZ_MVP_SELECTOR_WRITE_STRING) {
         if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
@@ -1411,8 +1699,13 @@ void recorz_mvp_vm_run(const struct recorz_mvp_program *program, const struct re
     uint32_t pc = 0U;
     struct recorz_mvp_value lexical[LEXICAL_LIMIT];
     uint32_t lexical_index;
-    initialize_roots(seed);
     stack_size = 0U;
+    panic_phase = "bootstrap";
+    panic_pc = 0U;
+    panic_have_instruction = 0U;
+    panic_have_send = 0U;
+    machine_set_panic_hook(vm_panic_hook);
+    initialize_roots(seed);
 
     if (program->lexical_count > LEXICAL_LIMIT) {
         machine_panic("too many lexical slots for MVP VM");
@@ -1421,8 +1714,15 @@ void recorz_mvp_vm_run(const struct recorz_mvp_program *program, const struct re
         lexical[lexical_index] = nil_value();
     }
 
-            while (pc < program->instruction_count) {
+    while (pc < program->instruction_count) {
         const struct recorz_mvp_instruction instruction = program->instructions[pc++];
+
+        panic_phase = "execute";
+        panic_pc = pc - 1U;
+        panic_instruction = instruction;
+        panic_have_instruction = 1U;
+        panic_have_send = 0U;
+
         switch (instruction.opcode) {
             case RECORZ_MVP_OP_PUSH_GLOBAL:
                 push(global_value(instruction.operand_a));
@@ -1458,9 +1758,14 @@ void recorz_mvp_vm_run(const struct recorz_mvp_program *program, const struct re
                 (void)pop_value();
                 break;
             case RECORZ_MVP_OP_RETURN:
+                panic_phase = "return";
+                machine_set_panic_hook(0);
                 return;
             default:
                 machine_panic("unknown opcode in MVP VM");
         }
     }
+
+    panic_phase = "done";
+    machine_set_panic_hook(0);
 }

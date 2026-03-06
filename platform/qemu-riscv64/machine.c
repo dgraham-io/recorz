@@ -98,6 +98,7 @@ struct uart_candidate {
 
 static uintptr_t uart_base = UART0_DEFAULT_BASE;
 static uintptr_t fw_cfg_dma_register = FW_CFG_DEFAULT_BASE + 0x10U;
+static machine_panic_hook current_panic_hook = 0;
 
 static struct fw_cfg_dma_access fw_cfg_dma_request;
 static struct fw_cfg_files fw_cfg_files;
@@ -527,10 +528,20 @@ void machine_wait_forever(void) {
     }
 }
 
+void machine_set_panic_hook(machine_panic_hook hook) {
+    current_panic_hook = hook;
+}
+
 void machine_panic(const char *message) {
+    machine_panic_hook hook = current_panic_hook;
+
+    current_panic_hook = 0;
     machine_puts("panic: ");
     machine_puts(message);
     machine_puts("\n");
+    if (hook != 0) {
+        hook(message);
+    }
     machine_wait_forever();
 }
 
