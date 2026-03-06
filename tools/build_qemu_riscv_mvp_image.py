@@ -115,16 +115,24 @@ PROGRAM_LITERAL_HEADER_FORMAT = "<BBHi"
 
 IMAGE_MAGIC = b"RCZI"
 IMAGE_VERSION = 1
-IMAGE_HEADER_FORMAT = "<4sHH"
+IMAGE_HEADER_FORMAT = "<4sHHII8s"
 IMAGE_SECTION_FORMAT = "<HHII"
 IMAGE_SECTION_PROGRAM = 1
 IMAGE_SECTION_SEED = 2
+IMAGE_SECTION_ENTRY = 3
+IMAGE_FEATURE_FNV1A32 = 1
+IMAGE_PROFILE = b"RV64MVP1"
+IMAGE_ENTRY_MAGIC = b"RCZE"
+IMAGE_ENTRY_VERSION = 1
+IMAGE_ENTRY_FORMAT = "<4sHHHHHH"
+IMAGE_ENTRY_KIND_DOIT = 1
 
 SEED_MAGIC = b"RCZS"
-SEED_VERSION = 1
-SEED_HEADER_FORMAT = "<4sHH7HHHHHBB"
+SEED_VERSION = 3
+SEED_HEADER_FORMAT = "<4sHHHHHH"
+SEED_BINDING_FORMAT = "<HH"
 SEED_OBJECT_HEADER_FORMAT = "<BBH"
-SEED_FIELD_FORMAT = "<Bhx"
+SEED_FIELD_FORMAT = "<Bi"
 
 SEED_FIELD_NIL = 0
 SEED_FIELD_SMALL_INTEGER = 1
@@ -138,6 +146,14 @@ SEED_OBJECT_BITBLT = 5
 SEED_OBJECT_GLYPHS = 6
 SEED_OBJECT_FORM_FACTORY = 7
 SEED_OBJECT_BITMAP_FACTORY = 8
+SEED_OBJECT_TEXT_LAYOUT = 9
+SEED_OBJECT_TEXT_STYLE = 10
+
+SEED_ROOT_DEFAULT_FORM = 1
+SEED_ROOT_FRAMEBUFFER_BITMAP = 2
+SEED_ROOT_GLYPH_FALLBACK_BITMAP = 3
+SEED_ROOT_TRANSCRIPT_LAYOUT = 4
+SEED_ROOT_TRANSCRIPT_STYLE = 5
 
 BITMAP_STORAGE_FRAMEBUFFER = 1
 BITMAP_STORAGE_GLYPH_MONO = 2
@@ -331,6 +347,22 @@ def build_seed_manifest() -> bytes:
         (SEED_OBJECT_FORM_FACTORY, []),
         (SEED_OBJECT_BITMAP_FACTORY, []),
         (
+            SEED_OBJECT_TEXT_LAYOUT,
+            [
+                (SEED_FIELD_SMALL_INTEGER, 24),
+                (SEED_FIELD_SMALL_INTEGER, 24),
+                (SEED_FIELD_SMALL_INTEGER, 4),
+                (SEED_FIELD_SMALL_INTEGER, 2),
+            ],
+        ),
+        (
+            SEED_OBJECT_TEXT_STYLE,
+            [
+                (SEED_FIELD_SMALL_INTEGER, 0x00486020),
+                (SEED_FIELD_SMALL_INTEGER, 0x00F2F2F2),
+            ],
+        ),
+        (
             SEED_OBJECT_BITMAP,
             [
                 (SEED_FIELD_SMALL_INTEGER, 640),
@@ -342,7 +374,7 @@ def build_seed_manifest() -> bytes:
         (
             SEED_OBJECT_FORM,
             [
-                (SEED_FIELD_OBJECT_INDEX, 6),
+                (SEED_FIELD_OBJECT_INDEX, 8),
             ],
         ),
     ]
@@ -359,24 +391,32 @@ def build_seed_manifest() -> bytes:
             )
         )
 
+    global_bindings = [
+        (GLOBAL_VALUES["RECORZ_MVP_GLOBAL_TRANSCRIPT"], 0),
+        (GLOBAL_VALUES["RECORZ_MVP_GLOBAL_DISPLAY"], 1),
+        (GLOBAL_VALUES["RECORZ_MVP_GLOBAL_BITBLT"], 2),
+        (GLOBAL_VALUES["RECORZ_MVP_GLOBAL_GLYPHS"], 3),
+        (GLOBAL_VALUES["RECORZ_MVP_GLOBAL_FORM"], 4),
+        (GLOBAL_VALUES["RECORZ_MVP_GLOBAL_BITMAP"], 5),
+    ]
+    root_bindings = [
+        (SEED_ROOT_DEFAULT_FORM, 9),
+        (SEED_ROOT_FRAMEBUFFER_BITMAP, 8),
+        (SEED_ROOT_GLYPH_FALLBACK_BITMAP, 10 + 32),
+        (SEED_ROOT_TRANSCRIPT_LAYOUT, 6),
+        (SEED_ROOT_TRANSCRIPT_STYLE, 7),
+    ]
+    glyph_object_indices = [10 + glyph_index for glyph_index in range(128)]
+
     manifest = bytearray(
         struct.pack(
             SEED_HEADER_FORMAT,
             SEED_MAGIC,
             SEED_VERSION,
             len(seed_objects),
-            0,
-            0,
-            1,
-            2,
-            3,
-            4,
-            5,
-            7,
-            6,
-            8,
+            len(global_bindings),
+            len(root_bindings),
             128,
-            32,
             0,
         )
     )
@@ -384,17 +424,46 @@ def build_seed_manifest() -> bytes:
         manifest.extend(struct.pack(SEED_OBJECT_HEADER_FORMAT, object_kind, len(fields), 0))
         for field_kind, field_value in fields + [(SEED_FIELD_NIL, 0)] * (4 - len(fields)):
             manifest.extend(struct.pack(SEED_FIELD_FORMAT, field_kind, field_value))
-    manifest.extend(bytes(range(128)))
+    for binding_id, object_index in global_bindings:
+        manifest.extend(struct.pack(SEED_BINDING_FORMAT, binding_id, object_index))
+    for binding_id, object_index in root_bindings:
+        manifest.extend(struct.pack(SEED_BINDING_FORMAT, binding_id, object_index))
+    for object_index in glyph_object_indices:
+        manifest.extend(struct.pack("<H", object_index))
     return bytes(manifest)
 
 
+def build_entry_manifest() -> bytes:
+    return struct.pack(
+        IMAGE_ENTRY_FORMAT,
+        IMAGE_ENTRY_MAGIC,
+        IMAGE_ENTRY_VERSION,
+        IMAGE_ENTRY_KIND_DOIT,
+        0,
+        IMAGE_SECTION_PROGRAM,
+        0,
+        0,
+    )
+
+
+def fnv1a32(data: bytes, *, seed: int = 0x811C9DC5) -> int:
+    value = seed
+    for byte in data:
+        value ^= byte
+        value = (value * 0x01000193) & 0xFFFFFFFF
+    return value
+
+
 def build_image_manifest(program: Program) -> bytes:
+    entry_manifest = build_entry_manifest()
     program_manifest = build_program_manifest(program)
     seed_manifest = build_seed_manifest()
-    section_count = 2
+    section_count = 3
     header_size = struct.calcsize(IMAGE_HEADER_FORMAT) + (section_count * struct.calcsize(IMAGE_SECTION_FORMAT))
-    program_offset = header_size
+    entry_offset = header_size
+    program_offset = entry_offset + len(entry_manifest)
     seed_offset = program_offset + len(program_manifest)
+    feature_flags = IMAGE_FEATURE_FNV1A32
 
     manifest = bytearray(
         struct.pack(
@@ -402,6 +471,18 @@ def build_image_manifest(program: Program) -> bytes:
             IMAGE_MAGIC,
             IMAGE_VERSION,
             section_count,
+            feature_flags,
+            0,
+            IMAGE_PROFILE,
+        )
+    )
+    manifest.extend(
+        struct.pack(
+            IMAGE_SECTION_FORMAT,
+            IMAGE_SECTION_ENTRY,
+            0,
+            entry_offset,
+            len(entry_manifest),
         )
     )
     manifest.extend(
@@ -422,8 +503,19 @@ def build_image_manifest(program: Program) -> bytes:
             len(seed_manifest),
         )
     )
+    manifest.extend(entry_manifest)
     manifest.extend(program_manifest)
     manifest.extend(seed_manifest)
+    checksum = fnv1a32(manifest[struct.calcsize(IMAGE_HEADER_FORMAT) :])
+    manifest[: struct.calcsize(IMAGE_HEADER_FORMAT)] = struct.pack(
+        IMAGE_HEADER_FORMAT,
+        IMAGE_MAGIC,
+        IMAGE_VERSION,
+        section_count,
+        feature_flags,
+        checksum,
+        IMAGE_PROFILE,
+    )
     return bytes(manifest)
 
 

@@ -5,6 +5,7 @@
 
 #define RECORZ_MVP_HEAP_LIMIT 192U
 #define RECORZ_MVP_GLYPH_CODE_LIMIT 128U
+#define RECORZ_MVP_SEED_INVALID_OBJECT_INDEX 0xFFFFU
 
 enum recorz_mvp_opcode {
     RECORZ_MVP_OP_PUSH_GLOBAL = 1,
@@ -64,12 +65,22 @@ enum recorz_mvp_object_kind {
     RECORZ_MVP_OBJECT_GLYPHS = 6,
     RECORZ_MVP_OBJECT_FORM_FACTORY = 7,
     RECORZ_MVP_OBJECT_BITMAP_FACTORY = 8,
+    RECORZ_MVP_OBJECT_TEXT_LAYOUT = 9,
+    RECORZ_MVP_OBJECT_TEXT_STYLE = 10,
 };
 
 enum recorz_mvp_seed_field_kind {
     RECORZ_MVP_SEED_FIELD_NIL = 0,
     RECORZ_MVP_SEED_FIELD_SMALL_INTEGER = 1,
     RECORZ_MVP_SEED_FIELD_OBJECT_INDEX = 2,
+};
+
+enum recorz_mvp_seed_root {
+    RECORZ_MVP_SEED_ROOT_DEFAULT_FORM = 1,
+    RECORZ_MVP_SEED_ROOT_FRAMEBUFFER_BITMAP = 2,
+    RECORZ_MVP_SEED_ROOT_GLYPH_FALLBACK_BITMAP = 3,
+    RECORZ_MVP_SEED_ROOT_TRANSCRIPT_LAYOUT = 4,
+    RECORZ_MVP_SEED_ROOT_TRANSCRIPT_STYLE = 5,
 };
 
 struct recorz_mvp_instruction {
@@ -94,7 +105,7 @@ struct recorz_mvp_program {
 
 struct recorz_mvp_seed_field {
     uint8_t kind;
-    int16_t value;
+    int32_t value;
 };
 
 struct recorz_mvp_seed_object {
@@ -107,12 +118,9 @@ struct recorz_mvp_seed {
     const struct recorz_mvp_seed_object *objects;
     uint16_t object_count;
     uint16_t global_object_indices[RECORZ_MVP_GLOBAL_BITMAP + 1];
-    uint16_t default_form_index;
-    uint16_t framebuffer_bitmap_index;
-    uint16_t glyph_bitmap_start_index;
-    const uint8_t *glyph_object_offsets_by_code;
+    uint16_t root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_STYLE + 1];
+    const uint16_t *glyph_object_indices_by_code;
     uint16_t glyph_code_count;
-    uint8_t glyph_fallback_offset;
 };
 
 void recorz_mvp_vm_run(const struct recorz_mvp_program *program, const struct recorz_mvp_seed *seed);

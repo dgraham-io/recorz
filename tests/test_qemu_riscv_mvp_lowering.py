@@ -143,26 +143,49 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(operand_a, mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_TRANSCRIPT"])
         self.assertEqual(operand_b, 0)
 
-    def test_builds_image_manifest_with_program_and_seed_sections(self) -> None:
+    def test_builds_image_manifest_with_entry_program_and_seed_sections(self) -> None:
         program = mvp.build_program("Transcript show: 'HELLO'; cr")
         manifest = mvp.build_image_manifest(program)
-        magic, version, section_count = struct.unpack_from(mvp.IMAGE_HEADER_FORMAT, manifest, 0)
-        program_section = struct.unpack_from(
+        magic, version, section_count, feature_flags, checksum, profile = struct.unpack_from(mvp.IMAGE_HEADER_FORMAT, manifest, 0)
+        entry_section = struct.unpack_from(
             mvp.IMAGE_SECTION_FORMAT,
             manifest,
             struct.calcsize(mvp.IMAGE_HEADER_FORMAT),
         )
-        seed_section = struct.unpack_from(
+        program_section = struct.unpack_from(
             mvp.IMAGE_SECTION_FORMAT,
             manifest,
             struct.calcsize(mvp.IMAGE_HEADER_FORMAT) + struct.calcsize(mvp.IMAGE_SECTION_FORMAT),
         )
+        seed_section = struct.unpack_from(
+            mvp.IMAGE_SECTION_FORMAT,
+            manifest,
+            struct.calcsize(mvp.IMAGE_HEADER_FORMAT) + (2 * struct.calcsize(mvp.IMAGE_SECTION_FORMAT)),
+        )
+        entry_payload = manifest[entry_section[2] : entry_section[2] + entry_section[3]]
+        entry_magic, entry_version, entry_kind, entry_flags, entry_program_section, entry_argument_count, entry_reserved = (
+            struct.unpack_from(mvp.IMAGE_ENTRY_FORMAT, entry_payload, 0)
+        )
 
         self.assertEqual(magic, mvp.IMAGE_MAGIC)
         self.assertEqual(version, mvp.IMAGE_VERSION)
-        self.assertEqual(section_count, 2)
+        self.assertEqual(section_count, 3)
+        self.assertEqual(feature_flags, mvp.IMAGE_FEATURE_FNV1A32)
+        self.assertEqual(checksum, mvp.fnv1a32(manifest[struct.calcsize(mvp.IMAGE_HEADER_FORMAT) :]))
+        self.assertEqual(profile, mvp.IMAGE_PROFILE)
+        self.assertEqual(entry_section[0], mvp.IMAGE_SECTION_ENTRY)
         self.assertEqual(program_section[0], mvp.IMAGE_SECTION_PROGRAM)
         self.assertEqual(seed_section[0], mvp.IMAGE_SECTION_SEED)
+        self.assertEqual(entry_magic, mvp.IMAGE_ENTRY_MAGIC)
+        self.assertEqual(entry_version, mvp.IMAGE_ENTRY_VERSION)
+        self.assertEqual(entry_kind, mvp.IMAGE_ENTRY_KIND_DOIT)
+        self.assertEqual(entry_flags, 0)
+        self.assertEqual(entry_program_section, mvp.IMAGE_SECTION_PROGRAM)
+        self.assertEqual(entry_argument_count, 0)
+        self.assertEqual(entry_reserved, 0)
+        self.assertGreater(entry_section[2], 0)
+        self.assertGreater(entry_section[3], 0)
+        self.assertEqual(program_section[2], entry_section[2] + entry_section[3])
         self.assertGreater(program_section[2], 0)
         self.assertGreater(program_section[3], 0)
         self.assertEqual(seed_section[2], program_section[2] + program_section[3])
@@ -174,35 +197,37 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             magic,
             version,
             object_count,
-            nil_global,
-            transcript_global,
-            display_global,
-            bitblt_global,
-            glyphs_global,
-            form_global,
-            bitmap_global,
-            default_form_index,
-            framebuffer_bitmap_index,
-            glyph_bitmap_start_index,
+            global_binding_count,
+            root_binding_count,
             glyph_code_count,
-            glyph_fallback_offset,
             reserved,
         ) = struct.unpack_from(mvp.SEED_HEADER_FORMAT, manifest, 0)
+        object_bytes = object_count * (struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT)))
+        global_binding_offset = struct.calcsize(mvp.SEED_HEADER_FORMAT) + object_bytes
+        first_global_binding = struct.unpack_from(mvp.SEED_BINDING_FORMAT, manifest, global_binding_offset)
+        first_root_binding = struct.unpack_from(
+            mvp.SEED_BINDING_FORMAT,
+            manifest,
+            global_binding_offset + (global_binding_count * struct.calcsize(mvp.SEED_BINDING_FORMAT)),
+        )
+        first_glyph_object_index = struct.unpack_from(
+            "<H",
+            manifest,
+            global_binding_offset
+            + ((global_binding_count + root_binding_count) * struct.calcsize(mvp.SEED_BINDING_FORMAT)),
+        )[0]
 
-        self.assertEqual(struct.calcsize(mvp.SEED_HEADER_FORMAT), 32)
+        self.assertEqual(struct.calcsize(mvp.SEED_HEADER_FORMAT), 16)
         self.assertEqual(magic, mvp.SEED_MAGIC)
         self.assertEqual(version, mvp.SEED_VERSION)
-        self.assertEqual(object_count, 136)
-        self.assertEqual(
-            (nil_global, transcript_global, display_global, bitblt_global, glyphs_global, form_global, bitmap_global),
-            (0, 0, 1, 2, 3, 4, 5),
-        )
-        self.assertEqual(default_form_index, 7)
-        self.assertEqual(framebuffer_bitmap_index, 6)
-        self.assertEqual(glyph_bitmap_start_index, 8)
+        self.assertEqual(object_count, 138)
+        self.assertEqual(global_binding_count, 6)
+        self.assertEqual(root_binding_count, 5)
         self.assertEqual(glyph_code_count, 128)
-        self.assertEqual(glyph_fallback_offset, 32)
         self.assertEqual(reserved, 0)
+        self.assertEqual(first_global_binding, (mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_TRANSCRIPT"], 0))
+        self.assertEqual(first_root_binding, (mvp.SEED_ROOT_DEFAULT_FORM, 9))
+        self.assertEqual(first_glyph_object_index, 10)
 
     def test_rejects_unsupported_globals(self) -> None:
         with self.assertRaises(mvp.LoweringError):
