@@ -128,11 +128,11 @@ IMAGE_ENTRY_FORMAT = "<4sHHHHHH"
 IMAGE_ENTRY_KIND_DOIT = 1
 
 SEED_MAGIC = b"RCZS"
-SEED_VERSION = 2
+SEED_VERSION = 3
 SEED_HEADER_FORMAT = "<4sHHHHHH"
 SEED_BINDING_FORMAT = "<HH"
 SEED_OBJECT_HEADER_FORMAT = "<BBH"
-SEED_FIELD_FORMAT = "<Bhx"
+SEED_FIELD_FORMAT = "<Bi"
 
 SEED_FIELD_NIL = 0
 SEED_FIELD_SMALL_INTEGER = 1
@@ -147,11 +147,13 @@ SEED_OBJECT_GLYPHS = 6
 SEED_OBJECT_FORM_FACTORY = 7
 SEED_OBJECT_BITMAP_FACTORY = 8
 SEED_OBJECT_TEXT_LAYOUT = 9
+SEED_OBJECT_TEXT_STYLE = 10
 
 SEED_ROOT_DEFAULT_FORM = 1
 SEED_ROOT_FRAMEBUFFER_BITMAP = 2
 SEED_ROOT_GLYPH_FALLBACK_BITMAP = 3
 SEED_ROOT_TRANSCRIPT_LAYOUT = 4
+SEED_ROOT_TRANSCRIPT_STYLE = 5
 
 BITMAP_STORAGE_FRAMEBUFFER = 1
 BITMAP_STORAGE_GLYPH_MONO = 2
@@ -354,6 +356,13 @@ def build_seed_manifest() -> bytes:
             ],
         ),
         (
+            SEED_OBJECT_TEXT_STYLE,
+            [
+                (SEED_FIELD_SMALL_INTEGER, 0x00486020),
+                (SEED_FIELD_SMALL_INTEGER, 0x00F2F2F2),
+            ],
+        ),
+        (
             SEED_OBJECT_BITMAP,
             [
                 (SEED_FIELD_SMALL_INTEGER, 640),
@@ -365,7 +374,7 @@ def build_seed_manifest() -> bytes:
         (
             SEED_OBJECT_FORM,
             [
-                (SEED_FIELD_OBJECT_INDEX, 7),
+                (SEED_FIELD_OBJECT_INDEX, 8),
             ],
         ),
     ]
@@ -391,12 +400,13 @@ def build_seed_manifest() -> bytes:
         (GLOBAL_VALUES["RECORZ_MVP_GLOBAL_BITMAP"], 5),
     ]
     root_bindings = [
-        (SEED_ROOT_DEFAULT_FORM, 8),
-        (SEED_ROOT_FRAMEBUFFER_BITMAP, 7),
-        (SEED_ROOT_GLYPH_FALLBACK_BITMAP, 9 + 32),
+        (SEED_ROOT_DEFAULT_FORM, 9),
+        (SEED_ROOT_FRAMEBUFFER_BITMAP, 8),
+        (SEED_ROOT_GLYPH_FALLBACK_BITMAP, 10 + 32),
         (SEED_ROOT_TRANSCRIPT_LAYOUT, 6),
+        (SEED_ROOT_TRANSCRIPT_STYLE, 7),
     ]
-    glyph_object_indices = [9 + glyph_index for glyph_index in range(128)]
+    glyph_object_indices = [10 + glyph_index for glyph_index in range(128)]
 
     manifest = bytearray(
         struct.pack(

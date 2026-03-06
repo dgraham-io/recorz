@@ -17,8 +17,6 @@
 
 #define GLYPH_WIDTH 5U
 #define GLYPH_HEIGHT 7U
-#define TEXT_BACKGROUND_COLOR 0x00486020U
-#define TEXT_FOREGROUND_COLOR 0x00f2f2f2U
 
 #define FORM_FIELD_BITS 0U
 #define BITMAP_FIELD_WIDTH 0U
@@ -29,6 +27,8 @@
 #define TEXT_LAYOUT_FIELD_TOP_MARGIN 1U
 #define TEXT_LAYOUT_FIELD_LINE_SPACING 2U
 #define TEXT_LAYOUT_FIELD_PIXEL_SCALE 3U
+#define TEXT_STYLE_FIELD_BACKGROUND_COLOR 0U
+#define TEXT_STYLE_FIELD_FOREGROUND_COLOR 1U
 
 #define BITMAP_STORAGE_FRAMEBUFFER 1U
 #define BITMAP_STORAGE_GLYPH_MONO 2U
@@ -95,6 +95,7 @@ static uint16_t framebuffer_bitmap_handle = 0U;
 static uint16_t glyph_bitmap_handles[128];
 static uint16_t glyph_fallback_handle = 0U;
 static uint16_t transcript_layout_handle = 0U;
+static uint16_t transcript_style_handle = 0U;
 static uint32_t mono_bitmap_pool[MONO_BITMAP_LIMIT][MONO_BITMAP_MAX_HEIGHT];
 static uint16_t mono_bitmap_count = 0U;
 static uint32_t cursor_x = 0U;
@@ -291,6 +292,33 @@ static uint32_t text_pixel_scale(void) {
         machine_panic("text layout pixel scale must be non-zero");
     }
     return scale;
+}
+
+static const struct recorz_mvp_heap_object *transcript_style_object(void) {
+    const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(transcript_style_handle);
+
+    if (object->kind != RECORZ_MVP_OBJECT_TEXT_STYLE) {
+        machine_panic("transcript style root is not a text style");
+    }
+    return object;
+}
+
+static uint32_t transcript_style_u32(uint8_t index, const char *message) {
+    return small_integer_u32(heap_get_field(transcript_style_object(), index), message);
+}
+
+static uint32_t text_background_color(void) {
+    return transcript_style_u32(
+        TEXT_STYLE_FIELD_BACKGROUND_COLOR,
+        "text style background color is not a small integer"
+    );
+}
+
+static uint32_t text_foreground_color(void) {
+    return transcript_style_u32(
+        TEXT_STYLE_FIELD_FOREGROUND_COLOR,
+        "text style foreground color is not a small integer"
+    );
 }
 
 static uint32_t char_width(void) {
@@ -609,7 +637,7 @@ static void fill_form_color(const struct recorz_mvp_heap_object *form, uint32_t 
 }
 
 static void form_clear(const struct recorz_mvp_heap_object *form) {
-    fill_form_color(form, TEXT_BACKGROUND_COLOR);
+    fill_form_color(form, text_background_color());
 }
 
 static void form_newline(const struct recorz_mvp_heap_object *form) {
@@ -645,8 +673,8 @@ static void form_write_string(const struct recorz_mvp_heap_object *form, const c
             cursor_x,
             cursor_y,
             text_pixel_scale(),
-            TEXT_FOREGROUND_COLOR,
-            TEXT_BACKGROUND_COLOR,
+            text_foreground_color(),
+            text_background_color(),
             0U
         );
         cursor_x += char_width();
@@ -722,6 +750,7 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
     default_form_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_DEFAULT_FORM]);
     framebuffer_bitmap_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_FRAMEBUFFER_BITMAP]);
     transcript_layout_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_LAYOUT]);
+    transcript_style_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_STYLE]);
     if (heap_get_field(heap_object(default_form_handle), FORM_FIELD_BITS).kind != RECORZ_MVP_VALUE_OBJECT ||
         (uint16_t)heap_get_field(heap_object(default_form_handle), FORM_FIELD_BITS).integer != framebuffer_bitmap_handle) {
         machine_panic("seed default form does not point at the framebuffer bitmap");
@@ -868,7 +897,7 @@ static void dispatch_send(const struct recorz_mvp_program *program, uint8_t sele
                     small_integer_u32(arguments[2], "BitBlt copy x must be a non-negative small integer"),
                     small_integer_u32(arguments[3], "BitBlt copy y must be a non-negative small integer"),
                     small_integer_u32(arguments[4], "BitBlt copy scale must be a non-negative small integer"),
-                    TEXT_FOREGROUND_COLOR,
+                    text_foreground_color(),
                     0U,
                     1U
                 );

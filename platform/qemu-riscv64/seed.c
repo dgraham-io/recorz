@@ -8,9 +8,9 @@
 #define RECORZ_MVP_SEED_MAGIC_1 'C'
 #define RECORZ_MVP_SEED_MAGIC_2 'Z'
 #define RECORZ_MVP_SEED_MAGIC_3 'S'
-#define RECORZ_MVP_SEED_VERSION 2U
+#define RECORZ_MVP_SEED_VERSION 3U
 #define RECORZ_MVP_SEED_HEADER_SIZE 16U
-#define RECORZ_MVP_SEED_OBJECT_SIZE 20U
+#define RECORZ_MVP_SEED_OBJECT_SIZE 24U
 #define RECORZ_MVP_SEED_BINDING_SIZE 4U
 
 static struct recorz_mvp_seed_object loaded_objects[RECORZ_MVP_HEAP_LIMIT];
@@ -21,8 +21,13 @@ static uint16_t read_u16_le(const uint8_t *bytes) {
     return (uint16_t)bytes[0] | (uint16_t)((uint16_t)bytes[1] << 8U);
 }
 
-static int16_t read_i16_le(const uint8_t *bytes) {
-    return (int16_t)read_u16_le(bytes);
+static int32_t read_i32_le(const uint8_t *bytes) {
+    return (int32_t)(
+        (uint32_t)bytes[0] |
+        ((uint32_t)bytes[1] << 8U) |
+        ((uint32_t)bytes[2] << 16U) |
+        ((uint32_t)bytes[3] << 24U)
+    );
 }
 
 const struct recorz_mvp_seed *recorz_mvp_seed_load(const uint8_t *blob, uint32_t size) {
@@ -72,7 +77,7 @@ const struct recorz_mvp_seed *recorz_mvp_seed_load(const uint8_t *blob, uint32_t
     for (global_index = 0U; global_index <= RECORZ_MVP_GLOBAL_BITMAP; ++global_index) {
         loaded_seed.global_object_indices[global_index] = RECORZ_MVP_SEED_INVALID_OBJECT_INDEX;
     }
-    for (global_index = 0U; global_index <= RECORZ_MVP_SEED_ROOT_TRANSCRIPT_LAYOUT; ++global_index) {
+    for (global_index = 0U; global_index <= RECORZ_MVP_SEED_ROOT_TRANSCRIPT_STYLE; ++global_index) {
         loaded_seed.root_object_indices[global_index] = RECORZ_MVP_SEED_INVALID_OBJECT_INDEX;
     }
 
@@ -90,9 +95,8 @@ const struct recorz_mvp_seed *recorz_mvp_seed_load(const uint8_t *blob, uint32_t
         for (field_index = 0U; field_index < 4U; ++field_index) {
             struct recorz_mvp_seed_field *field = &object->fields[field_index];
             field->kind = blob[offset++];
-            field->value = read_i16_le(blob + offset);
-            offset += 2U;
-            offset += 1U;
+            field->value = read_i32_le(blob + offset);
+            offset += 4U;
             if (field->kind > RECORZ_MVP_SEED_FIELD_OBJECT_INDEX) {
                 machine_panic("seed manifest field kind is unknown");
             }
@@ -128,7 +132,7 @@ const struct recorz_mvp_seed *recorz_mvp_seed_load(const uint8_t *blob, uint32_t
 
         offset += RECORZ_MVP_SEED_BINDING_SIZE;
         if (binding_id < RECORZ_MVP_SEED_ROOT_DEFAULT_FORM ||
-            binding_id > RECORZ_MVP_SEED_ROOT_TRANSCRIPT_LAYOUT) {
+            binding_id > RECORZ_MVP_SEED_ROOT_TRANSCRIPT_STYLE) {
             machine_panic("seed manifest root binding id is out of range");
         }
         if (binding_object_index >= object_count) {
@@ -141,7 +145,7 @@ const struct recorz_mvp_seed *recorz_mvp_seed_load(const uint8_t *blob, uint32_t
     }
 
     for (object_index = RECORZ_MVP_SEED_ROOT_DEFAULT_FORM;
-         object_index <= RECORZ_MVP_SEED_ROOT_TRANSCRIPT_LAYOUT;
+         object_index <= RECORZ_MVP_SEED_ROOT_TRANSCRIPT_STYLE;
          ++object_index) {
         if (loaded_seed.root_object_indices[object_index] == RECORZ_MVP_SEED_INVALID_OBJECT_INDEX) {
             machine_panic("seed manifest is missing a required root binding");
