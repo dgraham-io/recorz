@@ -23,7 +23,7 @@ OBJECTS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(filter %.c,$(SOURCES))) \
 	$(patsubst %.S,$(BUILD_DIR)/%.o,$(filter %.S,$(SOURCES))) \
 	$(GENERATED_IMAGE_OBJECT)
 
-.PHONY: all run run-headless screenshot clean
+.PHONY: all run run-headless screenshot inspect-image clean
 
 all: $(ELF)
 
@@ -67,6 +67,9 @@ screenshot: $(ELF)
 	$(PYTHON) $(ROOT)/tools/qemu_hmp_screendump.py $(MONITOR_SOCK) $(PPM)
 	@PID=$$(cat $(QEMU_PID)); kill $$PID >/dev/null 2>&1 || true
 	@echo "wrote $(PPM)"
+
+inspect-image: $(GENERATED_IMAGE)
+	$(PYTHON) $(ROOT)/tools/inspect_qemu_riscv_mvp_image.py $(GENERATED_IMAGE)
 
 clean:
 	rm -rf $(BUILD_DIR)
