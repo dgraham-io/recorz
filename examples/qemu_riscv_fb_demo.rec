@@ -1,0 +1,22 @@
+| width height pixels form bits scratch |
+form := Display defaultForm.
+bits := form bits.
+width := bits width.
+height := bits height.
+pixels := width * height.
+scratch := Form fromBits: (Bitmap monoWidth: 24 height: 28).
+BitBlt fillForm: form color: 0.
+BitBlt fillForm: scratch color: 0.
+BitBlt copyBitmap: (Glyphs at: 82) toForm: scratch x: 0 y: 0 scale: 4.
+BitBlt copyBitmap: scratch bits sourceX: 0 sourceY: 0 width: 24 height: 28 toForm: form x: 560 y: 24 scale: 1 color: 16711680.
+form writeString: 'HELLO FROM RECORZ'.
+form newline.
+form writeString: 'SIZE: '.
+form writeString: width printString.
+form writeString: ' x '.
+form writeString: height printString.
+form newline.
+form writeString: 'PIXELS: '.
+form writeString: pixels printString.
+form newline.
+form writeString: 'RAMFB ONLINE.'

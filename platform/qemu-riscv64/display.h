@@ -1,0 +1,27 @@
+#ifndef RECORZ_QEMU_RISCV64_DISPLAY_H
+#define RECORZ_QEMU_RISCV64_DISPLAY_H
+
+#include <stdint.h>
+
+#define RECORZ_DISPLAY_WIDTH 640U
+#define RECORZ_DISPLAY_HEIGHT 480U
+
+void display_init(void);
+void display_form_fill_color(uint32_t color);
+void display_form_blit_mono_bitmap(
+    uint32_t x,
+    uint32_t y,
+    const uint32_t *rows,
+    uint32_t bitmap_width,
+    uint32_t bitmap_height,
+    uint32_t source_x,
+    uint32_t source_y,
+    uint32_t copy_width,
+    uint32_t copy_height,
+    uint32_t scale,
+    uint32_t one_color,
+    uint32_t zero_color,
+    uint8_t transparent_zero
+);
+
+#endif

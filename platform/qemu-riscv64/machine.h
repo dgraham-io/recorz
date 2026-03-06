@@ -1,0 +1,13 @@
+#ifndef RECORZ_QEMU_RISCV64_MACHINE_H
+#define RECORZ_QEMU_RISCV64_MACHINE_H
+
+#include <stdint.h>
+
+void machine_init(const void *fdt);
+void machine_putc(char c);
+void machine_puts(const char *text);
+void machine_wait_forever(void);
+void machine_panic(const char *message);
+void machine_ramfb_init(void *framebuffer, uint32_t width, uint32_t height, uint32_t stride);
+
+#endif

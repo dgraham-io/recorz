@@ -1,0 +1,93 @@
+#include "image.h"
+
+#include <stdint.h>
+
+#include "machine.h"
+#include "program.h"
+#include "seed.h"
+
+#define RECORZ_MVP_IMAGE_MAGIC_0 'R'
+#define RECORZ_MVP_IMAGE_MAGIC_1 'C'
+#define RECORZ_MVP_IMAGE_MAGIC_2 'Z'
+#define RECORZ_MVP_IMAGE_MAGIC_3 'I'
+#define RECORZ_MVP_IMAGE_VERSION 1U
+#define RECORZ_MVP_IMAGE_HEADER_SIZE 8U
+#define RECORZ_MVP_IMAGE_SECTION_SIZE 12U
+#define RECORZ_MVP_IMAGE_SECTION_LIMIT 8U
+#define RECORZ_MVP_IMAGE_SECTION_PROGRAM 1U
+#define RECORZ_MVP_IMAGE_SECTION_SEED 2U
+
+static struct recorz_mvp_boot_image loaded_image;
+
+static uint16_t read_u16_le(const uint8_t *bytes) {
+    return (uint16_t)bytes[0] | (uint16_t)((uint16_t)bytes[1] << 8U);
+}
+
+static uint32_t read_u32_le(const uint8_t *bytes) {
+    return (uint32_t)bytes[0] | ((uint32_t)bytes[1] << 8U) | ((uint32_t)bytes[2] << 16U) | ((uint32_t)bytes[3] << 24U);
+}
+
+const struct recorz_mvp_boot_image *recorz_mvp_image_load(const uint8_t *blob, uint32_t size) {
+    uint16_t section_count;
+    uint16_t section_index;
+    const uint8_t *program_blob = 0;
+    const uint8_t *seed_blob = 0;
+    uint32_t program_size = 0U;
+    uint32_t seed_size = 0U;
+    uint32_t offset = RECORZ_MVP_IMAGE_HEADER_SIZE;
+
+    if (size < RECORZ_MVP_IMAGE_HEADER_SIZE) {
+        machine_panic("boot image is too small");
+    }
+    if (blob[0] != RECORZ_MVP_IMAGE_MAGIC_0 || blob[1] != RECORZ_MVP_IMAGE_MAGIC_1 ||
+        blob[2] != RECORZ_MVP_IMAGE_MAGIC_2 || blob[3] != RECORZ_MVP_IMAGE_MAGIC_3) {
+        machine_panic("boot image magic mismatch");
+    }
+    if (read_u16_le(blob + 4U) != RECORZ_MVP_IMAGE_VERSION) {
+        machine_panic("boot image version mismatch");
+    }
+
+    section_count = read_u16_le(blob + 6U);
+    if (section_count == 0U || section_count > RECORZ_MVP_IMAGE_SECTION_LIMIT) {
+        machine_panic("boot image section count is invalid");
+    }
+    if (size < RECORZ_MVP_IMAGE_HEADER_SIZE + ((uint32_t)section_count * RECORZ_MVP_IMAGE_SECTION_SIZE)) {
+        machine_panic("boot image section table is truncated");
+    }
+
+    for (section_index = 0U; section_index < section_count; ++section_index) {
+        uint16_t kind = read_u16_le(blob + offset);
+        uint32_t section_offset = read_u32_le(blob + offset + 4U);
+        uint32_t section_size = read_u32_le(blob + offset + 8U);
+
+        offset += RECORZ_MVP_IMAGE_SECTION_SIZE;
+        if (section_offset > size || section_size > size - section_offset) {
+            machine_panic("boot image section bounds are invalid");
+        }
+        if (kind == RECORZ_MVP_IMAGE_SECTION_PROGRAM) {
+            if (program_blob != 0) {
+                machine_panic("boot image has duplicate program sections");
+            }
+            program_blob = blob + section_offset;
+            program_size = section_size;
+            continue;
+        }
+        if (kind == RECORZ_MVP_IMAGE_SECTION_SEED) {
+            if (seed_blob != 0) {
+                machine_panic("boot image has duplicate seed sections");
+            }
+            seed_blob = blob + section_offset;
+            seed_size = section_size;
+            continue;
+        }
+        machine_panic("boot image section kind is unknown");
+    }
+
+    if (program_blob == 0 || seed_blob == 0) {
+        machine_panic("boot image is missing required sections");
+    }
+
+    loaded_image.program = recorz_mvp_program_load(program_blob, program_size);
+    loaded_image.seed = recorz_mvp_seed_load(seed_blob, seed_size);
+    return &loaded_image;
+}
