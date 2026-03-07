@@ -1,0 +1,13 @@
+| helperClass |
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #Helper
+!
+cr
+    Display newline.
+    ^self'.
+helperClass := KernelInstaller classNamed: 'Helper'.
+Transcript show: 'ONE'.
+Transcript cr.
+Transcript show: 'TWO'.
+helperClass new cr.
+Transcript show: 'THREE'.
