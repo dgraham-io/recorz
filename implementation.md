@@ -465,3 +465,9 @@
 - Switched the derived dynamic section views and fixed boot materialization path to consume `BOOT_IMAGE_SPEC`, while preserving the existing `FIXED_BOOT_GRAPH_SPEC`, `DYNAMIC_SEED_SECTION_SPECS`, and helper-derived views for stability.
 - Extended the focused lowering regressions to lock the new `BOOT_IMAGE_SPEC` and the fact that the existing fixed/dynamic spec views remain derived from it.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Derive Fixed Boot Views From Boot Image Spec
+- Moved the fixed boot family/order/export derived views to initialize from `BOOT_IMAGE_SPEC.fixed_boot_graph_spec` instead of directly from the standalone fixed graph constant, so the top-level boot image spec now owns more of the active bootstrap surface.
+- Kept `FIXED_BOOT_GRAPH_SPEC` as the stable underlying declaration, but made the boot object family maps, flattened object order, fixed count, and export maps flow through the top-level boot image model.
+- Extended the focused lowering regressions to lock that those fixed boot views are now derived from `BOOT_IMAGE_SPEC.fixed_boot_graph_spec` while keeping the generated seed image unchanged.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

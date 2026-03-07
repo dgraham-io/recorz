@@ -563,14 +563,6 @@ def build_boot_object_family_spec_map(fixed_boot_graph_spec: FixedBootGraphSpec)
     return family_spec_map
 
 
-BOOT_OBJECT_FAMILY_SPECS = list(FIXED_BOOT_GRAPH_SPEC.family_specs)
-BOOT_OBJECT_FAMILY_SPECS_BY_NAME = build_boot_object_family_spec_map(FIXED_BOOT_GRAPH_SPEC)
-BOOT_OBJECT_FAMILY_NAMES = [family_spec.name for family_spec in FIXED_BOOT_GRAPH_SPEC.family_specs]
-BOOT_OBJECT_SPECS_BEFORE_GLYPHS = BOOT_OBJECT_FAMILY_SPECS_BY_NAME["before_glyphs"].object_specs
-GLYPH_BITMAP_BOOT_SPECS = BOOT_OBJECT_FAMILY_SPECS_BY_NAME["glyph_bitmaps"].object_specs
-BOOT_OBJECT_SPECS_AFTER_GLYPHS = BOOT_OBJECT_FAMILY_SPECS_BY_NAME["after_glyphs"].object_specs
-
-
 def flatten_boot_object_specs(fixed_boot_graph_spec: FixedBootGraphSpec) -> list[BootObjectSpec]:
     return [
         object_spec
@@ -589,12 +581,6 @@ def build_boot_object_spec_map(object_specs: list[BootObjectSpec]) -> dict[str, 
     return spec_map
 
 
-BOOT_OBJECT_SPECS_IN_ORDER = flatten_boot_object_specs(FIXED_BOOT_GRAPH_SPEC)
-BOOT_OBJECT_SPEC_NAMES_IN_ORDER = [object_spec.name for object_spec in BOOT_OBJECT_SPECS_IN_ORDER]
-BOOT_OBJECT_SPECS_BY_NAME = build_boot_object_spec_map(BOOT_OBJECT_SPECS_IN_ORDER)
-BOOT_OBJECT_FIXED_COUNT = len(BOOT_OBJECT_SPECS_IN_ORDER)
-
-
 def build_boot_object_export_map(
     object_specs: list[BootObjectSpec],
     export_kind: str,
@@ -609,10 +595,6 @@ def build_boot_object_export_map(
             export_map[export_name] = object_spec.name
 
     return export_map
-
-
-GLOBAL_NAME_TO_BOOT_OBJECT_NAME = build_boot_object_export_map(BOOT_OBJECT_SPECS_IN_ORDER, "global")
-SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME = build_boot_object_export_map(BOOT_OBJECT_SPECS_IN_ORDER, "root")
 KERNEL_METHOD_IMPLEMENTATION_COMPILED = "compiled"
 KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE = "primitive"
 KERNEL_CLASS_HEADER_PATTERN = re.compile(
@@ -1542,6 +1524,18 @@ def build_boot_image_spec(
 
 
 BOOT_IMAGE_SPEC = build_boot_image_spec(FIXED_BOOT_GRAPH_SPEC, DYNAMIC_SEED_SECTION_SPECS)
+BOOT_OBJECT_FAMILY_SPECS = list(BOOT_IMAGE_SPEC.fixed_boot_graph_spec.family_specs)
+BOOT_OBJECT_FAMILY_SPECS_BY_NAME = build_boot_object_family_spec_map(BOOT_IMAGE_SPEC.fixed_boot_graph_spec)
+BOOT_OBJECT_FAMILY_NAMES = [family_spec.name for family_spec in BOOT_IMAGE_SPEC.fixed_boot_graph_spec.family_specs]
+BOOT_OBJECT_SPECS_BEFORE_GLYPHS = BOOT_OBJECT_FAMILY_SPECS_BY_NAME["before_glyphs"].object_specs
+GLYPH_BITMAP_BOOT_SPECS = BOOT_OBJECT_FAMILY_SPECS_BY_NAME["glyph_bitmaps"].object_specs
+BOOT_OBJECT_SPECS_AFTER_GLYPHS = BOOT_OBJECT_FAMILY_SPECS_BY_NAME["after_glyphs"].object_specs
+BOOT_OBJECT_SPECS_IN_ORDER = flatten_boot_object_specs(BOOT_IMAGE_SPEC.fixed_boot_graph_spec)
+BOOT_OBJECT_SPEC_NAMES_IN_ORDER = [object_spec.name for object_spec in BOOT_OBJECT_SPECS_IN_ORDER]
+BOOT_OBJECT_SPECS_BY_NAME = build_boot_object_spec_map(BOOT_OBJECT_SPECS_IN_ORDER)
+BOOT_OBJECT_FIXED_COUNT = len(BOOT_OBJECT_SPECS_IN_ORDER)
+GLOBAL_NAME_TO_BOOT_OBJECT_NAME = build_boot_object_export_map(BOOT_OBJECT_SPECS_IN_ORDER, "global")
+SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME = build_boot_object_export_map(BOOT_OBJECT_SPECS_IN_ORDER, "root")
 SEED_LAYOUT_SECTION_SPECS = build_seed_layout_section_specs(BOOT_IMAGE_SPEC.dynamic_seed_section_specs)
 SEED_LAYOUT_SECTION_NAMES = [section_spec.name for section_spec in SEED_LAYOUT_SECTION_SPECS]
 DYNAMIC_SEED_OBJECT_SECTION_SPECS = build_dynamic_seed_object_section_specs(BOOT_IMAGE_SPEC.dynamic_seed_section_specs)
