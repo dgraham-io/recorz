@@ -804,6 +804,27 @@ def kernel_instance_variable_index(class_name: str, field_name: str) -> int:
         ) from error
 
 
+def materialize_named_seed_fields(
+    class_name: str,
+    field_values_by_name: dict[str, tuple[int, int]],
+) -> list[tuple[int, int]]:
+    class_header = KERNEL_CLASS_HEADERS_BY_NAME[class_name]
+    instance_variables = class_header.instance_variables
+    unknown_field_names = sorted(set(field_values_by_name) - set(instance_variables))
+    if unknown_field_names:
+        raise LoweringError(
+            f"kernel MVP class #{class_name} does not declare instance variables "
+            + ", ".join(repr(field_name) for field_name in unknown_field_names)
+        )
+    fields = [
+        field_values_by_name.get(field_name, (SEED_FIELD_NIL, 0))
+        for field_name in instance_variables
+    ]
+    while fields and fields[-1] == (SEED_FIELD_NIL, 0):
+        fields.pop()
+    return fields
+
+
 CLASS_FIELD_SUPERCLASS = kernel_instance_variable_index("Class", "superclass")
 CLASS_FIELD_INSTANCE_KIND = kernel_instance_variable_index("Class", "instanceKind")
 CLASS_FIELD_METHOD_START = kernel_instance_variable_index("Class", "methodStart")
@@ -1709,15 +1730,18 @@ def build_class_seed_objects(
         SeedObject(
             SEED_OBJECT_CLASS,
             class_class_index,
-            [
-                (SEED_FIELD_NIL, 0),
-                (SEED_FIELD_SMALL_INTEGER, class_kind),
-                (
-                    SEED_FIELD_OBJECT_INDEX if class_kind in method_start_by_kind else SEED_FIELD_NIL,
-                    method_start_by_kind.get(class_kind, 0),
-                ),
-                (SEED_FIELD_SMALL_INTEGER, method_count_by_kind.get(class_kind, 0)),
-            ],
+            materialize_named_seed_fields(
+                "Class",
+                {
+                    "superclass": (SEED_FIELD_NIL, 0),
+                    "instanceKind": (SEED_FIELD_SMALL_INTEGER, class_kind),
+                    "methodStart": (
+                        SEED_FIELD_OBJECT_INDEX if class_kind in method_start_by_kind else SEED_FIELD_NIL,
+                        method_start_by_kind.get(class_kind, 0),
+                    ),
+                    "methodCount": (SEED_FIELD_SMALL_INTEGER, method_count_by_kind.get(class_kind, 0)),
+                },
+            ),
         )
         for class_kind in class_kind_order
     ]
@@ -2055,9 +2079,12 @@ def build_selector_seed_objects(
             SeedObject(
                 SEED_OBJECT_SELECTOR,
                 selector_class_index,
-                [
-                    (SEED_FIELD_SMALL_INTEGER, selector_value),
-                ],
+                materialize_named_seed_fields(
+                    "Selector",
+                    {
+                        "value": (SEED_FIELD_SMALL_INTEGER, selector_value),
+                    },
+                ),
             )
         )
 
@@ -2074,16 +2101,18 @@ def build_compiled_method_seed_objects(
 
     for entry_name in compiled_method_entry_order:
         program = COMPILED_METHOD_PROGRAM_BY_ENTRY_NAME[entry_name]
-        encoded_fields = [
-            (SEED_FIELD_SMALL_INTEGER, instruction)
-            for instruction in program
-        ]
         compiled_method_indices[entry_name] = compiled_method_start_index + len(compiled_method_seed_objects)
         compiled_method_seed_objects.append(
             SeedObject(
                 SEED_OBJECT_COMPILED_METHOD,
                 compiled_method_class_index,
-                encoded_fields,
+                materialize_named_seed_fields(
+                    "CompiledMethod",
+                    {
+                        f"word{index}": (SEED_FIELD_SMALL_INTEGER, instruction)
+                        for index, instruction in enumerate(program)
+                    },
+                ),
             )
         )
 
@@ -2114,10 +2143,13 @@ def build_method_entry_seed_objects(
             SeedObject(
                 SEED_OBJECT_METHOD_ENTRY,
                 method_entry_class_index,
-                [
-                    (SEED_FIELD_SMALL_INTEGER, METHOD_ENTRY_VALUES[entry_name]),
-                    (implementation_field_kind, implementation_field_value),
-                ],
+                materialize_named_seed_fields(
+                    "MethodEntry",
+                    {
+                        "executionId": (SEED_FIELD_SMALL_INTEGER, METHOD_ENTRY_VALUES[entry_name]),
+                        "implementation": (implementation_field_kind, implementation_field_value),
+                    },
+                ),
             )
         )
 
@@ -2145,12 +2177,18 @@ def build_method_descriptor_seed_objects(
                 SeedObject(
                     SEED_OBJECT_METHOD_DESCRIPTOR,
                     method_descriptor_class_index,
-                    [
-                        (SEED_FIELD_OBJECT_INDEX, selector_indices_by_value[SELECTOR_VALUES[SELECTOR_IDS[selector]]]),
-                        (SEED_FIELD_SMALL_INTEGER, argument_count),
-                        (SEED_FIELD_SMALL_INTEGER, class_kind),
-                        (SEED_FIELD_OBJECT_INDEX, method_entry_indices[entry_name]),
-                    ],
+                    materialize_named_seed_fields(
+                        "MethodDescriptor",
+                        {
+                            "selector": (
+                                SEED_FIELD_OBJECT_INDEX,
+                                selector_indices_by_value[SELECTOR_VALUES[SELECTOR_IDS[selector]]],
+                            ),
+                            "argumentCount": (SEED_FIELD_SMALL_INTEGER, argument_count),
+                            "primitiveKind": (SEED_FIELD_SMALL_INTEGER, class_kind),
+                            "entry": (SEED_FIELD_OBJECT_INDEX, method_entry_indices[entry_name]),
+                        },
+                    ),
                 )
             )
 

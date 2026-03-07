@@ -632,6 +632,35 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ),
         )
 
+    def test_materializes_named_seed_fields_in_source_slot_order(self) -> None:
+        self.assertEqual(
+            mvp.materialize_named_seed_fields(
+                "MethodEntry",
+                {
+                    "implementation": (mvp.SEED_FIELD_OBJECT_INDEX, 17),
+                    "executionId": (mvp.SEED_FIELD_SMALL_INTEGER, 3),
+                },
+            ),
+            [
+                (mvp.SEED_FIELD_SMALL_INTEGER, 3),
+                (mvp.SEED_FIELD_OBJECT_INDEX, 17),
+            ],
+        )
+        self.assertEqual(
+            mvp.materialize_named_seed_fields(
+                "CompiledMethod",
+                {
+                    "word0": (mvp.SEED_FIELD_SMALL_INTEGER, 11),
+                    "word2": (mvp.SEED_FIELD_SMALL_INTEGER, 33),
+                },
+            ),
+            [
+                (mvp.SEED_FIELD_SMALL_INTEGER, 11),
+                (mvp.SEED_FIELD_NIL, 0),
+                (mvp.SEED_FIELD_SMALL_INTEGER, 33),
+            ],
+        )
+
     def test_derives_method_entry_order_from_boot_class_order_and_source_chunks(self) -> None:
         self.assertEqual(
             mvp.KERNEL_CLASS_BOOT_ORDER,

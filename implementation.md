@@ -567,3 +567,9 @@
 - Added a small `kernel_instance_variable_index()` helper so builder-side seed/class assembly now follows the same source-owned slot order already declared in the kernel `.rz` files.
 - Extended the focused lowering regressions to lock the new source-derived field indices for the support/runtime classes that the seed builder actively materializes.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Materialize Dynamic Seed Objects By Field Name
+- Replaced the live positional field-list assembly for `Class`, `Selector`, `MethodEntry`, `MethodDescriptor`, and `CompiledMethod` seed objects with a named-field materializer that follows the source-declared `instanceVariableNames:` order.
+- Added `materialize_named_seed_fields()` so the dynamic seed builder now describes those runtime objects in terms of field names rather than builder-authored slot positions.
+- Extended the focused lowering regressions to lock the new named-field materialization behavior, including sparse compiled-method word materialization with explicit `nil` padding for skipped slots.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
