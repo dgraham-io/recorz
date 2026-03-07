@@ -750,29 +750,46 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 mvp.DynamicSeedBuildStepSpec(
                     "selectors",
                     mvp.build_selector_seed_section,
+                    required_state_fields=("seed_layout", "class_indices"),
                     state_update_fields=("selector_indices_by_value",),
                 ),
                 mvp.DynamicSeedBuildStepSpec(
                     "compiled_methods",
                     mvp.build_compiled_method_seed_section,
+                    required_state_fields=("seed_layout", "class_indices"),
                     state_update_fields=("compiled_method_indices",),
                 ),
                 mvp.DynamicSeedBuildStepSpec(
                     "method_entries",
                     mvp.build_method_entry_seed_section,
                     ("compiled_methods",),
+                    ("seed_layout", "class_indices", "compiled_method_indices"),
                     ("method_entry_indices",),
                 ),
                 mvp.DynamicSeedBuildStepSpec(
                     "method_descriptors",
                     mvp.build_method_descriptor_seed_section,
                     ("selectors", "method_entries"),
+                    (
+                        "seed_layout",
+                        "class_kind_order",
+                        "class_indices",
+                        "selector_indices_by_value",
+                        "method_entry_indices",
+                    ),
                     ("method_start_by_kind", "method_count_by_kind"),
                 ),
                 mvp.DynamicSeedBuildStepSpec(
                     "class_descriptors",
                     mvp.build_class_seed_section,
                     ("method_descriptors",),
+                    (
+                        "class_kind_order",
+                        "class_class_index",
+                        "class_indices",
+                        "method_start_by_kind",
+                        "method_count_by_kind",
+                    ),
                 ),
             ],
         )
@@ -797,6 +814,28 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
+            [spec.required_state_fields for spec in mvp.DYNAMIC_SEED_BUILD_STEP_SPECS],
+            [
+                ("seed_layout", "class_indices"),
+                ("seed_layout", "class_indices"),
+                ("seed_layout", "class_indices", "compiled_method_indices"),
+                (
+                    "seed_layout",
+                    "class_kind_order",
+                    "class_indices",
+                    "selector_indices_by_value",
+                    "method_entry_indices",
+                ),
+                (
+                    "class_kind_order",
+                    "class_class_index",
+                    "class_indices",
+                    "method_start_by_kind",
+                    "method_count_by_kind",
+                ),
+            ],
+        )
+        self.assertEqual(
             [spec.state_update_fields for spec in mvp.DYNAMIC_SEED_BUILD_STEP_SPECS],
             [
                 ("selector_indices_by_value",),
@@ -805,6 +844,15 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("method_start_by_kind", "method_count_by_kind"),
                 (),
             ],
+        )
+        self.assertEqual(
+            mvp.INITIAL_DYNAMIC_SEED_STATE_FIELDS,
+            (
+                "seed_layout",
+                "class_kind_order",
+                "class_class_index",
+                "class_indices",
+            ),
         )
         self.assertEqual(
             [spec.builder.__name__ for spec in mvp.DYNAMIC_SEED_BUILD_STEP_SPECS],

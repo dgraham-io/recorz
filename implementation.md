@@ -441,3 +441,9 @@
 - Kept the same dynamic section order and dependency contract, but moved selector, compiled-method, method-entry, and method-descriptor state propagation behind `apply_dynamic_seed_build_step_result()` and made the class section assert that it does not unexpectedly rewrite the class index map.
 - Extended the focused lowering regressions to lock the declared state-update fields alongside the existing section order and dependency metadata.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Declare Dynamic Seed State Dependencies
+- Added explicit `required_state_fields` metadata and an `INITIAL_DYNAMIC_SEED_STATE_FIELDS` declaration so the dynamic seed builder now states which shared state each step consumes, not just which sections it depends on and which fields it produces.
+- Extended both build-step validation and runtime execution checks to reject missing, invalid, or out-of-order required state fields before any dynamic seed section is assembled.
+- Extended the focused lowering regressions to lock the required-state-field tuples and the declared initial dynamic seed state alongside the existing section and state-update contracts.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
