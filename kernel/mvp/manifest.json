@@ -12,6 +12,7 @@
       "instance_variables": [],
       "file": "Display.rz",
       "entries": [
+        "RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM",
         "RECORZ_MVP_METHOD_ENTRY_DISPLAY_CLEAR",
         "RECORZ_MVP_METHOD_ENTRY_DISPLAY_WRITE_STRING",
         "RECORZ_MVP_METHOD_ENTRY_DISPLAY_NEWLINE"

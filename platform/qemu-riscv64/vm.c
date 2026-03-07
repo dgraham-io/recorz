@@ -140,7 +140,7 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_SELECTOR_DEFAULT_FORM,
         0U,
         RECORZ_MVP_OBJECT_DISPLAY,
-        RECORZ_MVP_METHOD_IMPLEMENTATION_INTERPRETED,
+        RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED,
         0U,
         0U,
         0U,

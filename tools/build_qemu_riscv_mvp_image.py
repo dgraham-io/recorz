@@ -332,12 +332,7 @@ INTERPRETED_METHOD_OPCODE_VALUES = {
     "return_top": INTERPRETED_METHOD_OP_RETURN_TOP,
     "return_receiver": INTERPRETED_METHOD_OP_RETURN_RECEIVER,
 }
-INTERPRETED_METHOD_PROGRAM_BY_ENTRY_NAME = {
-    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM": [
-        ("push_root", SEED_ROOT_DEFAULT_FORM, 0),
-        ("return_top", 0, 0),
-    ],
-}
+INTERPRETED_METHOD_PROGRAM_BY_ENTRY_NAME: dict[str, list[tuple[str, int | str, int]]] = {}
 BUILTIN_METHODS_BY_KIND: dict[int, list[tuple[str, int, str]]] = {
     kind: [] for kind in range(SEED_OBJECT_TRANSCRIPT, SEED_OBJECT_COMPILED_METHOD + 1)
 }

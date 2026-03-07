@@ -1,3 +1,6 @@
+defaultForm
+    ^Display defaultForm
+!
 clear
     Display defaultForm clear.
     ^self

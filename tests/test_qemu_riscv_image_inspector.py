@@ -52,8 +52,8 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         self.assertEqual(summary["seed"]["field_send_method_object_count"], 0)
         self.assertEqual(summary["seed"]["root_send_method_object_count"], 0)
         self.assertEqual(summary["seed"]["root_value_method_object_count"], 0)
-        self.assertEqual(summary["seed"]["interpreted_method_object_count"], 1)
-        self.assertEqual(summary["seed"]["compiled_method_object_count"], 11)
+        self.assertEqual(summary["seed"]["interpreted_method_object_count"], 0)
+        self.assertEqual(summary["seed"]["compiled_method_object_count"], 12)
         self.assertEqual(summary["seed"]["method_entry_object_count"], 22)
         self.assertEqual(summary["seed"]["declared_method_count"], 22)
         self.assertEqual(summary["seed"]["method_entry_count"], 22)
@@ -204,7 +204,7 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         with self.assertRaises(inspector.ImageInspectionError):
             inspector.inspect_seed_manifest(bytes(seed))
 
-    def test_rejects_interpreted_method_entry_without_implementation(self) -> None:
+    def test_rejects_compiled_display_default_form_entry_without_implementation(self) -> None:
         seed = bytearray(mvp.build_seed_manifest())
         header_size = struct.calcsize(mvp.SEED_HEADER_FORMAT)
         object_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT))

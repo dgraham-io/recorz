@@ -230,10 +230,22 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 mvp.encode_compiled_method_instruction("return_receiver"),
             ],
         )
+        self.assertEqual(
+            mvp.compile_kernel_method_program(
+                "Display",
+                [],
+                "defaultForm ^Display defaultForm",
+            ),
+            [
+                mvp.encode_compiled_method_instruction("push_root", mvp.SEED_ROOT_DEFAULT_FORM),
+                mvp.encode_compiled_method_instruction("return_top"),
+            ],
+        )
 
     def test_loads_kernel_methods_from_manifest_files(self) -> None:
         sources = mvp.load_kernel_method_sources()
         transcript_show = sources["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW"]
+        display_default_form = sources["RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM"]
         form_width = sources["RECORZ_MVP_METHOD_ENTRY_FORM_WIDTH"]
 
         self.assertEqual(transcript_show.class_name, "Transcript")
@@ -241,6 +253,11 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(transcript_show.relative_path, "Transcript.rz")
         self.assertEqual(transcript_show.selector, "show:")
         self.assertIn("Display defaultForm writeString: text.", transcript_show.source_text)
+        self.assertEqual(display_default_form.class_name, "Display")
+        self.assertEqual(display_default_form.instance_variables, ())
+        self.assertEqual(display_default_form.relative_path, "Display.rz")
+        self.assertEqual(display_default_form.selector, "defaultForm")
+        self.assertEqual(display_default_form.source_text, "defaultForm\n    ^Display defaultForm")
         self.assertEqual(form_width.class_name, "Form")
         self.assertEqual(form_width.instance_variables, ("bits",))
         self.assertEqual(form_width.relative_path, "Form.rz")
@@ -304,33 +321,17 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             )
             for field_index in range(1)
         ]
-        first_interpreted_method_header = struct.unpack_from(
-            mvp.SEED_OBJECT_HEADER_FORMAT,
-            manifest,
-            struct.calcsize(mvp.SEED_HEADER_FORMAT) + (179 * object_size),
-        )
-        first_interpreted_method_fields = [
-            struct.unpack_from(
-                mvp.SEED_FIELD_FORMAT,
-                manifest,
-                struct.calcsize(mvp.SEED_HEADER_FORMAT)
-                + (179 * object_size)
-                + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
-                + (field_index * struct.calcsize(mvp.SEED_FIELD_FORMAT)),
-            )
-            for field_index in range(2)
-        ]
         first_compiled_method_header = struct.unpack_from(
             mvp.SEED_OBJECT_HEADER_FORMAT,
             manifest,
-            struct.calcsize(mvp.SEED_HEADER_FORMAT) + (180 * object_size),
+            struct.calcsize(mvp.SEED_HEADER_FORMAT) + (179 * object_size),
         )
         first_compiled_method_fields = [
             struct.unpack_from(
                 mvp.SEED_FIELD_FORMAT,
                 manifest,
                 struct.calcsize(mvp.SEED_HEADER_FORMAT)
-                + (180 * object_size)
+                + (179 * object_size)
                 + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
                 + (field_index * struct.calcsize(mvp.SEED_FIELD_FORMAT)),
             )
@@ -392,20 +393,6 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 (mvp.SEED_FIELD_SMALL_INTEGER, mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SHOW"]),
             ],
         )
-        self.assertEqual(first_interpreted_method_header, (mvp.SEED_OBJECT_INTERPRETED_METHOD, 2, 160))
-        self.assertEqual(
-            first_interpreted_method_fields,
-            [
-                (
-                    mvp.SEED_FIELD_SMALL_INTEGER,
-                    mvp.encode_interpreted_instruction("push_root", mvp.SEED_ROOT_DEFAULT_FORM),
-                ),
-                (
-                    mvp.SEED_FIELD_SMALL_INTEGER,
-                    mvp.encode_interpreted_instruction("return_top"),
-                ),
-            ],
-        )
         self.assertEqual(first_compiled_method_header, (mvp.SEED_OBJECT_COMPILED_METHOD, 4, 161))
         self.assertEqual(
             first_compiled_method_fields,
@@ -437,7 +424,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             first_method_entry_fields,
             [
                 (mvp.SEED_FIELD_SMALL_INTEGER, mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW"]),
-                (mvp.SEED_FIELD_OBJECT_INDEX, 180),
+                (mvp.SEED_FIELD_OBJECT_INDEX, 179),
             ],
         )
         self.assertEqual(first_method_header, (mvp.SEED_OBJECT_METHOD_DESCRIPTOR, 4, 153))
