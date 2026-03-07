@@ -1,6 +1,6 @@
 | helper |
 Display clear.
-helper := KernelInstaller fileInClassChunks: 'RecorzKernelClass: #Helper
+helper := KernelInstaller fileInClassChunks: 'RecorzKernelClass: #Helper superclass: #Object instanceVariableNames: ''value''
 !
 cr
     ^self'.

@@ -18,6 +18,7 @@
 #define METHOD_SOURCE_NAME_LIMIT 64U
 #define METHOD_SOURCE_CHUNK_LIMIT 512U
 #define DYNAMIC_CLASS_LIMIT 16U
+#define DYNAMIC_CLASS_IVAR_LIMIT OBJECT_FIELD_LIMIT
 
 #define FORM_FIELD_BITS RECORZ_MVP_FORM_FIELD_BITS
 #define BITMAP_FIELD_WIDTH RECORZ_MVP_BITMAP_FIELD_WIDTH
@@ -80,6 +81,22 @@ struct recorz_mvp_heap_object {
     struct recorz_mvp_value fields[OBJECT_FIELD_LIMIT];
 };
 
+struct recorz_mvp_live_class_definition {
+    char class_name[METHOD_SOURCE_NAME_LIMIT];
+    uint8_t has_superclass;
+    char superclass_name[METHOD_SOURCE_NAME_LIMIT];
+    uint8_t instance_variable_count;
+    char instance_variable_names[DYNAMIC_CLASS_IVAR_LIMIT][METHOD_SOURCE_NAME_LIMIT];
+};
+
+struct recorz_mvp_dynamic_class_definition {
+    uint16_t class_handle;
+    uint16_t superclass_handle;
+    char class_name[METHOD_SOURCE_NAME_LIMIT];
+    uint8_t instance_variable_count;
+    char instance_variable_names[DYNAMIC_CLASS_IVAR_LIMIT][METHOD_SOURCE_NAME_LIMIT];
+};
+
 enum recorz_mvp_method_return_mode {
     RECORZ_MVP_METHOD_RETURN_RESULT = 1,
     RECORZ_MVP_METHOD_RETURN_RECEIVER = 2,
@@ -125,8 +142,7 @@ static uint16_t class_handles_by_kind[MAX_OBJECT_KIND + 1U];
 static uint16_t class_descriptor_handles_by_kind[MAX_OBJECT_KIND + 1U];
 static uint16_t selector_handles_by_id[RECORZ_MVP_SELECTOR_CLASS_NAMED + 1U];
 static uint16_t global_handles[RECORZ_MVP_GLOBAL_KERNEL_INSTALLER + 1U];
-static uint16_t dynamic_class_handles[DYNAMIC_CLASS_LIMIT];
-static char dynamic_class_names[DYNAMIC_CLASS_LIMIT][METHOD_SOURCE_NAME_LIMIT];
+static struct recorz_mvp_dynamic_class_definition dynamic_classes[DYNAMIC_CLASS_LIMIT];
 static uint16_t default_form_handle = 0U;
 static uint16_t framebuffer_bitmap_handle = 0U;
 static uint16_t next_dynamic_method_entry_execution_id = RECORZ_MVP_METHOD_ENTRY_COUNT;
@@ -172,6 +188,9 @@ static uint16_t allocate_compiled_method_from_words(
     uint8_t instruction_count
 );
 static const struct recorz_mvp_heap_object *lookup_class_by_name(const char *class_name);
+static const struct recorz_mvp_heap_object *ensure_class_defined(
+    const struct recorz_mvp_live_class_definition *definition
+);
 
 static void panic_put_u32(uint32_t value) {
     char digits[10];
@@ -579,25 +598,160 @@ static uint32_t source_copy_next_chunk(const char **cursor_ref, char buffer[], u
 }
 
 static const char *source_parse_identifier(const char *cursor, char buffer[], uint32_t buffer_size);
+static const struct recorz_mvp_dynamic_class_definition *dynamic_class_definition_for_name(const char *class_name);
+static struct recorz_mvp_dynamic_class_definition *mutable_dynamic_class_definition_for_handle(uint16_t class_handle);
 
-static void source_parse_class_name_from_chunk(
+static void source_copy_identifier(char destination[], uint32_t destination_size, const char *source) {
+    uint32_t index = 0U;
+
+    while (source[index] != '\0') {
+        if (index + 1U >= destination_size) {
+            machine_panic("KernelInstaller identifier copy exceeds buffer capacity");
+        }
+        destination[index] = source[index];
+        ++index;
+    }
+    destination[index] = '\0';
+}
+
+static const char *source_skip_decimal_digits(const char *cursor) {
+    if (*cursor < '0' || *cursor > '9') {
+        return 0;
+    }
+    while (*cursor >= '0' && *cursor <= '9') {
+        ++cursor;
+    }
+    return cursor;
+}
+
+static const char *source_parse_hash_identifier(
+    const char *cursor,
+    char buffer[],
+    uint32_t buffer_size
+) {
+    cursor = source_skip_horizontal_space(cursor);
+    if (*cursor != '#') {
+        return 0;
+    }
+    ++cursor;
+    return source_parse_identifier(cursor, buffer, buffer_size);
+}
+
+static const char *source_copy_single_quoted_text(
+    const char *cursor,
+    char buffer[],
+    uint32_t buffer_size
+) {
+    uint32_t length = 0U;
+
+    cursor = source_skip_horizontal_space(cursor);
+    if (*cursor != '\'') {
+        return 0;
+    }
+    ++cursor;
+    while (*cursor != '\0' && *cursor != '\'') {
+        if (length + 1U >= buffer_size) {
+            machine_panic("KernelInstaller quoted text exceeds buffer capacity");
+        }
+        buffer[length++] = *cursor++;
+    }
+    if (*cursor != '\'') {
+        machine_panic("KernelInstaller quoted text is unterminated");
+    }
+    buffer[length] = '\0';
+    return cursor + 1;
+}
+
+static uint8_t source_parse_identifier_list(
+    const char *text,
+    char names[][METHOD_SOURCE_NAME_LIMIT],
+    uint8_t maximum_count
+) {
+    uint8_t count = 0U;
+    const char *cursor = text;
+
+    cursor = source_skip_horizontal_space(cursor);
+    while (*cursor != '\0') {
+        if (count >= maximum_count) {
+            machine_panic("KernelInstaller instance variable count exceeds MVP object field limit");
+        }
+        cursor = source_parse_identifier(cursor, names[count], METHOD_SOURCE_NAME_LIMIT);
+        if (cursor == 0) {
+            machine_panic("KernelInstaller instance variable name is invalid");
+        }
+        ++count;
+        cursor = source_skip_horizontal_space(cursor);
+    }
+    return count;
+}
+
+static void initialize_live_class_definition(struct recorz_mvp_live_class_definition *definition) {
+    uint8_t index;
+
+    definition->class_name[0] = '\0';
+    definition->has_superclass = 0U;
+    definition->superclass_name[0] = '\0';
+    definition->instance_variable_count = 0U;
+    for (index = 0U; index < DYNAMIC_CLASS_IVAR_LIMIT; ++index) {
+        definition->instance_variable_names[index][0] = '\0';
+    }
+}
+
+static void source_parse_class_definition_from_chunk(
     const char *chunk,
-    char class_name[],
-    uint32_t class_name_size
+    struct recorz_mvp_live_class_definition *definition
 ) {
     const char *cursor = chunk;
+    char keyword[METHOD_SOURCE_NAME_LIMIT];
 
+    initialize_live_class_definition(definition);
     if (!source_starts_with(cursor, "RecorzKernelClass:")) {
         machine_panic("KernelInstaller class chunk is missing a RecorzKernelClass header");
     }
     cursor += 18U;
-    cursor = source_skip_horizontal_space(cursor);
-    if (*cursor != '#') {
-        machine_panic("KernelInstaller class chunk header is missing a class name");
-    }
-    ++cursor;
-    if (source_parse_identifier(cursor, class_name, class_name_size) == 0) {
+    cursor = source_parse_hash_identifier(cursor, definition->class_name, sizeof(definition->class_name));
+    if (cursor == 0) {
         machine_panic("KernelInstaller class chunk header has an invalid class name");
+    }
+    cursor = source_skip_horizontal_space(cursor);
+    while (*cursor != '\0') {
+        char instance_variables[METHOD_SOURCE_CHUNK_LIMIT];
+
+        cursor = source_parse_identifier(cursor, keyword, sizeof(keyword));
+        if (cursor == 0 || *cursor != ':') {
+            machine_panic("KernelInstaller class chunk header has an invalid keyword");
+        }
+        ++cursor;
+        if (source_names_equal(keyword, "superclass")) {
+            cursor = source_parse_hash_identifier(cursor, definition->superclass_name, sizeof(definition->superclass_name));
+            if (cursor == 0) {
+                machine_panic("KernelInstaller class chunk superclass is invalid");
+            }
+            definition->has_superclass = 1U;
+        } else if (source_names_equal(keyword, "instanceVariableNames")) {
+            cursor = source_copy_single_quoted_text(cursor, instance_variables, sizeof(instance_variables));
+            if (cursor == 0) {
+                machine_panic("KernelInstaller class chunk instanceVariableNames is invalid");
+            }
+            definition->instance_variable_count = source_parse_identifier_list(
+                instance_variables,
+                definition->instance_variable_names,
+                DYNAMIC_CLASS_IVAR_LIMIT
+            );
+        } else if (
+            source_names_equal(keyword, "descriptorOrder") ||
+            source_names_equal(keyword, "objectKindOrder") ||
+            source_names_equal(keyword, "sourceBootOrder")
+        ) {
+            cursor = source_skip_horizontal_space(cursor);
+            cursor = source_skip_decimal_digits(cursor);
+            if (cursor == 0) {
+                machine_panic("KernelInstaller class chunk numeric header value is invalid");
+            }
+        } else {
+            machine_panic("KernelInstaller class chunk header uses an unsupported keyword");
+        }
+        cursor = source_skip_horizontal_space(cursor);
     }
 }
 
@@ -653,6 +807,32 @@ static uint8_t source_selector_id_for_name(const char *name) {
         }
     }
     return 0U;
+}
+
+static const struct recorz_mvp_dynamic_class_definition *dynamic_class_definition_for_name(const char *class_name) {
+    uint16_t dynamic_index;
+
+    for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
+        if (source_names_equal(class_name, dynamic_classes[dynamic_index].class_name)) {
+            return &dynamic_classes[dynamic_index];
+        }
+    }
+    return 0;
+}
+
+static struct recorz_mvp_dynamic_class_definition *mutable_dynamic_class_definition_for_handle(uint16_t class_handle) {
+    uint16_t dynamic_index;
+
+    for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
+        if (dynamic_classes[dynamic_index].class_handle == class_handle) {
+            return &dynamic_classes[dynamic_index];
+        }
+    }
+    return 0;
+}
+
+static const struct recorz_mvp_dynamic_class_definition *dynamic_class_definition_for_handle(uint16_t class_handle) {
+    return (const struct recorz_mvp_dynamic_class_definition *)mutable_dynamic_class_definition_for_handle(class_handle);
 }
 
 static void vm_panic_hook(const char *message) {
@@ -1070,6 +1250,26 @@ static const struct recorz_mvp_heap_object *class_object_for_kind(uint8_t kind) 
         machine_panic("method update class kind is out of range");
     }
     return (const struct recorz_mvp_heap_object *)heap_object(class_descriptor_handles_by_kind[kind]);
+}
+
+static const char *class_name_for_object(const struct recorz_mvp_heap_object *class_object) {
+    const struct recorz_mvp_dynamic_class_definition *dynamic_definition =
+        dynamic_class_definition_for_handle(heap_handle_for_object(class_object));
+
+    if (dynamic_definition != 0) {
+        return dynamic_definition->class_name;
+    }
+    return object_kind_name((uint8_t)class_instance_kind(class_object));
+}
+
+static uint8_t live_instance_field_count_for_class(const struct recorz_mvp_heap_object *class_object) {
+    const struct recorz_mvp_dynamic_class_definition *dynamic_definition =
+        dynamic_class_definition_for_handle(heap_handle_for_object(class_object));
+
+    if (dynamic_definition != 0) {
+        return dynamic_definition->instance_variable_count;
+    }
+    return 0U;
 }
 
 static uint32_t primitive_kind_for_heap_object(const struct recorz_mvp_heap_object *object) {
@@ -1863,8 +2063,15 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
     next_dynamic_method_entry_execution_id = RECORZ_MVP_METHOD_ENTRY_COUNT;
     dynamic_class_count = 0U;
     for (dynamic_index = 0U; dynamic_index < DYNAMIC_CLASS_LIMIT; ++dynamic_index) {
-        dynamic_class_handles[dynamic_index] = 0U;
-        dynamic_class_names[dynamic_index][0] = '\0';
+        uint8_t ivar_index;
+
+        dynamic_classes[dynamic_index].class_handle = 0U;
+        dynamic_classes[dynamic_index].superclass_handle = 0U;
+        dynamic_classes[dynamic_index].class_name[0] = '\0';
+        dynamic_classes[dynamic_index].instance_variable_count = 0U;
+        for (ivar_index = 0U; ivar_index < DYNAMIC_CLASS_IVAR_LIMIT; ++ivar_index) {
+            dynamic_classes[dynamic_index].instance_variable_names[ivar_index][0] = '\0';
+        }
     }
     for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
         seeded_handles[seed_index] = heap_allocate(seed->objects[seed_index].object_kind);
@@ -2209,6 +2416,8 @@ static void execute_entry_class_new(
     const char *text
 ) {
     uint16_t instance_handle;
+    uint8_t field_count;
+    uint8_t field_index;
 
     (void)receiver;
     (void)arguments;
@@ -2218,6 +2427,10 @@ static void execute_entry_class_new(
     }
     instance_handle = heap_allocate(RECORZ_MVP_OBJECT_OBJECT);
     heap_set_class(instance_handle, heap_handle_for_object(object));
+    field_count = live_instance_field_count_for_class(object);
+    for (field_index = 0U; field_index < field_count; ++field_index) {
+        heap_set_field(instance_handle, field_index, nil_value());
+    }
     push(object_value(instance_handle));
 }
 
@@ -2536,7 +2749,7 @@ static void file_in_method_chunks_on_class(
 
 static const struct recorz_mvp_heap_object *lookup_class_by_name(const char *class_name) {
     uint8_t kind;
-    uint16_t dynamic_index;
+    const struct recorz_mvp_dynamic_class_definition *dynamic_definition;
 
     if (class_name == 0 || *class_name == '\0') {
         machine_panic("KernelInstaller class name is empty");
@@ -2549,47 +2762,106 @@ static const struct recorz_mvp_heap_object *lookup_class_by_name(const char *cla
             return (const struct recorz_mvp_heap_object *)heap_object(class_descriptor_handles_by_kind[kind]);
         }
     }
-    for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
-        if (source_names_equal(class_name, dynamic_class_names[dynamic_index])) {
-            return (const struct recorz_mvp_heap_object *)heap_object(dynamic_class_handles[dynamic_index]);
-        }
+    dynamic_definition = dynamic_class_definition_for_name(class_name);
+    if (dynamic_definition != 0) {
+        return (const struct recorz_mvp_heap_object *)heap_object(dynamic_definition->class_handle);
     }
     return 0;
 }
 
-static const struct recorz_mvp_heap_object *ensure_class_named(const char *class_name) {
-    const struct recorz_mvp_heap_object *class_object = lookup_class_by_name(class_name);
-    uint16_t class_handle;
-    uint32_t name_index = 0U;
+static void copy_dynamic_class_definition(
+    struct recorz_mvp_dynamic_class_definition *destination,
+    const struct recorz_mvp_live_class_definition *source,
+    uint16_t class_handle,
+    uint16_t superclass_handle
+) {
+    uint8_t ivar_index;
 
+    destination->class_handle = class_handle;
+    destination->superclass_handle = superclass_handle;
+    source_copy_identifier(destination->class_name, sizeof(destination->class_name), source->class_name);
+    destination->instance_variable_count = source->instance_variable_count;
+    for (ivar_index = 0U; ivar_index < DYNAMIC_CLASS_IVAR_LIMIT; ++ivar_index) {
+        destination->instance_variable_names[ivar_index][0] = '\0';
+    }
+    for (ivar_index = 0U; ivar_index < source->instance_variable_count; ++ivar_index) {
+        source_copy_identifier(
+            destination->instance_variable_names[ivar_index],
+            sizeof(destination->instance_variable_names[ivar_index]),
+            source->instance_variable_names[ivar_index]
+        );
+    }
+}
+
+static const struct recorz_mvp_heap_object *ensure_class_defined(
+    const struct recorz_mvp_live_class_definition *definition
+) {
+    const struct recorz_mvp_heap_object *class_object = lookup_class_by_name(definition->class_name);
+    struct recorz_mvp_dynamic_class_definition *dynamic_definition = 0;
+    struct recorz_mvp_live_class_definition superclass_definition;
+    const struct recorz_mvp_heap_object *superclass_object;
+    uint16_t class_handle;
+    const char *resolved_superclass_name;
+
+    if (definition->class_name[0] == '\0') {
+        machine_panic("dynamic class definition is missing a class name");
+    }
     if (class_object != 0) {
-        return class_object;
+        dynamic_definition = mutable_dynamic_class_definition_for_handle(heap_handle_for_object(class_object));
+        if (dynamic_definition == 0) {
+            if (definition->instance_variable_count != 0U) {
+                machine_panic("KernelInstaller does not support redefining seeded class instance variables");
+            }
+            if (definition->has_superclass) {
+                resolved_superclass_name = class_name_for_object(
+                    heap_object_for_value(heap_get_field(class_object, CLASS_FIELD_SUPERCLASS))
+                );
+                if (!source_names_equal(definition->superclass_name, resolved_superclass_name)) {
+                    machine_panic("KernelInstaller seeded class superclass does not match class chunk");
+                }
+            }
+            return class_object;
+        }
     }
-    if (dynamic_class_count >= DYNAMIC_CLASS_LIMIT) {
-        machine_panic("dynamic class registry overflow");
+    if (class_object == 0) {
+        if (dynamic_class_count >= DYNAMIC_CLASS_LIMIT) {
+            machine_panic("dynamic class registry overflow");
+        }
+        class_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_CLASS);
+        heap_set_field(class_handle, CLASS_FIELD_INSTANCE_KIND, small_integer_value((int32_t)RECORZ_MVP_OBJECT_OBJECT));
+        heap_set_field(class_handle, CLASS_FIELD_METHOD_START, nil_value());
+        heap_set_field(class_handle, CLASS_FIELD_METHOD_COUNT, small_integer_value(0));
+        dynamic_definition = &dynamic_classes[dynamic_class_count++];
+        class_object = (const struct recorz_mvp_heap_object *)heap_object(class_handle);
+        machine_puts("recorz qemu-riscv64 mvp: created class ");
+        machine_puts(definition->class_name);
+        machine_putc('\n');
+    } else {
+        class_handle = heap_handle_for_object(class_object);
     }
-    class_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_CLASS);
+
+    if (definition->has_superclass) {
+        initialize_live_class_definition(&superclass_definition);
+        source_copy_identifier(
+            superclass_definition.class_name,
+            sizeof(superclass_definition.class_name),
+            definition->superclass_name
+        );
+        superclass_object = ensure_class_defined(&superclass_definition);
+    } else {
+        superclass_object = class_object_for_kind(RECORZ_MVP_OBJECT_OBJECT);
+    }
     heap_set_field(
         class_handle,
         CLASS_FIELD_SUPERCLASS,
-        object_value(heap_handle_for_object(class_object_for_kind(RECORZ_MVP_OBJECT_OBJECT)))
+        object_value(heap_handle_for_object(superclass_object))
     );
-    heap_set_field(class_handle, CLASS_FIELD_INSTANCE_KIND, small_integer_value((int32_t)RECORZ_MVP_OBJECT_OBJECT));
-    heap_set_field(class_handle, CLASS_FIELD_METHOD_START, nil_value());
-    heap_set_field(class_handle, CLASS_FIELD_METHOD_COUNT, small_integer_value(0));
-    while (class_name[name_index] != '\0') {
-        if (name_index + 1U >= METHOD_SOURCE_NAME_LIMIT) {
-            machine_panic("dynamic class name exceeds buffer capacity");
-        }
-        dynamic_class_names[dynamic_class_count][name_index] = class_name[name_index];
-        ++name_index;
-    }
-    dynamic_class_names[dynamic_class_count][name_index] = '\0';
-    dynamic_class_handles[dynamic_class_count] = class_handle;
-    ++dynamic_class_count;
-    machine_puts("recorz qemu-riscv64 mvp: created class ");
-    machine_puts(class_name);
-    machine_putc('\n');
+    copy_dynamic_class_definition(
+        dynamic_definition,
+        definition,
+        class_handle,
+        heap_handle_for_object(superclass_object)
+    );
     return (const struct recorz_mvp_heap_object *)heap_object(class_handle);
 }
 
@@ -2735,7 +3007,7 @@ static void execute_entry_kernel_installer_file_in_class_chunks(
     const struct recorz_mvp_heap_object *class_object;
     const char *cursor;
     char chunk[METHOD_SOURCE_CHUNK_LIMIT];
-    char class_name[METHOD_SOURCE_NAME_LIMIT];
+    struct recorz_mvp_live_class_definition definition;
 
     (void)object;
     (void)receiver;
@@ -2747,8 +3019,8 @@ static void execute_entry_kernel_installer_file_in_class_chunks(
     if (source_copy_next_chunk(&cursor, chunk, sizeof(chunk)) == 0U) {
         machine_panic("KernelInstaller fileInClassChunks: source is empty");
     }
-    source_parse_class_name_from_chunk(chunk, class_name, sizeof(class_name));
-    class_object = ensure_class_named(class_name);
+    source_parse_class_definition_from_chunk(chunk, &definition);
+    class_object = ensure_class_defined(&definition);
     file_in_method_chunks_on_class(arguments[0].string, class_object);
     push(object_value(heap_handle_for_object(class_object)));
 }
