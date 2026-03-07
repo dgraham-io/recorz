@@ -1,13 +1,13 @@
 RecorzKernelClass: #Form instanceVariableNames: 'bits'
 !
 clear
-    <primitive>
+    <primitive: #formClear>
 !
 writeString: text
-    <primitive>
+    <primitive: #formWriteString>
 !
 newline
-    <primitive>
+    <primitive: #formNewline>
 !
 bits
     ^bits

@@ -1,4 +1,4 @@
 RecorzKernelClass: #Glyphs instanceVariableNames: ''
 !
 at: codePoint
-    <primitive>
+    <primitive: #glyphsAt>

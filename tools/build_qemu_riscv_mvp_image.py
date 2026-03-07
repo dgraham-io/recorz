@@ -254,6 +254,7 @@ class KernelMethodSource:
     relative_path: str
     selector: str
     implementation_kind: str
+    primitive_binding: str | None
     source_text: str
 
 
@@ -306,17 +307,18 @@ KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE = "primitive"
 KERNEL_CLASS_HEADER_PATTERN = re.compile(
     r"^RecorzKernelClass:\s*#(?P<class_name>[A-Za-z_]\w*)\s+instanceVariableNames:\s*'(?P<instance_variables>[^']*)'$"
 )
-PRIMITIVE_KERNEL_METHOD_ENTRY_NAMES = {
-    "RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR",
-    "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE",
-    "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR",
-    "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR",
-    "RECORZ_MVP_METHOD_ENTRY_GLYPHS_AT",
-    "RECORZ_MVP_METHOD_ENTRY_FORM_FACTORY_FROM_BITS",
-    "RECORZ_MVP_METHOD_ENTRY_BITMAP_FACTORY_MONO_WIDTH_HEIGHT",
-    "RECORZ_MVP_METHOD_ENTRY_FORM_CLEAR",
-    "RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING",
-    "RECORZ_MVP_METHOD_ENTRY_FORM_NEWLINE",
+KERNEL_PRIMITIVE_DECLARATION_PATTERN = re.compile(r"^<primitive:\s*#(?P<binding>[A-Za-z_]\w*)>$")
+PRIMITIVE_KERNEL_METHOD_BINDING_BY_ENTRY_NAME = {
+    "RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR": "bitbltFillFormColor",
+    "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE": "bitbltCopyBitmapToFormXYScale",
+    "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR": "bitbltCopyBitmapToFormXYScaleColor",
+    "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR": "bitbltCopyBitmapRegionToFormXYScaleColor",
+    "RECORZ_MVP_METHOD_ENTRY_GLYPHS_AT": "glyphsAt",
+    "RECORZ_MVP_METHOD_ENTRY_FORM_FACTORY_FROM_BITS": "formFactoryFromBits",
+    "RECORZ_MVP_METHOD_ENTRY_BITMAP_FACTORY_MONO_WIDTH_HEIGHT": "bitmapFactoryMonoWidthHeight",
+    "RECORZ_MVP_METHOD_ENTRY_FORM_CLEAR": "formClear",
+    "RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING": "formWriteString",
+    "RECORZ_MVP_METHOD_ENTRY_FORM_NEWLINE": "formNewline",
 }
 METHOD_ENTRY_SPECS = {
     METHOD_ENTRY_VALUES[name]: (owner_kind, SELECTOR_VALUES[SELECTOR_IDS[selector]], argument_count)
@@ -416,16 +418,26 @@ def parse_kernel_method_chunk(
     class_name: str,
     instance_variables: list[str],
     chunk_source: str,
-) -> tuple[str, int, str]:
+) -> tuple[str, int, str, str | None]:
     lines = chunk_source.splitlines()
     if not lines:
         raise LoweringError(f"kernel MVP class {class_name} contains an empty method chunk")
     trimmed_body = [line.strip() for line in lines[1:] if line.strip()]
-    if trimmed_body == ["<primitive>"]:
-        signature_probe = compile_method(f"{lines[0]}\n    ^self", class_name, list(instance_variables))
-        return (signature_probe.selector, len(signature_probe.arg_names), KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE)
+    if len(trimmed_body) == 1:
+        primitive_match = KERNEL_PRIMITIVE_DECLARATION_PATTERN.fullmatch(trimmed_body[0])
+        if primitive_match is not None:
+            primitive_binding = primitive_match.group("binding")
+            signature_probe = compile_method(f"{lines[0]}\n    ^self", class_name, list(instance_variables))
+            return (
+                signature_probe.selector,
+                len(signature_probe.arg_names),
+                KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE,
+                primitive_binding,
+            )
+    if any(line.startswith("<primitive") for line in trimmed_body):
+        raise LoweringError(f"kernel MVP primitive declaration is invalid in class {class_name}")
     compiled = compile_method(chunk_source, class_name, list(instance_variables))
-    return (compiled.selector, len(compiled.arg_names), KERNEL_METHOD_IMPLEMENTATION_COMPILED)
+    return (compiled.selector, len(compiled.arg_names), KERNEL_METHOD_IMPLEMENTATION_COMPILED, None)
 
 
 def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
@@ -461,10 +473,10 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
         if class_name in seen_class_names:
             raise LoweringError(f"kernel MVP class {class_name} is declared more than once")
         seen_class_names.add(class_name)
-        chunk_definitions: dict[tuple[str, int], tuple[str, str]] = {}
+        chunk_definitions: dict[tuple[str, int], tuple[str, str | None, str]] = {}
 
         for chunk_source in chunk_sources[1:]:
-            selector, argument_count, implementation_kind = parse_kernel_method_chunk(
+            selector, argument_count, implementation_kind, primitive_binding = parse_kernel_method_chunk(
                 class_name,
                 instance_variables,
                 chunk_source,
@@ -475,7 +487,7 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
                 raise LoweringError(
                     f"kernel MVP class file {relative_path} duplicates method {selector}/{argument_count}"
                 )
-            chunk_definitions[signature] = (implementation_kind, chunk_source)
+            chunk_definitions[signature] = (implementation_kind, primitive_binding, chunk_source)
         for entry_name in entry_names:
             owner_kind, selector, argument_count = entry_definitions.get(entry_name, (None, None, None))
 
@@ -492,16 +504,22 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
                 raise LoweringError(
                     f"kernel MVP class file {relative_path} is missing method {selector}/{argument_count} for entry {entry_name}"
                 )
+            expected_primitive_binding = PRIMITIVE_KERNEL_METHOD_BINDING_BY_ENTRY_NAME.get(entry_name)
             expected_implementation_kind = (
                 KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE
-                if entry_name in PRIMITIVE_KERNEL_METHOD_ENTRY_NAMES
+                if expected_primitive_binding is not None
                 else KERNEL_METHOD_IMPLEMENTATION_COMPILED
             )
-            implementation_kind, chunk_source = chunk_definition
+            implementation_kind, primitive_binding, chunk_source = chunk_definition
             if implementation_kind != expected_implementation_kind:
                 raise LoweringError(
                     f"kernel MVP method {class_name}>>{selector} in {relative_path} is declared as "
                     f"{implementation_kind} but entry {entry_name} expects {expected_implementation_kind}"
+                )
+            if primitive_binding != expected_primitive_binding:
+                raise LoweringError(
+                    f"kernel MVP method {class_name}>>{selector} in {relative_path} declares primitive "
+                    f"{primitive_binding!r} but entry {entry_name} expects {expected_primitive_binding!r}"
                 )
             method_sources[entry_name] = KernelMethodSource(
                 class_name=class_name,
@@ -509,6 +527,7 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
                 relative_path=relative_path,
                 selector=selector,
                 implementation_kind=implementation_kind,
+                primitive_binding=primitive_binding,
                 source_text=chunk_source,
             )
         if len(chunk_definitions) != len(entry_names):

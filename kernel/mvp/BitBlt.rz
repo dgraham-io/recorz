@@ -1,13 +1,13 @@
 RecorzKernelClass: #BitBlt instanceVariableNames: ''
 !
 fillForm: form color: color
-    <primitive>
+    <primitive: #bitbltFillFormColor>
 !
 copyBitmap: bitmap toForm: form x: x y: y scale: scale
-    <primitive>
+    <primitive: #bitbltCopyBitmapToFormXYScale>
 !
 copyBitmap: bitmap toForm: form x: x y: y scale: scale color: color
-    <primitive>
+    <primitive: #bitbltCopyBitmapToFormXYScaleColor>
 !
 copyBitmap: bitmap sourceX: sourceX sourceY: sourceY width: width height: height toForm: form x: x y: y scale: scale color: color
-    <primitive>
+    <primitive: #bitbltCopyBitmapRegionToFormXYScaleColor>

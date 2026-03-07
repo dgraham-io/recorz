@@ -255,29 +255,37 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(transcript_show.relative_path, "Transcript.rz")
         self.assertEqual(transcript_show.selector, "show:")
         self.assertEqual(transcript_show.implementation_kind, mvp.KERNEL_METHOD_IMPLEMENTATION_COMPILED)
+        self.assertIsNone(transcript_show.primitive_binding)
         self.assertIn("Display defaultForm writeString: text.", transcript_show.source_text)
         self.assertEqual(display_default_form.class_name, "Display")
         self.assertEqual(display_default_form.instance_variables, ())
         self.assertEqual(display_default_form.relative_path, "Display.rz")
         self.assertEqual(display_default_form.selector, "defaultForm")
         self.assertEqual(display_default_form.implementation_kind, mvp.KERNEL_METHOD_IMPLEMENTATION_COMPILED)
+        self.assertIsNone(display_default_form.primitive_binding)
         self.assertEqual(display_default_form.source_text, "defaultForm\n    ^Display defaultForm")
         self.assertEqual(bitblt_fill_form_color.class_name, "BitBlt")
         self.assertEqual(bitblt_fill_form_color.instance_variables, ())
         self.assertEqual(bitblt_fill_form_color.relative_path, "BitBlt.rz")
         self.assertEqual(bitblt_fill_form_color.selector, "fillForm:color:")
         self.assertEqual(bitblt_fill_form_color.implementation_kind, mvp.KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE)
-        self.assertEqual(bitblt_fill_form_color.source_text, "fillForm: form color: color\n    <primitive>")
+        self.assertEqual(bitblt_fill_form_color.primitive_binding, "bitbltFillFormColor")
+        self.assertEqual(
+            bitblt_fill_form_color.source_text,
+            "fillForm: form color: color\n    <primitive: #bitbltFillFormColor>",
+        )
         self.assertEqual(form_width.class_name, "Form")
         self.assertEqual(form_width.instance_variables, ("bits",))
         self.assertEqual(form_width.relative_path, "Form.rz")
         self.assertEqual(form_width.selector, "width")
         self.assertEqual(form_width.implementation_kind, mvp.KERNEL_METHOD_IMPLEMENTATION_COMPILED)
+        self.assertIsNone(form_width.primitive_binding)
         self.assertEqual(form_width.source_text, "width\n    ^bits width")
         self.assertEqual(form_newline.class_name, "Form")
         self.assertEqual(form_newline.selector, "newline")
         self.assertEqual(form_newline.implementation_kind, mvp.KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE)
-        self.assertEqual(form_newline.source_text, "newline\n    <primitive>")
+        self.assertEqual(form_newline.primitive_binding, "formNewline")
+        self.assertEqual(form_newline.source_text, "newline\n    <primitive: #formNewline>")
 
     def test_splits_class_file_chunks_on_bang_lines(self) -> None:
         self.assertEqual(
@@ -311,9 +319,9 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             mvp.parse_kernel_method_chunk(
                 "BitBlt",
                 [],
-                "fillForm: form color: color\n    <primitive>",
+                "fillForm: form color: color\n    <primitive: #bitbltFillFormColor>",
             ),
-            ("fillForm:color:", 2, mvp.KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE),
+            ("fillForm:color:", 2, mvp.KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE, "bitbltFillFormColor"),
         )
 
     def test_builds_seed_manifest_with_expected_header(self) -> None:
