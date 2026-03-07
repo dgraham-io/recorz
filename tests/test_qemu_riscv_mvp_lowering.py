@@ -570,6 +570,25 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(len(mvp.BOOT_OBJECT_FAMILY_SPECS[2].object_specs), 2)
         self.assertEqual(mvp.BOOT_OBJECT_FIXED_COUNT, 140)
 
+    def test_builds_fixed_boot_seed_objects_from_declared_families(self) -> None:
+        seed_objects, seed_object_indices_by_name, glyph_object_indices = mvp.build_fixed_boot_seed_objects()
+
+        self.assertEqual(len(seed_objects), mvp.BOOT_OBJECT_FIXED_COUNT)
+        self.assertEqual(seed_object_indices_by_name["Transcript"], 0)
+        self.assertEqual(seed_object_indices_by_name["DefaultForm"], 9)
+        self.assertEqual(seed_object_indices_by_name["TranscriptBehavior"], 139)
+        self.assertEqual(glyph_object_indices[0], 10)
+        self.assertEqual(glyph_object_indices[-1], 137)
+        self.assertEqual(
+            seed_objects[glyph_object_indices[0]].fields,
+            [
+                (mvp.SEED_FIELD_SMALL_INTEGER, 5),
+                (mvp.SEED_FIELD_SMALL_INTEGER, 7),
+                (mvp.SEED_FIELD_SMALL_INTEGER, mvp.BITMAP_STORAGE_GLYPH_MONO),
+                (mvp.SEED_FIELD_SMALL_INTEGER, 0),
+            ],
+        )
+
     def test_declares_glyph_bitmap_boot_specs(self) -> None:
         self.assertEqual(mvp.GLYPH_BITMAP_NAME_PREFIX, "GlyphBitmap")
         self.assertEqual(mvp.GLYPH_BITMAP_WIDTH, 5)

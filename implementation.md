@@ -352,3 +352,9 @@
 - Replaced the three separate boot-object passes in `build_seed_manifest()` with one family-driven materialization loop and added internal checks that the boot object count and collected glyph indices still match the declared family specs.
 - Added a focused regression covering the declared boot object family order, the glyph-index-collecting family, and the derived fixed boot object count.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Extract Fixed Boot Seed Object Builder
+- Pulled fixed boot-object materialization out of `build_seed_manifest()` into `build_fixed_boot_seed_objects()` plus a reusable `add_named_seed_object()` helper, so the seed builder now consumes an explicit fixed boot graph instead of constructing it inline.
+- Kept the boot object family assertions in the extracted helper, preserving the same fixed boot object count and glyph index collection behavior while simplifying `build_seed_manifest()`.
+- Added a focused regression covering the extracted fixed boot seed objects, named object indices, and glyph bitmap object range.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

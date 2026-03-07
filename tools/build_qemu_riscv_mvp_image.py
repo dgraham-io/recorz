@@ -1321,23 +1321,32 @@ def build_method_descriptor_seed_objects(
     return method_start_by_kind, method_count_by_kind, method_seed_objects
 
 
-def build_seed_manifest() -> bytes:
+def add_named_seed_object(
+    seed_objects: list[SeedObject],
+    seed_object_indices_by_name: dict[str, int],
+    name: str,
+    object_kind: int,
+    fields: list[tuple[int, int]],
+) -> int:
+    object_index = len(seed_objects)
+
+    if name in seed_object_indices_by_name:
+        raise AssertionError(f"duplicate seed object name {name!r}")
+    seed_object_indices_by_name[name] = object_index
+    seed_objects.append(SeedObject(object_kind, SEED_INVALID_OBJECT_INDEX, fields))
+    return object_index
+
+
+def build_fixed_boot_seed_objects() -> tuple[list[SeedObject], dict[str, int], list[int]]:
     seed_objects: list[SeedObject] = []
     seed_object_indices_by_name: dict[str, int] = {}
-
-    def add_seed_object(name: str, object_kind: int, fields: list[tuple[int, int]]) -> int:
-        object_index = len(seed_objects)
-
-        if name in seed_object_indices_by_name:
-            raise AssertionError(f"duplicate seed object name {name!r}")
-        seed_object_indices_by_name[name] = object_index
-        seed_objects.append(SeedObject(object_kind, SEED_INVALID_OBJECT_INDEX, fields))
-        return object_index
-
     glyph_object_indices: list[int] = []
+
     for family_spec in BOOT_OBJECT_FAMILY_SPECS:
         for spec in family_spec.object_specs:
-            object_index = add_seed_object(
+            object_index = add_named_seed_object(
+                seed_objects,
+                seed_object_indices_by_name,
                 spec.name,
                 constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, spec.object_kind_name),
                 materialize_boot_object_fields(spec.field_specs, seed_object_indices_by_name, glyph_object_indices),
@@ -1349,6 +1358,12 @@ def build_seed_manifest() -> bytes:
         raise AssertionError("boot object count does not match declared boot object families")
     if len(glyph_object_indices) != len(GLYPH_BITMAP_BOOT_SPECS):
         raise AssertionError("glyph object indices do not match declared glyph bitmap specs")
+
+    return seed_objects, seed_object_indices_by_name, glyph_object_indices
+
+
+def build_seed_manifest() -> bytes:
+    seed_objects, seed_object_indices_by_name, glyph_object_indices = build_fixed_boot_seed_objects()
 
     seed_layout = build_seed_layout(BOOT_OBJECT_FIXED_COUNT, CLASS_DESCRIPTOR_KIND_ORDER)
     class_class_index = seed_layout["class_descriptors"].start_index
