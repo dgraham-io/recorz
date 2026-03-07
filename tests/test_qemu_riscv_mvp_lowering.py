@@ -474,7 +474,11 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertEqual(
             mvp.COMPILED_METHOD_OPCODE_VALUES,
-            mvp.build_named_value_map_from_explicit_specs(mvp.COMPILED_METHOD_OPCODE_SPEC),
+            mvp.build_named_constant_maps_from_explicit_specs(mvp.COMPILED_METHOD_OPCODE_SPEC)[1],
+        )
+        self.assertEqual(
+            mvp.METHOD_IMPLEMENTATION_DEFINITIONS,
+            mvp.build_named_constant_maps_from_explicit_specs(mvp.METHOD_IMPLEMENTATION_RUNTIME_SPEC)[2],
         )
 
     def test_derives_kernel_method_entry_names(self) -> None:
@@ -1465,6 +1469,16 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertIn("#define RECORZ_MVP_IMAGE_SECTION_PROGRAM 1U", header)
         self.assertIn("#define RECORZ_MVP_IMAGE_ENTRY_SIZE 16U", header)
         self.assertIn("#define RECORZ_MVP_SEED_VERSION 16U", header)
+        self.assertIn("#define RECORZ_MVP_SEED_INVALID_OBJECT_INDEX 65535U", header)
+        self.assertIn("#define RECORZ_MVP_COMPILED_METHOD_MAX_INSTRUCTIONS 4U", header)
+        self.assertIn("enum recorz_mvp_compiled_method_opcode {", header)
+        self.assertIn("RECORZ_MVP_COMPILED_METHOD_OP_RETURN_RECEIVER = 7,", header)
+        self.assertIn("enum recorz_mvp_method_implementation {", header)
+        self.assertIn("RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED = 7,", header)
+        self.assertIn("#define RECORZ_MVP_TEXT_LAYOUT_FIELD_SCALE 2U", header)
+        self.assertIn("#define RECORZ_MVP_TEXT_STYLE_FIELD_FOREGROUND_COLOR 0U", header)
+        self.assertIn("#define RECORZ_MVP_SELECTOR_FIELD_VALUE 0U", header)
+        self.assertIn("#define RECORZ_MVP_BITMAP_STORAGE_FRAMEBUFFER 1U", header)
         self.assertIn("enum recorz_mvp_opcode {", header)
         self.assertIn("RECORZ_MVP_OP_STORE_LEXICAL = 9,", header)
         self.assertIn("enum recorz_mvp_global {", header)

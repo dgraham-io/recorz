@@ -108,6 +108,7 @@ PROGRAM_RUNTIME_SPEC = dict(RUNTIME_SPEC["program"])
 IMAGE_RUNTIME_SPEC = dict(RUNTIME_SPEC["image"])
 SEED_RUNTIME_SPEC = dict(RUNTIME_SPEC["seed"])
 COMPILED_METHOD_RUNTIME_SPEC = dict(RUNTIME_SPEC["compiled_method"])
+METHOD_IMPLEMENTATION_RUNTIME_SPEC = list(RUNTIME_SPEC["method_implementations"])
 
 OPCODE_SPEC = list(RUNTIME_SPEC["opcodes"])
 LITERAL_KIND_SPEC = list(RUNTIME_SPEC["literal_kinds"])
@@ -522,6 +523,9 @@ def build_boot_object_export_map(
     return export_map
 KERNEL_METHOD_IMPLEMENTATION_COMPILED = "compiled"
 KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE = "primitive"
+METHOD_IMPLEMENTATION_IDS, METHOD_IMPLEMENTATION_VALUES, METHOD_IMPLEMENTATION_DEFINITIONS = (
+    build_named_constant_maps_from_explicit_specs(METHOD_IMPLEMENTATION_RUNTIME_SPEC)
+)
 KERNEL_CLASS_HEADER_PATTERN = re.compile(
     r"^RecorzKernelClass:\s*#(?P<class_name>[A-Za-z_]\w*)\s+descriptorOrder:\s*(?P<descriptor_order>\d+)"
     r"\s+objectKindOrder:\s*(?P<object_kind_order>\d+)"
@@ -546,19 +550,29 @@ KERNEL_BOOT_OBJECT_ATTRIBUTE_PATTERN = re.compile(
     r"^(?P<attribute_name>fields|globalExports|rootExports):\s*'(?P<attribute_value>[^']*)'$"
 )
 KERNEL_PRIMITIVE_DECLARATION_PATTERN = re.compile(r"^<primitive:\s*#(?P<binding>[A-Za-z_]\w*)>$")
-COMPILED_METHOD_OPCODE_VALUES = build_named_value_map_from_explicit_specs(COMPILED_METHOD_OPCODE_SPEC)
-COMPILED_METHOD_OP_PUSH_GLOBAL = COMPILED_METHOD_OPCODE_VALUES["push_global"]
-COMPILED_METHOD_OP_PUSH_ROOT = COMPILED_METHOD_OPCODE_VALUES["push_root"]
-COMPILED_METHOD_OP_PUSH_ARGUMENT = COMPILED_METHOD_OPCODE_VALUES["push_argument"]
-COMPILED_METHOD_OP_PUSH_FIELD = COMPILED_METHOD_OPCODE_VALUES["push_field"]
-COMPILED_METHOD_OP_SEND = COMPILED_METHOD_OPCODE_VALUES["send"]
-COMPILED_METHOD_OP_RETURN_TOP = COMPILED_METHOD_OPCODE_VALUES["return_top"]
-COMPILED_METHOD_OP_RETURN_RECEIVER = COMPILED_METHOD_OPCODE_VALUES["return_receiver"]
+COMPILED_METHOD_OPCODE_IDS, COMPILED_METHOD_OPCODE_VALUES, COMPILED_METHOD_OPCODE_DEFINITIONS = (
+    build_named_constant_maps_from_explicit_specs(COMPILED_METHOD_OPCODE_SPEC)
+)
+COMPILED_METHOD_OP_PUSH_GLOBAL = constant_value(COMPILED_METHOD_OPCODE_IDS, COMPILED_METHOD_OPCODE_VALUES, "push_global")
+COMPILED_METHOD_OP_PUSH_ROOT = constant_value(COMPILED_METHOD_OPCODE_IDS, COMPILED_METHOD_OPCODE_VALUES, "push_root")
+COMPILED_METHOD_OP_PUSH_ARGUMENT = constant_value(
+    COMPILED_METHOD_OPCODE_IDS,
+    COMPILED_METHOD_OPCODE_VALUES,
+    "push_argument",
+)
+COMPILED_METHOD_OP_PUSH_FIELD = constant_value(COMPILED_METHOD_OPCODE_IDS, COMPILED_METHOD_OPCODE_VALUES, "push_field")
+COMPILED_METHOD_OP_SEND = constant_value(COMPILED_METHOD_OPCODE_IDS, COMPILED_METHOD_OPCODE_VALUES, "send")
+COMPILED_METHOD_OP_RETURN_TOP = constant_value(COMPILED_METHOD_OPCODE_IDS, COMPILED_METHOD_OPCODE_VALUES, "return_top")
+COMPILED_METHOD_OP_RETURN_RECEIVER = constant_value(
+    COMPILED_METHOD_OPCODE_IDS,
+    COMPILED_METHOD_OPCODE_VALUES,
+    "return_receiver",
+)
 
 
 def encode_compiled_method_instruction(opcode_name: str, operand_a: int = 0, operand_b: int = 0) -> int:
     return (
-        COMPILED_METHOD_OPCODE_VALUES[opcode_name]
+        constant_value(COMPILED_METHOD_OPCODE_IDS, COMPILED_METHOD_OPCODE_VALUES, opcode_name)
         | ((operand_a & 0xFF) << 8)
         | ((operand_b & 0xFFFF) << 16)
     )
@@ -1123,10 +1137,22 @@ def kernel_primitive_handler_name(binding_name: str) -> str:
 
 def kernel_method_implementation_constant_name(implementation_kind: str) -> str:
     if implementation_kind == KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE:
-        return "RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE"
+        return METHOD_IMPLEMENTATION_IDS["primitive"]
     if implementation_kind == KERNEL_METHOD_IMPLEMENTATION_COMPILED:
-        return "RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED"
+        return METHOD_IMPLEMENTATION_IDS["compiled"]
     raise LoweringError(f"kernel MVP method implementation kind {implementation_kind!r} is unsupported")
+
+
+def kernel_field_constant_name(class_name: str, field_name: str) -> str:
+    return f"RECORZ_MVP_{kernel_class_entry_stem(class_name)}_FIELD_{upper_snake_name(field_name)}"
+
+
+def build_kernel_field_definitions() -> list[tuple[str, int]]:
+    return [
+        (kernel_field_constant_name(class_header.class_name, field_name), field_index)
+        for class_header in KERNEL_CLASS_HEADERS_IN_DESCRIPTOR_ORDER
+        for field_index, field_name in enumerate(class_header.instance_variables)
+    ]
 
 
 def append_enum_definition(lines: list[str], enum_name: str, entries: list[tuple[str, int]]) -> None:
@@ -1526,6 +1552,15 @@ def render_generated_runtime_bindings_header() -> str:
         f"{struct.calcsize(SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(SEED_FIELD_FORMAT))}U",
     )
     append_macro_definition(lines, "RECORZ_MVP_SEED_BINDING_SIZE", f"{struct.calcsize(SEED_BINDING_FORMAT)}U")
+    append_macro_definition(lines, "RECORZ_MVP_SEED_INVALID_OBJECT_INDEX", f"{SEED_INVALID_OBJECT_INDEX}U")
+    append_macro_definition(lines, "RECORZ_MVP_COMPILED_METHOD_MAX_INSTRUCTIONS", f"{COMPILED_METHOD_MAX_INSTRUCTIONS}U")
+    lines.append("")
+    append_enum_definition(lines, "recorz_mvp_compiled_method_opcode", COMPILED_METHOD_OPCODE_DEFINITIONS)
+    append_enum_definition(lines, "recorz_mvp_method_implementation", METHOD_IMPLEMENTATION_DEFINITIONS)
+    for field_constant_name, field_index in build_kernel_field_definitions():
+        append_macro_definition(lines, field_constant_name, f"{field_index}U")
+    append_macro_definition(lines, "RECORZ_MVP_BITMAP_STORAGE_FRAMEBUFFER", f"{BITMAP_STORAGE_FRAMEBUFFER}U")
+    append_macro_definition(lines, "RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO", f"{BITMAP_STORAGE_GLYPH_MONO}U")
     lines.append("")
     append_enum_definition(lines, "recorz_mvp_opcode", OPCODE_DEFINITIONS)
     append_enum_definition(lines, "recorz_mvp_global", GLOBAL_DEFINITIONS)

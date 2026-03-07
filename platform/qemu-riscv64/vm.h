@@ -7,7 +7,6 @@
 
 #define RECORZ_MVP_HEAP_LIMIT 256U
 #define RECORZ_MVP_GLYPH_CODE_LIMIT 128U
-#define RECORZ_MVP_SEED_INVALID_OBJECT_INDEX 0xFFFFU
 
 struct recorz_mvp_instruction {
     uint8_t opcode;

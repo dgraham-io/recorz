@@ -119,32 +119,51 @@
     "opcodes": [
       {
         "name": "push_global",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_GLOBAL",
         "value": 1
       },
       {
         "name": "push_root",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_ROOT",
         "value": 2
       },
       {
         "name": "push_argument",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_ARGUMENT",
         "value": 3
       },
       {
         "name": "push_field",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_FIELD",
         "value": 4
       },
       {
         "name": "send",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_SEND",
         "value": 5
       },
       {
         "name": "return_top",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_RETURN_TOP",
         "value": 6
       },
       {
         "name": "return_receiver",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_RETURN_RECEIVER",
         "value": 7
       }
     ]
-  }
+  },
+  "method_implementations": [
+    {
+      "name": "primitive",
+      "constant": "RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE",
+      "value": 1
+    },
+    {
+      "name": "compiled",
+      "constant": "RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED",
+      "value": 7
+    }
+  ]
 }

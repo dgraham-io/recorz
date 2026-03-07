@@ -597,3 +597,9 @@
 - Removed the duplicated wire-format `#define`s from `program.c`, `seed.c`, and `image.c`, so those target loaders now consume the same generated host/target contract instead of maintaining their own copies.
 - Extended the focused header-generation regression to lock the newly generated wire-format defines.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Move VM Runtime Layout Constants Into Generated Header
+- Extended `runtime_spec.json` and the generated runtime header so the target now gets shared compiled-method opcode ids, method implementation ids, the seed invalid-object marker, source-derived field index macros, and shared bitmap storage ids from one generated contract.
+- Removed the last duplicated numeric runtime/layout truth from `platform/qemu-riscv64/vm.c` and `platform/qemu-riscv64/vm.h` by switching the VM to those generated constants, which also brought the `TextLayout` (`left top scale lineSpacing`) and `TextStyle` (`foregroundColor backgroundColor`) slot usage back into sync with the kernel source declarations.
+- Added `runtime_spec.json` as an explicit dependency for generated-image/generated-header rebuilds and extended the focused lowering regression to lock the new generated VM/runtime constants.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
