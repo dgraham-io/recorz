@@ -402,6 +402,34 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ("RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR", 17),
         )
 
+    def test_derives_seed_object_and_root_maps_from_specs(self) -> None:
+        self.assertEqual(
+            mvp.SEED_FIELD_KIND_SPECS,
+            [
+                ("nil", "RECORZ_MVP_SEED_FIELD_NIL"),
+                ("small_integer", "RECORZ_MVP_SEED_FIELD_SMALL_INTEGER"),
+                ("object_index", "RECORZ_MVP_SEED_FIELD_OBJECT_INDEX"),
+            ],
+        )
+        self.assertEqual(mvp.SEED_FIELD_KIND_DEFINITIONS[2], ("RECORZ_MVP_SEED_FIELD_OBJECT_INDEX", 2))
+        self.assertEqual(mvp.OBJECT_KIND_SPECS[0], ("Transcript", "RECORZ_MVP_OBJECT_TRANSCRIPT"))
+        self.assertEqual(mvp.OBJECT_KIND_SPECS[-1], ("CompiledMethod", "RECORZ_MVP_OBJECT_COMPILED_METHOD"))
+        self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["BitBlt"], mvp.SEED_OBJECT_BITBLT)
+        self.assertEqual(mvp.OBJECT_KIND_DEFINITIONS[-1], ("RECORZ_MVP_OBJECT_COMPILED_METHOD", 22))
+        self.assertEqual(
+            mvp.SEED_ROOT_SPECS,
+            [
+                ("default_form", "RECORZ_MVP_SEED_ROOT_DEFAULT_FORM"),
+                ("framebuffer_bitmap", "RECORZ_MVP_SEED_ROOT_FRAMEBUFFER_BITMAP"),
+                ("transcript_behavior", "RECORZ_MVP_SEED_ROOT_TRANSCRIPT_BEHAVIOR"),
+                ("transcript_layout", "RECORZ_MVP_SEED_ROOT_TRANSCRIPT_LAYOUT"),
+                ("transcript_style", "RECORZ_MVP_SEED_ROOT_TRANSCRIPT_STYLE"),
+                ("transcript_metrics", "RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS"),
+            ],
+        )
+        self.assertEqual(mvp.SEED_ROOT_VALUES["RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS"], 6)
+        self.assertEqual(mvp.SEED_ROOT_DEFINITIONS[0], ("RECORZ_MVP_SEED_ROOT_DEFAULT_FORM", 1))
+
     def test_renders_generated_runtime_bindings_header(self) -> None:
         header = mvp.render_generated_runtime_bindings_header()
 

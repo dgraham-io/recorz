@@ -298,3 +298,9 @@
 - Kept the host compiler/lowerer behavior and the generated target header unchanged, but removed another duplicated host-side contract layer from the builder.
 - Added a focused regression that asserts the source-of-truth spec lists and the derived global/selector lookup tables used by the lowerer and image builder.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-06 - Derive Builder Seed Metadata From Shared Specs
+- Replaced the parallel builder-side seed field kind, object kind, and seed root constant tables with shared declarative spec lists and derived maps, preserving the existing zero-based seed field numbering and one-based object/root numbering.
+- Derived `KERNEL_CLASS_NAME_TO_OBJECT_KIND` from the same object-kind spec layer so the source loader, seed builder, and generated target header all read from one host-side definition path.
+- Added a focused regression covering the new seed field/object/root spec lists and their derived maps without changing the target VM or seed image layout.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
