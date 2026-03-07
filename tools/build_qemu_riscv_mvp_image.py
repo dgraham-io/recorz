@@ -1141,6 +1141,15 @@ def append_enum_definition(lines: list[str], enum_name: str, entries: list[tuple
     )
 
 
+def append_macro_definition(lines: list[str], name: str, value: str) -> None:
+    lines.append(f"#define {name} {value}")
+
+
+def append_magic_byte_definitions(lines: list[str], prefix: str, magic: bytes) -> None:
+    for index, value in enumerate(magic):
+        append_macro_definition(lines, f"{prefix}_{index}", repr(chr(value)))
+
+
 def build_global_specs_from_boot_object_exports(
     fixed_boot_graph_spec: FixedBootGraphSpec,
 ) -> list[tuple[str, str]]:
@@ -1480,6 +1489,44 @@ def render_generated_runtime_bindings_header() -> str:
         "#define RECORZ_QEMU_RISCV64_GENERATED_RUNTIME_BINDINGS_H",
         "",
     ]
+    append_magic_byte_definitions(lines, "RECORZ_MVP_PROGRAM_MAGIC", PROGRAM_MAGIC)
+    append_macro_definition(lines, "RECORZ_MVP_PROGRAM_VERSION", f"{PROGRAM_VERSION}U")
+    append_macro_definition(lines, "RECORZ_MVP_PROGRAM_HEADER_SIZE", f"{struct.calcsize(PROGRAM_HEADER_FORMAT)}U")
+    append_macro_definition(
+        lines,
+        "RECORZ_MVP_PROGRAM_INSTRUCTION_SIZE",
+        f"{struct.calcsize(PROGRAM_INSTRUCTION_FORMAT)}U",
+    )
+    append_macro_definition(
+        lines,
+        "RECORZ_MVP_PROGRAM_LITERAL_HEADER_SIZE",
+        f"{struct.calcsize(PROGRAM_LITERAL_HEADER_FORMAT)}U",
+    )
+    lines.append("")
+    append_magic_byte_definitions(lines, "RECORZ_MVP_IMAGE_MAGIC", IMAGE_MAGIC)
+    append_macro_definition(lines, "RECORZ_MVP_IMAGE_VERSION", f"{IMAGE_VERSION}U")
+    append_macro_definition(lines, "RECORZ_MVP_IMAGE_HEADER_SIZE", f"{struct.calcsize(IMAGE_HEADER_FORMAT)}U")
+    append_macro_definition(lines, "RECORZ_MVP_IMAGE_SECTION_SIZE", f"{struct.calcsize(IMAGE_SECTION_FORMAT)}U")
+    append_macro_definition(lines, "RECORZ_MVP_IMAGE_SECTION_PROGRAM", f"{IMAGE_SECTION_PROGRAM}U")
+    append_macro_definition(lines, "RECORZ_MVP_IMAGE_SECTION_SEED", f"{IMAGE_SECTION_SEED}U")
+    append_macro_definition(lines, "RECORZ_MVP_IMAGE_SECTION_ENTRY", f"{IMAGE_SECTION_ENTRY}U")
+    append_macro_definition(lines, "RECORZ_MVP_IMAGE_FEATURE_FNV1A32", f"{IMAGE_FEATURE_FNV1A32}U")
+    append_magic_byte_definitions(lines, "RECORZ_MVP_IMAGE_PROFILE", IMAGE_PROFILE)
+    append_magic_byte_definitions(lines, "RECORZ_MVP_IMAGE_ENTRY_MAGIC", IMAGE_ENTRY_MAGIC)
+    append_macro_definition(lines, "RECORZ_MVP_IMAGE_ENTRY_VERSION", f"{IMAGE_ENTRY_VERSION}U")
+    append_macro_definition(lines, "RECORZ_MVP_IMAGE_ENTRY_SIZE", f"{struct.calcsize(IMAGE_ENTRY_FORMAT)}U")
+    append_macro_definition(lines, "RECORZ_MVP_IMAGE_ENTRY_KIND_DOIT", f"{IMAGE_ENTRY_KIND_DOIT}U")
+    lines.append("")
+    append_magic_byte_definitions(lines, "RECORZ_MVP_SEED_MAGIC", SEED_MAGIC)
+    append_macro_definition(lines, "RECORZ_MVP_SEED_VERSION", f"{SEED_VERSION}U")
+    append_macro_definition(lines, "RECORZ_MVP_SEED_HEADER_SIZE", f"{struct.calcsize(SEED_HEADER_FORMAT)}U")
+    append_macro_definition(
+        lines,
+        "RECORZ_MVP_SEED_OBJECT_SIZE",
+        f"{struct.calcsize(SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(SEED_FIELD_FORMAT))}U",
+    )
+    append_macro_definition(lines, "RECORZ_MVP_SEED_BINDING_SIZE", f"{struct.calcsize(SEED_BINDING_FORMAT)}U")
+    lines.append("")
     append_enum_definition(lines, "recorz_mvp_opcode", OPCODE_DEFINITIONS)
     append_enum_definition(lines, "recorz_mvp_global", GLOBAL_DEFINITIONS)
     append_enum_definition(lines, "recorz_mvp_selector", SELECTOR_DEFINITIONS)

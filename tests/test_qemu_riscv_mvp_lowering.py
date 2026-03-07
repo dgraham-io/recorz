@@ -1461,6 +1461,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         header = mvp.render_generated_runtime_bindings_header()
 
         self.assertIn("#ifndef RECORZ_QEMU_RISCV64_GENERATED_RUNTIME_BINDINGS_H", header)
+        self.assertIn("#define RECORZ_MVP_PROGRAM_MAGIC_0 'R'", header)
+        self.assertIn("#define RECORZ_MVP_IMAGE_SECTION_PROGRAM 1U", header)
+        self.assertIn("#define RECORZ_MVP_IMAGE_ENTRY_SIZE 16U", header)
+        self.assertIn("#define RECORZ_MVP_SEED_VERSION 16U", header)
         self.assertIn("enum recorz_mvp_opcode {", header)
         self.assertIn("RECORZ_MVP_OP_STORE_LEXICAL = 9,", header)
         self.assertIn("enum recorz_mvp_global {", header)

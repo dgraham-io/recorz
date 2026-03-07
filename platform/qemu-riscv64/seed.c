@@ -4,15 +4,6 @@
 
 #include "machine.h"
 
-#define RECORZ_MVP_SEED_MAGIC_0 'R'
-#define RECORZ_MVP_SEED_MAGIC_1 'C'
-#define RECORZ_MVP_SEED_MAGIC_2 'Z'
-#define RECORZ_MVP_SEED_MAGIC_3 'S'
-#define RECORZ_MVP_SEED_VERSION 16U
-#define RECORZ_MVP_SEED_HEADER_SIZE 16U
-#define RECORZ_MVP_SEED_OBJECT_SIZE 24U
-#define RECORZ_MVP_SEED_BINDING_SIZE 4U
-
 static struct recorz_mvp_seed_object loaded_objects[RECORZ_MVP_HEAP_LIMIT];
 static uint16_t loaded_glyph_object_indices[RECORZ_MVP_GLYPH_CODE_LIMIT];
 static struct recorz_mvp_seed loaded_seed;

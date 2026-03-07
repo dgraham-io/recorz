@@ -591,3 +591,9 @@
 - Updated the builder to load that runtime spec and derive the active opcode/literal/format/seed compatibility constants from it instead of authoring those values directly in Python.
 - Extended the focused lowering regressions to lock that the live builder constants now derive from `runtime_spec.json`, not from builder-side Python literals.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Move Wire-Format Constants Into Generated Target Header
+- Extended the generated runtime header so it now exports the shared program/image/seed magic bytes, versions, profile bytes, section ids, feature bits, and format-derived structure sizes.
+- Removed the duplicated wire-format `#define`s from `program.c`, `seed.c`, and `image.c`, so those target loaders now consume the same generated host/target contract instead of maintaining their own copies.
+- Extended the focused header-generation regression to lock the newly generated wire-format defines.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
