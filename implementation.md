@@ -1,5 +1,11 @@
 # Implementation Log
 
+## 2026-03-07 - Existing-Class In-Image Class File-In
+- Added `KernelInstaller>>fileInClassChunks:` so the running image can accept a small `RecorzKernelClass:` chunk stream, resolve an existing class from the class header, and file its method chunks in through the existing live install path.
+- Added the new selector and primitive-backed entry to the MVP kernel source tree, extended the target VM with class-header parsing and existing-class lookup, and updated the host-side image inspector and structural tests for the enlarged selector/method-entry set.
+- Added an end-to-end demo and QEMU integration test proving that a `Display` class chunk can be filed in from inside the image without an external update payload and immediately change framebuffer-visible behavior.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v`, `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_method_update_integration -v`, and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
 ## 2026-03-06 - Boot Image Metadata
 - Added image-level evolution metadata to the QEMU MVP `RCZI` boot image: a feature bitmap plus an FNV-1a checksum.
 - Updated the target image loader to reject unknown feature flags and verify the checksum before handing control to the program and seed loaders.

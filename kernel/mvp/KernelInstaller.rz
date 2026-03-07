@@ -14,3 +14,6 @@ installMethodSource: source onClass: class
 !
 fileInMethodChunks: source onClass: class
     <primitive: #kernelInstallerFileInMethodChunksOnClass>
+!
+fileInClassChunks: source
+    <primitive: #kernelInstallerFileInClassChunks>

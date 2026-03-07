@@ -121,7 +121,7 @@ static struct recorz_mvp_heap_object heap[HEAP_LIMIT];
 static uint32_t stack_size = 0U;
 static uint16_t heap_size = 0U;
 static uint16_t class_handles_by_kind[MAX_OBJECT_KIND + 1U];
-static uint16_t selector_handles_by_id[RECORZ_MVP_SELECTOR_FILE_IN_METHOD_CHUNKS_ON_CLASS + 1U];
+static uint16_t selector_handles_by_id[RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS + 1U];
 static uint16_t global_handles[RECORZ_MVP_GLOBAL_KERNEL_INSTALLER + 1U];
 static uint16_t default_form_handle = 0U;
 static uint16_t framebuffer_bitmap_handle = 0U;
@@ -315,6 +315,8 @@ static const char *selector_name(uint8_t selector) {
             return "installMethodSource:onClass:";
         case RECORZ_MVP_SELECTOR_FILE_IN_METHOD_CHUNKS_ON_CLASS:
             return "fileInMethodChunks:onClass:";
+        case RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS:
+            return "fileInClassChunks:";
     }
     return "unknown";
 }
@@ -564,6 +566,29 @@ static uint32_t source_copy_next_chunk(const char **cursor_ref, char buffer[], u
     return chunk_length;
 }
 
+static const char *source_parse_identifier(const char *cursor, char buffer[], uint32_t buffer_size);
+
+static void source_parse_class_name_from_chunk(
+    const char *chunk,
+    char class_name[],
+    uint32_t class_name_size
+) {
+    const char *cursor = chunk;
+
+    if (!source_starts_with(cursor, "RecorzKernelClass:")) {
+        machine_panic("KernelInstaller class chunk is missing a RecorzKernelClass header");
+    }
+    cursor += 18U;
+    cursor = source_skip_horizontal_space(cursor);
+    if (*cursor != '#') {
+        machine_panic("KernelInstaller class chunk header is missing a class name");
+    }
+    ++cursor;
+    if (source_parse_identifier(cursor, class_name, class_name_size) == 0) {
+        machine_panic("KernelInstaller class chunk header has an invalid class name");
+    }
+}
+
 static const char *source_parse_identifier(const char *cursor, char buffer[], uint32_t buffer_size) {
     uint32_t length = 0U;
 
@@ -609,7 +634,7 @@ static uint8_t source_selector_id_for_name(const char *name) {
     uint8_t selector;
 
     for (selector = RECORZ_MVP_SELECTOR_SHOW;
-         selector <= RECORZ_MVP_SELECTOR_FILE_IN_METHOD_CHUNKS_ON_CLASS;
+         selector <= RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS;
          ++selector) {
         if (source_names_equal(name, selector_name(selector))) {
             return selector;
@@ -920,7 +945,7 @@ static struct recorz_mvp_heap_object *mutable_method_descriptor_entry_object(con
 }
 
 static uint16_t selector_object_handle(uint8_t selector) {
-    if (selector == 0U || selector > RECORZ_MVP_SELECTOR_FILE_IN_METHOD_CHUNKS_ON_CLASS ||
+    if (selector == 0U || selector > RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS ||
         selector_handles_by_id[selector] == 0U) {
         machine_panic("selector handle is not installed");
     }
@@ -1004,7 +1029,7 @@ static const struct recorz_mvp_heap_object *lookup_builtin_method_descriptor(
     if (method_object == 0) {
         machine_panic("class with methods is missing a method start");
     }
-    if (selector == 0U || selector > RECORZ_MVP_SELECTOR_FILE_IN_METHOD_CHUNKS_ON_CLASS) {
+    if (selector == 0U || selector > RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS) {
         machine_panic("selector id is out of range");
     }
     if (selector_handles_by_id[selector] == 0U) {
@@ -1091,7 +1116,7 @@ static void validate_compiled_method(
                 break;
             case COMPILED_METHOD_OP_SEND:
                 if (operand_a < RECORZ_MVP_SELECTOR_SHOW ||
-                    operand_a > RECORZ_MVP_SELECTOR_FILE_IN_METHOD_CHUNKS_ON_CLASS) {
+                    operand_a > RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS) {
                     machine_panic("compiled method send selector is out of range");
                 }
                 send_count = operand_b;
@@ -1200,7 +1225,7 @@ static void validate_class_method_table(
         entry = method_entry_execution_id(entry_object);
         implementation_value = method_entry_implementation_value(entry_object);
         if (selector < RECORZ_MVP_SELECTOR_SHOW ||
-            selector > RECORZ_MVP_SELECTOR_FILE_IN_METHOD_CHUNKS_ON_CLASS) {
+            selector > RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS) {
             machine_panic("method descriptor selector is out of range");
         }
         if (argument_count > MAX_SEND_ARGS) {
@@ -1275,7 +1300,7 @@ static void initialize_selector_handle_cache(const struct recorz_mvp_seed *seed)
     uint16_t seed_index;
     uint16_t selector_id;
 
-    for (selector_id = 0U; selector_id <= RECORZ_MVP_SELECTOR_FILE_IN_METHOD_CHUNKS_ON_CLASS; ++selector_id) {
+    for (selector_id = 0U; selector_id <= RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS; ++selector_id) {
         selector_handles_by_id[selector_id] = 0U;
     }
     for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
@@ -2435,6 +2460,23 @@ static void file_in_method_chunks_on_class(
     }
 }
 
+static const struct recorz_mvp_heap_object *lookup_class_by_name(const char *class_name) {
+    uint8_t kind;
+
+    if (class_name == 0 || *class_name == '\0') {
+        machine_panic("KernelInstaller class name is empty");
+    }
+    for (kind = 1U; kind <= MAX_OBJECT_KIND; ++kind) {
+        if (class_handles_by_kind[kind] == 0U) {
+            continue;
+        }
+        if (source_names_equal(class_name, object_kind_name(kind))) {
+            return (const struct recorz_mvp_heap_object *)heap_object(class_handles_by_kind[kind]);
+        }
+    }
+    return 0;
+}
+
 static void execute_entry_kernel_installer_compiled_method_word0_word1_word2_word3_instruction_count(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -2499,7 +2541,7 @@ static void execute_entry_kernel_installer_install_compiled_method_on_class_sele
         arguments[3],
         "KernelInstaller argumentCount must be a non-negative small integer"
     );
-    if (selector_id == 0U || selector_id > RECORZ_MVP_SELECTOR_FILE_IN_METHOD_CHUNKS_ON_CLASS) {
+    if (selector_id == 0U || selector_id > RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS) {
         machine_panic("KernelInstaller selectorId is out of range");
     }
     if (argument_count > MAX_SEND_ARGS) {
@@ -2566,6 +2608,36 @@ static void execute_entry_kernel_installer_file_in_method_chunks_on_class(
     }
     file_in_method_chunks_on_class(arguments[0].string, class_object);
     push(receiver);
+}
+
+static void execute_entry_kernel_installer_file_in_class_chunks(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const struct recorz_mvp_heap_object *class_object;
+    const char *cursor;
+    char chunk[METHOD_SOURCE_CHUNK_LIMIT];
+    char class_name[METHOD_SOURCE_NAME_LIMIT];
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("KernelInstaller fileInClassChunks: expects a source string");
+    }
+    cursor = arguments[0].string;
+    if (source_copy_next_chunk(&cursor, chunk, sizeof(chunk)) == 0U) {
+        machine_panic("KernelInstaller fileInClassChunks: source is empty");
+    }
+    source_parse_class_name_from_chunk(chunk, class_name, sizeof(class_name));
+    class_object = lookup_class_by_name(class_name);
+    if (class_object == 0) {
+        machine_panic("KernelInstaller fileInClassChunks: could not resolve class");
+    }
+    file_in_method_chunks_on_class(arguments[0].string, class_object);
+    push(object_value(heap_handle_for_object(class_object)));
 }
 
 static const recorz_mvp_method_entry_handler primitive_binding_handlers[RECORZ_MVP_PRIMITIVE_COUNT] = {
@@ -2941,7 +3013,7 @@ static void apply_method_update_payload(const uint8_t *blob, uint32_t size) {
         machine_panic("method update payload reserved field is nonzero");
     }
     if (selector < RECORZ_MVP_SELECTOR_SHOW ||
-        selector > RECORZ_MVP_SELECTOR_FILE_IN_METHOD_CHUNKS_ON_CLASS) {
+        selector > RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS) {
         machine_panic("method update payload selector is out of range");
     }
     if (argument_count > MAX_SEND_ARGS) {

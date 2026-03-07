@@ -51,3 +51,5 @@ RecorzKernelSelector: #installCompiledMethod:onClass:selectorId:argumentCount: o
 RecorzKernelSelector: #installMethodSource:onClass: order: 24
 !
 RecorzKernelSelector: #fileInMethodChunks:onClass: order: 25
+!
+RecorzKernelSelector: #fileInClassChunks: order: 26
