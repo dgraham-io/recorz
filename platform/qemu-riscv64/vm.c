@@ -58,7 +58,7 @@
 #define BITMAP_STORAGE_FRAMEBUFFER RECORZ_MVP_BITMAP_STORAGE_FRAMEBUFFER
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
-#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_KERNEL_INSTALLER
+#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_OBJECT
 
 enum recorz_mvp_value_kind {
     RECORZ_MVP_VALUE_NIL = 0,
@@ -122,7 +122,8 @@ static struct recorz_mvp_heap_object heap[HEAP_LIMIT];
 static uint32_t stack_size = 0U;
 static uint16_t heap_size = 0U;
 static uint16_t class_handles_by_kind[MAX_OBJECT_KIND + 1U];
-static uint16_t selector_handles_by_id[RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS + 1U];
+static uint16_t class_descriptor_handles_by_kind[MAX_OBJECT_KIND + 1U];
+static uint16_t selector_handles_by_id[RECORZ_MVP_SELECTOR_NEW + 1U];
 static uint16_t global_handles[RECORZ_MVP_GLOBAL_KERNEL_INSTALLER + 1U];
 static uint16_t dynamic_class_handles[DYNAMIC_CLASS_LIMIT];
 static char dynamic_class_names[DYNAMIC_CLASS_LIMIT][METHOD_SOURCE_NAME_LIMIT];
@@ -321,6 +322,8 @@ static const char *selector_name(uint8_t selector) {
             return "fileInMethodChunks:onClass:";
         case RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS:
             return "fileInClassChunks:";
+        case RECORZ_MVP_SELECTOR_NEW:
+            return "new";
     }
     return "unknown";
 }
@@ -363,6 +366,8 @@ static const char *object_kind_name(uint8_t kind) {
             return "CompiledMethod";
         case RECORZ_MVP_OBJECT_KERNEL_INSTALLER:
             return "KernelInstaller";
+        case RECORZ_MVP_OBJECT_OBJECT:
+            return "Object";
     }
     return "UnknownObject";
 }
@@ -638,7 +643,7 @@ static uint8_t source_selector_id_for_name(const char *name) {
     uint8_t selector;
 
     for (selector = RECORZ_MVP_SELECTOR_SHOW;
-         selector <= RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS;
+         selector <= RECORZ_MVP_SELECTOR_NEW;
          ++selector) {
         if (source_names_equal(name, selector_name(selector))) {
             return selector;
@@ -949,7 +954,7 @@ static struct recorz_mvp_heap_object *mutable_method_descriptor_entry_object(con
 }
 
 static uint16_t selector_object_handle(uint8_t selector) {
-    if (selector == 0U || selector > RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS ||
+    if (selector == 0U || selector > RECORZ_MVP_SELECTOR_NEW ||
         selector_handles_by_id[selector] == 0U) {
         machine_panic("selector handle is not installed");
     }
@@ -1033,7 +1038,7 @@ static const struct recorz_mvp_heap_object *lookup_builtin_method_descriptor(
     if (method_object == 0) {
         machine_panic("class with methods is missing a method start");
     }
-    if (selector == 0U || selector > RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS) {
+    if (selector == 0U || selector > RECORZ_MVP_SELECTOR_NEW) {
         machine_panic("selector id is out of range");
     }
     if (selector_handles_by_id[selector] == 0U) {
@@ -1058,10 +1063,10 @@ static const struct recorz_mvp_heap_object *lookup_builtin_method_descriptor(
 }
 
 static const struct recorz_mvp_heap_object *class_object_for_kind(uint8_t kind) {
-    if (kind == 0U || kind > MAX_OBJECT_KIND || class_handles_by_kind[kind] == 0U) {
+    if (kind == 0U || kind > MAX_OBJECT_KIND || class_descriptor_handles_by_kind[kind] == 0U) {
         machine_panic("method update class kind is out of range");
     }
-    return (const struct recorz_mvp_heap_object *)heap_object(class_handles_by_kind[kind]);
+    return (const struct recorz_mvp_heap_object *)heap_object(class_descriptor_handles_by_kind[kind]);
 }
 
 static uint32_t primitive_kind_for_heap_object(const struct recorz_mvp_heap_object *object) {
@@ -1120,7 +1125,7 @@ static void validate_compiled_method(
                 break;
             case COMPILED_METHOD_OP_SEND:
                 if (operand_a < RECORZ_MVP_SELECTOR_SHOW ||
-                    operand_a > RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS) {
+                    operand_a > RECORZ_MVP_SELECTOR_NEW) {
                     machine_panic("compiled method send selector is out of range");
                 }
                 send_count = operand_b;
@@ -1229,7 +1234,7 @@ static void validate_class_method_table(
         entry = method_entry_execution_id(entry_object);
         implementation_value = method_entry_implementation_value(entry_object);
         if (selector < RECORZ_MVP_SELECTOR_SHOW ||
-            selector > RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS) {
+            selector > RECORZ_MVP_SELECTOR_NEW) {
             machine_panic("method descriptor selector is out of range");
         }
         if (argument_count > MAX_SEND_ARGS) {
@@ -1287,6 +1292,22 @@ static void initialize_class_handle_cache(const struct recorz_mvp_seed *seed) {
 
     for (kind = 0U; kind <= MAX_OBJECT_KIND; ++kind) {
         class_handles_by_kind[kind] = 0U;
+        class_descriptor_handles_by_kind[kind] = 0U;
+    }
+    for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
+        const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(seeded_handles[seed_index]);
+
+        if (object->kind != RECORZ_MVP_OBJECT_CLASS) {
+            continue;
+        }
+        kind = (uint16_t)class_instance_kind(object);
+        if (kind == 0U || kind > MAX_OBJECT_KIND) {
+            continue;
+        }
+        if (class_descriptor_handles_by_kind[kind] == 0U) {
+            class_descriptor_handles_by_kind[kind] = seeded_handles[seed_index];
+            class_handles_by_kind[kind] = seeded_handles[seed_index];
+        }
     }
     for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
         const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(seeded_handles[seed_index]);
@@ -1304,7 +1325,7 @@ static void initialize_selector_handle_cache(const struct recorz_mvp_seed *seed)
     uint16_t seed_index;
     uint16_t selector_id;
 
-    for (selector_id = 0U; selector_id <= RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS; ++selector_id) {
+    for (selector_id = 0U; selector_id <= RECORZ_MVP_SELECTOR_NEW; ++selector_id) {
         selector_handles_by_id[selector_id] = 0U;
     }
     for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
@@ -2178,6 +2199,25 @@ static void execute_entry_form_newline(
     push(receiver);
 }
 
+static void execute_entry_class_new(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint16_t instance_handle;
+
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_CLASS) {
+        machine_panic("Class new expects a class receiver");
+    }
+    instance_handle = heap_allocate(RECORZ_MVP_OBJECT_OBJECT);
+    heap_set_class(instance_handle, heap_handle_for_object(object));
+    push(object_value(instance_handle));
+}
+
 static uint8_t compile_source_operand_push(
     const char *name,
     const char *argument_name,
@@ -2478,11 +2518,11 @@ static const struct recorz_mvp_heap_object *lookup_class_by_name(const char *cla
         machine_panic("KernelInstaller class name is empty");
     }
     for (kind = 1U; kind <= MAX_OBJECT_KIND; ++kind) {
-        if (class_handles_by_kind[kind] == 0U) {
+        if (class_descriptor_handles_by_kind[kind] == 0U) {
             continue;
         }
         if (source_names_equal(class_name, object_kind_name(kind))) {
-            return (const struct recorz_mvp_heap_object *)heap_object(class_handles_by_kind[kind]);
+            return (const struct recorz_mvp_heap_object *)heap_object(class_descriptor_handles_by_kind[kind]);
         }
     }
     for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
@@ -2505,8 +2545,12 @@ static const struct recorz_mvp_heap_object *ensure_class_named(const char *class
         machine_panic("dynamic class registry overflow");
     }
     class_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_CLASS);
-    heap_set_field(class_handle, CLASS_FIELD_SUPERCLASS, nil_value());
-    heap_set_field(class_handle, CLASS_FIELD_INSTANCE_KIND, small_integer_value((int32_t)RECORZ_MVP_OBJECT_CLASS));
+    heap_set_field(
+        class_handle,
+        CLASS_FIELD_SUPERCLASS,
+        object_value(heap_handle_for_object(class_object_for_kind(RECORZ_MVP_OBJECT_OBJECT)))
+    );
+    heap_set_field(class_handle, CLASS_FIELD_INSTANCE_KIND, small_integer_value((int32_t)RECORZ_MVP_OBJECT_OBJECT));
     heap_set_field(class_handle, CLASS_FIELD_METHOD_START, nil_value());
     heap_set_field(class_handle, CLASS_FIELD_METHOD_COUNT, small_integer_value(0));
     while (class_name[name_index] != '\0') {
@@ -2589,7 +2633,7 @@ static void execute_entry_kernel_installer_install_compiled_method_on_class_sele
         arguments[3],
         "KernelInstaller argumentCount must be a non-negative small integer"
     );
-    if (selector_id == 0U || selector_id > RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS) {
+    if (selector_id == 0U || selector_id > RECORZ_MVP_SELECTOR_NEW) {
         machine_panic("KernelInstaller selectorId is out of range");
     }
     if (argument_count > MAX_SEND_ARGS) {
@@ -3058,7 +3102,7 @@ static void apply_method_update_payload(const uint8_t *blob, uint32_t size) {
         machine_panic("method update payload reserved field is nonzero");
     }
     if (selector < RECORZ_MVP_SELECTOR_SHOW ||
-        selector > RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS) {
+        selector > RECORZ_MVP_SELECTOR_NEW) {
         machine_panic("method update payload selector is out of range");
     }
     if (argument_count > MAX_SEND_ARGS) {

@@ -145,7 +145,7 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
                 selector_id_field[0] != mvp.SEED_FIELD_SMALL_INTEGER
                 or selector_id_field[1] < mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SHOW"]
                 or selector_id_field[1]
-                > mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS"]
+                > mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_NEW"]
             ):
                 raise ImageInspectionError("seed manifest selector object id field is invalid")
             if int(selector_id_field[1]) in selector_ids:
@@ -247,7 +247,7 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
                     selector_id_field[0] != mvp.SEED_FIELD_SMALL_INTEGER
                     or selector_id_field[1] < mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SHOW"]
                     or selector_id_field[1]
-                    > mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS"]
+                    > mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_NEW"]
                 ):
                     raise ImageInspectionError("seed manifest selector object id field is invalid")
                 if argument_count_field[0] != mvp.SEED_FIELD_SMALL_INTEGER or argument_count_field[1] < 0:

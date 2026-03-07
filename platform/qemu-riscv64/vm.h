@@ -5,7 +5,7 @@
 
 #include "recorz_mvp_generated_runtime_bindings.h"
 
-#define RECORZ_MVP_HEAP_LIMIT 256U
+#define RECORZ_MVP_HEAP_LIMIT 512U
 #define RECORZ_MVP_GLYPH_CODE_LIMIT 128U
 
 struct recorz_mvp_instruction {

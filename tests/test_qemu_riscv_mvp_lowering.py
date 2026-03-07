@@ -506,7 +506,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formClear"], 8)
         self.assertEqual(
             mvp.PRIMITIVE_BINDING_VALUES["kernelInstallerInstallCompiledMethodOnClassSelectorIdArgumentCount"],
-            12,
+            13,
         )
         self.assertEqual(
             mvp.PRIMITIVE_BINDING_BY_ENTRY_NAME["RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING"],
@@ -565,12 +565,16 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             27,
         )
         self.assertEqual(
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_NEW"],
+            28,
+        )
+        self.assertEqual(
             mvp.SELECTOR_DEFINITIONS[16],
             ("RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR", 17),
         )
         self.assertEqual(
             mvp.SELECTOR_DEFINITIONS[-1],
-            ("RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS", 27),
+            ("RECORZ_MVP_SELECTOR_NEW", 28),
         )
 
     def test_derives_seed_object_and_root_maps_from_specs(self) -> None:
@@ -584,7 +588,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertEqual(mvp.SEED_FIELD_KIND_DEFINITIONS[2], ("RECORZ_MVP_SEED_FIELD_OBJECT_INDEX", 2))
         self.assertEqual(mvp.OBJECT_KIND_SPECS[0], ("Transcript", "RECORZ_MVP_OBJECT_TRANSCRIPT"))
-        self.assertEqual(mvp.OBJECT_KIND_SPECS[-1], ("KernelInstaller", "RECORZ_MVP_OBJECT_KERNEL_INSTALLER"))
+        self.assertEqual(mvp.OBJECT_KIND_SPECS[-1], ("Object", "RECORZ_MVP_OBJECT_OBJECT"))
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_IN_DESCRIPTOR_ORDER[0],
             mvp.KernelClassHeader("Class", 0, 12, 8, ("superclass", "instanceKind", "methodStart", "methodCount")),
@@ -610,11 +614,12 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "Selector",
                 "CompiledMethod",
                 "KernelInstaller",
+                "Object",
             ],
         )
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_IN_DESCRIPTOR_ORDER[-1],
-            mvp.KernelClassHeader("KernelInstaller", 17, 17, 9, ()),
+            mvp.KernelClassHeader("Object", 18, 18, 10, ()),
         )
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_BY_NAME["Class"],
@@ -626,13 +631,17 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             mvp.KernelClassHeader("KernelInstaller", 17, 17, 9, ()),
         )
         self.assertEqual(
+            mvp.KERNEL_CLASS_HEADERS_BY_NAME["Object"],
+            mvp.KernelClassHeader("Object", 18, 18, 10, ()),
+        )
+        self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_BY_NAME["TextLayout"],
             mvp.KernelClassHeader("TextLayout", 7, 8, None, ("left", "top", "scale", "lineSpacing")),
         )
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["BitBlt"], mvp.SEED_OBJECT_BITBLT)
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["CompiledMethod"], mvp.SEED_OBJECT_COMPILED_METHOD)
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["KernelInstaller"], mvp.SEED_OBJECT_KERNEL_INSTALLER)
-        self.assertEqual(mvp.OBJECT_KIND_DEFINITIONS[-1], ("RECORZ_MVP_OBJECT_KERNEL_INSTALLER", 18))
+        self.assertEqual(mvp.OBJECT_KIND_DEFINITIONS[-1], ("RECORZ_MVP_OBJECT_OBJECT", 19))
         self.assertEqual(mvp.CLASS_FIELD_METHOD_START, mvp.kernel_instance_variable_index("Class", "methodStart"))
         self.assertEqual(mvp.METHOD_FIELD_ENTRY, mvp.kernel_instance_variable_index("MethodDescriptor", "entry"))
         self.assertEqual(
@@ -734,6 +743,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "Form",
                 "Class",
                 "KernelInstaller",
+                "Object",
             ],
         )
         self.assertEqual(
@@ -756,9 +766,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            mvp.METHOD_ENTRY_ORDER[-6:],
+            mvp.METHOD_ENTRY_ORDER[-7:],
             [
                 "RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND",
+                "RECORZ_MVP_METHOD_ENTRY_CLASS_NEW",
                 "RECORZ_MVP_METHOD_ENTRY_KERNEL_INSTALLER_COMPILED_METHOD_WORD0_WORD1_WORD2_WORD3_INSTRUCTION_COUNT",
                 "RECORZ_MVP_METHOD_ENTRY_KERNEL_INSTALLER_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT",
                 "RECORZ_MVP_METHOD_ENTRY_KERNEL_INSTALLER_INSTALL_METHOD_SOURCE_ON_CLASS",
@@ -1091,6 +1102,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "Selector",
                 "CompiledMethod",
                 "KernelInstaller",
+                "Object",
             ],
         )
         self.assertEqual(
@@ -1364,17 +1376,17 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertIsNone(mvp.validate_dynamic_seed_build_step_specs())
         layout = mvp.build_seed_layout(140, mvp.CLASS_DESCRIPTOR_KIND_ORDER)
-        self.assertEqual(layout["class_descriptors"], mvp.SeedLayoutSection(140, 18))
-        self.assertEqual(layout["selectors"], mvp.SeedLayoutSection(158, 22))
-        self.assertEqual(layout["compiled_methods"], mvp.SeedLayoutSection(180, 12))
-        self.assertEqual(layout["method_entries"], mvp.SeedLayoutSection(192, 27))
-        self.assertEqual(layout["method_descriptors"], mvp.SeedLayoutSection(219, 27))
+        self.assertEqual(layout["class_descriptors"], mvp.SeedLayoutSection(140, 19))
+        self.assertEqual(layout["selectors"], mvp.SeedLayoutSection(159, 23))
+        self.assertEqual(layout["compiled_methods"], mvp.SeedLayoutSection(182, 12))
+        self.assertEqual(layout["method_entries"], mvp.SeedLayoutSection(194, 28))
+        self.assertEqual(layout["method_descriptors"], mvp.SeedLayoutSection(222, 28))
 
     def test_builds_dynamic_seed_sections_from_fixed_boot_graph(self) -> None:
         seed_objects, _seed_object_indices_by_name, _glyph_object_indices = mvp.build_fixed_boot_seed_objects()
         dynamic_sections = mvp.build_dynamic_seed_sections(seed_objects)
 
-        self.assertEqual(dynamic_sections.seed_layout["class_descriptors"], mvp.SeedLayoutSection(141, 18))
+        self.assertEqual(dynamic_sections.seed_layout["class_descriptors"], mvp.SeedLayoutSection(141, 19))
         self.assertEqual(dynamic_sections.class_indices[mvp.SEED_OBJECT_TRANSCRIPT], 142)
         self.assertEqual(dynamic_sections.class_indices[mvp.SEED_OBJECT_COMPILED_METHOD], 157)
         self.assertEqual(dynamic_sections.class_indices[mvp.SEED_OBJECT_KERNEL_INSTALLER], 158)
@@ -1389,18 +1401,18 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "selectors",
             ],
         )
-        self.assertEqual(len(dynamic_sections.class_seed_objects), 18)
-        self.assertEqual(len(dynamic_sections.selector_seed_objects), 22)
+        self.assertEqual(len(dynamic_sections.class_seed_objects), 19)
+        self.assertEqual(len(dynamic_sections.selector_seed_objects), 23)
         self.assertEqual(len(dynamic_sections.compiled_method_seed_objects), 12)
-        self.assertEqual(len(dynamic_sections.method_entry_seed_objects), 27)
-        self.assertEqual(len(dynamic_sections.method_seed_objects), 27)
+        self.assertEqual(len(dynamic_sections.method_entry_seed_objects), 28)
+        self.assertEqual(len(dynamic_sections.method_seed_objects), 28)
         self.assertEqual(
             dynamic_sections.class_seed_objects[0].fields,
             [
                 (mvp.SEED_FIELD_NIL, 0),
                 (mvp.SEED_FIELD_SMALL_INTEGER, mvp.SEED_OBJECT_CLASS),
-                (mvp.SEED_FIELD_OBJECT_INDEX, 220),
-                (mvp.SEED_FIELD_SMALL_INTEGER, 1),
+                (mvp.SEED_FIELD_OBJECT_INDEX, 223),
+                (mvp.SEED_FIELD_SMALL_INTEGER, 2),
             ],
         )
         self.assertIsNone(
@@ -1418,12 +1430,12 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(bindings.root_bindings[0], (mvp.SEED_ROOT_VALUES["RECORZ_MVP_SEED_ROOT_DEFAULT_FORM"], 9))
 
         manifest = mvp.encode_seed_manifest(seed_objects, bindings, glyph_object_indices)
-        self.assertEqual(struct.unpack_from(mvp.SEED_HEADER_FORMAT, manifest, 0), (mvp.SEED_MAGIC, mvp.SEED_VERSION, 247, 7, 6, 128, 0))
+        self.assertEqual(struct.unpack_from(mvp.SEED_HEADER_FORMAT, manifest, 0), (mvp.SEED_MAGIC, mvp.SEED_VERSION, 251, 7, 6, 128, 0))
 
     def test_declares_method_seed_orders_and_materializes_method_seed_objects(self) -> None:
         self.assertEqual(
             mvp.SELECTOR_VALUE_ORDER,
-            [1, 2, 3, 4, 5, 6, 7, 8, 9, 14, 15, 16, 17, 18, 19, 20, 22, 23, 24, 25, 26, 27],
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 14, 15, 16, 17, 18, 19, 20, 22, 23, 24, 25, 26, 27, 28],
         )
         self.assertEqual(
             mvp.COMPILED_METHOD_ENTRY_ORDER[:4],
@@ -1434,26 +1446,27 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "RECORZ_MVP_METHOD_ENTRY_DISPLAY_CLEAR",
             ],
         )
-        class_indices = mvp.build_class_index_map(mvp.CLASS_DESCRIPTOR_KIND_ORDER, 140)
+        class_indices = mvp.build_class_index_map(mvp.CLASS_DESCRIPTOR_KIND_ORDER, 141)
         selector_indices, selector_seed_objects = mvp.build_selector_seed_objects(
-            157,
+            160,
             class_indices[mvp.SEED_OBJECT_SELECTOR],
             mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.selector_value_order,
         )
-        self.assertEqual(selector_indices[mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SHOW"]], 157)
-        self.assertEqual(selector_indices[mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_INSTANCE_KIND"]], 173)
-        self.assertEqual(selector_indices[mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS"]], 178)
+        self.assertEqual(selector_indices[mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SHOW"]], 160)
+        self.assertEqual(selector_indices[mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_INSTANCE_KIND"]], 176)
+        self.assertEqual(selector_indices[mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS"]], 181)
+        self.assertEqual(selector_indices[mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_NEW"]], 182)
         self.assertEqual(
             selector_seed_objects[0].fields,
             [(mvp.SEED_FIELD_SMALL_INTEGER, mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SHOW"])],
         )
         compiled_method_indices, compiled_method_seed_objects = mvp.build_compiled_method_seed_objects(
-            180,
+            183,
             class_indices[mvp.SEED_OBJECT_COMPILED_METHOD],
             mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.compiled_method_entry_order,
         )
-        self.assertEqual(compiled_method_indices["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW"], 180)
-        self.assertEqual(compiled_method_indices["RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND"], 191)
+        self.assertEqual(compiled_method_indices["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW"], 183)
+        self.assertEqual(compiled_method_indices["RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND"], 194)
         self.assertEqual(
             compiled_method_seed_objects[0].fields,
             [
@@ -1462,7 +1475,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         method_entry_indices, method_entry_seed_objects = mvp.build_method_entry_seed_objects(
-            192,
+            195,
             class_indices[mvp.SEED_OBJECT_METHOD_ENTRY],
             compiled_method_indices,
             mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.method_entry_order,
@@ -1471,7 +1484,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             method_entry_seed_objects[0].fields,
             [
                 (mvp.SEED_FIELD_SMALL_INTEGER, mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW"]),
-                (mvp.SEED_FIELD_OBJECT_INDEX, 180),
+                (mvp.SEED_FIELD_OBJECT_INDEX, 183),
             ],
         )
         bitblt_fill_entry_index = mvp.METHOD_ENTRY_ORDER.index("RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR")
@@ -1490,17 +1503,17 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             class_indices[mvp.SEED_OBJECT_METHOD_DESCRIPTOR],
             selector_indices,
             method_entry_indices,
-            219,
+            223,
         )
-        self.assertEqual(method_start_by_kind[mvp.SEED_OBJECT_CLASS], 219)
+        self.assertEqual(method_start_by_kind[mvp.SEED_OBJECT_CLASS], 223)
         self.assertEqual(method_count_by_kind[mvp.SEED_OBJECT_FORM], 6)
         self.assertEqual(
             method_seed_objects[0].fields,
             [
-                (mvp.SEED_FIELD_OBJECT_INDEX, 173),
+                (mvp.SEED_FIELD_OBJECT_INDEX, 176),
                 (mvp.SEED_FIELD_SMALL_INTEGER, 0),
                 (mvp.SEED_FIELD_SMALL_INTEGER, mvp.SEED_OBJECT_CLASS),
-                (mvp.SEED_FIELD_OBJECT_INDEX, 213),
+                (mvp.SEED_FIELD_OBJECT_INDEX, 216),
             ],
         )
 
@@ -1547,11 +1560,13 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             "RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS = 27,",
             header,
         )
+        self.assertIn("RECORZ_MVP_SELECTOR_NEW = 28,", header)
         self.assertIn("enum recorz_mvp_literal_kind {", header)
         self.assertIn("RECORZ_MVP_LITERAL_SMALL_INTEGER = 2,", header)
         self.assertIn("enum recorz_mvp_object_kind {", header)
         self.assertIn("RECORZ_MVP_OBJECT_COMPILED_METHOD = 17,", header)
         self.assertIn("RECORZ_MVP_OBJECT_KERNEL_INSTALLER = 18,", header)
+        self.assertIn("RECORZ_MVP_OBJECT_OBJECT = 19,", header)
         self.assertIn("enum recorz_mvp_seed_field_kind {", header)
         self.assertIn("RECORZ_MVP_SEED_FIELD_OBJECT_INDEX = 2,", header)
         self.assertIn("enum recorz_mvp_seed_root {", header)
@@ -1559,36 +1574,38 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertIn("enum recorz_mvp_method_entry {", header)
         self.assertIn("RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW = 1,", header)
         self.assertIn("RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND = 22,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_CLASS_NEW = 23,", header)
         self.assertIn(
-            "RECORZ_MVP_METHOD_ENTRY_KERNEL_INSTALLER_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT = 24,",
+            "RECORZ_MVP_METHOD_ENTRY_KERNEL_INSTALLER_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT = 25,",
             header,
         )
         self.assertIn(
-            "RECORZ_MVP_METHOD_ENTRY_KERNEL_INSTALLER_INSTALL_METHOD_SOURCE_ON_CLASS = 25,",
+            "RECORZ_MVP_METHOD_ENTRY_KERNEL_INSTALLER_INSTALL_METHOD_SOURCE_ON_CLASS = 26,",
             header,
         )
         self.assertIn(
-            "RECORZ_MVP_METHOD_ENTRY_KERNEL_INSTALLER_FILE_IN_CLASS_CHUNKS = 27,",
+            "RECORZ_MVP_METHOD_ENTRY_KERNEL_INSTALLER_FILE_IN_CLASS_CHUNKS = 28,",
             header,
         )
-        self.assertIn("RECORZ_MVP_METHOD_ENTRY_COUNT = 28,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_COUNT = 29,", header)
         self.assertNotIn("RECORZ_MVP_GENERATED_METHOD_ENTRY_SPECS", header)
         self.assertIn("enum recorz_mvp_primitive_binding {", header)
         self.assertIn("RECORZ_MVP_PRIMITIVE_BITBLT_FILL_FORM_COLOR = 1,", header)
         self.assertIn("RECORZ_MVP_PRIMITIVE_FORM_NEWLINE = 10,", header)
+        self.assertIn("RECORZ_MVP_PRIMITIVE_CLASS_NEW = 11,", header)
         self.assertIn(
-            "RECORZ_MVP_PRIMITIVE_KERNEL_INSTALLER_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT = 12,",
+            "RECORZ_MVP_PRIMITIVE_KERNEL_INSTALLER_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT = 13,",
             header,
         )
         self.assertIn(
-            "RECORZ_MVP_PRIMITIVE_KERNEL_INSTALLER_INSTALL_METHOD_SOURCE_ON_CLASS = 13,",
+            "RECORZ_MVP_PRIMITIVE_KERNEL_INSTALLER_INSTALL_METHOD_SOURCE_ON_CLASS = 14,",
             header,
         )
         self.assertIn(
-            "RECORZ_MVP_PRIMITIVE_KERNEL_INSTALLER_FILE_IN_CLASS_CHUNKS = 15,",
+            "RECORZ_MVP_PRIMITIVE_KERNEL_INSTALLER_FILE_IN_CLASS_CHUNKS = 16,",
             header,
         )
-        self.assertIn("RECORZ_MVP_PRIMITIVE_COUNT = 16,", header)
+        self.assertIn("RECORZ_MVP_PRIMITIVE_COUNT = 17,", header)
         self.assertIn("#define RECORZ_MVP_GENERATED_PRIMITIVE_BINDING_HANDLERS \\", header)
         self.assertIn(
             "[RECORZ_MVP_PRIMITIVE_BITBLT_COPY_BITMAP_REGION_TO_FORM_X_Y_SCALE_COLOR] = "
@@ -1597,6 +1614,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertIn(
             "[RECORZ_MVP_PRIMITIVE_FORM_NEWLINE] = execute_entry_form_newline,",
+            header,
+        )
+        self.assertIn(
+            "[RECORZ_MVP_PRIMITIVE_CLASS_NEW] = execute_entry_class_new,",
             header,
         )
 
@@ -1729,7 +1750,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(struct.calcsize(mvp.SEED_HEADER_FORMAT), 16)
         self.assertEqual(magic, mvp.SEED_MAGIC)
         self.assertEqual(version, mvp.SEED_VERSION)
-        self.assertEqual(object_count, 247)
+        self.assertEqual(object_count, 251)
         self.assertEqual(global_binding_count, 7)
         self.assertEqual(root_binding_count, 6)
         self.assertEqual(glyph_code_count, len(mvp.GLYPH_BITMAP_BOOT_SPECS))
@@ -1774,19 +1795,19 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             first_method_entry_fields,
             [
                 (mvp.SEED_FIELD_SMALL_INTEGER, mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW"]),
-                (mvp.SEED_FIELD_OBJECT_INDEX, 181),
+                (mvp.SEED_FIELD_OBJECT_INDEX, 183),
             ],
         )
         self.assertEqual(first_method_header, (mvp.SEED_OBJECT_METHOD_DESCRIPTOR, 4, 154))
         self.assertEqual(
             first_method_fields,
             [
-                (mvp.SEED_FIELD_OBJECT_INDEX, 175),
+                (mvp.SEED_FIELD_OBJECT_INDEX, 176),
                 (mvp.SEED_FIELD_SMALL_INTEGER, 0),
                 (mvp.SEED_FIELD_SMALL_INTEGER, mvp.SEED_OBJECT_CLASS),
                 (
                     mvp.SEED_FIELD_OBJECT_INDEX,
-                    193 + (mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND"] - 1),
+                    195 + (mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND"] - 1),
                 ),
             ],
         )

@@ -2,3 +2,6 @@ RecorzKernelClass: #Class descriptorOrder: 0 objectKindOrder: 12 sourceBootOrder
 !
 instanceKind
     ^instanceKind
+!
+new
+    <primitive: #classNew>

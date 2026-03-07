@@ -45,7 +45,7 @@ static void validate_instruction(
             return;
         case RECORZ_MVP_OP_SEND:
             if (instruction->operand_a < RECORZ_MVP_SELECTOR_SHOW ||
-                instruction->operand_a > RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS) {
+                instruction->operand_a > RECORZ_MVP_SELECTOR_NEW) {
                 machine_panic("program manifest selector operand is out of range");
             }
             return;

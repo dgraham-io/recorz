@@ -667,3 +667,10 @@
 - Added `examples/qemu_riscv_in_image_chunk_file_in_demo.rz` plus a QEMU integration test that proves the running image can file in two `Display` methods in one chunk stream and immediately use both of them to render three visible lines without any host update payload.
 - Updated `platform/qemu-riscv64/program.c`, `platform/qemu-riscv64/vm.c`, `tools/inspect_qemu_riscv_mvp_image.py`, and the focused image/lowering tests so the expanded selector/method-entry/primitive counts for the chunk installer remain consistent across host and target.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Add Generic Object Instances And Class>>new
+- Added a new source-declared `Object` class under `kernel/mvp/Object.rz`, extended `kernel/mvp/Class.rz` with `new`, and declared the new selector in `kernel/mvp/Selector.rz` so the MVP kernel can represent ordinary instance objects instead of only the fixed built-in roots and service objects.
+- Extended `platform/qemu-riscv64/vm.c` and `platform/qemu-riscv64/program.c` so the target now knows the new `Object` kind, caches the `Object` class descriptor for dynamic class creation, and executes `Class>>new` as a primitive that allocates a generic heap object and stamps it with the receiver's class link.
+- Increased the target heap headroom in `platform/qemu-riscv64/vm.h` so the newer live-install, class-file-in, and generic-instance paths can coexist without exhausting the object heap during QEMU runs.
+- Added `examples/qemu_riscv_in_image_instance_demo.rz` plus integration coverage in `tests/test_qemu_riscv_method_update_integration.py`, and updated the host inspector/lowering tests for the expanded class, selector, method-entry, primitive, and seed-object counts.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v`, `make -C platform/qemu-riscv64 EXAMPLE=/Users/david/repos/recorz/examples/qemu_riscv_in_image_instance_demo.rz screenshot`, and `make -C platform/qemu-riscv64 clean all inspect-image`.
