@@ -392,6 +392,17 @@ static void remember_send_context(
     }
 }
 
+static uint16_t read_u16_le(const uint8_t *bytes) {
+    return (uint16_t)bytes[0] | (uint16_t)((uint16_t)bytes[1] << 8U);
+}
+
+static uint32_t read_u32_le(const uint8_t *bytes) {
+    return (uint32_t)bytes[0] |
+           ((uint32_t)bytes[1] << 8U) |
+           ((uint32_t)bytes[2] << 16U) |
+           ((uint32_t)bytes[3] << 24U);
+}
+
 static void vm_panic_hook(const char *message) {
     uint32_t dump_count;
     uint32_t slot;
@@ -626,6 +637,16 @@ static struct recorz_mvp_value seed_field_value(
     return nil_value();
 }
 
+static uint16_t heap_handle_for_object(const struct recorz_mvp_heap_object *object) {
+    uintptr_t offset;
+
+    if (object < heap || object >= heap + heap_size) {
+        machine_panic("heap object pointer is out of range");
+    }
+    offset = (uintptr_t)(object - heap);
+    return (uint16_t)(offset + 1U);
+}
+
 static uint32_t class_instance_kind(const struct recorz_mvp_heap_object *class_object) {
     return small_integer_u32(
         heap_get_field(class_object, CLASS_FIELD_INSTANCE_KIND),
@@ -677,6 +698,10 @@ static const struct recorz_mvp_heap_object *method_descriptor_entry_object(const
         machine_panic("method descriptor entry is not a method entry object");
     }
     return heap_object_for_value(entry_value);
+}
+
+static struct recorz_mvp_heap_object *mutable_method_descriptor_entry_object(const struct recorz_mvp_heap_object *method_object) {
+    return heap_object(heap_handle_for_object(method_descriptor_entry_object(method_object)));
 }
 
 static uint32_t method_entry_execution_id(const struct recorz_mvp_heap_object *entry_object) {
@@ -778,6 +803,13 @@ static const struct recorz_mvp_heap_object *lookup_builtin_method_descriptor(
         }
     }
     return 0;
+}
+
+static const struct recorz_mvp_heap_object *class_object_for_kind(uint8_t kind) {
+    if (kind == 0U || kind > RECORZ_MVP_OBJECT_COMPILED_METHOD || class_handles_by_kind[kind] == 0U) {
+        machine_panic("method update class kind is out of range");
+    }
+    return (const struct recorz_mvp_heap_object *)heap_object(class_handles_by_kind[kind]);
 }
 
 static uint32_t primitive_kind_for_heap_object(const struct recorz_mvp_heap_object *object) {
@@ -2080,6 +2112,87 @@ static void execute_compiled_method(
     execute_executable(&executable, receiver_object, receiver, argument_count, arguments);
 }
 
+static void apply_method_update_payload(const uint8_t *blob, uint32_t size) {
+    const struct recorz_mvp_heap_object *class_object;
+    const struct recorz_mvp_heap_object *method_object;
+    struct recorz_mvp_heap_object *entry_object;
+    struct recorz_mvp_value implementation_value;
+    uint16_t version;
+    uint16_t class_kind;
+    uint16_t selector;
+    uint16_t argument_count;
+    uint16_t instruction_count;
+    uint16_t reserved;
+    uint32_t expected_size;
+    uint32_t offset;
+    uint16_t compiled_method_handle;
+    uint16_t instruction_index;
+
+    if (size == 0U) {
+        return;
+    }
+    if (size < RECORZ_MVP_METHOD_UPDATE_HEADER_SIZE) {
+        machine_panic("method update payload is too small");
+    }
+    if (blob[0] != RECORZ_MVP_METHOD_UPDATE_MAGIC_0 || blob[1] != RECORZ_MVP_METHOD_UPDATE_MAGIC_1 ||
+        blob[2] != RECORZ_MVP_METHOD_UPDATE_MAGIC_2 || blob[3] != RECORZ_MVP_METHOD_UPDATE_MAGIC_3) {
+        machine_panic("method update payload magic mismatch");
+    }
+    version = read_u16_le(blob + 4U);
+    class_kind = read_u16_le(blob + 6U);
+    selector = read_u16_le(blob + 8U);
+    argument_count = read_u16_le(blob + 10U);
+    instruction_count = read_u16_le(blob + 12U);
+    reserved = read_u16_le(blob + 14U);
+    if (version != RECORZ_MVP_METHOD_UPDATE_VERSION) {
+        machine_panic("method update payload version mismatch");
+    }
+    if (reserved != 0U) {
+        machine_panic("method update payload reserved field is nonzero");
+    }
+    if (selector < RECORZ_MVP_SELECTOR_SHOW || selector > RECORZ_MVP_SELECTOR_INSTANCE_KIND) {
+        machine_panic("method update payload selector is out of range");
+    }
+    if (argument_count > MAX_SEND_ARGS) {
+        machine_panic("method update payload argument count exceeds send capacity");
+    }
+    if (instruction_count == 0U || instruction_count > COMPILED_METHOD_MAX_INSTRUCTIONS) {
+        machine_panic("method update payload instruction count is invalid");
+    }
+    expected_size = RECORZ_MVP_METHOD_UPDATE_HEADER_SIZE + ((uint32_t)instruction_count * 4U);
+    if (size != expected_size) {
+        machine_panic("method update payload size mismatch");
+    }
+
+    class_object = class_object_for_kind((uint8_t)class_kind);
+    method_object = lookup_builtin_method_descriptor(class_object, (uint8_t)selector, argument_count);
+    if (method_object == 0) {
+        machine_panic("method update target method is not understood by class");
+    }
+    entry_object = mutable_method_descriptor_entry_object(method_object);
+    implementation_value = method_entry_implementation_value(entry_object);
+    if (implementation_value.kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("method update only supports replacing compiled methods");
+    }
+
+    compiled_method_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_COMPILED_METHOD);
+    offset = RECORZ_MVP_METHOD_UPDATE_HEADER_SIZE;
+    for (instruction_index = 0U; instruction_index < instruction_count; ++instruction_index) {
+        heap_set_field(
+            compiled_method_handle,
+            (uint8_t)instruction_index,
+            small_integer_value((int32_t)read_u32_le(blob + offset))
+        );
+        offset += 4U;
+    }
+    validate_compiled_method(heap_object(compiled_method_handle), argument_count);
+    heap_set_field(
+        heap_handle_for_object(entry_object),
+        METHOD_ENTRY_FIELD_IMPLEMENTATION,
+        object_value(compiled_method_handle)
+    );
+}
+
 static void dispatch_heap_object_send(
     const struct recorz_mvp_heap_object *object,
     uint8_t selector,
@@ -2194,7 +2307,12 @@ static void perform_send(
     machine_panic("unsupported receiver in MVP VM");
 }
 
-void recorz_mvp_vm_run(const struct recorz_mvp_program *program, const struct recorz_mvp_seed *seed) {
+void recorz_mvp_vm_run(
+    const struct recorz_mvp_program *program,
+    const struct recorz_mvp_seed *seed,
+    const uint8_t *method_update_blob,
+    uint32_t method_update_size
+) {
     const struct recorz_mvp_executable executable = {
         .instruction_source = program->instructions,
         .read_instruction = read_program_instruction,
@@ -2211,6 +2329,11 @@ void recorz_mvp_vm_run(const struct recorz_mvp_program *program, const struct re
     panic_have_send = 0U;
     machine_set_panic_hook(vm_panic_hook);
     initialize_roots(seed);
+    if (method_update_blob != 0 && method_update_size != 0U) {
+        panic_phase = "update";
+        apply_method_update_payload(method_update_blob, method_update_size);
+        machine_puts("recorz qemu-riscv64 mvp: applied method update\n");
+    }
     execute_executable(&executable, 0, nil_value(), 0U, 0);
     panic_phase = "return";
     machine_set_panic_hook(0);

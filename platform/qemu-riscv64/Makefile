@@ -4,6 +4,12 @@ TOOLCHAIN_PREFIX ?= riscv64-unknown-elf-
 CC := $(TOOLCHAIN_PREFIX)gcc
 QEMU ?= qemu-system-riscv64
 PYTHON ?= python3
+UPDATE_PAYLOAD ?=
+UPDATE_FW_CFG_NAME ?= opt/recorz-method-update
+QEMU_EXTRA_ARGS ?=
+comma := ,
+QEMU_UPDATE_ARGS := $(if $(UPDATE_PAYLOAD),-fw_cfg name=$(UPDATE_FW_CFG_NAME)$(comma)file=$(UPDATE_PAYLOAD))
+QEMU_RUN_ARGS := $(QEMU_UPDATE_ARGS) $(QEMU_EXTRA_ARGS)
 
 CFLAGS := -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -ffreestanding -O2 -Wall -Wextra -I$(CURDIR) -I$(BUILD_DIR)
 LDFLAGS := -T $(CURDIR)/linker.ld
@@ -62,14 +68,14 @@ $(ELF): $(OBJECTS) $(CURDIR)/linker.ld
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJECTS) -o $@
 
 run: $(ELF)
-	$(QEMU) -machine virt -m 128M -smp 1 -kernel $(ELF) -serial mon:stdio -device ramfb
+	$(QEMU) -machine virt -m 128M -smp 1 -kernel $(ELF) -serial mon:stdio -device ramfb $(QEMU_RUN_ARGS)
 
 run-headless: $(ELF)
-	$(QEMU) -machine virt -m 128M -smp 1 -kernel $(ELF) -serial stdio -display none -device ramfb
+	$(QEMU) -machine virt -m 128M -smp 1 -kernel $(ELF) -serial stdio -display none -device ramfb $(QEMU_RUN_ARGS)
 
 screenshot: $(ELF)
 	rm -f $(MONITOR_SOCK) $(PPM) $(QEMU_PID)
-	( $(QEMU) -machine virt -m 128M -smp 1 -kernel $(ELF) -serial stdio -display none -device ramfb -monitor unix:$(MONITOR_SOCK),server,nowait >$(BUILD_DIR)/qemu.log 2>&1 & echo $$! > $(QEMU_PID) )
+	( $(QEMU) -machine virt -m 128M -smp 1 -kernel $(ELF) -serial stdio -display none -device ramfb $(QEMU_RUN_ARGS) -monitor unix:$(MONITOR_SOCK),server,nowait >$(BUILD_DIR)/qemu.log 2>&1 & echo $$! > $(QEMU_PID) )
 	$(PYTHON) $(ROOT)/tools/qemu_hmp_screendump.py $(MONITOR_SOCK) $(PPM)
 	@PID=$$(cat $(QEMU_PID)); kill $$PID >/dev/null 2>&1 || true
 	@echo "wrote $(PPM)"

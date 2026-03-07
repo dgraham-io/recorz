@@ -28,6 +28,7 @@ def main() -> None:
     source_text = args.source.read_text(encoding="utf-8").strip()
     if not source_text:
         raise SystemExit("method update source file is empty")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(mvp.build_method_update_manifest(args.class_name, source_text))
 
 

@@ -1,0 +1,4 @@
+Display clear.
+Transcript show: 'AAA'.
+Transcript cr.
+Transcript show: 'BBB'.

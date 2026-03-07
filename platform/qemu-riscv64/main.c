@@ -8,12 +8,19 @@ extern const uint8_t recorz_demo_image_blob_end[];
 void main(const void *fdt) {
     const struct recorz_mvp_boot_image *image;
     uint32_t image_size = (uint32_t)((uintptr_t)recorz_demo_image_blob_end - (uintptr_t)recorz_demo_image_blob_start);
+    uint8_t method_update_blob[RECORZ_MVP_METHOD_UPDATE_HEADER_SIZE + (RECORZ_MVP_COMPILED_METHOD_MAX_INSTRUCTIONS * 4U)];
+    uint32_t method_update_size;
 
     machine_init(fdt);
     machine_puts("recorz qemu-riscv64 mvp: booting\n");
     display_init();
     image = recorz_mvp_image_load(recorz_demo_image_blob_start, image_size);
-    recorz_mvp_vm_run(image->program, image->seed);
+    method_update_size = machine_fw_cfg_try_read_file(
+        RECORZ_MVP_METHOD_UPDATE_FW_CFG_NAME,
+        method_update_blob,
+        sizeof(method_update_blob)
+    );
+    recorz_mvp_vm_run(image->program, image->seed, method_update_blob, method_update_size);
     machine_puts("recorz qemu-riscv64 mvp: rendered\n");
     machine_wait_forever();
 }

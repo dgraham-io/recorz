@@ -49,6 +49,11 @@ struct recorz_mvp_seed {
     uint16_t glyph_code_count;
 };
 
-void recorz_mvp_vm_run(const struct recorz_mvp_program *program, const struct recorz_mvp_seed *seed);
+void recorz_mvp_vm_run(
+    const struct recorz_mvp_program *program,
+    const struct recorz_mvp_seed *seed,
+    const uint8_t *method_update_blob,
+    uint32_t method_update_size
+);
 
 #endif

@@ -622,3 +622,9 @@
 - Extended `tools/build_qemu_riscv_mvp_image.py` and the generated runtime header so both host and target can share that payload contract, including magic, version, header size, and the `fw_cfg` file name used to transport updates into QEMU.
 - Added `tools/build_qemu_riscv_method_update.py` plus focused lowering tests so a single method chunk can now be compiled into a validated method-update payload, while rejecting primitive-backed updates for this first narrow slice.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Add Tiny In-Image Method Install Path
+- Added an optional `fw_cfg` file-read seam to `platform/qemu-riscv64/machine.c` and threaded an optional method-update payload through `platform/qemu-riscv64/main.c` into the VM, using the shared `method_update` wire format.
+- Extended `platform/qemu-riscv64/vm.c` so, after seed bootstrap and before running the top-level do-it, it can locate an existing compiled method by class kind and selector, allocate a replacement `CompiledMethod` object in the live heap, validate it, and swap the owning `MethodEntry` to the new implementation.
+- Added optional `UPDATE_PAYLOAD=...` support to `platform/qemu-riscv64/Makefile`, a small live-update demo do-it plus a replacement `Transcript>>cr` method chunk under `examples/`, and a QEMU framebuffer integration test that proves behavior changes without rebuilding the embedded boot image.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

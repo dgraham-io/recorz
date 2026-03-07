@@ -566,7 +566,7 @@ static void fw_cfg_dma_transfer(uint16_t selector, uint32_t control, void *buffe
     }
 }
 
-static uint16_t fw_cfg_find_file(const char *target) {
+static int fw_cfg_lookup_file(const char *target, uint16_t *selector_out, uint32_t *size_out) {
     uint32_t count;
     uint32_t index;
 
@@ -585,12 +585,26 @@ static uint16_t fw_cfg_find_file(const char *target) {
             ++rhs;
         }
         if (*lhs == '\0' && *rhs == '\0') {
-            return bswap16(file->select);
+            if (selector_out != 0) {
+                *selector_out = bswap16(file->select);
+            }
+            if (size_out != 0) {
+                *size_out = bswap32(file->size);
+            }
+            return 1;
         }
     }
 
-    machine_panic("missing etc/ramfb");
     return 0;
+}
+
+static uint16_t fw_cfg_find_file(const char *target) {
+    uint16_t selector = 0U;
+
+    if (!fw_cfg_lookup_file(target, &selector, 0)) {
+        machine_panic("missing etc/ramfb");
+    }
+    return selector;
 }
 
 void machine_ramfb_init(void *framebuffer, uint32_t width, uint32_t height, uint32_t stride) {
@@ -604,4 +618,18 @@ void machine_ramfb_init(void *framebuffer, uint32_t width, uint32_t height, uint
     ramfb.stride = bswap32(stride);
 
     fw_cfg_dma_transfer(selector, FW_CFG_DMA_CTL_WRITE, &ramfb, sizeof(ramfb));
+}
+
+uint32_t machine_fw_cfg_try_read_file(const char *target, void *buffer, uint32_t buffer_size) {
+    uint16_t selector = 0U;
+    uint32_t size = 0U;
+
+    if (!fw_cfg_lookup_file(target, &selector, &size)) {
+        return 0U;
+    }
+    if (size > buffer_size) {
+        machine_panic("fw_cfg file exceeds destination buffer");
+    }
+    fw_cfg_dma_transfer(selector, FW_CFG_DMA_CTL_READ, buffer, size);
+    return size;
 }
