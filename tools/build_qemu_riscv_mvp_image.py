@@ -389,6 +389,10 @@ def kernel_class_entry_stem(class_name: str) -> str:
     return upper_snake_name(class_name)
 
 
+def kernel_object_kind_constant_name(class_name: str) -> str:
+    return f"RECORZ_MVP_OBJECT_{kernel_class_entry_stem(class_name)}"
+
+
 def kernel_selector_entry_stem(selector: str) -> str:
     keyword_parts = [part for part in selector.split(":") if part]
     if keyword_parts:
@@ -404,6 +408,14 @@ def kernel_method_entry_name(class_name: str, selector: str) -> str:
 
 def kernel_primitive_binding_constant_name(binding_name: str) -> str:
     return f"RECORZ_MVP_PRIMITIVE_{upper_snake_name(binding_name)}"
+
+
+def kernel_method_implementation_constant_name(implementation_kind: str) -> str:
+    if implementation_kind == KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE:
+        return "RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE"
+    if implementation_kind == KERNEL_METHOD_IMPLEMENTATION_COMPILED:
+        return "RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED"
+    raise LoweringError(f"kernel MVP method implementation kind {implementation_kind!r} is unsupported")
 
 
 def parse_kernel_method_chunk(
@@ -665,10 +677,37 @@ def render_generated_runtime_bindings_header() -> str:
     for binding_name, binding_id in sorted(PRIMITIVE_BINDING_VALUES.items(), key=lambda item: item[1]):
         lines.append(f"    {kernel_primitive_binding_constant_name(binding_name)} = {binding_id},")
     lines.append(f"    RECORZ_MVP_PRIMITIVE_COUNT = {len(PRIMITIVE_BINDING_VALUES) + 1},")
-    lines.append("};")
-    lines.append("")
-    lines.append("#endif")
-    lines.append("")
+    lines.extend(
+        [
+            "};",
+            "",
+            "#define RECORZ_MVP_GENERATED_METHOD_ENTRY_SPECS \\",
+        ]
+    )
+    method_entries = list(KERNEL_METHOD_SOURCE_BY_ENTRY_NAME.items())
+    for index, (entry_name, source) in enumerate(method_entries):
+        primitive_binding_constant = (
+            kernel_primitive_binding_constant_name(source.primitive_binding)
+            if source.implementation_kind == KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE and source.primitive_binding is not None
+            else "0U"
+        )
+        line = (
+            f"    [{entry_name}] = "
+            f"{{ {SELECTOR_IDS[source.selector]}, {source.argument_count}U, "
+            f"{kernel_object_kind_constant_name(source.class_name)}, "
+            f"{kernel_method_implementation_constant_name(source.implementation_kind)}, "
+            f"{primitive_binding_constant}, 0U, 0U, 0U }},"
+        )
+        if index != len(method_entries) - 1:
+            line += " \\"
+        lines.append(line)
+    lines.extend(
+        [
+            "",
+            "#endif",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
