@@ -1497,6 +1497,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertIn("RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW = 1,", header)
         self.assertIn("RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND = 22,", header)
         self.assertIn("RECORZ_MVP_METHOD_ENTRY_COUNT = 23,", header)
+        self.assertNotIn("RECORZ_MVP_GENERATED_METHOD_ENTRY_SPECS", header)
         self.assertIn("enum recorz_mvp_primitive_binding {", header)
         self.assertIn("RECORZ_MVP_PRIMITIVE_BITBLT_FILL_FORM_COLOR = 1,", header)
         self.assertIn("RECORZ_MVP_PRIMITIVE_FORM_NEWLINE = 10,", header)

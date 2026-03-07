@@ -1135,14 +1135,6 @@ def kernel_primitive_handler_name(binding_name: str) -> str:
     return f"execute_entry_{lower_snake_name(binding_name)}"
 
 
-def kernel_method_implementation_constant_name(implementation_kind: str) -> str:
-    if implementation_kind == KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE:
-        return METHOD_IMPLEMENTATION_IDS["primitive"]
-    if implementation_kind == KERNEL_METHOD_IMPLEMENTATION_COMPILED:
-        return METHOD_IMPLEMENTATION_IDS["compiled"]
-    raise LoweringError(f"kernel MVP method implementation kind {implementation_kind!r} is unsupported")
-
-
 def kernel_field_constant_name(class_name: str, field_name: str) -> str:
     return f"RECORZ_MVP_{kernel_class_entry_stem(class_name)}_FIELD_{upper_snake_name(field_name)}"
 
@@ -1586,29 +1578,6 @@ def render_generated_runtime_bindings_header() -> str:
     lines.extend(
         [
             "};",
-            "",
-            "#define RECORZ_MVP_GENERATED_METHOD_ENTRY_SPECS \\",
-        ]
-    )
-    method_entries = list(KERNEL_METHOD_SOURCE_BY_ENTRY_NAME.items())
-    for index, (entry_name, source) in enumerate(method_entries):
-        primitive_binding_constant = (
-            kernel_primitive_binding_constant_name(source.primitive_binding)
-            if source.implementation_kind == KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE and source.primitive_binding is not None
-            else "0U"
-        )
-        line = (
-            f"    [{entry_name}] = "
-            f"{{ {SELECTOR_IDS[source.selector]}, {source.argument_count}U, "
-            f"{kernel_object_kind_constant_name(source.class_name)}, "
-            f"{kernel_method_implementation_constant_name(source.implementation_kind)}, "
-            f"{primitive_binding_constant}, 0U, 0U, 0U }},"
-        )
-        if index != len(method_entries) - 1:
-            line += " \\"
-        lines.append(line)
-    lines.extend(
-        [
             "",
             "#define RECORZ_MVP_GENERATED_PRIMITIVE_BINDING_HANDLERS \\",
         ]

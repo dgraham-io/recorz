@@ -75,24 +75,9 @@ struct recorz_mvp_heap_object {
     struct recorz_mvp_value fields[OBJECT_FIELD_LIMIT];
 };
 
-struct recorz_mvp_method_entry_spec {
-    uint8_t selector;
-    uint8_t argument_count;
-    uint8_t primitive_kind;
-    uint8_t implementation_kind;
-    uint8_t primitive_binding_id;
-    uint8_t implementation_selector;
-    uint8_t implementation_root_id;
-    uint8_t implementation_return_mode;
-};
-
 enum recorz_mvp_method_return_mode {
     RECORZ_MVP_METHOD_RETURN_RESULT = 1,
     RECORZ_MVP_METHOD_RETURN_RECEIVER = 2,
-};
-
-static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_METHOD_ENTRY_COUNT] = {
-    RECORZ_MVP_GENERATED_METHOD_ENTRY_SPECS
 };
 
 static const uint32_t font5x7[128][7] = {
@@ -787,19 +772,9 @@ static uint32_t primitive_kind_for_heap_object(const struct recorz_mvp_heap_obje
     return class_instance_kind(class_object_for_heap_object(object));
 }
 
-static const struct recorz_mvp_method_entry_spec *method_entry_spec(uint32_t entry) {
-    if (entry == 0U || entry >= RECORZ_MVP_METHOD_ENTRY_COUNT) {
-        machine_panic("method descriptor entry is out of range");
-    }
-    if (method_entry_specs[entry].selector == 0U) {
-        machine_panic("method descriptor entry is not wired to a built-in method");
-    }
-    return &method_entry_specs[entry];
-}
-
 static void validate_compiled_method(
     const struct recorz_mvp_heap_object *compiled_method,
-    const struct recorz_mvp_method_entry_spec *entry_spec
+    uint32_t argument_count
 ) {
     uint8_t instruction_index;
     uint32_t stack_depth = 0U;
@@ -836,7 +811,7 @@ static void validate_compiled_method(
                 ++stack_depth;
                 break;
             case COMPILED_METHOD_OP_PUSH_ARGUMENT:
-                if (operand_a >= entry_spec->argument_count) {
+                if (operand_a >= argument_count) {
                     machine_panic("compiled method pushArgument index is out of range");
                 }
                 ++stack_depth;
@@ -852,7 +827,7 @@ static void validate_compiled_method(
                     machine_panic("compiled method send selector is out of range");
                 }
                 send_count = operand_b;
-                if (send_count > MAX_SEND_ARGS || send_count > entry_spec->argument_count) {
+                if (send_count > MAX_SEND_ARGS || send_count > argument_count) {
                     machine_panic("compiled method send argument count is out of range");
                 }
                 if (stack_depth < send_count + 1U) {
@@ -942,7 +917,7 @@ static void validate_class_method_table(
         uint32_t argument_count;
         uint32_t primitive_kind;
         uint32_t entry;
-        const struct recorz_mvp_method_entry_spec *entry_spec;
+        uint32_t primitive_binding_id;
 
         if (method_object->kind != RECORZ_MVP_OBJECT_METHOD_DESCRIPTOR) {
             machine_panic("class method range contains a non-method descriptor");
@@ -956,7 +931,6 @@ static void validate_class_method_table(
         entry_object = method_descriptor_entry_object(method_object);
         entry = method_entry_execution_id(entry_object);
         implementation_value = method_entry_implementation_value(entry_object);
-        entry_spec = method_entry_spec(entry);
         if (selector < RECORZ_MVP_SELECTOR_SHOW || selector > RECORZ_MVP_SELECTOR_INSTANCE_KIND) {
             machine_panic("method descriptor selector is out of range");
         }
@@ -966,21 +940,13 @@ static void validate_class_method_table(
         if (primitive_kind != class_kind) {
             machine_panic("method descriptor primitive kind does not match class instance kind");
         }
-        if (entry_spec->selector != selector) {
-            machine_panic("method descriptor selector does not match entry");
+        if (entry == 0U || entry >= RECORZ_MVP_METHOD_ENTRY_COUNT) {
+            machine_panic("method entry execution id is out of range");
         }
-        if (entry_spec->argument_count != argument_count) {
-            machine_panic("method descriptor argument count does not match entry");
-        }
-        if (entry_spec->primitive_kind != primitive_kind) {
-            machine_panic("method descriptor primitive kind does not match entry");
-        }
-        if (entry_spec->implementation_kind == RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE) {
-            if (implementation_value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
-                machine_panic("primitive method entry binding id is not a small integer");
-            }
-            if ((uint32_t)implementation_value.integer != entry_spec->primitive_binding_id) {
-                machine_panic("primitive method entry binding id does not match entry");
+        if (implementation_value.kind == RECORZ_MVP_VALUE_SMALL_INTEGER) {
+            primitive_binding_id = (uint32_t)implementation_value.integer;
+            if (primitive_binding_id == 0U || primitive_binding_id >= RECORZ_MVP_PRIMITIVE_COUNT) {
+                machine_panic("primitive method entry binding id is out of range");
             }
             continue;
         }
@@ -988,11 +954,7 @@ static void validate_class_method_table(
             machine_panic("method entry implementation object is missing");
         }
         implementation_object = heap_object_for_value(implementation_value);
-        if (entry_spec->implementation_kind == RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED) {
-            validate_compiled_method(implementation_object, entry_spec);
-            continue;
-        }
-        machine_panic("method entry implementation kind is unknown");
+        validate_compiled_method(implementation_object, argument_count);
     }
 }
 
@@ -1970,7 +1932,6 @@ static void dispatch_heap_object_send(
     const struct recorz_mvp_heap_object *entry_object;
     const struct recorz_mvp_heap_object *implementation_object;
     struct recorz_mvp_value implementation_value;
-    const struct recorz_mvp_method_entry_spec *entry_spec;
     recorz_mvp_method_entry_handler handler;
     uint32_t entry;
     uint32_t primitive_binding_id;
@@ -1987,29 +1948,19 @@ static void dispatch_heap_object_send(
     entry_object = method_descriptor_entry_object(method_object);
     entry = method_entry_execution_id(entry_object);
     implementation_value = method_entry_implementation_value(entry_object);
-    entry_spec = method_entry_spec(entry);
-    if (entry_spec->selector != selector || entry_spec->argument_count != argument_count) {
-        machine_panic("method descriptor entry does not match send site");
+    if (entry == 0U || entry >= RECORZ_MVP_METHOD_ENTRY_COUNT) {
+        machine_panic("method entry execution id is out of range");
     }
-    if (entry_spec->implementation_kind == RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED) {
-        if (implementation_value.kind != RECORZ_MVP_VALUE_OBJECT) {
-            machine_panic("compiled method entry is missing an implementation object");
-        }
+    if (implementation_value.kind == RECORZ_MVP_VALUE_OBJECT) {
         implementation_object = heap_object_for_value(implementation_value);
         execute_compiled_method(object, receiver, argument_count, arguments, implementation_object);
         return;
     }
-    if (entry_spec->implementation_kind != RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE) {
+    if (implementation_value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
         machine_panic("method entry implementation kind is unknown");
     }
-    if (implementation_value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
-        machine_panic("primitive method entry binding id is not a small integer");
-    }
     primitive_binding_id = (uint32_t)implementation_value.integer;
-    if (primitive_binding_id != entry_spec->primitive_binding_id) {
-        machine_panic("primitive method entry binding id does not match entry");
-    }
-    if (primitive_binding_id >= RECORZ_MVP_PRIMITIVE_COUNT) {
+    if (primitive_binding_id == 0U || primitive_binding_id >= RECORZ_MVP_PRIMITIVE_COUNT) {
         machine_panic("primitive method entry binding id is out of range");
     }
     handler = primitive_binding_handlers[primitive_binding_id];

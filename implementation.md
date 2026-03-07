@@ -603,3 +603,9 @@
 - Removed the last duplicated numeric runtime/layout truth from `platform/qemu-riscv64/vm.c` and `platform/qemu-riscv64/vm.h` by switching the VM to those generated constants, which also brought the `TextLayout` (`left top scale lineSpacing`) and `TextStyle` (`foregroundColor backgroundColor`) slot usage back into sync with the kernel source declarations.
 - Added `runtime_spec.json` as an explicit dependency for generated-image/generated-header rebuilds and extended the focused lowering regression to lock the new generated VM/runtime constants.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Route Target Dispatch Through Image-Owned Method Entries
+- Removed the target-side generated `method_entry_specs` table from the active VM path and switched `platform/qemu-riscv64/vm.c` to validate and dispatch sends directly from the seeded `MethodDescriptor` and `MethodEntry` objects.
+- The target now decides between primitive-backed and compiled-backed methods from the `MethodEntry` implementation field itself, while still validating selector/arity/primitive-kind through the image-owned method descriptors and compiled method objects.
+- Stopped emitting the dead `RECORZ_MVP_GENERATED_METHOD_ENTRY_SPECS` macro from the generated runtime header and extended the focused lowering regression to lock that removal.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
