@@ -2,39 +2,44 @@
   "classes": {
     "Transcript": {
       "instance_variables": [],
-      "methods": {
-        "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW": "Transcript/show.rz",
-        "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR": "Transcript/cr.rz"
-      }
+      "file": "Transcript.rz",
+      "entries": [
+        "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW",
+        "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR"
+      ]
     },
     "Display": {
       "instance_variables": [],
-      "methods": {
-        "RECORZ_MVP_METHOD_ENTRY_DISPLAY_CLEAR": "Display/clear.rz",
-        "RECORZ_MVP_METHOD_ENTRY_DISPLAY_WRITE_STRING": "Display/write_string.rz",
-        "RECORZ_MVP_METHOD_ENTRY_DISPLAY_NEWLINE": "Display/newline.rz"
-      }
+      "file": "Display.rz",
+      "entries": [
+        "RECORZ_MVP_METHOD_ENTRY_DISPLAY_CLEAR",
+        "RECORZ_MVP_METHOD_ENTRY_DISPLAY_WRITE_STRING",
+        "RECORZ_MVP_METHOD_ENTRY_DISPLAY_NEWLINE"
+      ]
     },
     "Bitmap": {
       "instance_variables": ["width", "height", "storageKind", "storageId"],
-      "methods": {
-        "RECORZ_MVP_METHOD_ENTRY_BITMAP_WIDTH": "Bitmap/width.rz",
-        "RECORZ_MVP_METHOD_ENTRY_BITMAP_HEIGHT": "Bitmap/height.rz"
-      }
+      "file": "Bitmap.rz",
+      "entries": [
+        "RECORZ_MVP_METHOD_ENTRY_BITMAP_WIDTH",
+        "RECORZ_MVP_METHOD_ENTRY_BITMAP_HEIGHT"
+      ]
     },
     "Form": {
       "instance_variables": ["bits"],
-      "methods": {
-        "RECORZ_MVP_METHOD_ENTRY_FORM_BITS": "Form/bits.rz",
-        "RECORZ_MVP_METHOD_ENTRY_FORM_WIDTH": "Form/width.rz",
-        "RECORZ_MVP_METHOD_ENTRY_FORM_HEIGHT": "Form/height.rz"
-      }
+      "file": "Form.rz",
+      "entries": [
+        "RECORZ_MVP_METHOD_ENTRY_FORM_BITS",
+        "RECORZ_MVP_METHOD_ENTRY_FORM_WIDTH",
+        "RECORZ_MVP_METHOD_ENTRY_FORM_HEIGHT"
+      ]
     },
     "Class": {
       "instance_variables": ["superclass", "instanceKind", "methodStart", "methodCount"],
-      "methods": {
-        "RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND": "Class/instance_kind.rz"
-      }
+      "file": "Class.rz",
+      "entries": [
+        "RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND"
+      ]
     }
   }
 }

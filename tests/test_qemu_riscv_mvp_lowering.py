@@ -238,12 +238,25 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
 
         self.assertEqual(transcript_show.class_name, "Transcript")
         self.assertEqual(transcript_show.instance_variables, ())
-        self.assertEqual(transcript_show.relative_path, "Transcript/show.rz")
+        self.assertEqual(transcript_show.relative_path, "Transcript.rz")
+        self.assertEqual(transcript_show.selector, "show:")
         self.assertIn("Display defaultForm writeString: text.", transcript_show.source_text)
         self.assertEqual(form_width.class_name, "Form")
         self.assertEqual(form_width.instance_variables, ("bits",))
-        self.assertEqual(form_width.relative_path, "Form/width.rz")
+        self.assertEqual(form_width.relative_path, "Form.rz")
+        self.assertEqual(form_width.selector, "width")
         self.assertEqual(form_width.source_text, "width\n    ^bits width")
+
+    def test_splits_class_file_chunks_on_bang_lines(self) -> None:
+        self.assertEqual(
+            mvp.split_kernel_method_chunks(
+                "width\n    ^width\n!\nheight\n    ^height\n!\n"
+            ),
+            [
+                "width\n    ^width",
+                "height\n    ^height",
+            ],
+        )
 
     def test_builds_seed_manifest_with_expected_header(self) -> None:
         manifest = mvp.build_seed_manifest()

@@ -1,3 +1,7 @@
 show: text
     Display defaultForm writeString: text.
     ^self
+!
+cr
+    Display defaultForm newline.
+    ^self

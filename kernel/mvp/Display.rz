@@ -1,0 +1,11 @@
+clear
+    Display defaultForm clear.
+    ^self
+!
+writeString: text
+    Display defaultForm writeString: text.
+    ^self
+!
+newline
+    Display defaultForm newline.
+    ^self

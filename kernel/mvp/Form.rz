@@ -1,0 +1,8 @@
+bits
+    ^bits
+!
+width
+    ^bits width
+!
+height
+    ^bits height

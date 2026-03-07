@@ -198,6 +198,22 @@ SEED_ROOT_TRANSCRIPT_METRICS = 6
 BITMAP_STORAGE_FRAMEBUFFER = 1
 BITMAP_STORAGE_GLYPH_MONO = 2
 
+KERNEL_CLASS_NAME_TO_OBJECT_KIND = {
+    "Transcript": SEED_OBJECT_TRANSCRIPT,
+    "Display": SEED_OBJECT_DISPLAY,
+    "Form": SEED_OBJECT_FORM,
+    "Bitmap": SEED_OBJECT_BITMAP,
+    "BitBlt": SEED_OBJECT_BITBLT,
+    "Glyphs": SEED_OBJECT_GLYPHS,
+    "FormFactory": SEED_OBJECT_FORM_FACTORY,
+    "BitmapFactory": SEED_OBJECT_BITMAP_FACTORY,
+    "TextLayout": SEED_OBJECT_TEXT_LAYOUT,
+    "TextStyle": SEED_OBJECT_TEXT_STYLE,
+    "TextMetrics": SEED_OBJECT_TEXT_METRICS,
+    "TextBehavior": SEED_OBJECT_TEXT_BEHAVIOR,
+    "Class": SEED_OBJECT_CLASS,
+}
+
 
 class LoweringError(RuntimeError):
     """Raised when the demo lowerer sees unsupported source."""
@@ -235,6 +251,7 @@ class KernelMethodSource:
     class_name: str
     instance_variables: tuple[str, ...]
     relative_path: str
+    selector: str
     source_text: str
 
 
@@ -344,7 +361,29 @@ def encode_compiled_method_instruction(opcode_name: str, operand_a: int = 0, ope
     )
 
 
+def split_kernel_method_chunks(source_text: str) -> list[str]:
+    chunks: list[str] = []
+    chunk_lines: list[str] = []
+
+    for line in source_text.splitlines():
+        if line.strip() == "!":
+            chunk = "\n".join(chunk_lines).strip()
+            if chunk:
+                chunks.append(chunk)
+            chunk_lines = []
+            continue
+        chunk_lines.append(line)
+    trailing_chunk = "\n".join(chunk_lines).strip()
+    if trailing_chunk:
+        chunks.append(trailing_chunk)
+    return chunks
+
+
 def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
+    entry_definitions = {
+        entry_name: (owner_kind, selector, argument_count)
+        for entry_name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS
+    }
     manifest_data = json.loads(KERNEL_MVP_MANIFEST_PATH.read_text(encoding="utf-8"))
     class_specs = manifest_data.get("classes")
     method_sources: dict[str, KernelMethodSource] = {}
@@ -352,28 +391,61 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
     if not isinstance(class_specs, dict):
         raise LoweringError("kernel MVP manifest is missing a classes table")
     for class_name, class_spec in class_specs.items():
+        expected_class_kind = KERNEL_CLASS_NAME_TO_OBJECT_KIND.get(class_name)
         if not isinstance(class_name, str) or not isinstance(class_spec, dict):
             raise LoweringError("kernel MVP manifest class entries are invalid")
+        if expected_class_kind is None:
+            raise LoweringError(f"kernel MVP manifest references unknown class {class_name}")
         instance_variables = class_spec.get("instance_variables")
-        methods = class_spec.get("methods")
+        relative_path = class_spec.get("file")
+        entry_names = class_spec.get("entries")
         if not isinstance(instance_variables, list) or not all(isinstance(name, str) for name in instance_variables):
             raise LoweringError(f"kernel MVP manifest instance variables are invalid for class {class_name}")
-        if not isinstance(methods, dict):
-            raise LoweringError(f"kernel MVP manifest methods table is invalid for class {class_name}")
-        for entry_name, relative_path in methods.items():
-            method_path = KERNEL_MVP_ROOT / relative_path
+        if not isinstance(relative_path, str):
+            raise LoweringError(f"kernel MVP manifest file path is invalid for class {class_name}")
+        if not isinstance(entry_names, list) or not all(isinstance(entry_name, str) for entry_name in entry_names):
+            raise LoweringError(f"kernel MVP manifest entries are invalid for class {class_name}")
+        method_path = KERNEL_MVP_ROOT / relative_path
+        if not method_path.is_file():
+            raise LoweringError(f"kernel MVP method source is missing: {method_path}")
+        chunk_sources = split_kernel_method_chunks(method_path.read_text(encoding="utf-8"))
+        compiled_chunks: dict[tuple[str, int], str] = {}
 
-            if not isinstance(entry_name, str) or not isinstance(relative_path, str):
-                raise LoweringError(f"kernel MVP manifest method entries are invalid for class {class_name}")
+        for chunk_source in chunk_sources:
+            compiled = compile_method(chunk_source, class_name, list(instance_variables))
+            signature = (compiled.selector, len(compiled.arg_names))
+
+            if signature in compiled_chunks:
+                raise LoweringError(
+                    f"kernel MVP class file {relative_path} duplicates method {compiled.selector}/{len(compiled.arg_names)}"
+                )
+            compiled_chunks[signature] = chunk_source
+        for entry_name in entry_names:
+            owner_kind, selector, argument_count = entry_definitions.get(entry_name, (None, None, None))
+
+            if owner_kind is None:
+                raise LoweringError(f"kernel MVP manifest references unknown method entry {entry_name}")
+            if owner_kind != expected_class_kind:
+                raise LoweringError(
+                    f"kernel MVP manifest class {class_name} includes method entry {entry_name} for a different owner kind"
+                )
             if entry_name in method_sources:
                 raise LoweringError(f"kernel MVP manifest duplicates method entry {entry_name}")
-            if not method_path.is_file():
-                raise LoweringError(f"kernel MVP method source is missing: {method_path}")
+            chunk_source = compiled_chunks.get((selector, argument_count))
+            if chunk_source is None:
+                raise LoweringError(
+                    f"kernel MVP class file {relative_path} is missing method {selector}/{argument_count} for entry {entry_name}"
+                )
             method_sources[entry_name] = KernelMethodSource(
                 class_name=class_name,
                 instance_variables=tuple(instance_variables),
                 relative_path=relative_path,
-                source_text=method_path.read_text(encoding="utf-8").strip(),
+                selector=selector,
+                source_text=chunk_source,
+            )
+        if len(compiled_chunks) != len(entry_names):
+            raise LoweringError(
+                f"kernel MVP class file {relative_path} contains method chunks that are not declared in the manifest"
             )
     return method_sources
 
