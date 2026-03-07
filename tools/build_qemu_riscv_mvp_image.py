@@ -1579,28 +1579,25 @@ def build_boot_image_spec(
 
 def build_boot_image_seed_build_context(
     boot_image_spec: BootImageSpec,
-    seed_layout_section_specs: list[SeedLayoutSectionSpec],
-    dynamic_seed_object_section_specs: list[DynamicSeedObjectSectionSpec],
-    dynamic_seed_build_step_specs: list[DynamicSeedBuildStepSpec],
-    global_name_to_boot_object_name: dict[str, str],
-    seed_root_name_to_boot_object_name: dict[str, str],
 ) -> BootImageSeedBuildContext:
-    glyph_bitmap_boot_specs = build_boot_object_family_spec_map(boot_image_spec.fixed_boot_graph_spec)[
-        "glyph_bitmaps"
-    ].object_specs
+    boot_object_specs_in_order = flatten_boot_object_specs(boot_image_spec.fixed_boot_graph_spec)
+    glyph_bitmap_boot_specs = build_boot_object_family_spec_map(boot_image_spec.fixed_boot_graph_spec)["glyph_bitmaps"].object_specs
+    seed_layout_section_specs = build_seed_layout_section_specs(boot_image_spec.dynamic_seed_section_specs)
+    dynamic_seed_object_section_specs = build_dynamic_seed_object_section_specs(boot_image_spec.dynamic_seed_section_specs)
+    dynamic_seed_build_step_specs = build_dynamic_seed_build_step_specs(boot_image_spec.dynamic_seed_section_specs)
     return BootImageSeedBuildContext(
         boot_image_spec=boot_image_spec,
         class_kind_order=boot_image_spec.ordering_spec.class_kind_order,
         selector_value_order=boot_image_spec.ordering_spec.selector_value_order,
         compiled_method_entry_order=boot_image_spec.ordering_spec.compiled_method_entry_order,
         method_entry_order=boot_image_spec.ordering_spec.method_entry_order,
-        fixed_boot_object_count=len(flatten_boot_object_specs(boot_image_spec.fixed_boot_graph_spec)),
+        fixed_boot_object_count=len(boot_object_specs_in_order),
         glyph_bitmap_boot_specs=glyph_bitmap_boot_specs,
         seed_layout_section_specs=tuple(seed_layout_section_specs),
         dynamic_seed_object_section_specs=tuple(dynamic_seed_object_section_specs),
         dynamic_seed_build_step_specs=tuple(dynamic_seed_build_step_specs),
-        global_name_to_boot_object_name=global_name_to_boot_object_name,
-        seed_root_name_to_boot_object_name=seed_root_name_to_boot_object_name,
+        global_name_to_boot_object_name=build_boot_object_export_map(boot_object_specs_in_order, "global"),
+        seed_root_name_to_boot_object_name=build_boot_object_export_map(boot_object_specs_in_order, "root"),
     )
 
 
@@ -1629,11 +1626,6 @@ DYNAMIC_SEED_OBJECT_SECTION_SPECS = build_dynamic_seed_object_section_specs(BOOT
 DYNAMIC_SEED_BUILD_STEP_SPECS = build_dynamic_seed_build_step_specs(BOOT_IMAGE_SPEC.dynamic_seed_section_specs)
 BOOT_IMAGE_SEED_BUILD_CONTEXT = build_boot_image_seed_build_context(
     BOOT_IMAGE_SPEC,
-    SEED_LAYOUT_SECTION_SPECS,
-    DYNAMIC_SEED_OBJECT_SECTION_SPECS,
-    DYNAMIC_SEED_BUILD_STEP_SPECS,
-    GLOBAL_NAME_TO_BOOT_OBJECT_NAME,
-    SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME,
 )
 
 

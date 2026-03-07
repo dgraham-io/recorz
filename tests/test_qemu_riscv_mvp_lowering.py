@@ -650,6 +650,22 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             tuple(mvp.DYNAMIC_SEED_BUILD_STEP_SPECS),
         )
         self.assertEqual(
+            mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.fixed_boot_object_count,
+            mvp.BOOT_OBJECT_FIXED_COUNT,
+        )
+        self.assertEqual(
+            mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.glyph_bitmap_boot_specs,
+            tuple(mvp.GLYPH_BITMAP_BOOT_SPECS),
+        )
+        self.assertEqual(
+            mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.global_name_to_boot_object_name,
+            mvp.GLOBAL_NAME_TO_BOOT_OBJECT_NAME,
+        )
+        self.assertEqual(
+            mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.seed_root_name_to_boot_object_name,
+            mvp.SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME,
+        )
+        self.assertEqual(
             tuple(mvp.BOOT_OBJECT_FAMILY_SPECS),
             mvp.BOOT_IMAGE_SPEC.fixed_boot_graph_spec.family_specs,
         )

@@ -495,3 +495,9 @@
 - Updated the boot image seed build context to derive its ordering fields from `boot_image_spec.ordering_spec`, so the context builder no longer takes those ordering inputs separately.
 - Extended the focused lowering regressions to lock the new boot-image-owned ordering declaration and the fact that the active build context now reads those tuples from `BOOT_IMAGE_SPEC`.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Derive Seed Build Context Views From Boot Image Spec
+- Simplified `build_boot_image_seed_build_context()` so it now derives its seed layout section specs, dynamic build-step views, glyph bitmap family, fixed boot object count, and boot object export maps directly from `BootImageSpec` instead of taking those as separate adjacent arguments.
+- Left the existing derived globals in place for readability and compatibility, but made the active seed build context consume the same data through one boot-image-owned derivation path.
+- Extended the focused lowering regressions to lock the context-owned fixed count, glyph specs, and export maps alongside the existing fixed/dynamic view coverage.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
