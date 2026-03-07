@@ -1,0 +1,4 @@
+Display clear.
+Display writeString: 'AAA'.
+Display cr.
+Display writeString: 'BBB'.

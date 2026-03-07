@@ -628,3 +628,9 @@
 - Extended `platform/qemu-riscv64/vm.c` so, after seed bootstrap and before running the top-level do-it, it can locate an existing compiled method by class kind and selector, allocate a replacement `CompiledMethod` object in the live heap, validate it, and swap the owning `MethodEntry` to the new implementation.
 - Added optional `UPDATE_PAYLOAD=...` support to `platform/qemu-riscv64/Makefile`, a small live-update demo do-it plus a replacement `Transcript>>cr` method chunk under `examples/`, and a QEMU framebuffer integration test that proves behavior changes without rebuilding the embedded boot image.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Grow Live Class Method Tables
+- Extended the live method installer in `platform/qemu-riscv64/vm.c` so method-update payloads can now either replace an existing method entry or append a new `MethodDescriptor` and `MethodEntry` to a class at runtime by cloning the current method table range to a new heap block and retargeting the class's `methodStart` and `methodCount`.
+- Relaxed the runtime send path so dynamically installed method entries can use VM-assigned execution ids outside the original seeded boot-image range, while keeping seeded boot-image validation unchanged.
+- Added a new QEMU demo and update chunk under `examples/` that installs a previously missing `Display>>cr` method over `fw_cfg`, plus an integration test that proves the demo panics without the update and renders successfully once the new selector is appended to `Display`'s live method table.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

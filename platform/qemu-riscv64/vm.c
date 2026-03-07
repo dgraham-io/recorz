@@ -121,6 +121,7 @@ static uint16_t selector_handles_by_id[RECORZ_MVP_SELECTOR_INSTANCE_KIND + 1U];
 static uint16_t global_handles[RECORZ_MVP_GLOBAL_BITMAP + 1U];
 static uint16_t default_form_handle = 0U;
 static uint16_t framebuffer_bitmap_handle = 0U;
+static uint16_t next_dynamic_method_entry_execution_id = RECORZ_MVP_METHOD_ENTRY_COUNT;
 static uint16_t glyph_bitmap_handles[128];
 static uint16_t glyph_fallback_handle = 0U;
 static uint16_t transcript_layout_handle = 0U;
@@ -702,6 +703,13 @@ static const struct recorz_mvp_heap_object *method_descriptor_entry_object(const
 
 static struct recorz_mvp_heap_object *mutable_method_descriptor_entry_object(const struct recorz_mvp_heap_object *method_object) {
     return heap_object(heap_handle_for_object(method_descriptor_entry_object(method_object)));
+}
+
+static uint16_t selector_object_handle(uint8_t selector) {
+    if (selector == 0U || selector > RECORZ_MVP_SELECTOR_INSTANCE_KIND || selector_handles_by_id[selector] == 0U) {
+        machine_panic("selector handle is not installed");
+    }
+    return selector_handles_by_id[selector];
 }
 
 static uint32_t method_entry_execution_id(const struct recorz_mvp_heap_object *entry_object) {
@@ -1581,6 +1589,7 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
 
     heap_size = 0U;
     mono_bitmap_count = 0U;
+    next_dynamic_method_entry_execution_id = RECORZ_MVP_METHOD_ENTRY_COUNT;
     for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
         seeded_handles[seed_index] = heap_allocate(seed->objects[seed_index].object_kind);
     }
@@ -2112,11 +2121,139 @@ static void execute_compiled_method(
     execute_executable(&executable, receiver_object, receiver, argument_count, arguments);
 }
 
+static uint16_t allocate_updated_compiled_method(
+    const uint8_t *blob,
+    uint16_t instruction_count
+) {
+    uint16_t compiled_method_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_COMPILED_METHOD);
+    uint32_t offset = RECORZ_MVP_METHOD_UPDATE_HEADER_SIZE;
+    uint16_t instruction_index;
+
+    for (instruction_index = 0U; instruction_index < instruction_count; ++instruction_index) {
+        heap_set_field(
+            compiled_method_handle,
+            (uint8_t)instruction_index,
+            small_integer_value((int32_t)read_u32_le(blob + offset))
+        );
+        offset += 4U;
+    }
+    return compiled_method_handle;
+}
+
+static uint16_t allocate_dynamic_method_entry(uint16_t compiled_method_handle) {
+    uint16_t entry_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_METHOD_ENTRY);
+
+    if (next_dynamic_method_entry_execution_id == 0U) {
+        machine_panic("dynamic method entry execution id overflow");
+    }
+    heap_set_field(
+        entry_handle,
+        METHOD_ENTRY_FIELD_EXECUTION_ID,
+        small_integer_value((int32_t)next_dynamic_method_entry_execution_id++)
+    );
+    heap_set_field(entry_handle, METHOD_ENTRY_FIELD_IMPLEMENTATION, object_value(compiled_method_handle));
+    return entry_handle;
+}
+
+static uint16_t allocate_method_descriptor(
+    uint8_t class_kind,
+    uint8_t selector,
+    uint16_t argument_count,
+    uint16_t entry_handle
+) {
+    uint16_t descriptor_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_METHOD_DESCRIPTOR);
+
+    heap_set_field(
+        descriptor_handle,
+        METHOD_FIELD_SELECTOR,
+        object_value(selector_object_handle(selector))
+    );
+    heap_set_field(
+        descriptor_handle,
+        METHOD_FIELD_ARGUMENT_COUNT,
+        small_integer_value((int32_t)argument_count)
+    );
+    heap_set_field(
+        descriptor_handle,
+        METHOD_FIELD_PRIMITIVE_KIND,
+        small_integer_value((int32_t)class_kind)
+    );
+    heap_set_field(descriptor_handle, METHOD_FIELD_ENTRY, object_value(entry_handle));
+    return descriptor_handle;
+}
+
+static uint16_t clone_method_descriptor(const struct recorz_mvp_heap_object *method_object) {
+    uint16_t cloned_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_METHOD_DESCRIPTOR);
+    uint8_t field_index;
+
+    for (field_index = 0U; field_index < method_object->field_count; ++field_index) {
+        heap_set_field(cloned_handle, field_index, heap_get_field(method_object, field_index));
+    }
+    return cloned_handle;
+}
+
+static void append_compiled_method_to_class(
+    const struct recorz_mvp_heap_object *class_object,
+    uint8_t selector,
+    uint16_t argument_count,
+    uint16_t compiled_method_handle
+) {
+    uint16_t class_handle = heap_handle_for_object(class_object);
+    uint32_t class_kind = class_instance_kind(class_object);
+    uint32_t method_count = class_method_count(class_object);
+    const struct recorz_mvp_heap_object *method_start_object = class_method_start_object(class_object);
+    uint16_t entry_handle = allocate_dynamic_method_entry(compiled_method_handle);
+    uint16_t new_method_start_handle;
+    uint32_t method_index;
+
+    if (method_count == 0U) {
+        uint16_t descriptor_handle = allocate_method_descriptor((uint8_t)class_kind, selector, argument_count, entry_handle);
+        heap_set_field(class_handle, CLASS_FIELD_METHOD_START, object_value(descriptor_handle));
+        heap_set_field(class_handle, CLASS_FIELD_METHOD_COUNT, small_integer_value(1));
+        return;
+    }
+    if (method_start_object == 0) {
+        machine_panic("class with methods is missing a method start");
+    }
+    new_method_start_handle = (uint16_t)(heap_size + 1U);
+    for (method_index = 0U; method_index < method_count; ++method_index) {
+        const struct recorz_mvp_heap_object *existing_method_object =
+            (const struct recorz_mvp_heap_object *)heap_object((uint16_t)(heap_handle_for_object(method_start_object) + method_index));
+
+        if (existing_method_object->kind != RECORZ_MVP_OBJECT_METHOD_DESCRIPTOR) {
+            machine_panic("class method range contains a non-method descriptor");
+        }
+        clone_method_descriptor(existing_method_object);
+    }
+    (void)allocate_method_descriptor((uint8_t)class_kind, selector, argument_count, entry_handle);
+    heap_set_field(class_handle, CLASS_FIELD_METHOD_START, object_value(new_method_start_handle));
+    heap_set_field(class_handle, CLASS_FIELD_METHOD_COUNT, small_integer_value((int32_t)(method_count + 1U)));
+}
+
+static void install_compiled_method_update(
+    const struct recorz_mvp_heap_object *class_object,
+    uint8_t selector,
+    uint16_t argument_count,
+    uint16_t compiled_method_handle
+) {
+    const struct recorz_mvp_heap_object *method_object =
+        lookup_builtin_method_descriptor(class_object, selector, argument_count);
+
+    if (method_object != 0) {
+        struct recorz_mvp_heap_object *entry_object = mutable_method_descriptor_entry_object(method_object);
+
+        heap_set_field(
+            heap_handle_for_object(entry_object),
+            METHOD_ENTRY_FIELD_IMPLEMENTATION,
+            object_value(compiled_method_handle)
+        );
+        return;
+    }
+    append_compiled_method_to_class(class_object, selector, argument_count, compiled_method_handle);
+}
+
 static void apply_method_update_payload(const uint8_t *blob, uint32_t size) {
     const struct recorz_mvp_heap_object *class_object;
-    const struct recorz_mvp_heap_object *method_object;
-    struct recorz_mvp_heap_object *entry_object;
-    struct recorz_mvp_value implementation_value;
     uint16_t version;
     uint16_t class_kind;
     uint16_t selector;
@@ -2124,9 +2261,7 @@ static void apply_method_update_payload(const uint8_t *blob, uint32_t size) {
     uint16_t instruction_count;
     uint16_t reserved;
     uint32_t expected_size;
-    uint32_t offset;
     uint16_t compiled_method_handle;
-    uint16_t instruction_index;
 
     if (size == 0U) {
         return;
@@ -2165,32 +2300,9 @@ static void apply_method_update_payload(const uint8_t *blob, uint32_t size) {
     }
 
     class_object = class_object_for_kind((uint8_t)class_kind);
-    method_object = lookup_builtin_method_descriptor(class_object, (uint8_t)selector, argument_count);
-    if (method_object == 0) {
-        machine_panic("method update target method is not understood by class");
-    }
-    entry_object = mutable_method_descriptor_entry_object(method_object);
-    implementation_value = method_entry_implementation_value(entry_object);
-    if (implementation_value.kind != RECORZ_MVP_VALUE_OBJECT) {
-        machine_panic("method update only supports replacing compiled methods");
-    }
-
-    compiled_method_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_COMPILED_METHOD);
-    offset = RECORZ_MVP_METHOD_UPDATE_HEADER_SIZE;
-    for (instruction_index = 0U; instruction_index < instruction_count; ++instruction_index) {
-        heap_set_field(
-            compiled_method_handle,
-            (uint8_t)instruction_index,
-            small_integer_value((int32_t)read_u32_le(blob + offset))
-        );
-        offset += 4U;
-    }
+    compiled_method_handle = allocate_updated_compiled_method(blob, instruction_count);
     validate_compiled_method(heap_object(compiled_method_handle), argument_count);
-    heap_set_field(
-        heap_handle_for_object(entry_object),
-        METHOD_ENTRY_FIELD_IMPLEMENTATION,
-        object_value(compiled_method_handle)
-    );
+    install_compiled_method_update(class_object, (uint8_t)selector, argument_count, compiled_method_handle);
 }
 
 static void dispatch_heap_object_send(
@@ -2222,7 +2334,7 @@ static void dispatch_heap_object_send(
     entry_object = method_descriptor_entry_object(method_object);
     entry = method_entry_execution_id(entry_object);
     implementation_value = method_entry_implementation_value(entry_object);
-    if (entry == 0U || entry >= RECORZ_MVP_METHOD_ENTRY_COUNT) {
+    if (entry == 0U) {
         machine_panic("method entry execution id is out of range");
     }
     if (implementation_value.kind == RECORZ_MVP_VALUE_OBJECT) {
