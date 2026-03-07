@@ -48,6 +48,7 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         self.assertEqual(summary["seed"]["class_link_count"], 176)
         self.assertEqual(summary["seed"]["method_descriptor_count"], 22)
         self.assertEqual(summary["seed"]["declared_method_count"], 22)
+        self.assertEqual(summary["seed"]["method_entry_count"], 22)
         self.assertEqual(summary["seed"]["global_binding_count"], 6)
         self.assertEqual(summary["seed"]["root_binding_count"], 6)
         self.assertEqual(summary["seed"]["globals"]["Transcript"], 0)
@@ -98,6 +99,21 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         primitive_kind_field_offset = method_offset + (2 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
 
         seed[primitive_kind_field_offset + 1 : primitive_kind_field_offset + 5] = struct.pack("<i", mvp.SEED_OBJECT_DISPLAY)
+
+        with self.assertRaises(inspector.ImageInspectionError):
+            inspector.inspect_seed_manifest(bytes(seed))
+
+    def test_rejects_method_descriptor_entry_mismatch(self) -> None:
+        seed = bytearray(mvp.build_seed_manifest())
+        header_size = struct.calcsize(mvp.SEED_HEADER_FORMAT)
+        object_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
+        method_offset = header_size + (154 * object_size) + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
+        entry_field_offset = method_offset + (3 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
+
+        seed[entry_field_offset + 1 : entry_field_offset + 5] = struct.pack(
+            "<i",
+            mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW"],
+        )
 
         with self.assertRaises(inspector.ImageInspectionError):
             inspector.inspect_seed_manifest(bytes(seed))

@@ -132,7 +132,7 @@ IMAGE_ENTRY_FORMAT = "<4sHHHHHH"
 IMAGE_ENTRY_KIND_DOIT = 1
 
 SEED_MAGIC = b"RCZS"
-SEED_VERSION = 7
+SEED_VERSION = 8
 SEED_HEADER_FORMAT = "<4sHHHHHH"
 SEED_BINDING_FORMAT = "<HH"
 SEED_OBJECT_HEADER_FORMAT = "<BBH"
@@ -145,6 +145,7 @@ CLASS_FIELD_METHOD_COUNT = 3
 METHOD_FIELD_SELECTOR = 0
 METHOD_FIELD_ARGUMENT_COUNT = 1
 METHOD_FIELD_PRIMITIVE_KIND = 2
+METHOD_FIELD_ENTRY = 3
 
 SEED_FIELD_NIL = 0
 SEED_FIELD_SMALL_INTEGER = 1
@@ -207,27 +208,53 @@ class SeedObject:
     fields: list[tuple[int, int]]
 
 
-BUILTIN_METHODS_BY_KIND: dict[int, list[tuple[str, int]]] = {
-    SEED_OBJECT_TRANSCRIPT: [("show:", 1), ("cr", 0)],
-    SEED_OBJECT_DISPLAY: [("defaultForm", 0), ("clear", 0), ("writeString:", 1), ("newline", 0)],
-    SEED_OBJECT_BITBLT: [
-        ("fillForm:color:", 2),
-        ("copyBitmap:toForm:x:y:scale:", 5),
-        ("copyBitmap:toForm:x:y:scale:color:", 6),
-        ("copyBitmap:sourceX:sourceY:width:height:toForm:x:y:scale:color:", 10),
-    ],
-    SEED_OBJECT_GLYPHS: [("at:", 1)],
-    SEED_OBJECT_FORM_FACTORY: [("fromBits:", 1)],
-    SEED_OBJECT_BITMAP_FACTORY: [("monoWidth:height:", 2)],
-    SEED_OBJECT_TEXT_LAYOUT: [],
-    SEED_OBJECT_TEXT_STYLE: [],
-    SEED_OBJECT_BITMAP: [("width", 0), ("height", 0)],
-    SEED_OBJECT_FORM: [("clear", 0), ("writeString:", 1), ("newline", 0), ("bits", 0), ("width", 0), ("height", 0)],
-    SEED_OBJECT_TEXT_METRICS: [],
-    SEED_OBJECT_TEXT_BEHAVIOR: [],
-    SEED_OBJECT_CLASS: [("instanceKind", 0)],
-    SEED_OBJECT_METHOD_DESCRIPTOR: [],
+METHOD_ENTRY_DEFINITIONS: list[tuple[str, int, str, int]] = [
+    ("RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW", SEED_OBJECT_TRANSCRIPT, "show:", 1),
+    ("RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR", SEED_OBJECT_TRANSCRIPT, "cr", 0),
+    ("RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM", SEED_OBJECT_DISPLAY, "defaultForm", 0),
+    ("RECORZ_MVP_METHOD_ENTRY_DISPLAY_CLEAR", SEED_OBJECT_DISPLAY, "clear", 0),
+    ("RECORZ_MVP_METHOD_ENTRY_DISPLAY_WRITE_STRING", SEED_OBJECT_DISPLAY, "writeString:", 1),
+    ("RECORZ_MVP_METHOD_ENTRY_DISPLAY_NEWLINE", SEED_OBJECT_DISPLAY, "newline", 0),
+    ("RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR", SEED_OBJECT_BITBLT, "fillForm:color:", 2),
+    ("RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE", SEED_OBJECT_BITBLT, "copyBitmap:toForm:x:y:scale:", 5),
+    (
+        "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR",
+        SEED_OBJECT_BITBLT,
+        "copyBitmap:toForm:x:y:scale:color:",
+        6,
+    ),
+    (
+        "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR",
+        SEED_OBJECT_BITBLT,
+        "copyBitmap:sourceX:sourceY:width:height:toForm:x:y:scale:color:",
+        10,
+    ),
+    ("RECORZ_MVP_METHOD_ENTRY_GLYPHS_AT", SEED_OBJECT_GLYPHS, "at:", 1),
+    ("RECORZ_MVP_METHOD_ENTRY_FORM_FACTORY_FROM_BITS", SEED_OBJECT_FORM_FACTORY, "fromBits:", 1),
+    ("RECORZ_MVP_METHOD_ENTRY_BITMAP_FACTORY_MONO_WIDTH_HEIGHT", SEED_OBJECT_BITMAP_FACTORY, "monoWidth:height:", 2),
+    ("RECORZ_MVP_METHOD_ENTRY_BITMAP_WIDTH", SEED_OBJECT_BITMAP, "width", 0),
+    ("RECORZ_MVP_METHOD_ENTRY_BITMAP_HEIGHT", SEED_OBJECT_BITMAP, "height", 0),
+    ("RECORZ_MVP_METHOD_ENTRY_FORM_CLEAR", SEED_OBJECT_FORM, "clear", 0),
+    ("RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING", SEED_OBJECT_FORM, "writeString:", 1),
+    ("RECORZ_MVP_METHOD_ENTRY_FORM_NEWLINE", SEED_OBJECT_FORM, "newline", 0),
+    ("RECORZ_MVP_METHOD_ENTRY_FORM_BITS", SEED_OBJECT_FORM, "bits", 0),
+    ("RECORZ_MVP_METHOD_ENTRY_FORM_WIDTH", SEED_OBJECT_FORM, "width", 0),
+    ("RECORZ_MVP_METHOD_ENTRY_FORM_HEIGHT", SEED_OBJECT_FORM, "height", 0),
+    ("RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND", SEED_OBJECT_CLASS, "instanceKind", 0),
+]
+METHOD_ENTRY_VALUES = {
+    name: index + 1 for index, (name, _owner_kind, _selector, _argument_count) in enumerate(METHOD_ENTRY_DEFINITIONS)
 }
+METHOD_ENTRY_COUNT = len(METHOD_ENTRY_VALUES) + 1
+METHOD_ENTRY_SPECS = {
+    METHOD_ENTRY_VALUES[name]: (owner_kind, SELECTOR_VALUES[SELECTOR_IDS[selector]], argument_count)
+    for name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS
+}
+BUILTIN_METHODS_BY_KIND: dict[int, list[tuple[str, int, str]]] = {
+    kind: [] for kind in range(SEED_OBJECT_TRANSCRIPT, SEED_OBJECT_METHOD_DESCRIPTOR + 1)
+}
+for entry_name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS:
+    BUILTIN_METHODS_BY_KIND[owner_kind].append((selector, argument_count, entry_name))
 
 
 class Lowerer:
@@ -511,7 +538,7 @@ def build_seed_manifest() -> bytes:
         method_count_by_kind[class_kind] = len(method_definitions)
         if method_definitions:
             method_start_by_kind[class_kind] = method_start_index + len(method_seed_objects)
-        for selector, argument_count in method_definitions:
+        for selector, argument_count, entry_name in method_definitions:
             method_seed_objects.append(
                 SeedObject(
                     SEED_OBJECT_METHOD_DESCRIPTOR,
@@ -520,6 +547,7 @@ def build_seed_manifest() -> bytes:
                         (SEED_FIELD_SMALL_INTEGER, SELECTOR_VALUES[SELECTOR_IDS[selector]]),
                         (SEED_FIELD_SMALL_INTEGER, argument_count),
                         (SEED_FIELD_SMALL_INTEGER, class_kind),
+                        (SEED_FIELD_SMALL_INTEGER, METHOD_ENTRY_VALUES[entry_name]),
                     ],
                 )
             )

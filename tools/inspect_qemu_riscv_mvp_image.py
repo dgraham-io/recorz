@@ -95,6 +95,7 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
     class_descriptor_count = 0
     class_link_count = 0
     method_descriptor_count = 0
+    method_entry_ids: set[int] = set()
     for _ in range(object_count):
         object_kind, field_count, class_index = struct.unpack_from(mvp.SEED_OBJECT_HEADER_FORMAT, blob, offset)
         if field_count > 4:
@@ -174,11 +175,12 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
                 method_summary = objects[method_index]
                 if method_summary["object_kind"] != mvp.SEED_OBJECT_METHOD_DESCRIPTOR:
                     raise ImageInspectionError("seed manifest class method range contains a non-method descriptor")
-                if int(method_summary["field_count"]) <= mvp.METHOD_FIELD_PRIMITIVE_KIND:
+                if int(method_summary["field_count"]) <= mvp.METHOD_FIELD_ENTRY:
                     raise ImageInspectionError("seed manifest method descriptor is missing required fields")
                 selector_field = method_summary["fields"][mvp.METHOD_FIELD_SELECTOR]
                 argument_count_field = method_summary["fields"][mvp.METHOD_FIELD_ARGUMENT_COUNT]
                 primitive_kind_field = method_summary["fields"][mvp.METHOD_FIELD_PRIMITIVE_KIND]
+                entry_field = method_summary["fields"][mvp.METHOD_FIELD_ENTRY]
                 if (
                     selector_field[0] != mvp.SEED_FIELD_SMALL_INTEGER
                     or selector_field[1] < mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SHOW"]
@@ -194,6 +196,22 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
                     or primitive_kind_field[1] != class_instance_kind_field[1]
                 ):
                     raise ImageInspectionError("seed manifest method descriptor primitive kind field is invalid")
+                if (
+                    entry_field[0] != mvp.SEED_FIELD_SMALL_INTEGER
+                    or entry_field[1] <= 0
+                    or entry_field[1] >= mvp.METHOD_ENTRY_COUNT
+                ):
+                    raise ImageInspectionError("seed manifest method descriptor entry field is invalid")
+                entry_spec = mvp.METHOD_ENTRY_SPECS.get(entry_field[1])
+                if entry_spec is None:
+                    raise ImageInspectionError("seed manifest method descriptor entry field is invalid")
+                if (
+                    entry_spec[0] != class_instance_kind_field[1]
+                    or entry_spec[1] != selector_field[1]
+                    or entry_spec[2] != argument_count_field[1]
+                ):
+                    raise ImageInspectionError("seed manifest method descriptor entry metadata does not match selector")
+                method_entry_ids.add(int(entry_field[1]))
             declared_method_count += method_count
 
     globals_summary: dict[str, int] = {}
@@ -237,6 +255,7 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
         "class_link_count": class_link_count,
         "method_descriptor_count": method_descriptor_count,
         "declared_method_count": declared_method_count,
+        "method_entry_count": len(method_entry_ids),
         "global_binding_count": global_binding_count,
         "root_binding_count": root_binding_count,
         "globals": globals_summary,
@@ -361,6 +380,7 @@ def render_summary(summary: dict[str, object]) -> str:
         "seed: "
         f"objects={seed['object_count']} classes={seed['class_descriptor_count']} class_links={seed['class_link_count']} "
         f"methods={seed['declared_method_count']} method_descriptors={seed['method_descriptor_count']} "
+        f"method_entries={seed['method_entry_count']} "
         f"globals={seed['global_binding_count']} roots={seed['root_binding_count']} "
         f"glyph_codes={seed['glyph_code_count']} default_form={seed['roots']['default_form']}"
     )

@@ -37,6 +37,7 @@
 #define METHOD_FIELD_SELECTOR 0U
 #define METHOD_FIELD_ARGUMENT_COUNT 1U
 #define METHOD_FIELD_PRIMITIVE_KIND 2U
+#define METHOD_FIELD_ENTRY 3U
 
 #define BITMAP_STORAGE_FRAMEBUFFER 1U
 #define BITMAP_STORAGE_GLYPH_MONO 2U
@@ -60,6 +61,125 @@ struct recorz_mvp_heap_object {
     uint8_t field_count;
     uint16_t class_handle;
     struct recorz_mvp_value fields[OBJECT_FIELD_LIMIT];
+};
+
+struct recorz_mvp_method_entry_spec {
+    uint8_t selector;
+    uint8_t argument_count;
+    uint8_t primitive_kind;
+};
+
+static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_METHOD_ENTRY_COUNT] = {
+    [RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW] = {
+        RECORZ_MVP_SELECTOR_SHOW,
+        1U,
+        RECORZ_MVP_OBJECT_TRANSCRIPT,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR] = {
+        RECORZ_MVP_SELECTOR_CR,
+        0U,
+        RECORZ_MVP_OBJECT_TRANSCRIPT,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM] = {
+        RECORZ_MVP_SELECTOR_DEFAULT_FORM,
+        0U,
+        RECORZ_MVP_OBJECT_DISPLAY,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_DISPLAY_CLEAR] = {
+        RECORZ_MVP_SELECTOR_CLEAR,
+        0U,
+        RECORZ_MVP_OBJECT_DISPLAY,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_DISPLAY_WRITE_STRING] = {
+        RECORZ_MVP_SELECTOR_WRITE_STRING,
+        1U,
+        RECORZ_MVP_OBJECT_DISPLAY,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_DISPLAY_NEWLINE] = {
+        RECORZ_MVP_SELECTOR_NEWLINE,
+        0U,
+        RECORZ_MVP_OBJECT_DISPLAY,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR] = {
+        RECORZ_MVP_SELECTOR_FILL_FORM_COLOR,
+        2U,
+        RECORZ_MVP_OBJECT_BITBLT,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE] = {
+        RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE,
+        5U,
+        RECORZ_MVP_OBJECT_BITBLT,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR] = {
+        RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR,
+        6U,
+        RECORZ_MVP_OBJECT_BITBLT,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR] = {
+        RECORZ_MVP_SELECTOR_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR,
+        10U,
+        RECORZ_MVP_OBJECT_BITBLT,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_GLYPHS_AT] = {
+        RECORZ_MVP_SELECTOR_AT,
+        1U,
+        RECORZ_MVP_OBJECT_GLYPHS,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_FORM_FACTORY_FROM_BITS] = {
+        RECORZ_MVP_SELECTOR_FROM_BITS,
+        1U,
+        RECORZ_MVP_OBJECT_FORM_FACTORY,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_BITMAP_FACTORY_MONO_WIDTH_HEIGHT] = {
+        RECORZ_MVP_SELECTOR_MONO_WIDTH_HEIGHT,
+        2U,
+        RECORZ_MVP_OBJECT_BITMAP_FACTORY,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_BITMAP_WIDTH] = {
+        RECORZ_MVP_SELECTOR_WIDTH,
+        0U,
+        RECORZ_MVP_OBJECT_BITMAP,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_BITMAP_HEIGHT] = {
+        RECORZ_MVP_SELECTOR_HEIGHT,
+        0U,
+        RECORZ_MVP_OBJECT_BITMAP,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_FORM_CLEAR] = {
+        RECORZ_MVP_SELECTOR_CLEAR,
+        0U,
+        RECORZ_MVP_OBJECT_FORM,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING] = {
+        RECORZ_MVP_SELECTOR_WRITE_STRING,
+        1U,
+        RECORZ_MVP_OBJECT_FORM,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_FORM_NEWLINE] = {
+        RECORZ_MVP_SELECTOR_NEWLINE,
+        0U,
+        RECORZ_MVP_OBJECT_FORM,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_FORM_BITS] = {
+        RECORZ_MVP_SELECTOR_BITS,
+        0U,
+        RECORZ_MVP_OBJECT_FORM,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_FORM_WIDTH] = {
+        RECORZ_MVP_SELECTOR_WIDTH,
+        0U,
+        RECORZ_MVP_OBJECT_FORM,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_FORM_HEIGHT] = {
+        RECORZ_MVP_SELECTOR_HEIGHT,
+        0U,
+        RECORZ_MVP_OBJECT_FORM,
+    },
+    [RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND] = {
+        RECORZ_MVP_SELECTOR_INSTANCE_KIND,
+        0U,
+        RECORZ_MVP_OBJECT_CLASS,
+    },
 };
 
 static const uint32_t font5x7[128][7] = {
@@ -602,6 +722,13 @@ static uint32_t method_descriptor_primitive_kind(const struct recorz_mvp_heap_ob
     );
 }
 
+static uint32_t method_descriptor_entry(const struct recorz_mvp_heap_object *method_object) {
+    return small_integer_u32(
+        heap_get_field(method_object, METHOD_FIELD_ENTRY),
+        "method descriptor entry is not a small integer"
+    );
+}
+
 static uint32_t class_method_count(const struct recorz_mvp_heap_object *class_object) {
     return small_integer_u32(
         heap_get_field(class_object, CLASS_FIELD_METHOD_COUNT),
@@ -655,6 +782,16 @@ static const struct recorz_mvp_heap_object *lookup_builtin_method_descriptor(
 
 static uint32_t primitive_kind_for_heap_object(const struct recorz_mvp_heap_object *object) {
     return class_instance_kind(class_object_for_heap_object(object));
+}
+
+static const struct recorz_mvp_method_entry_spec *method_entry_spec(uint32_t entry) {
+    if (entry == 0U || entry >= RECORZ_MVP_METHOD_ENTRY_COUNT) {
+        machine_panic("method descriptor entry is out of range");
+    }
+    if (method_entry_specs[entry].selector == 0U) {
+        machine_panic("method descriptor entry is not wired to a built-in method");
+    }
+    return &method_entry_specs[entry];
 }
 
 static void validate_class_superclass(const struct recorz_mvp_heap_object *class_object) {
@@ -714,25 +851,20 @@ static void validate_class_method_table(
         uint32_t selector;
         uint32_t argument_count;
         uint32_t primitive_kind;
+        uint32_t entry;
+        const struct recorz_mvp_method_entry_spec *entry_spec;
 
         if (method_object->kind != RECORZ_MVP_OBJECT_METHOD_DESCRIPTOR) {
             machine_panic("class method range contains a non-method descriptor");
         }
-        if (method_object->field_count <= METHOD_FIELD_PRIMITIVE_KIND) {
+        if (method_object->field_count <= METHOD_FIELD_ENTRY) {
             machine_panic("method descriptor is missing required fields");
         }
-        selector = small_integer_u32(
-            heap_get_field(method_object, METHOD_FIELD_SELECTOR),
-            "method descriptor selector is not a small integer"
-        );
-        argument_count = small_integer_u32(
-            heap_get_field(method_object, METHOD_FIELD_ARGUMENT_COUNT),
-            "method descriptor argument count is not a small integer"
-        );
-        primitive_kind = small_integer_u32(
-            heap_get_field(method_object, METHOD_FIELD_PRIMITIVE_KIND),
-            "method descriptor primitive kind is not a small integer"
-        );
+        selector = method_descriptor_selector(method_object);
+        argument_count = method_descriptor_argument_count(method_object);
+        primitive_kind = method_descriptor_primitive_kind(method_object);
+        entry = method_descriptor_entry(method_object);
+        entry_spec = method_entry_spec(entry);
         if (selector < RECORZ_MVP_SELECTOR_SHOW || selector > RECORZ_MVP_SELECTOR_INSTANCE_KIND) {
             machine_panic("method descriptor selector is out of range");
         }
@@ -741,6 +873,15 @@ static void validate_class_method_table(
         }
         if (primitive_kind != class_kind) {
             machine_panic("method descriptor primitive kind does not match class instance kind");
+        }
+        if (entry_spec->selector != selector) {
+            machine_panic("method descriptor selector does not match entry");
+        }
+        if (entry_spec->argument_count != argument_count) {
+            machine_panic("method descriptor argument count does not match entry");
+        }
+        if (entry_spec->primitive_kind != primitive_kind) {
+            machine_panic("method descriptor primitive kind does not match entry");
         }
     }
 }
@@ -1408,253 +1549,206 @@ static struct recorz_mvp_value literal_value(const struct recorz_mvp_literal *li
     return nil_value();
 }
 
-static void dispatch_transcript_send(uint8_t selector, struct recorz_mvp_value receiver, const char *text) {
-    if (selector == RECORZ_MVP_SELECTOR_SHOW) {
-        form_write_string(default_form_object(), text);
-        push(receiver);
-        return;
-    }
-    if (selector == RECORZ_MVP_SELECTOR_CR) {
-        form_newline(default_form_object());
-        push(receiver);
-        return;
-    }
-    machine_panic("unsupported Transcript selector");
-}
-
-static void dispatch_display_send(uint8_t selector, struct recorz_mvp_value receiver, const char *text) {
-    if (selector == RECORZ_MVP_SELECTOR_DEFAULT_FORM) {
-        push(form_value());
-        return;
-    }
-    if (selector == RECORZ_MVP_SELECTOR_CLEAR) {
-        form_clear(default_form_object());
-        push(receiver);
-        return;
-    }
-    if (selector == RECORZ_MVP_SELECTOR_WRITE_STRING) {
-        form_write_string(default_form_object(), text);
-        push(receiver);
-        return;
-    }
-    if (selector == RECORZ_MVP_SELECTOR_NEWLINE) {
-        form_newline(default_form_object());
-        push(receiver);
-        return;
-    }
-    machine_panic("unsupported Display selector");
-}
-
-static void dispatch_bitblt_send(uint8_t selector, const struct recorz_mvp_value arguments[]) {
-    if (selector == RECORZ_MVP_SELECTOR_FILL_FORM_COLOR) {
-        const struct recorz_mvp_heap_object *form;
-
-        if (arguments[0].kind != RECORZ_MVP_VALUE_OBJECT) {
-            machine_panic("BitBlt fillForm:color: expects a form receiver argument");
-        }
-        if (arguments[1].kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
-            machine_panic("BitBlt fillForm:color: expects a small integer color");
-        }
-        form = heap_object_for_value(arguments[0]);
-        if (primitive_kind_for_heap_object(form) != RECORZ_MVP_OBJECT_FORM) {
-            machine_panic("BitBlt fillForm:color: expects a form");
-        }
-        fill_form_color(form, (uint32_t)arguments[1].integer);
-        push(arguments[0]);
-        return;
-    }
-    if (selector == RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE) {
-        const struct recorz_mvp_heap_object *source_bitmap;
-        const struct recorz_mvp_heap_object *dest_form;
-
-        require_bitblt_copy_operands_at(arguments, 0U, 1U, &source_bitmap, &dest_form);
-        bitblt_copy_mono_bitmap_to_form(
-            source_bitmap,
-            dest_form,
-            0U,
-            0U,
-            bitmap_width(source_bitmap),
-            bitmap_height(source_bitmap),
-            small_integer_u32(arguments[2], "BitBlt copy x must be a non-negative small integer"),
-            small_integer_u32(arguments[3], "BitBlt copy y must be a non-negative small integer"),
-            small_integer_u32(arguments[4], "BitBlt copy scale must be a non-negative small integer"),
-            text_foreground_color(),
-            0U,
-            1U
-        );
-        push(arguments[1]);
-        return;
-    }
-    if (selector == RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR) {
-        const struct recorz_mvp_heap_object *source_bitmap;
-        const struct recorz_mvp_heap_object *dest_form;
-
-        require_bitblt_copy_operands_at(arguments, 0U, 1U, &source_bitmap, &dest_form);
-        bitblt_copy_mono_bitmap_to_form(
-            source_bitmap,
-            dest_form,
-            0U,
-            0U,
-            bitmap_width(source_bitmap),
-            bitmap_height(source_bitmap),
-            small_integer_u32(arguments[2], "BitBlt copy x must be a non-negative small integer"),
-            small_integer_u32(arguments[3], "BitBlt copy y must be a non-negative small integer"),
-            small_integer_u32(arguments[4], "BitBlt copy scale must be a non-negative small integer"),
-            small_integer_u32(arguments[5], "BitBlt copy color must be a non-negative small integer"),
-            0U,
-            1U
-        );
-        push(arguments[1]);
-        return;
-    }
-    if (selector == RECORZ_MVP_SELECTOR_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR) {
-        const struct recorz_mvp_heap_object *source_bitmap;
-        const struct recorz_mvp_heap_object *dest_form;
-
-        require_bitblt_copy_operands_at(arguments, 0U, 5U, &source_bitmap, &dest_form);
-        bitblt_copy_mono_bitmap_to_form(
-            source_bitmap,
-            dest_form,
-            small_integer_u32(arguments[1], "BitBlt copy sourceX must be a non-negative small integer"),
-            small_integer_u32(arguments[2], "BitBlt copy sourceY must be a non-negative small integer"),
-            small_integer_u32(arguments[3], "BitBlt copy width must be a non-negative small integer"),
-            small_integer_u32(arguments[4], "BitBlt copy height must be a non-negative small integer"),
-            small_integer_u32(arguments[6], "BitBlt copy x must be a non-negative small integer"),
-            small_integer_u32(arguments[7], "BitBlt copy y must be a non-negative small integer"),
-            small_integer_u32(arguments[8], "BitBlt copy scale must be a non-negative small integer"),
-            small_integer_u32(arguments[9], "BitBlt copy color must be a non-negative small integer"),
-            0U,
-            1U
-        );
-        push(arguments[5]);
-        return;
-    }
-    machine_panic("unsupported BitBlt selector");
-}
-
-static void dispatch_glyphs_send(uint8_t selector, const struct recorz_mvp_value arguments[]) {
-    if (selector == RECORZ_MVP_SELECTOR_AT) {
-        push(glyph_bitmap_value_for_code(small_integer_u32(arguments[0], "Glyphs at: expects a non-negative small integer")));
-        return;
-    }
-    machine_panic("unsupported Glyphs selector");
-}
-
-static void dispatch_form_factory_send(uint8_t selector, const struct recorz_mvp_value arguments[]) {
-    if (selector == RECORZ_MVP_SELECTOR_FROM_BITS) {
-        if (arguments[0].kind != RECORZ_MVP_VALUE_OBJECT) {
-            machine_panic("Form fromBits: expects a bitmap");
-        }
-        push(allocate_form_from_bits_value(arguments[0]));
-        return;
-    }
-    machine_panic("unsupported Form factory selector");
-}
-
-static void dispatch_bitmap_factory_send(uint8_t selector, const struct recorz_mvp_value arguments[]) {
-    if (selector == RECORZ_MVP_SELECTOR_MONO_WIDTH_HEIGHT) {
-        push(
-            allocate_mono_bitmap_value(
-                small_integer_u32(arguments[0], "Bitmap monoWidth:height: width must be a non-negative small integer"),
-                small_integer_u32(arguments[1], "Bitmap monoWidth:height: height must be a non-negative small integer")
-            )
-        );
-        return;
-    }
-    machine_panic("unsupported Bitmap factory selector");
-}
-
-static void dispatch_form_send(
+typedef void (*recorz_mvp_method_entry_handler)(
     const struct recorz_mvp_heap_object *object,
-    uint8_t selector,
-    struct recorz_mvp_value receiver,
-    const char *text
-) {
-    if (selector == RECORZ_MVP_SELECTOR_CLEAR) {
-        form_clear(object);
-        push(receiver);
-        return;
-    }
-    if (selector == RECORZ_MVP_SELECTOR_WRITE_STRING) {
-        form_write_string(object, text);
-        push(receiver);
-        return;
-    }
-    if (selector == RECORZ_MVP_SELECTOR_NEWLINE) {
-        form_newline(object);
-        push(receiver);
-        return;
-    }
-    if (selector == RECORZ_MVP_SELECTOR_BITS) {
-        push(heap_get_field(object, FORM_FIELD_BITS));
-        return;
-    }
-    if (selector == RECORZ_MVP_SELECTOR_WIDTH) {
-        push(heap_get_field(bitmap_for_form(object), BITMAP_FIELD_WIDTH));
-        return;
-    }
-    if (selector == RECORZ_MVP_SELECTOR_HEIGHT) {
-        push(heap_get_field(bitmap_for_form(object), BITMAP_FIELD_HEIGHT));
-        return;
-    }
-    machine_panic("unsupported Form selector");
-}
-
-static void dispatch_bitmap_send(const struct recorz_mvp_heap_object *object, uint8_t selector) {
-    if (selector == RECORZ_MVP_SELECTOR_WIDTH) {
-        push(heap_get_field(object, BITMAP_FIELD_WIDTH));
-        return;
-    }
-    if (selector == RECORZ_MVP_SELECTOR_HEIGHT) {
-        push(heap_get_field(object, BITMAP_FIELD_HEIGHT));
-        return;
-    }
-    machine_panic("unsupported Bitmap selector");
-}
-
-static void dispatch_class_send(const struct recorz_mvp_heap_object *object, uint8_t selector) {
-    if (selector == RECORZ_MVP_SELECTOR_INSTANCE_KIND) {
-        push(heap_get_field(object, CLASS_FIELD_INSTANCE_KIND));
-        return;
-    }
-    machine_panic("unsupported Class selector");
-}
-
-typedef void (*recorz_mvp_heap_send_handler)(
-    const struct recorz_mvp_heap_object *object,
-    uint8_t selector,
     struct recorz_mvp_value receiver,
     const struct recorz_mvp_value arguments[],
     const char *text
 );
 
-static void dispatch_transcript_family(
+static void execute_entry_transcript_show(
     const struct recorz_mvp_heap_object *object,
-    uint8_t selector,
     struct recorz_mvp_value receiver,
     const struct recorz_mvp_value arguments[],
     const char *text
 ) {
     (void)object;
     (void)arguments;
-    dispatch_transcript_send(selector, receiver, text);
+    form_write_string(default_form_object(), text);
+    push(receiver);
 }
 
-static void dispatch_display_family(
+static void execute_entry_transcript_cr(
     const struct recorz_mvp_heap_object *object,
-    uint8_t selector,
     struct recorz_mvp_value receiver,
     const struct recorz_mvp_value arguments[],
     const char *text
 ) {
     (void)object;
     (void)arguments;
-    dispatch_display_send(selector, receiver, text);
+    (void)text;
+    form_newline(default_form_object());
+    push(receiver);
 }
 
-static void dispatch_bitblt_family(
+static void execute_entry_display_default_form(
     const struct recorz_mvp_heap_object *object,
-    uint8_t selector,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    push(form_value());
+}
+
+static void execute_entry_display_clear(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)arguments;
+    (void)text;
+    form_clear(default_form_object());
+    push(receiver);
+}
+
+static void execute_entry_display_write_string(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)arguments;
+    form_write_string(default_form_object(), text);
+    push(receiver);
+}
+
+static void execute_entry_display_newline(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)arguments;
+    (void)text;
+    form_newline(default_form_object());
+    push(receiver);
+}
+
+static void execute_entry_bitblt_fill_form_color(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const struct recorz_mvp_heap_object *form;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("BitBlt fillForm:color: expects a form receiver argument");
+    }
+    if (arguments[1].kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+        machine_panic("BitBlt fillForm:color: expects a small integer color");
+    }
+    form = heap_object_for_value(arguments[0]);
+    if (primitive_kind_for_heap_object(form) != RECORZ_MVP_OBJECT_FORM) {
+        machine_panic("BitBlt fillForm:color: expects a form");
+    }
+    fill_form_color(form, (uint32_t)arguments[1].integer);
+    push(arguments[0]);
+}
+
+static void execute_entry_bitblt_copy_bitmap_to_form_x_y_scale(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const struct recorz_mvp_heap_object *source_bitmap;
+    const struct recorz_mvp_heap_object *dest_form;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    require_bitblt_copy_operands_at(arguments, 0U, 1U, &source_bitmap, &dest_form);
+    bitblt_copy_mono_bitmap_to_form(
+        source_bitmap,
+        dest_form,
+        0U,
+        0U,
+        bitmap_width(source_bitmap),
+        bitmap_height(source_bitmap),
+        small_integer_u32(arguments[2], "BitBlt copy x must be a non-negative small integer"),
+        small_integer_u32(arguments[3], "BitBlt copy y must be a non-negative small integer"),
+        small_integer_u32(arguments[4], "BitBlt copy scale must be a non-negative small integer"),
+        text_foreground_color(),
+        0U,
+        1U
+    );
+    push(arguments[1]);
+}
+
+static void execute_entry_bitblt_copy_bitmap_to_form_x_y_scale_color(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const struct recorz_mvp_heap_object *source_bitmap;
+    const struct recorz_mvp_heap_object *dest_form;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    require_bitblt_copy_operands_at(arguments, 0U, 1U, &source_bitmap, &dest_form);
+    bitblt_copy_mono_bitmap_to_form(
+        source_bitmap,
+        dest_form,
+        0U,
+        0U,
+        bitmap_width(source_bitmap),
+        bitmap_height(source_bitmap),
+        small_integer_u32(arguments[2], "BitBlt copy x must be a non-negative small integer"),
+        small_integer_u32(arguments[3], "BitBlt copy y must be a non-negative small integer"),
+        small_integer_u32(arguments[4], "BitBlt copy scale must be a non-negative small integer"),
+        small_integer_u32(arguments[5], "BitBlt copy color must be a non-negative small integer"),
+        0U,
+        1U
+    );
+    push(arguments[1]);
+}
+
+static void execute_entry_bitblt_copy_bitmap_source_x_source_y_width_height_to_form_x_y_scale_color(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const struct recorz_mvp_heap_object *source_bitmap;
+    const struct recorz_mvp_heap_object *dest_form;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    require_bitblt_copy_operands_at(arguments, 0U, 5U, &source_bitmap, &dest_form);
+    bitblt_copy_mono_bitmap_to_form(
+        source_bitmap,
+        dest_form,
+        small_integer_u32(arguments[1], "BitBlt copy sourceX must be a non-negative small integer"),
+        small_integer_u32(arguments[2], "BitBlt copy sourceY must be a non-negative small integer"),
+        small_integer_u32(arguments[3], "BitBlt copy width must be a non-negative small integer"),
+        small_integer_u32(arguments[4], "BitBlt copy height must be a non-negative small integer"),
+        small_integer_u32(arguments[6], "BitBlt copy x must be a non-negative small integer"),
+        small_integer_u32(arguments[7], "BitBlt copy y must be a non-negative small integer"),
+        small_integer_u32(arguments[8], "BitBlt copy scale must be a non-negative small integer"),
+        small_integer_u32(arguments[9], "BitBlt copy color must be a non-negative small integer"),
+        0U,
+        1U
+    );
+    push(arguments[5]);
+}
+
+static void execute_entry_glyphs_at(
+    const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
     const struct recorz_mvp_value arguments[],
     const char *text
@@ -1662,12 +1756,11 @@ static void dispatch_bitblt_family(
     (void)object;
     (void)receiver;
     (void)text;
-    dispatch_bitblt_send(selector, arguments);
+    push(glyph_bitmap_value_for_code(small_integer_u32(arguments[0], "Glyphs at: expects a non-negative small integer")));
 }
 
-static void dispatch_glyphs_family(
+static void execute_entry_form_factory_from_bits(
     const struct recorz_mvp_heap_object *object,
-    uint8_t selector,
     struct recorz_mvp_value receiver,
     const struct recorz_mvp_value arguments[],
     const char *text
@@ -1675,12 +1768,14 @@ static void dispatch_glyphs_family(
     (void)object;
     (void)receiver;
     (void)text;
-    dispatch_glyphs_send(selector, arguments);
+    if (arguments[0].kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("Form fromBits: expects a bitmap");
+    }
+    push(allocate_form_from_bits_value(arguments[0]));
 }
 
-static void dispatch_form_factory_family(
+static void execute_entry_bitmap_factory_mono_width_height(
     const struct recorz_mvp_heap_object *object,
-    uint8_t selector,
     struct recorz_mvp_value receiver,
     const struct recorz_mvp_value arguments[],
     const char *text
@@ -1688,36 +1783,75 @@ static void dispatch_form_factory_family(
     (void)object;
     (void)receiver;
     (void)text;
-    dispatch_form_factory_send(selector, arguments);
+    push(
+        allocate_mono_bitmap_value(
+            small_integer_u32(arguments[0], "Bitmap monoWidth:height: width must be a non-negative small integer"),
+            small_integer_u32(arguments[1], "Bitmap monoWidth:height: height must be a non-negative small integer")
+        )
+    );
 }
 
-static void dispatch_bitmap_factory_family(
+static void execute_entry_bitmap_width(
     const struct recorz_mvp_heap_object *object,
-    uint8_t selector,
     struct recorz_mvp_value receiver,
     const struct recorz_mvp_value arguments[],
     const char *text
 ) {
-    (void)object;
     (void)receiver;
+    (void)arguments;
     (void)text;
-    dispatch_bitmap_factory_send(selector, arguments);
+    push(heap_get_field(object, BITMAP_FIELD_WIDTH));
 }
 
-static void dispatch_form_family(
+static void execute_entry_bitmap_height(
     const struct recorz_mvp_heap_object *object,
-    uint8_t selector,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    push(heap_get_field(object, BITMAP_FIELD_HEIGHT));
+}
+
+static void execute_entry_form_clear(
+    const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
     const struct recorz_mvp_value arguments[],
     const char *text
 ) {
     (void)arguments;
-    dispatch_form_send(object, selector, receiver, text);
+    (void)text;
+    form_clear(object);
+    push(receiver);
 }
 
-static void dispatch_bitmap_family(
+static void execute_entry_form_write_string(
     const struct recorz_mvp_heap_object *object,
-    uint8_t selector,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    form_write_string(object, text);
+    push(receiver);
+}
+
+static void execute_entry_form_newline(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    form_newline(object);
+    push(receiver);
+}
+
+static void execute_entry_form_bits(
+    const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
     const struct recorz_mvp_value arguments[],
     const char *text
@@ -1725,12 +1859,11 @@ static void dispatch_bitmap_family(
     (void)receiver;
     (void)arguments;
     (void)text;
-    dispatch_bitmap_send(object, selector);
+    push(heap_get_field(object, FORM_FIELD_BITS));
 }
 
-static void dispatch_class_family(
+static void execute_entry_form_width(
     const struct recorz_mvp_heap_object *object,
-    uint8_t selector,
     struct recorz_mvp_value receiver,
     const struct recorz_mvp_value arguments[],
     const char *text
@@ -1738,19 +1871,58 @@ static void dispatch_class_family(
     (void)receiver;
     (void)arguments;
     (void)text;
-    dispatch_class_send(object, selector);
+    push(heap_get_field(bitmap_for_form(object), BITMAP_FIELD_WIDTH));
 }
 
-static const recorz_mvp_heap_send_handler heap_send_handlers[RECORZ_MVP_OBJECT_METHOD_DESCRIPTOR + 1U] = {
-    [RECORZ_MVP_OBJECT_TRANSCRIPT] = dispatch_transcript_family,
-    [RECORZ_MVP_OBJECT_DISPLAY] = dispatch_display_family,
-    [RECORZ_MVP_OBJECT_FORM] = dispatch_form_family,
-    [RECORZ_MVP_OBJECT_BITMAP] = dispatch_bitmap_family,
-    [RECORZ_MVP_OBJECT_BITBLT] = dispatch_bitblt_family,
-    [RECORZ_MVP_OBJECT_GLYPHS] = dispatch_glyphs_family,
-    [RECORZ_MVP_OBJECT_FORM_FACTORY] = dispatch_form_factory_family,
-    [RECORZ_MVP_OBJECT_BITMAP_FACTORY] = dispatch_bitmap_factory_family,
-    [RECORZ_MVP_OBJECT_CLASS] = dispatch_class_family,
+static void execute_entry_form_height(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    push(heap_get_field(bitmap_for_form(object), BITMAP_FIELD_HEIGHT));
+}
+
+static void execute_entry_class_instance_kind(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    push(heap_get_field(object, CLASS_FIELD_INSTANCE_KIND));
+}
+
+static const recorz_mvp_method_entry_handler method_entry_handlers[RECORZ_MVP_METHOD_ENTRY_COUNT] = {
+    [RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW] = execute_entry_transcript_show,
+    [RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR] = execute_entry_transcript_cr,
+    [RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM] = execute_entry_display_default_form,
+    [RECORZ_MVP_METHOD_ENTRY_DISPLAY_CLEAR] = execute_entry_display_clear,
+    [RECORZ_MVP_METHOD_ENTRY_DISPLAY_WRITE_STRING] = execute_entry_display_write_string,
+    [RECORZ_MVP_METHOD_ENTRY_DISPLAY_NEWLINE] = execute_entry_display_newline,
+    [RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR] = execute_entry_bitblt_fill_form_color,
+    [RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE] = execute_entry_bitblt_copy_bitmap_to_form_x_y_scale,
+    [RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR] =
+        execute_entry_bitblt_copy_bitmap_to_form_x_y_scale_color,
+    [RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR] =
+        execute_entry_bitblt_copy_bitmap_source_x_source_y_width_height_to_form_x_y_scale_color,
+    [RECORZ_MVP_METHOD_ENTRY_GLYPHS_AT] = execute_entry_glyphs_at,
+    [RECORZ_MVP_METHOD_ENTRY_FORM_FACTORY_FROM_BITS] = execute_entry_form_factory_from_bits,
+    [RECORZ_MVP_METHOD_ENTRY_BITMAP_FACTORY_MONO_WIDTH_HEIGHT] = execute_entry_bitmap_factory_mono_width_height,
+    [RECORZ_MVP_METHOD_ENTRY_BITMAP_WIDTH] = execute_entry_bitmap_width,
+    [RECORZ_MVP_METHOD_ENTRY_BITMAP_HEIGHT] = execute_entry_bitmap_height,
+    [RECORZ_MVP_METHOD_ENTRY_FORM_CLEAR] = execute_entry_form_clear,
+    [RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING] = execute_entry_form_write_string,
+    [RECORZ_MVP_METHOD_ENTRY_FORM_NEWLINE] = execute_entry_form_newline,
+    [RECORZ_MVP_METHOD_ENTRY_FORM_BITS] = execute_entry_form_bits,
+    [RECORZ_MVP_METHOD_ENTRY_FORM_WIDTH] = execute_entry_form_width,
+    [RECORZ_MVP_METHOD_ENTRY_FORM_HEIGHT] = execute_entry_form_height,
+    [RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND] = execute_entry_class_instance_kind,
 };
 
 static void dispatch_heap_object_send(
@@ -1763,8 +1935,9 @@ static void dispatch_heap_object_send(
 ) {
     const struct recorz_mvp_heap_object *class_object;
     const struct recorz_mvp_heap_object *method_object;
-    recorz_mvp_heap_send_handler handler;
-    uint32_t primitive_kind;
+    const struct recorz_mvp_method_entry_spec *entry_spec;
+    recorz_mvp_method_entry_handler handler;
+    uint32_t entry;
 
     if (selector == RECORZ_MVP_SELECTOR_CLASS) {
         push(object_value(object->class_handle));
@@ -1775,15 +1948,16 @@ static void dispatch_heap_object_send(
     if (method_object == 0) {
         machine_panic("selector is not understood by receiver class");
     }
-    primitive_kind = method_descriptor_primitive_kind(method_object);
-    if (primitive_kind > RECORZ_MVP_OBJECT_METHOD_DESCRIPTOR) {
-        machine_panic("unsupported heap object kind");
+    entry = method_descriptor_entry(method_object);
+    entry_spec = method_entry_spec(entry);
+    if (entry_spec->selector != selector || entry_spec->argument_count != argument_count) {
+        machine_panic("method descriptor entry does not match send site");
     }
-    handler = heap_send_handlers[primitive_kind];
+    handler = method_entry_handlers[entry];
     if (handler == 0) {
-        machine_panic("unsupported heap object kind");
+        machine_panic("method descriptor entry handler is not installed");
     }
-    handler(object, selector, receiver, arguments, text);
+    handler(object, receiver, arguments, text);
 }
 
 static void dispatch_send(const struct recorz_mvp_program *program, uint8_t selector, uint16_t argument_count) {

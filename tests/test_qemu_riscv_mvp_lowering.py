@@ -245,7 +245,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
                 + (field_index * struct.calcsize(mvp.SEED_FIELD_FORMAT)),
             )
-            for field_index in range(3)
+            for field_index in range(4)
         ]
         first_glyph_object_index = struct.unpack_from(
             "<H",
@@ -264,13 +264,14 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(reserved, 0)
         self.assertEqual(first_object_header, (mvp.SEED_OBJECT_TRANSCRIPT, 0, 141))
         self.assertEqual(class_class_header, (mvp.SEED_OBJECT_CLASS, 4, 140))
-        self.assertEqual(first_method_header, (mvp.SEED_OBJECT_METHOD_DESCRIPTOR, 3, 153))
+        self.assertEqual(first_method_header, (mvp.SEED_OBJECT_METHOD_DESCRIPTOR, 4, 153))
         self.assertEqual(
             first_method_fields,
             [
                 (mvp.SEED_FIELD_SMALL_INTEGER, mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_INSTANCE_KIND"]),
                 (mvp.SEED_FIELD_SMALL_INTEGER, 0),
                 (mvp.SEED_FIELD_SMALL_INTEGER, mvp.SEED_OBJECT_CLASS),
+                (mvp.SEED_FIELD_SMALL_INTEGER, mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND"]),
             ],
         )
         self.assertEqual(first_global_binding, (mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_TRANSCRIPT"], 0))
