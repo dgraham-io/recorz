@@ -579,3 +579,9 @@
 - Added small helpers that derive boot object field specs, small-integer payload tuples, and glyph references directly from parsed `RecorzKernelBootObject:` declarations, then rebuilt the compatibility constants from those source-owned declarations.
 - Also switched the live `BITMAP_STORAGE_FRAMEBUFFER`, `BITMAP_STORAGE_GLYPH_MONO`, and `GLYPH_FALLBACK_CODE` compatibility values to derive from the source-declared framebuffer/glyph/behavior metadata instead of hard-coded Python integers.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Remove Dead Historical Method-Shape Constants
+- Removed the remaining dead builder-side constants and tables for historical accessor/field-send/root-send/root-value/interpreted method shapes, which are no longer part of the active MVP image path.
+- Simplified the host-side image inspector so method-entry validation now recognizes only the two live implementation cases: primitive-backed entries and compiled-method entries.
+- Kept the boot image summary unchanged, with the dead method-shape object counts still reporting as zero through compatibility paths while removing stale semantic truth from the builder and inspector.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
