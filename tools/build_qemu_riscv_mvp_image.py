@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import struct
 import sys
@@ -14,7 +13,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 KERNEL_MVP_ROOT = ROOT / "kernel" / "mvp"
-KERNEL_MVP_MANIFEST_PATH = KERNEL_MVP_ROOT / "manifest.json"
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
@@ -213,6 +211,9 @@ KERNEL_CLASS_NAME_TO_OBJECT_KIND = {
     "TextMetrics": SEED_OBJECT_TEXT_METRICS,
     "TextBehavior": SEED_OBJECT_TEXT_BEHAVIOR,
     "Class": SEED_OBJECT_CLASS,
+}
+KERNEL_OBJECT_KIND_TO_CLASS_NAME = {
+    object_kind: class_name for class_name, object_kind in KERNEL_CLASS_NAME_TO_OBJECT_KIND.items()
 }
 
 
@@ -441,26 +442,16 @@ def parse_kernel_method_chunk(
 
 
 def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
-    entry_definitions = {
-        entry_name: (owner_kind, selector, argument_count)
-        for entry_name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS
-    }
-    manifest_data = json.loads(KERNEL_MVP_MANIFEST_PATH.read_text(encoding="utf-8"))
-    file_specs = manifest_data.get("files")
     method_sources: dict[str, KernelMethodSource] = {}
     seen_class_names: set[str] = set()
+    class_sources_by_kind: dict[int, tuple[KernelClassHeader, str, dict[tuple[str, int], tuple[str, str | None, str]]]] = {}
+    expected_signatures_by_kind: dict[int, set[tuple[str, int]]] = {}
 
-    if not isinstance(file_specs, dict):
-        raise LoweringError("kernel MVP manifest is missing a files table")
-    for relative_path, class_spec in file_specs.items():
-        if not isinstance(relative_path, str) or not isinstance(class_spec, dict):
-            raise LoweringError("kernel MVP manifest file entries are invalid")
-        entry_names = class_spec.get("entries")
-        if not isinstance(entry_names, list) or not all(isinstance(entry_name, str) for entry_name in entry_names):
-            raise LoweringError(f"kernel MVP manifest entries are invalid for file {relative_path}")
-        method_path = KERNEL_MVP_ROOT / relative_path
-        if not method_path.is_file():
-            raise LoweringError(f"kernel MVP method source is missing: {method_path}")
+    for _entry_name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS:
+        expected_signatures_by_kind.setdefault(owner_kind, set()).add((selector, argument_count))
+
+    for method_path in sorted(KERNEL_MVP_ROOT.glob("*.rz")):
+        relative_path = method_path.name
         chunk_sources = split_kernel_method_chunks(method_path.read_text(encoding="utf-8"))
         if not chunk_sources:
             raise LoweringError(f"kernel MVP class file {relative_path} is empty")
@@ -488,52 +479,59 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
                     f"kernel MVP class file {relative_path} duplicates method {selector}/{argument_count}"
                 )
             chunk_definitions[signature] = (implementation_kind, primitive_binding, chunk_source)
-        for entry_name in entry_names:
-            owner_kind, selector, argument_count = entry_definitions.get(entry_name, (None, None, None))
-
-            if owner_kind is None:
-                raise LoweringError(f"kernel MVP manifest references unknown method entry {entry_name}")
-            if owner_kind != expected_class_kind:
-                raise LoweringError(
-                    f"kernel MVP manifest class {class_name} includes method entry {entry_name} for a different owner kind"
-                )
-            if entry_name in method_sources:
-                raise LoweringError(f"kernel MVP manifest duplicates method entry {entry_name}")
-            chunk_definition = chunk_definitions.get((selector, argument_count))
-            if chunk_definition is None:
-                raise LoweringError(
-                    f"kernel MVP class file {relative_path} is missing method {selector}/{argument_count} for entry {entry_name}"
-                )
-            expected_primitive_binding = PRIMITIVE_KERNEL_METHOD_BINDING_BY_ENTRY_NAME.get(entry_name)
-            expected_implementation_kind = (
-                KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE
-                if expected_primitive_binding is not None
-                else KERNEL_METHOD_IMPLEMENTATION_COMPILED
-            )
-            implementation_kind, primitive_binding, chunk_source = chunk_definition
-            if implementation_kind != expected_implementation_kind:
-                raise LoweringError(
-                    f"kernel MVP method {class_name}>>{selector} in {relative_path} is declared as "
-                    f"{implementation_kind} but entry {entry_name} expects {expected_implementation_kind}"
-                )
-            if primitive_binding != expected_primitive_binding:
-                raise LoweringError(
-                    f"kernel MVP method {class_name}>>{selector} in {relative_path} declares primitive "
-                    f"{primitive_binding!r} but entry {entry_name} expects {expected_primitive_binding!r}"
-                )
-            method_sources[entry_name] = KernelMethodSource(
-                class_name=class_name,
-                instance_variables=class_header.instance_variables,
-                relative_path=relative_path,
-                selector=selector,
-                implementation_kind=implementation_kind,
-                primitive_binding=primitive_binding,
-                source_text=chunk_source,
-            )
-        if len(chunk_definitions) != len(entry_names):
+        expected_signatures = expected_signatures_by_kind.get(expected_class_kind)
+        if expected_signatures is None:
+            raise LoweringError(f"kernel MVP class file {relative_path} declares unsupported class {class_name}")
+        if set(chunk_definitions) != expected_signatures:
             raise LoweringError(
-                f"kernel MVP class file {relative_path} contains method chunks that are not declared in the manifest"
+                f"kernel MVP class file {relative_path} does not match the expected built-in method signatures"
             )
+        if expected_class_kind in class_sources_by_kind:
+            raise LoweringError(f"kernel MVP object kind {expected_class_kind} is declared more than once")
+        class_sources_by_kind[expected_class_kind] = (class_header, relative_path, chunk_definitions)
+
+    for entry_name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS:
+        class_source = class_sources_by_kind.get(owner_kind)
+        if class_source is None:
+            owner_class_name = KERNEL_OBJECT_KIND_TO_CLASS_NAME.get(owner_kind, f"<object kind {owner_kind}>")
+            raise LoweringError(
+                f"kernel MVP source tree is missing class {owner_class_name} for entry {entry_name}"
+            )
+        class_header, relative_path, chunk_definitions = class_source
+        chunk_definition = chunk_definitions.get((selector, argument_count))
+        if chunk_definition is None:
+            raise LoweringError(
+                f"kernel MVP class file {relative_path} is missing method {selector}/{argument_count} for entry {entry_name}"
+            )
+        expected_primitive_binding = PRIMITIVE_KERNEL_METHOD_BINDING_BY_ENTRY_NAME.get(entry_name)
+        expected_implementation_kind = (
+            KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE
+            if expected_primitive_binding is not None
+            else KERNEL_METHOD_IMPLEMENTATION_COMPILED
+        )
+        implementation_kind, primitive_binding, chunk_source = chunk_definition
+        if implementation_kind != expected_implementation_kind:
+            raise LoweringError(
+                f"kernel MVP method {class_header.class_name}>>{selector} in {relative_path} is declared as "
+                f"{implementation_kind} but entry {entry_name} expects {expected_implementation_kind}"
+            )
+        if primitive_binding != expected_primitive_binding:
+            raise LoweringError(
+                f"kernel MVP method {class_header.class_name}>>{selector} in {relative_path} declares primitive "
+                f"{primitive_binding!r} but entry {entry_name} expects {expected_primitive_binding!r}"
+            )
+        method_sources[entry_name] = KernelMethodSource(
+            class_name=class_header.class_name,
+            instance_variables=class_header.instance_variables,
+            relative_path=relative_path,
+            selector=selector,
+            implementation_kind=implementation_kind,
+            primitive_binding=primitive_binding,
+            source_text=chunk_source,
+        )
+
+    if len(class_sources_by_kind) != len(expected_signatures_by_kind):
+        raise LoweringError("kernel MVP source tree is missing one or more built-in classes")
     return method_sources
 
 

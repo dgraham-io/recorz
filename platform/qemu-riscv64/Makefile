@@ -10,7 +10,7 @@ LDFLAGS := -T $(CURDIR)/linker.ld
 
 EXAMPLE := $(ROOT)/examples/qemu_riscv_fb_demo.rz
 IMAGE_SCRIPT := $(ROOT)/tools/build_qemu_riscv_mvp_image.py
-KERNEL_MVP_SOURCES := $(ROOT)/kernel/mvp/manifest.json $(wildcard $(ROOT)/kernel/mvp/*.rz)
+KERNEL_MVP_SOURCES := $(wildcard $(ROOT)/kernel/mvp/*.rz)
 GENERATED_IMAGE := $(BUILD_DIR)/demo_image.bin
 GENERATED_IMAGE_ASM := $(BUILD_DIR)/demo_image_blob.S
 GENERATED_IMAGE_OBJECT := $(BUILD_DIR)/demo_image_blob.o

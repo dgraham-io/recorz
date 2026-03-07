@@ -242,7 +242,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
 
-    def test_loads_kernel_methods_from_manifest_files(self) -> None:
+    def test_loads_kernel_methods_from_class_source_files(self) -> None:
         sources = mvp.load_kernel_method_sources()
         transcript_show = sources["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW"]
         display_default_form = sources["RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM"]
@@ -250,6 +250,21 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         form_width = sources["RECORZ_MVP_METHOD_ENTRY_FORM_WIDTH"]
         form_newline = sources["RECORZ_MVP_METHOD_ENTRY_FORM_NEWLINE"]
 
+        self.assertEqual(len(sources), len(mvp.METHOD_ENTRY_DEFINITIONS))
+        self.assertEqual(
+            {source.relative_path for source in sources.values()},
+            {
+                "BitBlt.rz",
+                "Bitmap.rz",
+                "BitmapFactory.rz",
+                "Class.rz",
+                "Display.rz",
+                "Form.rz",
+                "FormFactory.rz",
+                "Glyphs.rz",
+                "Transcript.rz",
+            },
+        )
         self.assertEqual(transcript_show.class_name, "Transcript")
         self.assertEqual(transcript_show.instance_variables, ())
         self.assertEqual(transcript_show.relative_path, "Transcript.rz")
