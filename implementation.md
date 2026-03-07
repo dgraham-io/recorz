@@ -531,3 +531,9 @@
 - Added explicit builder validation for per-family contiguous `order:` ranges and extended the focused lowering regressions to lock that the active before/after boot object specs are derived from `KERNEL_BOOT_OBJECT_DECLARATIONS_BY_NAME`.
 - Kept the generated image shape unchanged while moving the live fixed singleton/root object graph and export semantics onto kernel-owned declarations.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Move Glyph Family Metadata Into Kernel Source
+- Added `RecorzKernelGlyphBitmapFamily:` declaration syntax and declared the glyph bitmap family in [kernel/mvp/Bitmap.rz](/Users/david/repos/recorz/kernel/mvp/Bitmap.rz), so the glyph name prefix, class, dimensions, storage kind, and count are now kernel-owned metadata.
+- Updated the builder to parse that glyph family declaration, derive the `GLYPH_BITMAP_*` compatibility views from it, and materialize the glyph bitmap boot family in `FIXED_BOOT_GRAPH_SPEC` from the parsed source declaration instead of a Python-authored family spec.
+- Extended the method-source loader to skip glyph family declaration chunks and added focused lowering regressions for the parsed glyph family declaration and the source-derived glyph metadata.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

@@ -306,6 +306,18 @@ class KernelBootObjectDeclaration:
 
 
 @dataclass(frozen=True)
+class KernelGlyphBitmapFamilyDeclaration:
+    name_prefix: str
+    family_name: str
+    class_name: str
+    width: int
+    height: int
+    storage_kind: int
+    count: int
+    relative_path: str
+
+
+@dataclass(frozen=True)
 class KernelClassHeader:
     class_name: str
     descriptor_order: int
@@ -460,15 +472,6 @@ class SeedBindings:
     global_bindings: list[tuple[int, int]]
     root_bindings: list[tuple[int, int]]
 
-GLYPH_BITMAP_NAME_PREFIX = "GlyphBitmap"
-GLYPH_BITMAP_WIDTH = 5
-GLYPH_BITMAP_HEIGHT = 7
-GLYPH_BITMAP_CODE_COUNT = 128
-GLYPH_BITMAP_BASE_FIELD_VALUES = (
-    GLYPH_BITMAP_WIDTH,
-    GLYPH_BITMAP_HEIGHT,
-    BITMAP_STORAGE_GLYPH_MONO,
-)
 TRANSCRIPT_LAYOUT_FIELD_VALUES = (24, 24, 4, 2)
 TRANSCRIPT_STYLE_FIELD_VALUES = (0x00486020, 0x00F2F2F2)
 FRAMEBUFFER_BITMAP_FIELD_VALUES = (640, 480, BITMAP_STORAGE_FRAMEBUFFER, 0)
@@ -485,16 +488,6 @@ TRANSCRIPT_BEHAVIOR_BOOT_FIELD_SPECS = (
 def build_small_integer_boot_field_specs(field_values: tuple[int, ...]) -> tuple[tuple[str, int], ...]:
     return tuple((FIELD_SPEC_SMALL_INTEGER, field_value) for field_value in field_values)
 
-
-def build_glyph_bitmap_boot_specs() -> list[BootObjectSpec]:
-    return [
-        BootObjectSpec(
-            f"{GLYPH_BITMAP_NAME_PREFIX}{glyph_index}",
-            "Bitmap",
-            build_small_integer_boot_field_specs(GLYPH_BITMAP_BASE_FIELD_VALUES + (glyph_index,)),
-        )
-        for glyph_index in range(GLYPH_BITMAP_CODE_COUNT)
-    ]
 
 def build_boot_object_specs_from_declarations(
     boot_object_declarations_by_name: dict[str, KernelBootObjectDeclaration],
@@ -528,6 +521,7 @@ def build_boot_object_specs_from_declarations(
 
 def build_fixed_boot_graph_spec(
     boot_object_declarations_by_name: dict[str, KernelBootObjectDeclaration],
+    glyph_bitmap_family_declaration: KernelGlyphBitmapFamilyDeclaration,
 ) -> FixedBootGraphSpec:
     return FixedBootGraphSpec(
         (
@@ -535,7 +529,11 @@ def build_fixed_boot_graph_spec(
                 "before_glyphs",
                 build_boot_object_specs_from_declarations(boot_object_declarations_by_name, "before_glyphs"),
             ),
-            BootObjectFamilySpec("glyph_bitmaps", tuple(build_glyph_bitmap_boot_specs()), collect_object_indices=True),
+            BootObjectFamilySpec(
+                glyph_bitmap_family_declaration.family_name,
+                tuple(build_glyph_bitmap_boot_specs(glyph_bitmap_family_declaration)),
+                collect_object_indices=True,
+            ),
             BootObjectFamilySpec(
                 "after_glyphs",
                 build_boot_object_specs_from_declarations(boot_object_declarations_by_name, "after_glyphs"),
@@ -595,6 +593,11 @@ KERNEL_CLASS_HEADER_PATTERN = re.compile(
 KERNEL_BOOT_OBJECT_HEADER_PATTERN = re.compile(
     r"^RecorzKernelBootObject:\s*#(?P<name>[A-Za-z_]\w*)\s+family:\s*#(?P<family_name>[A-Za-z_]\w*)"
     r"\s+order:\s*(?P<family_order>\d+)\s+class:\s*#(?P<class_name>[A-Za-z_]\w*)$"
+)
+KERNEL_GLYPH_BITMAP_FAMILY_PATTERN = re.compile(
+    r"^RecorzKernelGlyphBitmapFamily:\s*#(?P<name_prefix>[A-Za-z_]\w*)\s+family:\s*#(?P<family_name>[A-Za-z_]\w*)"
+    r"\s+class:\s*#(?P<class_name>[A-Za-z_]\w*)\s+width:\s*(?P<width>\d+)\s+height:\s*(?P<height>\d+)"
+    r"\s+storageKind:\s*(?P<storage_kind>\d+)\s+count:\s*(?P<count>\d+)$"
 )
 KERNEL_BOOT_OBJECT_ATTRIBUTE_PATTERN = re.compile(
     r"^(?P<attribute_name>fields|globalExports|rootExports):\s*'(?P<attribute_value>[^']*)'$"
@@ -744,6 +747,26 @@ def parse_kernel_boot_object_chunk(chunk_source: str, relative_path: str) -> Ker
     )
 
 
+def parse_kernel_glyph_bitmap_family_chunk(
+    chunk_source: str,
+    relative_path: str,
+) -> KernelGlyphBitmapFamilyDeclaration:
+    normalized_header = " ".join(line.strip() for line in chunk_source.splitlines() if line.strip())
+    match = KERNEL_GLYPH_BITMAP_FAMILY_PATTERN.fullmatch(normalized_header)
+    if match is None:
+        raise LoweringError(f"kernel MVP glyph bitmap family chunk in {relative_path} has an invalid header")
+    return KernelGlyphBitmapFamilyDeclaration(
+        name_prefix=match.group("name_prefix"),
+        family_name=re.sub(r"(?<!^)(?=[A-Z])", "_", match.group("family_name")).lower(),
+        class_name=match.group("class_name"),
+        width=int(match.group("width")),
+        height=int(match.group("height")),
+        storage_kind=int(match.group("storage_kind")),
+        count=int(match.group("count")),
+        relative_path=relative_path,
+    )
+
+
 def load_kernel_class_headers() -> dict[str, KernelClassHeader]:
     class_headers_by_name: dict[str, KernelClassHeader] = {}
 
@@ -835,7 +858,66 @@ def load_kernel_boot_object_declarations() -> dict[str, KernelBootObjectDeclarat
 
 
 KERNEL_BOOT_OBJECT_DECLARATIONS_BY_NAME = load_kernel_boot_object_declarations()
-FIXED_BOOT_GRAPH_SPEC = build_fixed_boot_graph_spec(KERNEL_BOOT_OBJECT_DECLARATIONS_BY_NAME)
+
+
+def load_kernel_glyph_bitmap_family_declaration() -> KernelGlyphBitmapFamilyDeclaration:
+    glyph_family_declaration: KernelGlyphBitmapFamilyDeclaration | None = None
+
+    for method_path in sorted(KERNEL_MVP_ROOT.glob("*.rz")):
+        relative_path = method_path.name
+        chunk_sources = split_kernel_method_chunks(method_path.read_text(encoding="utf-8"))
+        if not chunk_sources:
+            raise LoweringError(f"kernel MVP class file {relative_path} is empty")
+        class_header = parse_kernel_class_header(chunk_sources[0], relative_path)
+
+        for chunk_source in chunk_sources[1:]:
+            if not chunk_source.lstrip().startswith("RecorzKernelGlyphBitmapFamily:"):
+                continue
+            declaration = parse_kernel_glyph_bitmap_family_chunk(chunk_source, relative_path)
+            if declaration.class_name != class_header.class_name:
+                raise LoweringError(
+                    f"kernel MVP glyph bitmap family in {relative_path} must declare class #{class_header.class_name}"
+                )
+            if glyph_family_declaration is not None:
+                raise LoweringError("kernel MVP glyph bitmap family is declared more than once")
+            glyph_family_declaration = declaration
+
+    if glyph_family_declaration is None:
+        raise LoweringError("kernel MVP glyph bitmap family must be declared once in kernel source")
+    return glyph_family_declaration
+
+
+KERNEL_GLYPH_BITMAP_FAMILY_DECLARATION = load_kernel_glyph_bitmap_family_declaration()
+GLYPH_BITMAP_NAME_PREFIX = KERNEL_GLYPH_BITMAP_FAMILY_DECLARATION.name_prefix
+GLYPH_BITMAP_WIDTH = KERNEL_GLYPH_BITMAP_FAMILY_DECLARATION.width
+GLYPH_BITMAP_HEIGHT = KERNEL_GLYPH_BITMAP_FAMILY_DECLARATION.height
+GLYPH_BITMAP_CODE_COUNT = KERNEL_GLYPH_BITMAP_FAMILY_DECLARATION.count
+GLYPH_BITMAP_BASE_FIELD_VALUES = (
+    GLYPH_BITMAP_WIDTH,
+    GLYPH_BITMAP_HEIGHT,
+    KERNEL_GLYPH_BITMAP_FAMILY_DECLARATION.storage_kind,
+)
+
+
+def build_glyph_bitmap_boot_specs(
+    glyph_family_declaration: KernelGlyphBitmapFamilyDeclaration,
+) -> list[BootObjectSpec]:
+    return [
+        BootObjectSpec(
+            f"{glyph_family_declaration.name_prefix}{glyph_index}",
+            glyph_family_declaration.class_name,
+            build_small_integer_boot_field_specs(
+                (glyph_family_declaration.width, glyph_family_declaration.height, glyph_family_declaration.storage_kind, glyph_index)
+            ),
+        )
+        for glyph_index in range(glyph_family_declaration.count)
+    ]
+
+
+FIXED_BOOT_GRAPH_SPEC = build_fixed_boot_graph_spec(
+    KERNEL_BOOT_OBJECT_DECLARATIONS_BY_NAME,
+    KERNEL_GLYPH_BITMAP_FAMILY_DECLARATION,
+)
 
 
 def upper_snake_name(name: str) -> str:
@@ -947,6 +1029,8 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
 
         for chunk_source in chunk_sources[1:]:
             if chunk_source.lstrip().startswith("RecorzKernelBootObject:"):
+                continue
+            if chunk_source.lstrip().startswith("RecorzKernelGlyphBitmapFamily:"):
                 continue
             selector, argument_count, implementation_kind, primitive_binding = parse_kernel_method_chunk(
                 class_name,

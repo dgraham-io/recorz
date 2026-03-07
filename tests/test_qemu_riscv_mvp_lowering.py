@@ -391,6 +391,24 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ),
         )
 
+    def test_parses_kernel_glyph_bitmap_family_chunk(self) -> None:
+        self.assertEqual(
+            mvp.parse_kernel_glyph_bitmap_family_chunk(
+                "RecorzKernelGlyphBitmapFamily: #GlyphBitmap family: #glyphBitmaps class: #Bitmap width: 5 height: 7 storageKind: 2 count: 128",
+                "Bitmap.rz",
+            ),
+            mvp.KernelGlyphBitmapFamilyDeclaration(
+                "GlyphBitmap",
+                "glyph_bitmaps",
+                "Bitmap",
+                5,
+                7,
+                2,
+                128,
+                "Bitmap.rz",
+            ),
+        )
+
     def test_parses_primitive_kernel_method_chunk(self) -> None:
         self.assertEqual(
             mvp.parse_kernel_method_chunk(
@@ -815,6 +833,19 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
 
     def test_declares_glyph_bitmap_boot_specs(self) -> None:
+        self.assertEqual(
+            mvp.KERNEL_GLYPH_BITMAP_FAMILY_DECLARATION,
+            mvp.KernelGlyphBitmapFamilyDeclaration(
+                "GlyphBitmap",
+                "glyph_bitmaps",
+                "Bitmap",
+                5,
+                7,
+                2,
+                128,
+                "Bitmap.rz",
+            ),
+        )
         self.assertEqual(mvp.GLYPH_BITMAP_NAME_PREFIX, "GlyphBitmap")
         self.assertEqual(mvp.GLYPH_BITMAP_WIDTH, 5)
         self.assertEqual(mvp.GLYPH_BITMAP_HEIGHT, 7)

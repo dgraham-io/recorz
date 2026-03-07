@@ -4,6 +4,8 @@ RecorzKernelBootObject: #FramebufferBitmap family: #beforeGlyphs order: 8 class:
 fields: 'small:640 small:480 small:1 small:0'
 rootExports: 'framebuffer_bitmap'
 !
+RecorzKernelGlyphBitmapFamily: #GlyphBitmap family: #glyphBitmaps class: #Bitmap width: 5 height: 7 storageKind: 2 count: 128
+!
 width
     ^width
 !
