@@ -243,24 +243,6 @@ BITMAP_STORAGE_FRAMEBUFFER = 1
 BITMAP_STORAGE_GLYPH_MONO = 2
 GLYPH_FALLBACK_CODE = 32
 
-KERNEL_CLASS_NAME_TO_OBJECT_KIND = {
-    class_name: constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, class_name)
-    for class_name in (
-        "Transcript",
-        "Display",
-        "Form",
-        "Bitmap",
-        "BitBlt",
-        "Glyphs",
-        "FormFactory",
-        "BitmapFactory",
-        "TextLayout",
-        "TextStyle",
-        "TextMetrics",
-        "TextBehavior",
-        "Class",
-    )
-}
 FIELD_SPEC_SMALL_INTEGER = "small_integer"
 FIELD_SPEC_OBJECT_REF = "object_ref"
 FIELD_SPEC_GLYPH_REF = "glyph_ref"
@@ -317,6 +299,12 @@ class KernelClassHeader:
 
 
 @dataclass(frozen=True)
+class KernelClassSpec:
+    class_name: str
+    source_boot_order: int | None = None
+
+
+@dataclass(frozen=True)
 class BootObjectSpec:
     name: str
     object_kind_name: str
@@ -355,40 +343,39 @@ class SeedBindings:
     root_bindings: list[tuple[int, int]]
 
 
-KERNEL_CLASS_BOOT_ORDER = [
-    "Transcript",
-    "Display",
-    "BitBlt",
-    "Glyphs",
-    "FormFactory",
-    "BitmapFactory",
-    "Bitmap",
-    "Form",
-    "Class",
+KERNEL_CLASS_SPECS = [
+    KernelClassSpec("Class", source_boot_order=8),
+    KernelClassSpec("Transcript", source_boot_order=0),
+    KernelClassSpec("Display", source_boot_order=1),
+    KernelClassSpec("BitBlt", source_boot_order=2),
+    KernelClassSpec("Glyphs", source_boot_order=3),
+    KernelClassSpec("FormFactory", source_boot_order=4),
+    KernelClassSpec("BitmapFactory", source_boot_order=5),
+    KernelClassSpec("TextLayout"),
+    KernelClassSpec("TextStyle"),
+    KernelClassSpec("Bitmap", source_boot_order=6),
+    KernelClassSpec("Form", source_boot_order=7),
+    KernelClassSpec("TextMetrics"),
+    KernelClassSpec("TextBehavior"),
+    KernelClassSpec("MethodDescriptor"),
+    KernelClassSpec("MethodEntry"),
+    KernelClassSpec("Selector"),
+    KernelClassSpec("CompiledMethod"),
 ]
-CLASS_DESCRIPTOR_KIND_NAMES = [
-    "Class",
-    "Transcript",
-    "Display",
-    "BitBlt",
-    "Glyphs",
-    "FormFactory",
-    "BitmapFactory",
-    "TextLayout",
-    "TextStyle",
-    "Bitmap",
-    "Form",
-    "TextMetrics",
-    "TextBehavior",
-    "MethodDescriptor",
-    "MethodEntry",
-    "Selector",
-    "CompiledMethod",
-]
+KERNEL_SOURCE_CLASS_SPECS = sorted(
+    (spec for spec in KERNEL_CLASS_SPECS if spec.source_boot_order is not None),
+    key=lambda spec: spec.source_boot_order,
+)
+KERNEL_CLASS_BOOT_ORDER = [spec.class_name for spec in KERNEL_SOURCE_CLASS_SPECS]
+CLASS_DESCRIPTOR_KIND_NAMES = [spec.class_name for spec in KERNEL_CLASS_SPECS]
 CLASS_DESCRIPTOR_KIND_ORDER = [
     constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, kind_name)
     for kind_name in CLASS_DESCRIPTOR_KIND_NAMES
 ]
+KERNEL_CLASS_NAME_TO_OBJECT_KIND = {
+    spec.class_name: constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, spec.class_name)
+    for spec in KERNEL_SOURCE_CLASS_SPECS
+}
 SEED_LAYOUT_SECTION_NAMES = [
     "class_descriptors",
     "selectors",

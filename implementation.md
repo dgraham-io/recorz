@@ -376,3 +376,9 @@
 - Replaced the parallel `GLOBAL_NAME_TO_BOOT_OBJECT_NAME` and `SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME` tables with `build_boot_object_export_map()`, derived directly from the declared boot object family specs.
 - Extended the focused binding-map regression to assert the boot object export declarations that now drive the derived global/root maps.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Derive Kernel Class Orders From Specs
+- Added a small `KernelClassSpec` layer so the builder now declares kernel class descriptor order and source boot order in one place instead of keeping separate standalone class-order lists.
+- Derived `KERNEL_CLASS_BOOT_ORDER`, `CLASS_DESCRIPTOR_KIND_NAMES`, and `KERNEL_CLASS_NAME_TO_OBJECT_KIND` from those declared class specs without changing the generated seed image or target VM behavior.
+- Extended the focused lowering regressions to lock both the new class spec layer and the derived boot-order / descriptor-order lists.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

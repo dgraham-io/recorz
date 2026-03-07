@@ -414,6 +414,8 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.SEED_FIELD_KIND_DEFINITIONS[2], ("RECORZ_MVP_SEED_FIELD_OBJECT_INDEX", 2))
         self.assertEqual(mvp.OBJECT_KIND_SPECS[0], ("Transcript", "RECORZ_MVP_OBJECT_TRANSCRIPT"))
         self.assertEqual(mvp.OBJECT_KIND_SPECS[-1], ("CompiledMethod", "RECORZ_MVP_OBJECT_COMPILED_METHOD"))
+        self.assertEqual(mvp.KERNEL_CLASS_SPECS[0], mvp.KernelClassSpec("Class", source_boot_order=8))
+        self.assertEqual(mvp.KERNEL_CLASS_SPECS[-1], mvp.KernelClassSpec("CompiledMethod"))
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["BitBlt"], mvp.SEED_OBJECT_BITBLT)
         self.assertEqual(mvp.OBJECT_KIND_DEFINITIONS[-1], ("RECORZ_MVP_OBJECT_COMPILED_METHOD", 22))
         self.assertEqual(
@@ -444,6 +446,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "Form",
                 "Class",
             ],
+        )
+        self.assertEqual(
+            [spec.class_name for spec in mvp.KERNEL_SOURCE_CLASS_SPECS],
+            mvp.KERNEL_CLASS_BOOT_ORDER,
         )
         self.assertEqual(
             mvp.METHOD_ENTRY_ORDER[:6],
@@ -641,6 +647,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "Selector",
                 "CompiledMethod",
             ],
+        )
+        self.assertEqual(
+            [spec.class_name for spec in mvp.KERNEL_CLASS_SPECS],
+            mvp.CLASS_DESCRIPTOR_KIND_NAMES,
         )
         self.assertEqual(
             mvp.CLASS_DESCRIPTOR_KIND_ORDER[:4],
