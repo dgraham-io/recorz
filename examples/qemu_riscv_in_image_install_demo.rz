@@ -1,0 +1,16 @@
+| method |
+method := KernelInstaller
+    compiledMethodWord0: 513
+    word1: 1027
+    word2: 13
+    word3: 0
+    instructionCount: 3.
+KernelInstaller
+    installCompiledMethod: method
+    onClass: Display class
+    selectorId: 2
+    argumentCount: 0.
+Display clear.
+Display writeString: 'AAA'.
+Display cr.
+Display writeString: 'BBB'.

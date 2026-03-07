@@ -54,6 +54,7 @@
 #define BITMAP_STORAGE_FRAMEBUFFER RECORZ_MVP_BITMAP_STORAGE_FRAMEBUFFER
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
+#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_KERNEL_INSTALLER
 
 enum recorz_mvp_value_kind {
     RECORZ_MVP_VALUE_NIL = 0,
@@ -116,9 +117,9 @@ static struct recorz_mvp_value stack[STACK_LIMIT];
 static struct recorz_mvp_heap_object heap[HEAP_LIMIT];
 static uint32_t stack_size = 0U;
 static uint16_t heap_size = 0U;
-static uint16_t class_handles_by_kind[RECORZ_MVP_OBJECT_COMPILED_METHOD + 1U];
-static uint16_t selector_handles_by_id[RECORZ_MVP_SELECTOR_INSTANCE_KIND + 1U];
-static uint16_t global_handles[RECORZ_MVP_GLOBAL_BITMAP + 1U];
+static uint16_t class_handles_by_kind[MAX_OBJECT_KIND + 1U];
+static uint16_t selector_handles_by_id[RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT + 1U];
+static uint16_t global_handles[RECORZ_MVP_GLOBAL_KERNEL_INSTALLER + 1U];
 static uint16_t default_form_handle = 0U;
 static uint16_t framebuffer_bitmap_handle = 0U;
 static uint16_t next_dynamic_method_entry_execution_id = RECORZ_MVP_METHOD_ENTRY_COUNT;
@@ -152,6 +153,12 @@ static uint32_t compiled_method_instruction_word(const struct recorz_mvp_heap_ob
 static uint8_t compiled_method_instruction_opcode(uint32_t instruction);
 static uint8_t compiled_method_instruction_operand_a(uint32_t instruction);
 static uint16_t compiled_method_instruction_operand_b(uint32_t instruction);
+static void install_compiled_method_update(
+    const struct recorz_mvp_heap_object *class_object,
+    uint8_t selector,
+    uint16_t argument_count,
+    uint16_t compiled_method_handle
+);
 
 static void panic_put_u32(uint32_t value) {
     char digits[10];
@@ -333,6 +340,8 @@ static const char *object_kind_name(uint8_t kind) {
             return "Selector";
         case RECORZ_MVP_OBJECT_COMPILED_METHOD:
             return "CompiledMethod";
+        case RECORZ_MVP_OBJECT_KERNEL_INSTALLER:
+            return "KernelInstaller";
     }
     return "UnknownObject";
 }
@@ -464,7 +473,7 @@ static struct recorz_mvp_value object_value(uint16_t handle) {
 }
 
 static struct recorz_mvp_value global_value(uint8_t global_id) {
-    if (global_id == 0U || global_id > RECORZ_MVP_GLOBAL_BITMAP || global_handles[global_id] == 0U) {
+    if (global_id == 0U || global_id > RECORZ_MVP_GLOBAL_KERNEL_INSTALLER || global_handles[global_id] == 0U) {
         machine_panic("unknown global in MVP VM");
     }
     return object_value(global_handles[global_id]);
@@ -553,7 +562,7 @@ static uint16_t heap_allocate(uint8_t kind) {
 static uint16_t heap_allocate_seeded_class(uint8_t kind) {
     uint16_t handle = heap_allocate(kind);
 
-    if (kind <= RECORZ_MVP_OBJECT_COMPILED_METHOD && class_handles_by_kind[kind] != 0U) {
+    if (kind <= MAX_OBJECT_KIND && class_handles_by_kind[kind] != 0U) {
         heap_set_class(handle, class_handles_by_kind[kind]);
     }
     return handle;
@@ -706,7 +715,8 @@ static struct recorz_mvp_heap_object *mutable_method_descriptor_entry_object(con
 }
 
 static uint16_t selector_object_handle(uint8_t selector) {
-    if (selector == 0U || selector > RECORZ_MVP_SELECTOR_INSTANCE_KIND || selector_handles_by_id[selector] == 0U) {
+    if (selector == 0U || selector > RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT ||
+        selector_handles_by_id[selector] == 0U) {
         machine_panic("selector handle is not installed");
     }
     return selector_handles_by_id[selector];
@@ -789,7 +799,7 @@ static const struct recorz_mvp_heap_object *lookup_builtin_method_descriptor(
     if (method_object == 0) {
         machine_panic("class with methods is missing a method start");
     }
-    if (selector == 0U || selector > RECORZ_MVP_SELECTOR_INSTANCE_KIND) {
+    if (selector == 0U || selector > RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT) {
         machine_panic("selector id is out of range");
     }
     if (selector_handles_by_id[selector] == 0U) {
@@ -814,7 +824,7 @@ static const struct recorz_mvp_heap_object *lookup_builtin_method_descriptor(
 }
 
 static const struct recorz_mvp_heap_object *class_object_for_kind(uint8_t kind) {
-    if (kind == 0U || kind > RECORZ_MVP_OBJECT_COMPILED_METHOD || class_handles_by_kind[kind] == 0U) {
+    if (kind == 0U || kind > MAX_OBJECT_KIND || class_handles_by_kind[kind] == 0U) {
         machine_panic("method update class kind is out of range");
     }
     return (const struct recorz_mvp_heap_object *)heap_object(class_handles_by_kind[kind]);
@@ -850,7 +860,7 @@ static void validate_compiled_method(
         }
         switch (opcode) {
             case COMPILED_METHOD_OP_PUSH_GLOBAL:
-                if (operand_a < RECORZ_MVP_GLOBAL_TRANSCRIPT || operand_a > RECORZ_MVP_GLOBAL_BITMAP) {
+                if (operand_a < RECORZ_MVP_GLOBAL_TRANSCRIPT || operand_a > RECORZ_MVP_GLOBAL_KERNEL_INSTALLER) {
                     machine_panic("compiled method pushGlobal global id is out of range");
                 }
                 ++stack_depth;
@@ -875,7 +885,8 @@ static void validate_compiled_method(
                 ++stack_depth;
                 break;
             case COMPILED_METHOD_OP_SEND:
-                if (operand_a < RECORZ_MVP_SELECTOR_SHOW || operand_a > RECORZ_MVP_SELECTOR_INSTANCE_KIND) {
+                if (operand_a < RECORZ_MVP_SELECTOR_SHOW ||
+                    operand_a > RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT) {
                     machine_panic("compiled method send selector is out of range");
                 }
                 send_count = operand_b;
@@ -983,7 +994,8 @@ static void validate_class_method_table(
         entry_object = method_descriptor_entry_object(method_object);
         entry = method_entry_execution_id(entry_object);
         implementation_value = method_entry_implementation_value(entry_object);
-        if (selector < RECORZ_MVP_SELECTOR_SHOW || selector > RECORZ_MVP_SELECTOR_INSTANCE_KIND) {
+        if (selector < RECORZ_MVP_SELECTOR_SHOW ||
+            selector > RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT) {
             machine_panic("method descriptor selector is out of range");
         }
         if (argument_count > MAX_SEND_ARGS) {
@@ -1039,13 +1051,13 @@ static void initialize_class_handle_cache(const struct recorz_mvp_seed *seed) {
     uint16_t seed_index;
     uint16_t kind;
 
-    for (kind = 0U; kind <= RECORZ_MVP_OBJECT_COMPILED_METHOD; ++kind) {
+    for (kind = 0U; kind <= MAX_OBJECT_KIND; ++kind) {
         class_handles_by_kind[kind] = 0U;
     }
     for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
         const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(seeded_handles[seed_index]);
 
-        if (object->kind > RECORZ_MVP_OBJECT_COMPILED_METHOD || object->class_handle == 0U) {
+        if (object->kind > MAX_OBJECT_KIND || object->class_handle == 0U) {
             continue;
         }
         if (class_handles_by_kind[object->kind] == 0U) {
@@ -1058,7 +1070,7 @@ static void initialize_selector_handle_cache(const struct recorz_mvp_seed *seed)
     uint16_t seed_index;
     uint16_t selector_id;
 
-    for (selector_id = 0U; selector_id <= RECORZ_MVP_SELECTOR_INSTANCE_KIND; ++selector_id) {
+    for (selector_id = 0U; selector_id <= RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT; ++selector_id) {
         selector_handles_by_id[selector_id] = 0U;
     }
     for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
@@ -1616,10 +1628,10 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
     initialize_class_handle_cache(seed);
     initialize_selector_handle_cache(seed);
 
-    for (global_index = 0U; global_index <= RECORZ_MVP_GLOBAL_BITMAP; ++global_index) {
+    for (global_index = 0U; global_index <= RECORZ_MVP_GLOBAL_KERNEL_INSTALLER; ++global_index) {
         global_handles[global_index] = 0U;
     }
-    for (global_index = RECORZ_MVP_GLOBAL_TRANSCRIPT; global_index <= RECORZ_MVP_GLOBAL_BITMAP; ++global_index) {
+    for (global_index = RECORZ_MVP_GLOBAL_TRANSCRIPT; global_index <= RECORZ_MVP_GLOBAL_KERNEL_INSTALLER; ++global_index) {
         global_handles[global_index] = seed_handle_at(seed, seed->global_object_indices[global_index]);
     }
 
@@ -1923,6 +1935,93 @@ static void execute_entry_form_newline(
     (void)arguments;
     (void)text;
     form_newline(object);
+    push(receiver);
+}
+
+static void execute_entry_kernel_installer_compiled_method_word0_word1_word2_word3_instruction_count(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint16_t compiled_method_handle;
+    uint32_t instruction_count;
+    uint32_t instruction_index;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    instruction_count = small_integer_u32(
+        arguments[4],
+        "KernelInstaller instructionCount must be a non-negative small integer"
+    );
+    if (instruction_count == 0U || instruction_count > COMPILED_METHOD_MAX_INSTRUCTIONS) {
+        machine_panic("KernelInstaller instructionCount is out of range");
+    }
+    compiled_method_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_COMPILED_METHOD);
+    for (instruction_index = 0U; instruction_index < instruction_count; ++instruction_index) {
+        heap_set_field(
+            compiled_method_handle,
+            (uint8_t)instruction_index,
+            small_integer_value(
+                (int32_t)small_integer_u32(
+                    arguments[instruction_index],
+                    "KernelInstaller compiled method words must be non-negative small integers"
+                )
+            )
+        );
+    }
+    push(object_value(compiled_method_handle));
+}
+
+static void execute_entry_kernel_installer_install_compiled_method_on_class_selector_id_argument_count(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const struct recorz_mvp_heap_object *compiled_method;
+    const struct recorz_mvp_heap_object *class_object;
+    uint32_t selector_id;
+    uint32_t argument_count;
+
+    (void)object;
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("KernelInstaller installCompiledMethod:onClass:selectorId:argumentCount: expects a compiled method");
+    }
+    if (arguments[1].kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("KernelInstaller installCompiledMethod:onClass:selectorId:argumentCount: expects a class object");
+    }
+    compiled_method = heap_object_for_value(arguments[0]);
+    class_object = heap_object_for_value(arguments[1]);
+    if (compiled_method->kind != RECORZ_MVP_OBJECT_COMPILED_METHOD) {
+        machine_panic("KernelInstaller install expects a CompiledMethod");
+    }
+    if (class_object->kind != RECORZ_MVP_OBJECT_CLASS) {
+        machine_panic("KernelInstaller install expects a Class");
+    }
+    selector_id = small_integer_u32(
+        arguments[2],
+        "KernelInstaller selectorId must be a non-negative small integer"
+    );
+    argument_count = small_integer_u32(
+        arguments[3],
+        "KernelInstaller argumentCount must be a non-negative small integer"
+    );
+    if (selector_id == 0U || selector_id > RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT) {
+        machine_panic("KernelInstaller selectorId is out of range");
+    }
+    if (argument_count > MAX_SEND_ARGS) {
+        machine_panic("KernelInstaller argumentCount exceeds send capacity");
+    }
+    validate_compiled_method(compiled_method, argument_count);
+    install_compiled_method_update(
+        class_object,
+        (uint8_t)selector_id,
+        (uint16_t)argument_count,
+        heap_handle_for_object(compiled_method)
+    );
     push(receiver);
 }
 
@@ -2285,7 +2384,8 @@ static void apply_method_update_payload(const uint8_t *blob, uint32_t size) {
     if (reserved != 0U) {
         machine_panic("method update payload reserved field is nonzero");
     }
-    if (selector < RECORZ_MVP_SELECTOR_SHOW || selector > RECORZ_MVP_SELECTOR_INSTANCE_KIND) {
+    if (selector < RECORZ_MVP_SELECTOR_SHOW ||
+        selector > RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT) {
         machine_panic("method update payload selector is out of range");
     }
     if (argument_count > MAX_SEND_ARGS) {

@@ -782,6 +782,7 @@ OBJECT_KIND_SPECS = [
     for class_header in KERNEL_CLASS_HEADERS_IN_OBJECT_KIND_ORDER
 ]
 OBJECT_KIND_IDS, OBJECT_KIND_VALUES, OBJECT_KIND_DEFINITIONS = build_named_constant_maps(OBJECT_KIND_SPECS)
+MAX_SEED_OBJECT_KIND = max(OBJECT_KIND_VALUES.values())
 KERNEL_CLASS_NAME_TO_OBJECT_KIND = {
     class_name: constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, class_name)
     for class_name in KERNEL_CLASS_HEADERS_BY_NAME
@@ -807,6 +808,7 @@ SEED_OBJECT_METHOD_DESCRIPTOR = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALU
 SEED_OBJECT_METHOD_ENTRY = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "MethodEntry")
 SEED_OBJECT_SELECTOR = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "Selector")
 SEED_OBJECT_COMPILED_METHOD = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "CompiledMethod")
+SEED_OBJECT_KERNEL_INSTALLER = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "KernelInstaller")
 
 
 def kernel_instance_variable_index(class_name: str, field_name: str) -> int:
@@ -1513,7 +1515,7 @@ METHOD_ENTRY_SPECS = {
     for name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS
 }
 BUILTIN_METHODS_BY_KIND = {
-    kind: [] for kind in range(SEED_OBJECT_TRANSCRIPT, SEED_OBJECT_COMPILED_METHOD + 1)
+    kind: [] for kind in range(SEED_OBJECT_TRANSCRIPT, MAX_SEED_OBJECT_KIND + 1)
 }
 for entry_name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS:
     BUILTIN_METHODS_BY_KIND[owner_kind].append((selector, argument_count, entry_name))

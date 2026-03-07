@@ -1,0 +1,10 @@
+RecorzKernelClass: #KernelInstaller descriptorOrder: 17 objectKindOrder: 17 sourceBootOrder: 9 instanceVariableNames: ''
+!
+RecorzKernelBootObject: #KernelInstaller family: #beforeGlyphs order: 10 class: #KernelInstaller
+globalExports: 'KernelInstaller'
+!
+compiledMethodWord0: word0 word1: word1 word2: word2 word3: word3 instructionCount: instructionCount
+    <primitive: #kernelInstallerCompiledMethodWord0Word1Word2Word3InstructionCount>
+!
+installCompiledMethod: compiledMethod onClass: class selectorId: selectorId argumentCount: argumentCount
+    <primitive: #kernelInstallerInstallCompiledMethodOnClassSelectorIdArgumentCount>

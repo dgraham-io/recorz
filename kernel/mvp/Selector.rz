@@ -43,3 +43,7 @@ RecorzKernelSelector: #fromBits: order: 19
 RecorzKernelSelector: #class order: 20
 !
 RecorzKernelSelector: #instanceKind order: 21
+!
+RecorzKernelSelector: #compiledMethodWord0:word1:word2:word3:instructionCount: order: 22
+!
+RecorzKernelSelector: #installCompiledMethod:onClass:selectorId:argumentCount: order: 23

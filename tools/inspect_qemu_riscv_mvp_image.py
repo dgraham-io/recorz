@@ -144,7 +144,8 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
             if (
                 selector_id_field[0] != mvp.SEED_FIELD_SMALL_INTEGER
                 or selector_id_field[1] < mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SHOW"]
-                or selector_id_field[1] > mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_INSTANCE_KIND"]
+                or selector_id_field[1]
+                > mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT"]
             ):
                 raise ImageInspectionError("seed manifest selector object id field is invalid")
             if int(selector_id_field[1]) in selector_ids:
@@ -245,7 +246,8 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
                 if (
                     selector_id_field[0] != mvp.SEED_FIELD_SMALL_INTEGER
                     or selector_id_field[1] < mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SHOW"]
-                    or selector_id_field[1] > mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_INSTANCE_KIND"]
+                    or selector_id_field[1]
+                    > mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT"]
                 ):
                     raise ImageInspectionError("seed manifest selector object id field is invalid")
                 if argument_count_field[0] != mvp.SEED_FIELD_SMALL_INTEGER or argument_count_field[1] < 0:
@@ -335,6 +337,8 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
             globals_summary["Form"] = object_index
         elif binding_id == mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_BITMAP"]:
             globals_summary["Bitmap"] = object_index
+        elif binding_id == mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_KERNEL_INSTALLER"]:
+            globals_summary["KernelInstaller"] = object_index
         else:
             raise ImageInspectionError("seed manifest global binding id is unknown")
 

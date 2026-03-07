@@ -634,3 +634,10 @@
 - Relaxed the runtime send path so dynamically installed method entries can use VM-assigned execution ids outside the original seeded boot-image range, while keeping seeded boot-image validation unchanged.
 - Added a new QEMU demo and update chunk under `examples/` that installs a previously missing `Display>>cr` method over `fw_cfg`, plus an integration test that proves the demo panics without the update and renders successfully once the new selector is appended to `Display`'s live method table.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Add In-Image Installer Surface
+- Added a new source-declared `KernelInstaller` class/global under `kernel/mvp/KernelInstaller.rz`, two installer selectors in `kernel/mvp/Selector.rz`, and the matching primitive-backed method entries so the running image now owns a tiny object-level install surface instead of relying only on external `fw_cfg` payloads.
+- Extended the target VM in `platform/qemu-riscv64/vm.c` so `KernelInstaller` can allocate a live `CompiledMethod` object from up to four instruction words and install it onto a live class by selector id and argument count, reusing the same append-capable method-table growth path already added for host-driven updates.
+- Added `examples/qemu_riscv_in_image_install_demo.rz` plus a QEMU integration test that proves the running image can create and install `Display>>cr` for itself and render successfully without any host `UPDATE_PAYLOAD`, then updated the host inspector/runtime-lowering tests for the new class/global/selector/method counts.
+- Fixed the target seed/global array range in `platform/qemu-riscv64/vm.h` so the new `KernelInstaller` global no longer relied on undefined behavior.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

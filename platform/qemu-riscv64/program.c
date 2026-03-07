@@ -28,7 +28,7 @@ static void validate_instruction(
     switch (instruction->opcode) {
         case RECORZ_MVP_OP_PUSH_GLOBAL:
             if (instruction->operand_a < RECORZ_MVP_GLOBAL_TRANSCRIPT ||
-                instruction->operand_a > RECORZ_MVP_GLOBAL_BITMAP) {
+                instruction->operand_a > RECORZ_MVP_GLOBAL_KERNEL_INSTALLER) {
                 machine_panic("program manifest global operand is out of range");
             }
             return;
@@ -45,7 +45,7 @@ static void validate_instruction(
             return;
         case RECORZ_MVP_OP_SEND:
             if (instruction->operand_a < RECORZ_MVP_SELECTOR_SHOW ||
-                instruction->operand_a > RECORZ_MVP_SELECTOR_INSTANCE_KIND) {
+                instruction->operand_a > RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT) {
                 machine_panic("program manifest selector operand is out of range");
             }
             return;

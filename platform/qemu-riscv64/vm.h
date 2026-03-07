@@ -43,7 +43,7 @@ struct recorz_mvp_seed_object {
 struct recorz_mvp_seed {
     const struct recorz_mvp_seed_object *objects;
     uint16_t object_count;
-    uint16_t global_object_indices[RECORZ_MVP_GLOBAL_BITMAP + 1];
+    uint16_t global_object_indices[RECORZ_MVP_GLOBAL_KERNEL_INSTALLER + 1];
     uint16_t root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS + 1];
     const uint16_t *glyph_object_indices_by_code;
     uint16_t glyph_code_count;
