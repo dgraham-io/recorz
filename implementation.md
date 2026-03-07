@@ -483,3 +483,9 @@
 - Updated `build_seed_layout()` and `build_dynamic_seed_sections()` to consume those context-owned values while preserving the existing derived `CLASS_DESCRIPTOR_KIND_ORDER` and `SEED_LAYOUT_SECTION_SPECS` views for compatibility and focused tests.
 - Extended the focused lowering regressions to lock the new context-owned class order and seed layout spec alongside the existing boot image context coverage.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Move Dynamic Ordering Inputs Into Build Context
+- Added `selector_value_order`, `compiled_method_entry_order`, and `method_entry_order` to `BootImageSeedBuildContext` and to the initial dynamic seed build state, so dynamic section construction stops reaching into adjacent ordering globals during selector, compiled-method, and method-entry assembly.
+- Updated the dynamic build-step contracts to declare those ordering values as required initial state for the relevant sections, and switched `build_dynamic_seed_sections()` to pass the context-owned ordering inputs into both seed layout computation and per-section materialization.
+- Extended the focused lowering regressions to lock the new context-owned ordering tuples and the stronger dynamic build-step dependency declarations alongside the existing boot image context coverage.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

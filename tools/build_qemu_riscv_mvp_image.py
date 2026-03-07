@@ -379,6 +379,9 @@ class BootImageSpec:
 class BootImageSeedBuildContext:
     boot_image_spec: BootImageSpec
     class_kind_order: tuple[int, ...]
+    selector_value_order: tuple[int, ...]
+    compiled_method_entry_order: tuple[str, ...]
+    method_entry_order: tuple[str, ...]
     fixed_boot_object_count: int
     glyph_bitmap_boot_specs: tuple[BootObjectSpec, ...]
     seed_layout_section_specs: tuple[SeedLayoutSectionSpec, ...]
@@ -394,6 +397,9 @@ class DynamicSeedBuildState:
     class_kind_order: list[int]
     class_class_index: int
     class_indices: dict[int, int]
+    selector_value_order: tuple[int, ...]
+    compiled_method_entry_order: tuple[str, ...]
+    method_entry_order: tuple[str, ...]
     selector_indices_by_value: dict[int, int]
     compiled_method_indices: dict[str, int]
     method_entry_indices: dict[str, int]
@@ -1316,15 +1322,24 @@ def build_class_index_map(class_kind_order: list[int], class_class_index: int) -
 def build_seed_layout(
     base_object_index: int,
     class_kind_order: list[int] | tuple[int, ...],
+    selector_value_order: list[int] | tuple[int, ...] | None = None,
+    compiled_method_entry_order: list[str] | tuple[str, ...] | None = None,
+    method_entry_order: list[str] | tuple[str, ...] | None = None,
     seed_layout_section_specs: list[SeedLayoutSectionSpec] | tuple[SeedLayoutSectionSpec, ...] | None = None,
 ) -> dict[str, SeedLayoutSection]:
+    if selector_value_order is None:
+        selector_value_order = SELECTOR_VALUE_ORDER
+    if compiled_method_entry_order is None:
+        compiled_method_entry_order = COMPILED_METHOD_ENTRY_ORDER
+    if method_entry_order is None:
+        method_entry_order = METHOD_ENTRY_ORDER
     if seed_layout_section_specs is None:
         seed_layout_section_specs = SEED_LAYOUT_SECTION_SPECS
     section_count_sources = {
         "class_kind_order": len(class_kind_order),
-        "selector_value_order": len(SELECTOR_VALUE_ORDER),
-        "compiled_method_entry_order": len(COMPILED_METHOD_ENTRY_ORDER),
-        "method_entry_order": len(METHOD_ENTRY_ORDER),
+        "selector_value_order": len(selector_value_order),
+        "compiled_method_entry_order": len(compiled_method_entry_order),
+        "method_entry_order": len(method_entry_order),
         "builtin_method_definitions": sum(len(BUILTIN_METHODS_BY_KIND.get(class_kind, [])) for class_kind in class_kind_order),
     }
     layout: dict[str, SeedLayoutSection] = {}
@@ -1359,6 +1374,7 @@ def build_selector_seed_section(
     selector_indices_by_value, selector_seed_objects = build_selector_seed_objects(
         build_state.seed_layout["selectors"].start_index,
         build_state.class_indices[SEED_OBJECT_SELECTOR],
+        build_state.selector_value_order,
     )
     return DynamicSeedBuildStepResult(
         selector_seed_objects,
@@ -1374,6 +1390,7 @@ def build_compiled_method_seed_section(
     compiled_method_indices, compiled_method_seed_objects = build_compiled_method_seed_objects(
         build_state.seed_layout["compiled_methods"].start_index,
         build_state.class_indices[SEED_OBJECT_COMPILED_METHOD],
+        build_state.compiled_method_entry_order,
     )
     return DynamicSeedBuildStepResult(
         compiled_method_seed_objects,
@@ -1390,6 +1407,7 @@ def build_method_entry_seed_section(
         build_state.seed_layout["method_entries"].start_index,
         build_state.class_indices[SEED_OBJECT_METHOD_ENTRY],
         build_state.compiled_method_indices,
+        build_state.method_entry_order,
     )
     return DynamicSeedBuildStepResult(
         method_entry_seed_objects,
@@ -1454,7 +1472,7 @@ DYNAMIC_SEED_SECTION_SPECS = [
         "selector_value_order",
         build_selector_seed_section,
         0,
-        required_state_fields=("seed_layout", "class_indices"),
+        required_state_fields=("seed_layout", "class_indices", "selector_value_order"),
         state_update_fields=("selector_indices_by_value",),
     ),
     DynamicSeedSectionSpec(
@@ -1462,7 +1480,7 @@ DYNAMIC_SEED_SECTION_SPECS = [
         "compiled_method_entry_order",
         build_compiled_method_seed_section,
         1,
-        required_state_fields=("seed_layout", "class_indices"),
+        required_state_fields=("seed_layout", "class_indices", "compiled_method_entry_order"),
         state_update_fields=("compiled_method_indices",),
     ),
     DynamicSeedSectionSpec(
@@ -1471,7 +1489,7 @@ DYNAMIC_SEED_SECTION_SPECS = [
         build_method_entry_seed_section,
         2,
         ("compiled_methods",),
-        ("seed_layout", "class_indices", "compiled_method_indices"),
+        ("seed_layout", "class_indices", "compiled_method_indices", "method_entry_order"),
         ("method_entry_indices",),
     ),
     DynamicSeedSectionSpec(
@@ -1495,6 +1513,9 @@ INITIAL_DYNAMIC_SEED_STATE_FIELDS = (
     "class_kind_order",
     "class_class_index",
     "class_indices",
+    "selector_value_order",
+    "compiled_method_entry_order",
+    "method_entry_order",
 )
 
 
@@ -1548,6 +1569,9 @@ def build_boot_image_spec(
 def build_boot_image_seed_build_context(
     boot_image_spec: BootImageSpec,
     class_kind_order: list[int],
+    selector_value_order: list[int],
+    compiled_method_entry_order: list[str],
+    method_entry_order: list[str],
     seed_layout_section_specs: list[SeedLayoutSectionSpec],
     dynamic_seed_object_section_specs: list[DynamicSeedObjectSectionSpec],
     dynamic_seed_build_step_specs: list[DynamicSeedBuildStepSpec],
@@ -1560,6 +1584,9 @@ def build_boot_image_seed_build_context(
     return BootImageSeedBuildContext(
         boot_image_spec=boot_image_spec,
         class_kind_order=tuple(class_kind_order),
+        selector_value_order=tuple(selector_value_order),
+        compiled_method_entry_order=tuple(compiled_method_entry_order),
+        method_entry_order=tuple(method_entry_order),
         fixed_boot_object_count=len(flatten_boot_object_specs(boot_image_spec.fixed_boot_graph_spec)),
         glyph_bitmap_boot_specs=glyph_bitmap_boot_specs,
         seed_layout_section_specs=tuple(seed_layout_section_specs),
@@ -1590,6 +1617,9 @@ DYNAMIC_SEED_BUILD_STEP_SPECS = build_dynamic_seed_build_step_specs(BOOT_IMAGE_S
 BOOT_IMAGE_SEED_BUILD_CONTEXT = build_boot_image_seed_build_context(
     BOOT_IMAGE_SPEC,
     CLASS_DESCRIPTOR_KIND_ORDER,
+    SELECTOR_VALUE_ORDER,
+    COMPILED_METHOD_ENTRY_ORDER,
+    METHOD_ENTRY_ORDER,
     SEED_LAYOUT_SECTION_SPECS,
     DYNAMIC_SEED_OBJECT_SECTION_SPECS,
     DYNAMIC_SEED_BUILD_STEP_SPECS,
@@ -1601,11 +1631,12 @@ BOOT_IMAGE_SEED_BUILD_CONTEXT = build_boot_image_seed_build_context(
 def build_selector_seed_objects(
     selector_start_index: int,
     selector_class_index: int,
+    selector_value_order: list[int] | tuple[int, ...] = SELECTOR_VALUE_ORDER,
 ) -> tuple[dict[int, int], list[SeedObject]]:
     selector_indices_by_value: dict[int, int] = {}
     selector_seed_objects: list[SeedObject] = []
 
-    for selector_value in SELECTOR_VALUE_ORDER:
+    for selector_value in selector_value_order:
         selector_indices_by_value[selector_value] = selector_start_index + len(selector_seed_objects)
         selector_seed_objects.append(
             SeedObject(
@@ -1623,11 +1654,12 @@ def build_selector_seed_objects(
 def build_compiled_method_seed_objects(
     compiled_method_start_index: int,
     compiled_method_class_index: int,
+    compiled_method_entry_order: list[str] | tuple[str, ...] = COMPILED_METHOD_ENTRY_ORDER,
 ) -> tuple[dict[str, int], list[SeedObject]]:
     compiled_method_indices: dict[str, int] = {}
     compiled_method_seed_objects: list[SeedObject] = []
 
-    for entry_name in COMPILED_METHOD_ENTRY_ORDER:
+    for entry_name in compiled_method_entry_order:
         program = COMPILED_METHOD_PROGRAM_BY_ENTRY_NAME[entry_name]
         encoded_fields = [
             (SEED_FIELD_SMALL_INTEGER, instruction)
@@ -1649,11 +1681,12 @@ def build_method_entry_seed_objects(
     method_entry_start_index: int,
     method_entry_class_index: int,
     compiled_method_indices: dict[str, int],
+    method_entry_order: list[str] | tuple[str, ...] = METHOD_ENTRY_ORDER,
 ) -> tuple[dict[str, int], list[SeedObject]]:
     method_entry_indices: dict[str, int] = {}
     method_entry_seed_objects: list[SeedObject] = []
 
-    for entry_name, _owner_kind, _selector, _argument_count in METHOD_ENTRY_DEFINITIONS:
+    for entry_name in method_entry_order:
         implementation_field_kind = SEED_FIELD_NIL
         implementation_field_value = 0
 
@@ -1865,7 +1898,10 @@ def build_dynamic_seed_sections(
     seed_layout = build_seed_layout(
         build_context.fixed_boot_object_count,
         build_context.class_kind_order,
-        build_context.seed_layout_section_specs,
+        selector_value_order=build_context.selector_value_order,
+        compiled_method_entry_order=build_context.compiled_method_entry_order,
+        method_entry_order=build_context.method_entry_order,
+        seed_layout_section_specs=build_context.seed_layout_section_specs,
     )
     class_class_index = seed_layout["class_descriptors"].start_index
     class_kind_order = list(build_context.class_kind_order)
@@ -1875,6 +1911,9 @@ def build_dynamic_seed_sections(
         class_kind_order=class_kind_order,
         class_class_index=class_class_index,
         class_indices=class_indices,
+        selector_value_order=build_context.selector_value_order,
+        compiled_method_entry_order=build_context.compiled_method_entry_order,
+        method_entry_order=build_context.method_entry_order,
         selector_indices_by_value={},
         compiled_method_indices={},
         method_entry_indices={},

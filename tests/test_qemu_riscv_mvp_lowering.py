@@ -629,6 +629,18 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             tuple(mvp.SEED_LAYOUT_SECTION_SPECS),
         )
         self.assertEqual(
+            mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.selector_value_order,
+            tuple(mvp.SELECTOR_VALUE_ORDER),
+        )
+        self.assertEqual(
+            mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.compiled_method_entry_order,
+            tuple(mvp.COMPILED_METHOD_ENTRY_ORDER),
+        )
+        self.assertEqual(
+            mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.method_entry_order,
+            tuple(mvp.METHOD_ENTRY_ORDER),
+        )
+        self.assertEqual(
             mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.dynamic_seed_object_section_specs,
             tuple(mvp.DYNAMIC_SEED_OBJECT_SECTION_SPECS),
         )
@@ -783,7 +795,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                     "selector_value_order",
                     mvp.build_selector_seed_section,
                     0,
-                    required_state_fields=("seed_layout", "class_indices"),
+                    required_state_fields=("seed_layout", "class_indices", "selector_value_order"),
                     state_update_fields=("selector_indices_by_value",),
                 ),
                 mvp.DynamicSeedSectionSpec(
@@ -791,7 +803,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                     "compiled_method_entry_order",
                     mvp.build_compiled_method_seed_section,
                     1,
-                    required_state_fields=("seed_layout", "class_indices"),
+                    required_state_fields=("seed_layout", "class_indices", "compiled_method_entry_order"),
                     state_update_fields=("compiled_method_indices",),
                 ),
                 mvp.DynamicSeedSectionSpec(
@@ -800,7 +812,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                     mvp.build_method_entry_seed_section,
                     2,
                     ("compiled_methods",),
-                    ("seed_layout", "class_indices", "compiled_method_indices"),
+                    ("seed_layout", "class_indices", "compiled_method_indices", "method_entry_order"),
                     ("method_entry_indices",),
                 ),
                 mvp.DynamicSeedSectionSpec(
@@ -850,20 +862,20 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 mvp.DynamicSeedBuildStepSpec(
                     "selectors",
                     mvp.build_selector_seed_section,
-                    required_state_fields=("seed_layout", "class_indices"),
+                    required_state_fields=("seed_layout", "class_indices", "selector_value_order"),
                     state_update_fields=("selector_indices_by_value",),
                 ),
                 mvp.DynamicSeedBuildStepSpec(
                     "compiled_methods",
                     mvp.build_compiled_method_seed_section,
-                    required_state_fields=("seed_layout", "class_indices"),
+                    required_state_fields=("seed_layout", "class_indices", "compiled_method_entry_order"),
                     state_update_fields=("compiled_method_indices",),
                 ),
                 mvp.DynamicSeedBuildStepSpec(
                     "method_entries",
                     mvp.build_method_entry_seed_section,
                     ("compiled_methods",),
-                    ("seed_layout", "class_indices", "compiled_method_indices"),
+                    ("seed_layout", "class_indices", "compiled_method_indices", "method_entry_order"),
                     ("method_entry_indices",),
                 ),
                 mvp.DynamicSeedBuildStepSpec(
@@ -916,9 +928,9 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(
             [spec.required_state_fields for spec in mvp.DYNAMIC_SEED_BUILD_STEP_SPECS],
             [
-                ("seed_layout", "class_indices"),
-                ("seed_layout", "class_indices"),
-                ("seed_layout", "class_indices", "compiled_method_indices"),
+                ("seed_layout", "class_indices", "selector_value_order"),
+                ("seed_layout", "class_indices", "compiled_method_entry_order"),
+                ("seed_layout", "class_indices", "compiled_method_indices", "method_entry_order"),
                 (
                     "seed_layout",
                     "class_kind_order",
@@ -952,6 +964,9 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "class_kind_order",
                 "class_class_index",
                 "class_indices",
+                "selector_value_order",
+                "compiled_method_entry_order",
+                "method_entry_order",
             ),
         )
         self.assertEqual(
@@ -1046,7 +1061,11 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         class_indices = mvp.build_class_index_map(mvp.CLASS_DESCRIPTOR_KIND_ORDER, 140)
-        selector_indices, selector_seed_objects = mvp.build_selector_seed_objects(157, class_indices[mvp.SEED_OBJECT_SELECTOR])
+        selector_indices, selector_seed_objects = mvp.build_selector_seed_objects(
+            157,
+            class_indices[mvp.SEED_OBJECT_SELECTOR],
+            mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.selector_value_order,
+        )
         self.assertEqual(selector_indices[mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SHOW"]], 157)
         self.assertEqual(selector_indices[mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_INSTANCE_KIND"]], 173)
         self.assertEqual(
@@ -1056,6 +1075,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         compiled_method_indices, compiled_method_seed_objects = mvp.build_compiled_method_seed_objects(
             174,
             class_indices[mvp.SEED_OBJECT_COMPILED_METHOD],
+            mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.compiled_method_entry_order,
         )
         self.assertEqual(compiled_method_indices["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW"], 174)
         self.assertEqual(compiled_method_indices["RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND"], 185)
@@ -1070,6 +1090,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             186,
             class_indices[mvp.SEED_OBJECT_METHOD_ENTRY],
             compiled_method_indices,
+            mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.method_entry_order,
         )
         self.assertEqual(
             method_entry_seed_objects[0].fields,
