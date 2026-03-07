@@ -394,3 +394,9 @@
 - Derived the transcript layout, style, framebuffer bitmap, transcript metrics, and glyph bitmap field tuples from those named payload specs, while keeping object refs and glyph refs explicit where they matter semantically.
 - Extended the focused lowering regressions to lock the new named payload specs and the helper-driven field materialization without changing the generated seed image or target VM behavior.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Derive Flat Boot Object Views From Family Specs
+- Added a derived flat ordered boot-object view and a derived boot-object name map so the fixed boot graph can now be addressed either by family or by object identity from the same declared family specs.
+- Changed the boot-object export-map builder and fixed boot object count to use that flat ordered view instead of separate nested family-only traversal and count arithmetic.
+- Extended the focused lowering regressions to lock the new flat ordered view, the name map, and the unchanged family-derived aliases without changing the generated seed image or target VM behavior.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

@@ -483,19 +483,41 @@ BOOT_OBJECT_FAMILY_NAMES = [family_spec.name for family_spec in BOOT_OBJECT_FAMI
 BOOT_OBJECT_SPECS_BEFORE_GLYPHS = BOOT_OBJECT_FAMILY_SPECS_BY_NAME["before_glyphs"].object_specs
 GLYPH_BITMAP_BOOT_SPECS = BOOT_OBJECT_FAMILY_SPECS_BY_NAME["glyph_bitmaps"].object_specs
 BOOT_OBJECT_SPECS_AFTER_GLYPHS = BOOT_OBJECT_FAMILY_SPECS_BY_NAME["after_glyphs"].object_specs
-BOOT_OBJECT_FIXED_COUNT = sum(len(family_spec.object_specs) for family_spec in BOOT_OBJECT_FAMILY_SPECS)
+
+
+def flatten_boot_object_specs() -> list[BootObjectSpec]:
+    return [
+        object_spec
+        for family_spec in BOOT_OBJECT_FAMILY_SPECS
+        for object_spec in family_spec.object_specs
+    ]
+
+
+def build_boot_object_spec_map() -> dict[str, BootObjectSpec]:
+    spec_map: dict[str, BootObjectSpec] = {}
+
+    for object_spec in BOOT_OBJECT_SPECS_IN_ORDER:
+        if object_spec.name in spec_map:
+            raise AssertionError(f"duplicate boot object spec name {object_spec.name!r}")
+        spec_map[object_spec.name] = object_spec
+    return spec_map
+
+
+BOOT_OBJECT_SPECS_IN_ORDER = flatten_boot_object_specs()
+BOOT_OBJECT_SPEC_NAMES_IN_ORDER = [object_spec.name for object_spec in BOOT_OBJECT_SPECS_IN_ORDER]
+BOOT_OBJECT_SPECS_BY_NAME = build_boot_object_spec_map()
+BOOT_OBJECT_FIXED_COUNT = len(BOOT_OBJECT_SPECS_IN_ORDER)
 
 
 def build_boot_object_export_map(export_kind: str) -> dict[str, str]:
     export_map: dict[str, str] = {}
 
-    for family_spec in BOOT_OBJECT_FAMILY_SPECS:
-        for object_spec in family_spec.object_specs:
-            export_names = object_spec.global_exports if export_kind == "global" else object_spec.root_exports
-            for export_name in export_names:
-                if export_name in export_map:
-                    raise AssertionError(f"duplicate boot object export {export_name!r}")
-                export_map[export_name] = object_spec.name
+    for object_spec in BOOT_OBJECT_SPECS_IN_ORDER:
+        export_names = object_spec.global_exports if export_kind == "global" else object_spec.root_exports
+        for export_name in export_names:
+            if export_name in export_map:
+                raise AssertionError(f"duplicate boot object export {export_name!r}")
+            export_map[export_name] = object_spec.name
 
     return export_map
 

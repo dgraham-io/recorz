@@ -495,6 +495,8 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "transcript_metrics": "TranscriptMetrics",
             },
         )
+        self.assertIs(mvp.BOOT_OBJECT_SPECS_BY_NAME["DefaultForm"], mvp.BOOT_OBJECT_SPECS_BEFORE_GLYPHS[-1])
+        self.assertIs(mvp.BOOT_OBJECT_SPECS_BY_NAME["TranscriptBehavior"], mvp.BOOT_OBJECT_SPECS_AFTER_GLYPHS[-1])
         self.assertEqual(mvp.BOOT_OBJECT_SPECS_BEFORE_GLYPHS[0].global_exports, ("Transcript",))
         self.assertEqual(mvp.BOOT_OBJECT_SPECS_BEFORE_GLYPHS[4].global_exports, ("Form",))
         self.assertEqual(mvp.BOOT_OBJECT_SPECS_BEFORE_GLYPHS[6].root_exports, ("transcript_layout",))
@@ -554,6 +556,9 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 (mvp.FIELD_SPEC_SMALL_INTEGER, 3),
             ),
         )
+        self.assertEqual(mvp.BOOT_OBJECT_SPEC_NAMES_IN_ORDER[0], "Transcript")
+        self.assertEqual(mvp.BOOT_OBJECT_SPEC_NAMES_IN_ORDER[9], "DefaultForm")
+        self.assertEqual(mvp.BOOT_OBJECT_SPEC_NAMES_IN_ORDER[-1], "TranscriptBehavior")
         self.assertEqual(
             [spec.name for spec in mvp.BOOT_OBJECT_SPECS_BEFORE_GLYPHS],
             [
@@ -608,6 +613,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertIs(mvp.BOOT_OBJECT_FAMILY_SPECS_BY_NAME["before_glyphs"], mvp.BOOT_OBJECT_FAMILY_SPECS[0])
         self.assertIs(mvp.BOOT_OBJECT_FAMILY_SPECS_BY_NAME["glyph_bitmaps"], mvp.BOOT_OBJECT_FAMILY_SPECS[1])
         self.assertIs(mvp.BOOT_OBJECT_FAMILY_SPECS_BY_NAME["after_glyphs"], mvp.BOOT_OBJECT_FAMILY_SPECS[2])
+        self.assertEqual(len(mvp.BOOT_OBJECT_SPECS_IN_ORDER), mvp.BOOT_OBJECT_FIXED_COUNT)
         self.assertEqual(len(mvp.BOOT_OBJECT_FAMILY_SPECS[0].object_specs), 10)
         self.assertTrue(mvp.BOOT_OBJECT_FAMILY_SPECS[1].collect_object_indices)
         self.assertEqual(len(mvp.BOOT_OBJECT_FAMILY_SPECS[1].object_specs), len(mvp.GLYPH_BITMAP_BOOT_SPECS))
