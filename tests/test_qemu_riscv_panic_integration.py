@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PLATFORM_DIR = ROOT / "platform" / "qemu-riscv64"
 BUILD_DIR = ROOT / "misc" / "qemu-riscv64-panic-test"
 ELF_PATH = BUILD_DIR / "recorz-qemu-riscv64-mvp.elf"
-PANIC_EXAMPLE_PATH = ROOT / "examples" / "qemu_riscv_panic_demo.rec"
+PANIC_EXAMPLE_PATH = ROOT / "examples" / "qemu_riscv_panic_demo.rz"
 LOOKUP_PANIC_EXAMPLE_PATH = ROOT / "examples" / "qemu_riscv_lookup_panic_demo.rz"
 
 

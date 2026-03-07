@@ -8,7 +8,7 @@ PYTHON ?= python3
 CFLAGS := -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -ffreestanding -O2 -Wall -Wextra -I$(CURDIR)
 LDFLAGS := -T $(CURDIR)/linker.ld
 
-EXAMPLE := $(ROOT)/examples/qemu_riscv_fb_demo.rec
+EXAMPLE := $(ROOT)/examples/qemu_riscv_fb_demo.rz
 IMAGE_SCRIPT := $(ROOT)/tools/build_qemu_riscv_mvp_image.py
 GENERATED_IMAGE := $(BUILD_DIR)/demo_image.bin
 GENERATED_IMAGE_ASM := $(BUILD_DIR)/demo_image_blob.S
