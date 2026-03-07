@@ -581,6 +581,78 @@ static uint32_t class_instance_kind(const struct recorz_mvp_heap_object *class_o
     );
 }
 
+static uint32_t method_descriptor_selector(const struct recorz_mvp_heap_object *method_object) {
+    return small_integer_u32(
+        heap_get_field(method_object, METHOD_FIELD_SELECTOR),
+        "method descriptor selector is not a small integer"
+    );
+}
+
+static uint32_t method_descriptor_argument_count(const struct recorz_mvp_heap_object *method_object) {
+    return small_integer_u32(
+        heap_get_field(method_object, METHOD_FIELD_ARGUMENT_COUNT),
+        "method descriptor argument count is not a small integer"
+    );
+}
+
+static uint32_t method_descriptor_primitive_kind(const struct recorz_mvp_heap_object *method_object) {
+    return small_integer_u32(
+        heap_get_field(method_object, METHOD_FIELD_PRIMITIVE_KIND),
+        "method descriptor primitive kind is not a small integer"
+    );
+}
+
+static uint32_t class_method_count(const struct recorz_mvp_heap_object *class_object) {
+    return small_integer_u32(
+        heap_get_field(class_object, CLASS_FIELD_METHOD_COUNT),
+        "class method count is not a small integer"
+    );
+}
+
+static const struct recorz_mvp_heap_object *class_method_start_object(const struct recorz_mvp_heap_object *class_object) {
+    struct recorz_mvp_value method_start = heap_get_field(class_object, CLASS_FIELD_METHOD_START);
+
+    if (method_start.kind == RECORZ_MVP_VALUE_NIL) {
+        return 0;
+    }
+    if (method_start.kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("class method start is not a method descriptor");
+    }
+    return heap_object_for_value(method_start);
+}
+
+static const struct recorz_mvp_heap_object *lookup_builtin_method_descriptor(
+    const struct recorz_mvp_heap_object *class_object,
+    uint8_t selector,
+    uint16_t argument_count
+) {
+    const struct recorz_mvp_heap_object *method_object = class_method_start_object(class_object);
+    uint32_t method_count = class_method_count(class_object);
+    uint32_t method_index;
+
+    if (method_count == 0U) {
+        return 0;
+    }
+    if (method_object == 0) {
+        machine_panic("class with methods is missing a method start");
+    }
+    for (method_index = 0U; method_index < method_count; ++method_index) {
+        const struct recorz_mvp_heap_object *candidate =
+            (const struct recorz_mvp_heap_object *)heap_object((uint16_t)(method_object - heap + 1U + method_index));
+
+        if (candidate->kind != RECORZ_MVP_OBJECT_METHOD_DESCRIPTOR) {
+            machine_panic("class method range contains a non-method descriptor");
+        }
+        if (method_descriptor_selector(candidate) == selector) {
+            if (method_descriptor_argument_count(candidate) != argument_count) {
+                machine_panic("selector argument count does not match method descriptor");
+            }
+            return candidate;
+        }
+    }
+    return 0;
+}
+
 static uint32_t primitive_kind_for_heap_object(const struct recorz_mvp_heap_object *object) {
     return class_instance_kind(class_object_for_heap_object(object));
 }
@@ -1683,18 +1755,27 @@ static const recorz_mvp_heap_send_handler heap_send_handlers[RECORZ_MVP_OBJECT_M
 
 static void dispatch_heap_object_send(
     const struct recorz_mvp_heap_object *object,
-    uint32_t primitive_kind,
     uint8_t selector,
+    uint16_t argument_count,
     struct recorz_mvp_value receiver,
     const struct recorz_mvp_value arguments[],
     const char *text
 ) {
+    const struct recorz_mvp_heap_object *class_object;
+    const struct recorz_mvp_heap_object *method_object;
     recorz_mvp_heap_send_handler handler;
+    uint32_t primitive_kind;
 
     if (selector == RECORZ_MVP_SELECTOR_CLASS) {
         push(object_value(object->class_handle));
         return;
     }
+    class_object = class_object_for_heap_object(object);
+    method_object = lookup_builtin_method_descriptor(class_object, selector, argument_count);
+    if (method_object == 0) {
+        machine_panic("selector is not understood by receiver class");
+    }
+    primitive_kind = method_descriptor_primitive_kind(method_object);
     if (primitive_kind > RECORZ_MVP_OBJECT_METHOD_DESCRIPTOR) {
         machine_panic("unsupported heap object kind");
     }
@@ -1733,10 +1814,8 @@ static void dispatch_send(const struct recorz_mvp_program *program, uint8_t sele
     }
 
     if (receiver.kind == RECORZ_MVP_VALUE_OBJECT) {
-        uint32_t primitive_kind;
         object = heap_object_for_value(receiver);
-        primitive_kind = primitive_kind_for_heap_object(object);
-        dispatch_heap_object_send(object, primitive_kind, selector, receiver, arguments, text);
+        dispatch_heap_object_send(object, selector, send_argument_count, receiver, arguments, text);
         return;
     }
 
