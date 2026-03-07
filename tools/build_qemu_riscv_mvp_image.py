@@ -339,6 +339,12 @@ class BootObjectSpec:
     field_specs: tuple[tuple[str, object], ...]
 
 
+@dataclass(frozen=True)
+class SeedLayoutSection:
+    start_index: int
+    count: int
+
+
 KERNEL_CLASS_BOOT_ORDER = [
     "Transcript",
     "Display",
@@ -372,6 +378,13 @@ CLASS_DESCRIPTOR_KIND_NAMES = [
 CLASS_DESCRIPTOR_KIND_ORDER = [
     constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, kind_name)
     for kind_name in CLASS_DESCRIPTOR_KIND_NAMES
+]
+SEED_LAYOUT_SECTION_NAMES = [
+    "class_descriptors",
+    "selectors",
+    "compiled_methods",
+    "method_entries",
+    "method_descriptors",
 ]
 BOOT_OBJECT_SPECS_BEFORE_GLYPHS = [
     BootObjectSpec("Transcript", "Transcript", ()),
@@ -1139,6 +1152,25 @@ def build_class_index_map(class_kind_order: list[int], class_class_index: int) -
     return class_indices
 
 
+def build_seed_layout(base_object_index: int, class_kind_order: list[int]) -> dict[str, SeedLayoutSection]:
+    section_counts = {
+        "class_descriptors": len(class_kind_order),
+        "selectors": len(SELECTOR_VALUE_ORDER),
+        "compiled_methods": len(COMPILED_METHOD_ENTRY_ORDER),
+        "method_entries": len(METHOD_ENTRY_ORDER),
+        "method_descriptors": sum(len(BUILTIN_METHODS_BY_KIND.get(class_kind, [])) for class_kind in class_kind_order),
+    }
+    layout: dict[str, SeedLayoutSection] = {}
+    next_index = base_object_index
+
+    for section_name in SEED_LAYOUT_SECTION_NAMES:
+        count = section_counts[section_name]
+        layout[section_name] = SeedLayoutSection(next_index, count)
+        next_index += count
+
+    return layout
+
+
 def build_selector_seed_objects(
     selector_start_index: int,
     selector_class_index: int,
@@ -1292,36 +1324,33 @@ def build_seed_manifest() -> bytes:
             materialize_boot_object_fields(spec.field_specs, seed_object_indices_by_name, glyph_object_indices),
         )
 
-    class_class_index = len(seed_objects)
+    seed_layout = build_seed_layout(len(seed_objects), CLASS_DESCRIPTOR_KIND_ORDER)
+    class_class_index = seed_layout["class_descriptors"].start_index
     class_kind_order = CLASS_DESCRIPTOR_KIND_ORDER
     class_indices = build_class_index_map(class_kind_order, class_class_index)
 
     for seed_object in seed_objects:
         seed_object.class_index = class_indices[seed_object.object_kind]
 
-    selector_start_index = class_class_index + len(class_kind_order)
     selector_indices_by_value, selector_seed_objects = build_selector_seed_objects(
-        selector_start_index,
+        seed_layout["selectors"].start_index,
         class_indices[SEED_OBJECT_SELECTOR],
     )
-    compiled_method_start_index = selector_start_index + len(selector_seed_objects)
     compiled_method_indices, compiled_method_seed_objects = build_compiled_method_seed_objects(
-        compiled_method_start_index,
+        seed_layout["compiled_methods"].start_index,
         class_indices[SEED_OBJECT_COMPILED_METHOD],
     )
-    method_entry_start_index = compiled_method_start_index + len(compiled_method_seed_objects)
     method_entry_indices, method_entry_seed_objects = build_method_entry_seed_objects(
-        method_entry_start_index,
+        seed_layout["method_entries"].start_index,
         class_indices[SEED_OBJECT_METHOD_ENTRY],
         compiled_method_indices,
     )
-    method_start_index = method_entry_start_index + len(method_entry_seed_objects)
     method_start_by_kind, method_count_by_kind, method_seed_objects = build_method_descriptor_seed_objects(
         class_kind_order,
         class_indices[SEED_OBJECT_METHOD_DESCRIPTOR],
         selector_indices_by_value,
         method_entry_indices,
-        method_start_index,
+        seed_layout["method_descriptors"].start_index,
     )
 
     class_indices, class_seed_objects = build_class_seed_objects(
@@ -1330,6 +1359,16 @@ def build_seed_manifest() -> bytes:
         method_start_by_kind,
         method_count_by_kind,
     )
+    if len(class_seed_objects) != seed_layout["class_descriptors"].count:
+        raise AssertionError("class seed object count does not match declared seed layout")
+    if len(selector_seed_objects) != seed_layout["selectors"].count:
+        raise AssertionError("selector seed object count does not match declared seed layout")
+    if len(compiled_method_seed_objects) != seed_layout["compiled_methods"].count:
+        raise AssertionError("compiled method seed object count does not match declared seed layout")
+    if len(method_entry_seed_objects) != seed_layout["method_entries"].count:
+        raise AssertionError("method entry seed object count does not match declared seed layout")
+    if len(method_seed_objects) != seed_layout["method_descriptors"].count:
+        raise AssertionError("method descriptor seed object count does not match declared seed layout")
 
     seed_objects.extend(class_seed_objects)
     seed_objects.extend(selector_seed_objects)

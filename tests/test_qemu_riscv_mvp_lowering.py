@@ -605,6 +605,24 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
 
+    def test_declares_seed_layout_sections_and_derives_layout(self) -> None:
+        self.assertEqual(
+            mvp.SEED_LAYOUT_SECTION_NAMES,
+            [
+                "class_descriptors",
+                "selectors",
+                "compiled_methods",
+                "method_entries",
+                "method_descriptors",
+            ],
+        )
+        layout = mvp.build_seed_layout(140, mvp.CLASS_DESCRIPTOR_KIND_ORDER)
+        self.assertEqual(layout["class_descriptors"], mvp.SeedLayoutSection(140, 17))
+        self.assertEqual(layout["selectors"], mvp.SeedLayoutSection(157, 17))
+        self.assertEqual(layout["compiled_methods"], mvp.SeedLayoutSection(174, 12))
+        self.assertEqual(layout["method_entries"], mvp.SeedLayoutSection(186, 22))
+        self.assertEqual(layout["method_descriptors"], mvp.SeedLayoutSection(208, 22))
+
     def test_declares_method_seed_orders_and_materializes_method_seed_objects(self) -> None:
         self.assertEqual(
             mvp.SELECTOR_VALUE_ORDER,

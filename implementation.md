@@ -334,3 +334,9 @@
 - Added `SELECTOR_VALUE_ORDER` and `COMPILED_METHOD_ENTRY_ORDER` so the seed builder no longer hides those ordering rules inside inline loops, while preserving the current image layout and object indices.
 - Added a focused regression covering selector seed object ordering, compiled-method and method-entry materialization, and the first method descriptor layout.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Declare Seed Layout Sections
+- Added an explicit `SEED_LAYOUT_SECTION_NAMES` spec plus a `build_seed_layout()` helper so the class, selector, compiled-method, method-entry, and method-descriptor sections are positioned from one declared layout rule instead of chained inline offset math.
+- Updated `build_seed_manifest()` to consume the declared layout starts and added internal count checks so each generated section still matches the declared image layout.
+- Added a focused regression covering the declared seed layout section order and the derived start/count boundaries for each dynamic section.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
