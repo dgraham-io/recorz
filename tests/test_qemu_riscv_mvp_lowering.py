@@ -279,12 +279,12 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             )
             for field_index in range(2)
         ]
-        first_root_send_method_header = struct.unpack_from(
+        first_interpreted_method_header = struct.unpack_from(
             mvp.SEED_OBJECT_HEADER_FORMAT,
             manifest,
             struct.calcsize(mvp.SEED_HEADER_FORMAT) + (184 * object_size),
         )
-        first_root_send_method_fields = [
+        first_interpreted_method_fields = [
             struct.unpack_from(
                 mvp.SEED_FIELD_FORMAT,
                 manifest,
@@ -293,23 +293,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
                 + (field_index * struct.calcsize(mvp.SEED_FIELD_FORMAT)),
             )
-            for field_index in range(3)
-        ]
-        first_interpreted_method_header = struct.unpack_from(
-            mvp.SEED_OBJECT_HEADER_FORMAT,
-            manifest,
-            struct.calcsize(mvp.SEED_HEADER_FORMAT) + (186 * object_size),
-        )
-        first_interpreted_method_fields = [
-            struct.unpack_from(
-                mvp.SEED_FIELD_FORMAT,
-                manifest,
-                struct.calcsize(mvp.SEED_HEADER_FORMAT)
-                + (186 * object_size)
-                + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
-                + (field_index * struct.calcsize(mvp.SEED_FIELD_FORMAT)),
-            )
-            for field_index in range(2)
+            for field_index in range(4)
         ]
         first_method_entry_header = struct.unpack_from(
             mvp.SEED_OBJECT_HEADER_FORMAT,
@@ -382,16 +366,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 (mvp.SEED_FIELD_OBJECT_INDEX, 167),
             ],
         )
-        self.assertEqual(first_root_send_method_header, (mvp.SEED_OBJECT_ROOT_SEND_METHOD, 3, 158))
-        self.assertEqual(
-            first_root_send_method_fields,
-            [
-                (mvp.SEED_FIELD_SMALL_INTEGER, mvp.SEED_ROOT_DEFAULT_FORM),
-                (mvp.SEED_FIELD_OBJECT_INDEX, 164),
-                (mvp.SEED_FIELD_SMALL_INTEGER, mvp.METHOD_RETURN_RECEIVER),
-            ],
-        )
-        self.assertEqual(first_interpreted_method_header, (mvp.SEED_OBJECT_INTERPRETED_METHOD, 2, 160))
+        self.assertEqual(first_interpreted_method_header, (mvp.SEED_OBJECT_INTERPRETED_METHOD, 4, 160))
         self.assertEqual(
             first_interpreted_method_fields,
             [
@@ -401,7 +376,19 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ),
                 (
                     mvp.SEED_FIELD_SMALL_INTEGER,
-                    mvp.encode_interpreted_instruction("return_top"),
+                    mvp.encode_interpreted_instruction("push_argument", 0),
+                ),
+                (
+                    mvp.SEED_FIELD_SMALL_INTEGER,
+                    mvp.encode_interpreted_instruction(
+                        "send",
+                        mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_WRITE_STRING"],
+                        1,
+                    ),
+                ),
+                (
+                    mvp.SEED_FIELD_SMALL_INTEGER,
+                    mvp.encode_interpreted_instruction("return_receiver"),
                 ),
             ],
         )
@@ -410,7 +397,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             first_method_entry_fields,
             [
                 (mvp.SEED_FIELD_SMALL_INTEGER, mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW"]),
-                (mvp.SEED_FIELD_OBJECT_INDEX, 185),
+                (mvp.SEED_FIELD_OBJECT_INDEX, 184),
             ],
         )
         self.assertEqual(first_method_header, (mvp.SEED_OBJECT_METHOD_DESCRIPTOR, 4, 153))
