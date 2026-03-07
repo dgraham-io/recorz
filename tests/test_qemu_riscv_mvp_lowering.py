@@ -547,12 +547,38 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             mvp.materialize_boot_object_fields(
                 mvp.BOOT_OBJECT_SPECS_AFTER_GLYPHS[-1].field_specs,
                 {"TranscriptBehavior": 139},
-                [100 + glyph_index for glyph_index in range(128)],
+                [100 + glyph_index for glyph_index in range(len(mvp.GLYPH_BITMAP_BOOT_SPECS))],
             ),
             [
                 (mvp.SEED_FIELD_OBJECT_INDEX, 132),
                 (mvp.SEED_FIELD_SMALL_INTEGER, 1),
             ],
+        )
+
+    def test_declares_glyph_bitmap_boot_specs(self) -> None:
+        self.assertEqual(mvp.GLYPH_BITMAP_NAME_PREFIX, "GlyphBitmap")
+        self.assertEqual(mvp.GLYPH_BITMAP_WIDTH, 5)
+        self.assertEqual(mvp.GLYPH_BITMAP_HEIGHT, 7)
+        self.assertEqual(len(mvp.GLYPH_BITMAP_BOOT_SPECS), mvp.GLYPH_BITMAP_CODE_COUNT)
+        self.assertEqual(mvp.GLYPH_BITMAP_BOOT_SPECS[0].name, "GlyphBitmap0")
+        self.assertEqual(mvp.GLYPH_BITMAP_BOOT_SPECS[-1].name, "GlyphBitmap127")
+        self.assertEqual(
+            mvp.GLYPH_BITMAP_BOOT_SPECS[0].field_specs,
+            (
+                (mvp.FIELD_SPEC_SMALL_INTEGER, 5),
+                (mvp.FIELD_SPEC_SMALL_INTEGER, 7),
+                (mvp.FIELD_SPEC_SMALL_INTEGER, mvp.BITMAP_STORAGE_GLYPH_MONO),
+                (mvp.FIELD_SPEC_SMALL_INTEGER, 0),
+            ),
+        )
+        self.assertEqual(
+            mvp.GLYPH_BITMAP_BOOT_SPECS[-1].field_specs,
+            (
+                (mvp.FIELD_SPEC_SMALL_INTEGER, 5),
+                (mvp.FIELD_SPEC_SMALL_INTEGER, 7),
+                (mvp.FIELD_SPEC_SMALL_INTEGER, mvp.BITMAP_STORAGE_GLYPH_MONO),
+                (mvp.FIELD_SPEC_SMALL_INTEGER, 127),
+            ),
         )
 
     def test_declares_class_descriptor_order_and_materializes_class_seed_objects(self) -> None:
@@ -844,7 +870,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(object_count, 230)
         self.assertEqual(global_binding_count, 6)
         self.assertEqual(root_binding_count, 6)
-        self.assertEqual(glyph_code_count, 128)
+        self.assertEqual(glyph_code_count, len(mvp.GLYPH_BITMAP_BOOT_SPECS))
         self.assertEqual(reserved, 0)
         self.assertEqual(first_object_header, (mvp.SEED_OBJECT_TRANSCRIPT, 0, 141))
         self.assertEqual(class_class_header, (mvp.SEED_OBJECT_CLASS, 4, 140))

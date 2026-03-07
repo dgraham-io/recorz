@@ -340,3 +340,9 @@
 - Updated `build_seed_manifest()` to consume the declared layout starts and added internal count checks so each generated section still matches the declared image layout.
 - Added a focused regression covering the declared seed layout section order and the derived start/count boundaries for each dynamic section.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Declare Glyph Bitmap Boot Specs
+- Moved the remaining inline glyph bitmap family in `build_seed_manifest()` onto a declared `GLYPH_BITMAP_BOOT_SPECS` list generated from explicit glyph bitmap constants.
+- Reused the same boot-spec materialization path already used for other seed objects and derived the seed header glyph count from the declared glyph bitmap specs instead of a hardcoded literal.
+- Added a focused regression covering the declared glyph bitmap spec family and updated the seed-header test to derive the glyph count from the declared glyph bitmap specs.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

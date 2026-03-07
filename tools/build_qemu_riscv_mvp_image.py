@@ -386,6 +386,10 @@ SEED_LAYOUT_SECTION_NAMES = [
     "method_entries",
     "method_descriptors",
 ]
+GLYPH_BITMAP_NAME_PREFIX = "GlyphBitmap"
+GLYPH_BITMAP_WIDTH = 5
+GLYPH_BITMAP_HEIGHT = 7
+GLYPH_BITMAP_CODE_COUNT = 128
 BOOT_OBJECT_SPECS_BEFORE_GLYPHS = [
     BootObjectSpec("Transcript", "Transcript", ()),
     BootObjectSpec("Display", "Display", ()),
@@ -447,6 +451,25 @@ BOOT_OBJECT_SPECS_AFTER_GLYPHS = [
         ),
     ),
 ]
+
+
+def build_glyph_bitmap_boot_specs() -> list[BootObjectSpec]:
+    return [
+        BootObjectSpec(
+            f"{GLYPH_BITMAP_NAME_PREFIX}{glyph_index}",
+            "Bitmap",
+            (
+                (FIELD_SPEC_SMALL_INTEGER, GLYPH_BITMAP_WIDTH),
+                (FIELD_SPEC_SMALL_INTEGER, GLYPH_BITMAP_HEIGHT),
+                (FIELD_SPEC_SMALL_INTEGER, BITMAP_STORAGE_GLYPH_MONO),
+                (FIELD_SPEC_SMALL_INTEGER, glyph_index),
+            ),
+        )
+        for glyph_index in range(GLYPH_BITMAP_CODE_COUNT)
+    ]
+
+
+GLYPH_BITMAP_BOOT_SPECS = build_glyph_bitmap_boot_specs()
 KERNEL_METHOD_IMPLEMENTATION_COMPILED = "compiled"
 KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE = "primitive"
 KERNEL_CLASS_HEADER_PATTERN = re.compile(
@@ -1304,17 +1327,12 @@ def build_seed_manifest() -> bytes:
             constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, spec.object_kind_name),
             materialize_boot_object_fields(spec.field_specs, seed_object_indices_by_name, glyph_object_indices),
         )
-    for glyph_index in range(128):
+    for spec in GLYPH_BITMAP_BOOT_SPECS:
         glyph_object_indices.append(
             add_seed_object(
-                f"GlyphBitmap{glyph_index}",
-                SEED_OBJECT_BITMAP,
-                [
-                    (SEED_FIELD_SMALL_INTEGER, 5),
-                    (SEED_FIELD_SMALL_INTEGER, 7),
-                    (SEED_FIELD_SMALL_INTEGER, BITMAP_STORAGE_GLYPH_MONO),
-                    (SEED_FIELD_SMALL_INTEGER, glyph_index),
-                ],
+                spec.name,
+                constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, spec.object_kind_name),
+                materialize_boot_object_fields(spec.field_specs, seed_object_indices_by_name, glyph_object_indices),
             )
         )
     for spec in BOOT_OBJECT_SPECS_AFTER_GLYPHS:
@@ -1399,7 +1417,7 @@ def build_seed_manifest() -> bytes:
             len(seed_objects),
             len(global_bindings),
             len(root_bindings),
-            128,
+            len(GLYPH_BITMAP_BOOT_SPECS),
             0,
         )
     )
