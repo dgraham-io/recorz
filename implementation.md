@@ -453,3 +453,9 @@
 - Derived `SEED_LAYOUT_SECTION_SPECS`, `DYNAMIC_SEED_OBJECT_SECTION_SPECS`, and `DYNAMIC_SEED_BUILD_STEP_SPECS` from that unified section spec layer, including a duplicate-build-order check in the builder helper.
 - Extended the focused lowering regressions to lock the unified dynamic section spec list and the unchanged derived layout/build/object views.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Introduce Fixed Boot Graph Spec
+- Added `FixedBootGraphSpec` as the top-level source of truth for the fixed boot graph so family order, flattened boot object order, and export maps are now derived from one declared fixed graph instead of only from adjacent helper lists.
+- Switched the fixed boot seed builder to materialize directly from `FIXED_BOOT_GRAPH_SPEC.family_specs` while preserving the existing derived `BOOT_OBJECT_FAMILY_*` and `BOOT_OBJECT_SPECS_*` views for readability and stable test coverage.
+- Extended the focused lowering regressions to lock the new fixed boot graph source-of-truth alongside the unchanged derived family views and boot object order.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

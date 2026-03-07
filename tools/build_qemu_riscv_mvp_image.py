@@ -322,6 +322,11 @@ class BootObjectFamilySpec:
 
 
 @dataclass(frozen=True)
+class FixedBootGraphSpec:
+    family_specs: tuple[BootObjectFamilySpec, ...]
+
+
+@dataclass(frozen=True)
 class SeedLayoutSection:
     start_index: int
     count: int
@@ -483,99 +488,114 @@ def build_glyph_bitmap_boot_specs() -> list[BootObjectSpec]:
     ]
 
 
-BOOT_OBJECT_FAMILY_SPECS = [
-    BootObjectFamilySpec(
-        "before_glyphs",
-        (
-            BootObjectSpec("Transcript", "Transcript", (), global_exports=("Transcript",)),
-            BootObjectSpec("Display", "Display", (), global_exports=("Display",)),
-            BootObjectSpec("BitBlt", "BitBlt", (), global_exports=("BitBlt",)),
-            BootObjectSpec("Glyphs", "Glyphs", (), global_exports=("Glyphs",)),
-            BootObjectSpec("FormFactory", "FormFactory", (), global_exports=("Form",)),
-            BootObjectSpec("BitmapFactory", "BitmapFactory", (), global_exports=("Bitmap",)),
-            BootObjectSpec(
-                "TranscriptLayout",
-                "TextLayout",
-                build_small_integer_boot_field_specs(TRANSCRIPT_LAYOUT_FIELD_VALUES),
-                root_exports=("transcript_layout",),
-            ),
-            BootObjectSpec(
-                "TranscriptStyle",
-                "TextStyle",
-                build_small_integer_boot_field_specs(TRANSCRIPT_STYLE_FIELD_VALUES),
-                root_exports=("transcript_style",),
-            ),
-            BootObjectSpec(
-                "FramebufferBitmap",
-                "Bitmap",
-                build_small_integer_boot_field_specs(FRAMEBUFFER_BITMAP_FIELD_VALUES),
-                root_exports=("framebuffer_bitmap",),
-            ),
-            BootObjectSpec(
-                "DefaultForm",
-                "Form",
-                DEFAULT_FORM_BOOT_FIELD_SPECS,
-                root_exports=("default_form",),
-            ),
-        ),
-    ),
-    BootObjectFamilySpec("glyph_bitmaps", tuple(build_glyph_bitmap_boot_specs()), collect_object_indices=True),
-    BootObjectFamilySpec(
-        "after_glyphs",
-        (
-            BootObjectSpec(
-                "TranscriptMetrics",
-                "TextMetrics",
-                build_small_integer_boot_field_specs(TRANSCRIPT_METRICS_FIELD_VALUES),
-                root_exports=("transcript_metrics",),
-            ),
-            BootObjectSpec(
-                "TranscriptBehavior",
-                "TextBehavior",
-                TRANSCRIPT_BEHAVIOR_BOOT_FIELD_SPECS,
-                root_exports=("transcript_behavior",),
+FIXED_BOOT_GRAPH_SPEC = FixedBootGraphSpec(
+    (
+        BootObjectFamilySpec(
+            "before_glyphs",
+            (
+                BootObjectSpec("Transcript", "Transcript", (), global_exports=("Transcript",)),
+                BootObjectSpec("Display", "Display", (), global_exports=("Display",)),
+                BootObjectSpec("BitBlt", "BitBlt", (), global_exports=("BitBlt",)),
+                BootObjectSpec("Glyphs", "Glyphs", (), global_exports=("Glyphs",)),
+                BootObjectSpec("FormFactory", "FormFactory", (), global_exports=("Form",)),
+                BootObjectSpec("BitmapFactory", "BitmapFactory", (), global_exports=("Bitmap",)),
+                BootObjectSpec(
+                    "TranscriptLayout",
+                    "TextLayout",
+                    build_small_integer_boot_field_specs(TRANSCRIPT_LAYOUT_FIELD_VALUES),
+                    root_exports=("transcript_layout",),
+                ),
+                BootObjectSpec(
+                    "TranscriptStyle",
+                    "TextStyle",
+                    build_small_integer_boot_field_specs(TRANSCRIPT_STYLE_FIELD_VALUES),
+                    root_exports=("transcript_style",),
+                ),
+                BootObjectSpec(
+                    "FramebufferBitmap",
+                    "Bitmap",
+                    build_small_integer_boot_field_specs(FRAMEBUFFER_BITMAP_FIELD_VALUES),
+                    root_exports=("framebuffer_bitmap",),
+                ),
+                BootObjectSpec(
+                    "DefaultForm",
+                    "Form",
+                    DEFAULT_FORM_BOOT_FIELD_SPECS,
+                    root_exports=("default_form",),
+                ),
             ),
         ),
-    ),
-]
-BOOT_OBJECT_FAMILY_SPECS_BY_NAME = {
-    family_spec.name: family_spec
-    for family_spec in BOOT_OBJECT_FAMILY_SPECS
-}
-BOOT_OBJECT_FAMILY_NAMES = [family_spec.name for family_spec in BOOT_OBJECT_FAMILY_SPECS]
+        BootObjectFamilySpec("glyph_bitmaps", tuple(build_glyph_bitmap_boot_specs()), collect_object_indices=True),
+        BootObjectFamilySpec(
+            "after_glyphs",
+            (
+                BootObjectSpec(
+                    "TranscriptMetrics",
+                    "TextMetrics",
+                    build_small_integer_boot_field_specs(TRANSCRIPT_METRICS_FIELD_VALUES),
+                    root_exports=("transcript_metrics",),
+                ),
+                BootObjectSpec(
+                    "TranscriptBehavior",
+                    "TextBehavior",
+                    TRANSCRIPT_BEHAVIOR_BOOT_FIELD_SPECS,
+                    root_exports=("transcript_behavior",),
+                ),
+            ),
+        ),
+    )
+)
+
+
+def build_boot_object_family_spec_map(fixed_boot_graph_spec: FixedBootGraphSpec) -> dict[str, BootObjectFamilySpec]:
+    family_spec_map: dict[str, BootObjectFamilySpec] = {}
+
+    for family_spec in fixed_boot_graph_spec.family_specs:
+        if family_spec.name in family_spec_map:
+            raise AssertionError(f"duplicate boot object family spec name {family_spec.name!r}")
+        family_spec_map[family_spec.name] = family_spec
+    return family_spec_map
+
+
+BOOT_OBJECT_FAMILY_SPECS = list(FIXED_BOOT_GRAPH_SPEC.family_specs)
+BOOT_OBJECT_FAMILY_SPECS_BY_NAME = build_boot_object_family_spec_map(FIXED_BOOT_GRAPH_SPEC)
+BOOT_OBJECT_FAMILY_NAMES = [family_spec.name for family_spec in FIXED_BOOT_GRAPH_SPEC.family_specs]
 BOOT_OBJECT_SPECS_BEFORE_GLYPHS = BOOT_OBJECT_FAMILY_SPECS_BY_NAME["before_glyphs"].object_specs
 GLYPH_BITMAP_BOOT_SPECS = BOOT_OBJECT_FAMILY_SPECS_BY_NAME["glyph_bitmaps"].object_specs
 BOOT_OBJECT_SPECS_AFTER_GLYPHS = BOOT_OBJECT_FAMILY_SPECS_BY_NAME["after_glyphs"].object_specs
 
 
-def flatten_boot_object_specs() -> list[BootObjectSpec]:
+def flatten_boot_object_specs(fixed_boot_graph_spec: FixedBootGraphSpec) -> list[BootObjectSpec]:
     return [
         object_spec
-        for family_spec in BOOT_OBJECT_FAMILY_SPECS
+        for family_spec in fixed_boot_graph_spec.family_specs
         for object_spec in family_spec.object_specs
     ]
 
 
-def build_boot_object_spec_map() -> dict[str, BootObjectSpec]:
+def build_boot_object_spec_map(object_specs: list[BootObjectSpec]) -> dict[str, BootObjectSpec]:
     spec_map: dict[str, BootObjectSpec] = {}
 
-    for object_spec in BOOT_OBJECT_SPECS_IN_ORDER:
+    for object_spec in object_specs:
         if object_spec.name in spec_map:
             raise AssertionError(f"duplicate boot object spec name {object_spec.name!r}")
         spec_map[object_spec.name] = object_spec
     return spec_map
 
 
-BOOT_OBJECT_SPECS_IN_ORDER = flatten_boot_object_specs()
+BOOT_OBJECT_SPECS_IN_ORDER = flatten_boot_object_specs(FIXED_BOOT_GRAPH_SPEC)
 BOOT_OBJECT_SPEC_NAMES_IN_ORDER = [object_spec.name for object_spec in BOOT_OBJECT_SPECS_IN_ORDER]
-BOOT_OBJECT_SPECS_BY_NAME = build_boot_object_spec_map()
+BOOT_OBJECT_SPECS_BY_NAME = build_boot_object_spec_map(BOOT_OBJECT_SPECS_IN_ORDER)
 BOOT_OBJECT_FIXED_COUNT = len(BOOT_OBJECT_SPECS_IN_ORDER)
 
 
-def build_boot_object_export_map(export_kind: str) -> dict[str, str]:
+def build_boot_object_export_map(
+    object_specs: list[BootObjectSpec],
+    export_kind: str,
+) -> dict[str, str]:
     export_map: dict[str, str] = {}
 
-    for object_spec in BOOT_OBJECT_SPECS_IN_ORDER:
+    for object_spec in object_specs:
         export_names = object_spec.global_exports if export_kind == "global" else object_spec.root_exports
         for export_name in export_names:
             if export_name in export_map:
@@ -585,8 +605,8 @@ def build_boot_object_export_map(export_kind: str) -> dict[str, str]:
     return export_map
 
 
-GLOBAL_NAME_TO_BOOT_OBJECT_NAME = build_boot_object_export_map("global")
-SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME = build_boot_object_export_map("root")
+GLOBAL_NAME_TO_BOOT_OBJECT_NAME = build_boot_object_export_map(BOOT_OBJECT_SPECS_IN_ORDER, "global")
+SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME = build_boot_object_export_map(BOOT_OBJECT_SPECS_IN_ORDER, "root")
 KERNEL_METHOD_IMPLEMENTATION_COMPILED = "compiled"
 KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE = "primitive"
 KERNEL_CLASS_HEADER_PATTERN = re.compile(
@@ -1639,7 +1659,7 @@ def build_fixed_boot_seed_objects() -> tuple[list[SeedObject], dict[str, int], l
     seed_object_indices_by_name: dict[str, int] = {}
     glyph_object_indices: list[int] = []
 
-    for family_spec in BOOT_OBJECT_FAMILY_SPECS:
+    for family_spec in FIXED_BOOT_GRAPH_SPEC.family_specs:
         for spec in family_spec.object_specs:
             object_index = add_named_seed_object(
                 seed_objects,
