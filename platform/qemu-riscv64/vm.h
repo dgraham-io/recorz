@@ -79,6 +79,7 @@ enum recorz_mvp_object_kind {
     RECORZ_MVP_OBJECT_FIELD_SEND_METHOD = 18,
     RECORZ_MVP_OBJECT_ROOT_SEND_METHOD = 19,
     RECORZ_MVP_OBJECT_ROOT_VALUE_METHOD = 20,
+    RECORZ_MVP_OBJECT_INTERPRETED_METHOD = 21,
 };
 
 enum recorz_mvp_method_entry {

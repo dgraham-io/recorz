@@ -132,7 +132,7 @@ IMAGE_ENTRY_FORMAT = "<4sHHHHHH"
 IMAGE_ENTRY_KIND_DOIT = 1
 
 SEED_MAGIC = b"RCZS"
-SEED_VERSION = 14
+SEED_VERSION = 15
 SEED_HEADER_FORMAT = "<4sHHHHHH"
 SEED_BINDING_FORMAT = "<HH"
 SEED_OBJECT_HEADER_FORMAT = "<BBH"
@@ -155,6 +155,7 @@ ROOT_SEND_METHOD_FIELD_ROOT_ID = 0
 ROOT_SEND_METHOD_FIELD_SELECTOR = 1
 ROOT_SEND_METHOD_FIELD_RETURN_MODE = 2
 ROOT_VALUE_METHOD_FIELD_ROOT_ID = 0
+INTERPRETED_METHOD_MAX_INSTRUCTIONS = 4
 
 SEED_FIELD_NIL = 0
 SEED_FIELD_SMALL_INTEGER = 1
@@ -180,6 +181,7 @@ SEED_OBJECT_ACCESSOR_METHOD = 17
 SEED_OBJECT_FIELD_SEND_METHOD = 18
 SEED_OBJECT_ROOT_SEND_METHOD = 19
 SEED_OBJECT_ROOT_VALUE_METHOD = 20
+SEED_OBJECT_INTERPRETED_METHOD = 21
 
 SEED_ROOT_DEFAULT_FORM = 1
 SEED_ROOT_FRAMEBUFFER_BITMAP = 2
@@ -279,19 +281,56 @@ METHOD_RETURN_RESULT = 1
 METHOD_RETURN_RECEIVER = 2
 ROOT_SEND_METHOD_SPEC_BY_ENTRY_NAME = {
     "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR": (SEED_ROOT_DEFAULT_FORM, "newline", METHOD_RETURN_RECEIVER),
-    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_CLEAR": (SEED_ROOT_DEFAULT_FORM, "clear", METHOD_RETURN_RECEIVER),
-    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_NEWLINE": (SEED_ROOT_DEFAULT_FORM, "newline", METHOD_RETURN_RECEIVER),
     "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW": (SEED_ROOT_DEFAULT_FORM, "writeString:", METHOD_RETURN_RECEIVER),
-    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_WRITE_STRING": (SEED_ROOT_DEFAULT_FORM, "writeString:", METHOD_RETURN_RECEIVER),
 }
-ROOT_VALUE_METHOD_ROOT_BY_ENTRY_NAME = {
-    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM": SEED_ROOT_DEFAULT_FORM,
+ROOT_VALUE_METHOD_ROOT_BY_ENTRY_NAME: dict[str, int] = {}
+INTERPRETED_METHOD_OP_PUSH_ROOT = 1
+INTERPRETED_METHOD_OP_PUSH_ARGUMENT = 2
+INTERPRETED_METHOD_OP_SEND = 3
+INTERPRETED_METHOD_OP_RETURN_TOP = 4
+INTERPRETED_METHOD_OP_RETURN_RECEIVER = 5
+INTERPRETED_METHOD_OPCODE_VALUES = {
+    "push_root": INTERPRETED_METHOD_OP_PUSH_ROOT,
+    "push_argument": INTERPRETED_METHOD_OP_PUSH_ARGUMENT,
+    "send": INTERPRETED_METHOD_OP_SEND,
+    "return_top": INTERPRETED_METHOD_OP_RETURN_TOP,
+    "return_receiver": INTERPRETED_METHOD_OP_RETURN_RECEIVER,
+}
+INTERPRETED_METHOD_PROGRAM_BY_ENTRY_NAME = {
+    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM": [
+        ("push_root", SEED_ROOT_DEFAULT_FORM, 0),
+        ("return_top", 0, 0),
+    ],
+    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_CLEAR": [
+        ("push_root", SEED_ROOT_DEFAULT_FORM, 0),
+        ("send", "clear", 0),
+        ("return_receiver", 0, 0),
+    ],
+    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_WRITE_STRING": [
+        ("push_root", SEED_ROOT_DEFAULT_FORM, 0),
+        ("push_argument", 0, 0),
+        ("send", "writeString:", 1),
+        ("return_receiver", 0, 0),
+    ],
+    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_NEWLINE": [
+        ("push_root", SEED_ROOT_DEFAULT_FORM, 0),
+        ("send", "newline", 0),
+        ("return_receiver", 0, 0),
+    ],
 }
 BUILTIN_METHODS_BY_KIND: dict[int, list[tuple[str, int, str]]] = {
-    kind: [] for kind in range(SEED_OBJECT_TRANSCRIPT, SEED_OBJECT_ROOT_VALUE_METHOD + 1)
+    kind: [] for kind in range(SEED_OBJECT_TRANSCRIPT, SEED_OBJECT_INTERPRETED_METHOD + 1)
 }
 for entry_name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS:
     BUILTIN_METHODS_BY_KIND[owner_kind].append((selector, argument_count, entry_name))
+
+
+def encode_interpreted_instruction(opcode_name: str, operand_a: int = 0, operand_b: int = 0) -> int:
+    return (
+        INTERPRETED_METHOD_OPCODE_VALUES[opcode_name]
+        | ((operand_a & 0xFF) << 8)
+        | ((operand_b & 0xFFFF) << 16)
+    )
 
 
 class Lowerer:
@@ -551,6 +590,7 @@ def build_seed_manifest() -> bytes:
         SEED_OBJECT_FIELD_SEND_METHOD,
         SEED_OBJECT_ROOT_SEND_METHOD,
         SEED_OBJECT_ROOT_VALUE_METHOD,
+        SEED_OBJECT_INTERPRETED_METHOD,
     ]
     class_indices = {
         SEED_OBJECT_TRANSCRIPT: class_class_index + 1,
@@ -572,6 +612,7 @@ def build_seed_manifest() -> bytes:
         SEED_OBJECT_FIELD_SEND_METHOD: class_class_index + 17,
         SEED_OBJECT_ROOT_SEND_METHOD: class_class_index + 18,
         SEED_OBJECT_ROOT_VALUE_METHOD: class_class_index + 19,
+        SEED_OBJECT_INTERPRETED_METHOD: class_class_index + 20,
     }
 
     for seed_object in seed_objects:
@@ -590,6 +631,8 @@ def build_seed_manifest() -> bytes:
     root_send_method_seed_objects: list[SeedObject] = []
     root_value_method_indices: dict[str, int] = {}
     root_value_method_seed_objects: list[SeedObject] = []
+    interpreted_method_indices: dict[str, int] = {}
+    interpreted_method_seed_objects: list[SeedObject] = []
     method_entry_indices: dict[str, int] = {}
     method_entry_seed_objects: list[SeedObject] = []
     method_seed_objects: list[SeedObject] = []
@@ -666,7 +709,39 @@ def build_seed_manifest() -> bytes:
             )
         )
 
-    method_entry_start_index = root_value_method_start_index + len(root_value_method_seed_objects)
+    interpreted_method_start_index = root_value_method_start_index + len(root_value_method_seed_objects)
+    for entry_name, program in INTERPRETED_METHOD_PROGRAM_BY_ENTRY_NAME.items():
+        encoded_fields: list[tuple[int, int]] = []
+
+        for opcode_name, operand_a, operand_b in program:
+            if opcode_name == "send":
+                encoded_fields.append(
+                    (
+                        SEED_FIELD_SMALL_INTEGER,
+                        encode_interpreted_instruction(
+                            opcode_name,
+                            SELECTOR_VALUES[SELECTOR_IDS[str(operand_a)]],
+                            int(operand_b),
+                        ),
+                    )
+                )
+            else:
+                encoded_fields.append(
+                    (
+                        SEED_FIELD_SMALL_INTEGER,
+                        encode_interpreted_instruction(opcode_name, int(operand_a), int(operand_b)),
+                    )
+                )
+        interpreted_method_indices[entry_name] = interpreted_method_start_index + len(interpreted_method_seed_objects)
+        interpreted_method_seed_objects.append(
+            SeedObject(
+                SEED_OBJECT_INTERPRETED_METHOD,
+                class_indices[SEED_OBJECT_INTERPRETED_METHOD],
+                encoded_fields,
+            )
+        )
+
+    method_entry_start_index = interpreted_method_start_index + len(interpreted_method_seed_objects)
     for entry_name, _owner_kind, _selector, _argument_count in METHOD_ENTRY_DEFINITIONS:
         implementation_kind = SEED_FIELD_NIL
         implementation_index = 0
@@ -683,6 +758,9 @@ def build_seed_manifest() -> bytes:
         elif entry_name in root_value_method_indices:
             implementation_kind = SEED_FIELD_OBJECT_INDEX
             implementation_index = root_value_method_indices[entry_name]
+        elif entry_name in interpreted_method_indices:
+            implementation_kind = SEED_FIELD_OBJECT_INDEX
+            implementation_index = interpreted_method_indices[entry_name]
         method_entry_indices[entry_name] = method_entry_start_index + len(method_entry_seed_objects)
         method_entry_seed_objects.append(
             SeedObject(
@@ -739,6 +817,7 @@ def build_seed_manifest() -> bytes:
     seed_objects.extend(field_send_method_seed_objects)
     seed_objects.extend(root_send_method_seed_objects)
     seed_objects.extend(root_value_method_seed_objects)
+    seed_objects.extend(interpreted_method_seed_objects)
     seed_objects.extend(method_entry_seed_objects)
     seed_objects.extend(method_seed_objects)
 

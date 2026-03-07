@@ -49,6 +49,19 @@ ROOT_VALUE_METHOD_ROOT_BY_ENTRY_ID = {
     mvp.METHOD_ENTRY_VALUES[name]: root_id
     for name, root_id in mvp.ROOT_VALUE_METHOD_ROOT_BY_ENTRY_NAME.items()
 }
+INTERPRETED_METHOD_PROGRAM_BY_ENTRY_ID = {
+    mvp.METHOD_ENTRY_VALUES[name]: [
+        (
+            mvp.encode_interpreted_instruction(
+                opcode_name,
+                mvp.SELECTOR_VALUES[mvp.SELECTOR_IDS[operand_a]] if opcode_name == "send" else operand_a,
+                operand_b,
+            )
+        )
+        for opcode_name, operand_a, operand_b in program
+    ]
+    for name, program in mvp.INTERPRETED_METHOD_PROGRAM_BY_ENTRY_NAME.items()
+}
 
 
 class ImageInspectionError(RuntimeError):
@@ -117,6 +130,7 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
     field_send_method_object_count = 0
     root_send_method_object_count = 0
     root_value_method_object_count = 0
+    interpreted_method_object_count = 0
     selector_ids: set[int] = set()
     method_entry_ids: set[int] = set()
     for _ in range(object_count):
@@ -160,6 +174,8 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
             root_send_method_object_count += 1
         if object_kind == mvp.SEED_OBJECT_ROOT_VALUE_METHOD:
             root_value_method_object_count += 1
+        if object_kind == mvp.SEED_OBJECT_INTERPRETED_METHOD:
+            interpreted_method_object_count += 1
         objects.append(
             {
                 "object_kind": object_kind,
@@ -285,11 +301,13 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
                 field_send_expected = FIELD_SEND_METHOD_SPEC_BY_ENTRY_ID.get(int(entry_id_field[1]))
                 root_send_expected = ROOT_SEND_METHOD_SPEC_BY_ENTRY_ID.get(int(entry_id_field[1]))
                 root_value_expected = ROOT_VALUE_METHOD_ROOT_BY_ENTRY_ID.get(int(entry_id_field[1]))
+                interpreted_expected = INTERPRETED_METHOD_PROGRAM_BY_ENTRY_ID.get(int(entry_id_field[1]))
                 if (
                     accessor_expected is None
                     and field_send_expected is None
                     and root_send_expected is None
                     and root_value_expected is None
+                    and interpreted_expected is None
                 ):
                     if implementation_field[0] != mvp.SEED_FIELD_NIL:
                         raise ImageInspectionError("primitive method entry unexpectedly has an implementation object")
@@ -381,7 +399,7 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
                         or delegated_selector_field[1] != root_send_expected[1]
                     ):
                         raise ImageInspectionError("root-send method selector does not match entry")
-                else:
+                elif root_value_expected is not None:
                     if implementation_field[0] != mvp.SEED_FIELD_OBJECT_INDEX:
                         raise ImageInspectionError("root-value method entry is missing an implementation object")
                     implementation_index = int(implementation_field[1])
@@ -398,6 +416,21 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
                         or root_id_field[1] != root_value_expected
                     ):
                         raise ImageInspectionError("root-value method root id is invalid")
+                else:
+                    if implementation_field[0] != mvp.SEED_FIELD_OBJECT_INDEX:
+                        raise ImageInspectionError("interpreted method entry is missing an implementation object")
+                    implementation_index = int(implementation_field[1])
+                    if implementation_index < 0 or implementation_index >= object_count:
+                        raise ImageInspectionError("interpreted method entry implementation is out of range")
+                    implementation_summary = objects[implementation_index]
+                    if implementation_summary["object_kind"] != mvp.SEED_OBJECT_INTERPRETED_METHOD:
+                        raise ImageInspectionError("interpreted method entry implementation is invalid")
+                    if int(implementation_summary["field_count"]) != len(interpreted_expected):
+                        raise ImageInspectionError("interpreted method field count is invalid")
+                    for field_index, expected_instruction in enumerate(interpreted_expected):
+                        field = implementation_summary["fields"][field_index]
+                        if field[0] != mvp.SEED_FIELD_SMALL_INTEGER or field[1] != expected_instruction:
+                            raise ImageInspectionError("interpreted method instruction does not match entry")
                 method_entry_ids.add(int(entry_id_field[1]))
             declared_method_count += method_count
 
@@ -447,6 +480,7 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
         "field_send_method_object_count": field_send_method_object_count,
         "root_send_method_object_count": root_send_method_object_count,
         "root_value_method_object_count": root_value_method_object_count,
+        "interpreted_method_object_count": interpreted_method_object_count,
         "declared_method_count": declared_method_count,
         "method_entry_count": len(method_entry_ids),
         "global_binding_count": global_binding_count,
@@ -578,6 +612,7 @@ def render_summary(summary: dict[str, object]) -> str:
         f"field_send_method_objects={seed['field_send_method_object_count']} "
         f"root_send_method_objects={seed['root_send_method_object_count']} "
         f"root_value_method_objects={seed['root_value_method_object_count']} "
+        f"interpreted_method_objects={seed['interpreted_method_object_count']} "
         f"method_entry_objects={seed['method_entry_object_count']} "
         f"method_entries={seed['method_entry_count']} "
         f"globals={seed['global_binding_count']} roots={seed['root_binding_count']} "
