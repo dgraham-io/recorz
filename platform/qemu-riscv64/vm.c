@@ -41,15 +41,7 @@
 #define METHOD_ENTRY_FIELD_EXECUTION_ID 0U
 #define METHOD_ENTRY_FIELD_IMPLEMENTATION 1U
 #define SELECTOR_FIELD_SELECTOR_ID 0U
-#define ACCESSOR_METHOD_FIELD_FIELD_INDEX 0U
-#define FIELD_SEND_METHOD_FIELD_FIELD_INDEX 0U
-#define FIELD_SEND_METHOD_FIELD_SELECTOR 1U
-#define ROOT_SEND_METHOD_FIELD_ROOT_ID 0U
-#define ROOT_SEND_METHOD_FIELD_SELECTOR 1U
-#define ROOT_SEND_METHOD_FIELD_RETURN_MODE 2U
-#define ROOT_VALUE_METHOD_FIELD_ROOT_ID 0U
 #define COMPILED_METHOD_MAX_INSTRUCTIONS 4U
-#define INTERPRETED_METHOD_MAX_INSTRUCTIONS 4U
 
 #define COMPILED_METHOD_OP_PUSH_GLOBAL 1U
 #define COMPILED_METHOD_OP_PUSH_ROOT 2U
@@ -58,12 +50,6 @@
 #define COMPILED_METHOD_OP_SEND 5U
 #define COMPILED_METHOD_OP_RETURN_TOP 6U
 #define COMPILED_METHOD_OP_RETURN_RECEIVER 7U
-
-#define INTERPRETED_METHOD_OP_PUSH_ROOT 1U
-#define INTERPRETED_METHOD_OP_PUSH_ARGUMENT 2U
-#define INTERPRETED_METHOD_OP_SEND 3U
-#define INTERPRETED_METHOD_OP_RETURN_TOP 4U
-#define INTERPRETED_METHOD_OP_RETURN_RECEIVER 5U
 
 #define BITMAP_STORAGE_FRAMEBUFFER 1U
 #define BITMAP_STORAGE_GLYPH_MONO 2U
@@ -950,94 +936,6 @@ static struct recorz_mvp_value method_entry_implementation_value(const struct re
     return heap_get_field(entry_object, METHOD_ENTRY_FIELD_IMPLEMENTATION);
 }
 
-static uint32_t accessor_method_field_index(const struct recorz_mvp_heap_object *accessor_object) {
-    if (accessor_object->kind != RECORZ_MVP_OBJECT_ACCESSOR_METHOD) {
-        machine_panic("method entry implementation is not an accessor method");
-    }
-    return small_integer_u32(
-        heap_get_field(accessor_object, ACCESSOR_METHOD_FIELD_FIELD_INDEX),
-        "accessor method field index is not a small integer"
-    );
-}
-
-static uint32_t field_send_method_field_index(const struct recorz_mvp_heap_object *field_send_object) {
-    if (field_send_object->kind != RECORZ_MVP_OBJECT_FIELD_SEND_METHOD) {
-        machine_panic("method entry implementation is not a field-send method");
-    }
-    return small_integer_u32(
-        heap_get_field(field_send_object, FIELD_SEND_METHOD_FIELD_FIELD_INDEX),
-        "field-send method field index is not a small integer"
-    );
-}
-
-static const struct recorz_mvp_heap_object *field_send_method_selector_object(
-    const struct recorz_mvp_heap_object *field_send_object
-) {
-    struct recorz_mvp_value selector_value;
-
-    if (field_send_object->kind != RECORZ_MVP_OBJECT_FIELD_SEND_METHOD) {
-        machine_panic("method entry implementation is not a field-send method");
-    }
-    selector_value = heap_get_field(field_send_object, FIELD_SEND_METHOD_FIELD_SELECTOR);
-    if (selector_value.kind != RECORZ_MVP_VALUE_OBJECT) {
-        machine_panic("field-send method selector is not a selector object");
-    }
-    return heap_object_for_value(selector_value);
-}
-
-static uint32_t field_send_method_selector(const struct recorz_mvp_heap_object *field_send_object) {
-    return selector_object_selector_id(field_send_method_selector_object(field_send_object));
-}
-
-static uint32_t root_send_method_root_id(const struct recorz_mvp_heap_object *root_send_object) {
-    if (root_send_object->kind != RECORZ_MVP_OBJECT_ROOT_SEND_METHOD) {
-        machine_panic("method entry implementation is not a root-send method");
-    }
-    return small_integer_u32(
-        heap_get_field(root_send_object, ROOT_SEND_METHOD_FIELD_ROOT_ID),
-        "root-send method root id is not a small integer"
-    );
-}
-
-static const struct recorz_mvp_heap_object *root_send_method_selector_object(
-    const struct recorz_mvp_heap_object *root_send_object
-) {
-    struct recorz_mvp_value selector_value;
-
-    if (root_send_object->kind != RECORZ_MVP_OBJECT_ROOT_SEND_METHOD) {
-        machine_panic("method entry implementation is not a root-send method");
-    }
-    selector_value = heap_get_field(root_send_object, ROOT_SEND_METHOD_FIELD_SELECTOR);
-    if (selector_value.kind != RECORZ_MVP_VALUE_OBJECT) {
-        machine_panic("root-send method selector is not a selector object");
-    }
-    return heap_object_for_value(selector_value);
-}
-
-static uint32_t root_send_method_selector(const struct recorz_mvp_heap_object *root_send_object) {
-    return selector_object_selector_id(root_send_method_selector_object(root_send_object));
-}
-
-static uint32_t root_send_method_return_mode(const struct recorz_mvp_heap_object *root_send_object) {
-    if (root_send_object->kind != RECORZ_MVP_OBJECT_ROOT_SEND_METHOD) {
-        machine_panic("method entry implementation is not a root-send method");
-    }
-    return small_integer_u32(
-        heap_get_field(root_send_object, ROOT_SEND_METHOD_FIELD_RETURN_MODE),
-        "root-send method return mode is not a small integer"
-    );
-}
-
-static uint32_t root_value_method_root_id(const struct recorz_mvp_heap_object *root_value_object) {
-    if (root_value_object->kind != RECORZ_MVP_OBJECT_ROOT_VALUE_METHOD) {
-        machine_panic("method entry implementation is not a root-value method");
-    }
-    return small_integer_u32(
-        heap_get_field(root_value_object, ROOT_VALUE_METHOD_FIELD_ROOT_ID),
-        "root-value method root id is not a small integer"
-    );
-}
-
 static uint32_t compiled_method_instruction_word(
     const struct recorz_mvp_heap_object *compiled_method,
     uint8_t index
@@ -1060,31 +958,6 @@ static uint8_t compiled_method_instruction_operand_a(uint32_t instruction) {
 }
 
 static uint16_t compiled_method_instruction_operand_b(uint32_t instruction) {
-    return (uint16_t)((instruction >> 16) & 0xFFFFU);
-}
-
-static uint32_t interpreted_method_instruction_word(
-    const struct recorz_mvp_heap_object *interpreted_method,
-    uint8_t index
-) {
-    if (interpreted_method->kind != RECORZ_MVP_OBJECT_INTERPRETED_METHOD) {
-        machine_panic("method entry implementation is not an interpreted method");
-    }
-    return small_integer_u32(
-        heap_get_field(interpreted_method, index),
-        "interpreted method instruction is not a small integer"
-    );
-}
-
-static uint8_t interpreted_method_instruction_opcode(uint32_t instruction) {
-    return (uint8_t)(instruction & 0xFFU);
-}
-
-static uint8_t interpreted_method_instruction_operand_a(uint32_t instruction) {
-    return (uint8_t)((instruction >> 8) & 0xFFU);
-}
-
-static uint16_t interpreted_method_instruction_operand_b(uint32_t instruction) {
     return (uint16_t)((instruction >> 16) & 0xFFFFU);
 }
 
@@ -1245,78 +1118,6 @@ static void validate_compiled_method(
     }
 }
 
-static void validate_interpreted_method(
-    const struct recorz_mvp_heap_object *interpreted_method,
-    const struct recorz_mvp_method_entry_spec *entry_spec
-) {
-    uint8_t instruction_index;
-    uint32_t stack_depth = 0U;
-
-    if (interpreted_method->kind != RECORZ_MVP_OBJECT_INTERPRETED_METHOD) {
-        machine_panic("interpreted method entry implementation is not an interpreted method");
-    }
-    if (interpreted_method->field_count == 0U || interpreted_method->field_count > INTERPRETED_METHOD_MAX_INSTRUCTIONS) {
-        machine_panic("interpreted method field count is invalid");
-    }
-    for (instruction_index = 0U; instruction_index < interpreted_method->field_count; ++instruction_index) {
-        uint32_t instruction = interpreted_method_instruction_word(interpreted_method, instruction_index);
-        uint8_t opcode = interpreted_method_instruction_opcode(instruction);
-        uint8_t operand_a = interpreted_method_instruction_operand_a(instruction);
-        uint16_t operand_b = interpreted_method_instruction_operand_b(instruction);
-        uint32_t send_count;
-
-        if (instruction_index + 1U < interpreted_method->field_count &&
-            (opcode == INTERPRETED_METHOD_OP_RETURN_TOP || opcode == INTERPRETED_METHOD_OP_RETURN_RECEIVER)) {
-            machine_panic("interpreted method returns before the final instruction");
-        }
-        switch (opcode) {
-            case INTERPRETED_METHOD_OP_PUSH_ROOT:
-                if (operand_a < RECORZ_MVP_SEED_ROOT_DEFAULT_FORM ||
-                    operand_a > RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS) {
-                    machine_panic("interpreted method pushRoot root id is out of range");
-                }
-                ++stack_depth;
-                break;
-            case INTERPRETED_METHOD_OP_PUSH_ARGUMENT:
-                if (operand_a >= entry_spec->argument_count) {
-                    machine_panic("interpreted method pushArgument index is out of range");
-                }
-                ++stack_depth;
-                break;
-            case INTERPRETED_METHOD_OP_SEND:
-                if (operand_a < RECORZ_MVP_SELECTOR_SHOW || operand_a > RECORZ_MVP_SELECTOR_INSTANCE_KIND) {
-                    machine_panic("interpreted method send selector is out of range");
-                }
-                send_count = operand_b;
-                if (send_count > MAX_SEND_ARGS || send_count > entry_spec->argument_count) {
-                    machine_panic("interpreted method send argument count is out of range");
-                }
-                if (stack_depth < send_count + 1U) {
-                    machine_panic("interpreted method send stack underflow");
-                }
-                stack_depth -= send_count;
-                break;
-            case INTERPRETED_METHOD_OP_RETURN_TOP:
-                if (stack_depth == 0U) {
-                    machine_panic("interpreted method returnTop stack underflow");
-                }
-                break;
-            case INTERPRETED_METHOD_OP_RETURN_RECEIVER:
-                break;
-            default:
-                machine_panic("interpreted method opcode is unknown");
-        }
-    }
-    if (interpreted_method_instruction_opcode(
-            interpreted_method_instruction_word(interpreted_method, (uint8_t)(interpreted_method->field_count - 1U))
-        ) != INTERPRETED_METHOD_OP_RETURN_TOP &&
-        interpreted_method_instruction_opcode(
-            interpreted_method_instruction_word(interpreted_method, (uint8_t)(interpreted_method->field_count - 1U))
-        ) != INTERPRETED_METHOD_OP_RETURN_RECEIVER) {
-        machine_panic("interpreted method is missing a final return");
-    }
-}
-
 static void validate_class_superclass(const struct recorz_mvp_heap_object *class_object) {
     struct recorz_mvp_value superclass_value = heap_get_field(class_object, CLASS_FIELD_SUPERCLASS);
     const struct recorz_mvp_heap_object *superclass_object;
@@ -1421,59 +1222,11 @@ static void validate_class_method_table(
             machine_panic("method entry implementation object is missing");
         }
         implementation_object = heap_object_for_value(implementation_value);
-        if (entry_spec->implementation_kind == RECORZ_MVP_METHOD_IMPLEMENTATION_ACCESSOR) {
-            if (implementation_object->kind != RECORZ_MVP_OBJECT_ACCESSOR_METHOD) {
-                machine_panic("accessor method entry implementation is not an accessor method");
-            }
-            if (accessor_method_field_index(implementation_object) != entry_spec->implementation_field_index) {
-                machine_panic("accessor method entry field index does not match entry");
-            }
-            continue;
-        }
-        if (entry_spec->implementation_kind == RECORZ_MVP_METHOD_IMPLEMENTATION_FIELD_SEND) {
-            if (implementation_object->kind != RECORZ_MVP_OBJECT_FIELD_SEND_METHOD) {
-                machine_panic("field-send method entry implementation is not a field-send method");
-            }
-            if (field_send_method_field_index(implementation_object) != entry_spec->implementation_field_index) {
-                machine_panic("field-send method entry field index does not match entry");
-            }
-            if (field_send_method_selector(implementation_object) != entry_spec->implementation_selector) {
-                machine_panic("field-send method entry selector does not match entry");
-            }
-            continue;
-        }
-        if (entry_spec->implementation_kind == RECORZ_MVP_METHOD_IMPLEMENTATION_ROOT_SEND) {
-            if (implementation_object->kind != RECORZ_MVP_OBJECT_ROOT_SEND_METHOD) {
-                machine_panic("root-send method entry implementation is not a root-send method");
-            }
-            if (root_send_method_root_id(implementation_object) != entry_spec->implementation_root_id) {
-                machine_panic("root-send method root id does not match entry");
-            }
-            if (root_send_method_selector(implementation_object) != entry_spec->implementation_selector) {
-                machine_panic("root-send method selector does not match entry");
-            }
-            if (root_send_method_return_mode(implementation_object) != entry_spec->implementation_return_mode) {
-                machine_panic("root-send method return mode does not match entry");
-            }
-            continue;
-        }
-        if (entry_spec->implementation_kind == RECORZ_MVP_METHOD_IMPLEMENTATION_ROOT_VALUE) {
-            if (implementation_object->kind != RECORZ_MVP_OBJECT_ROOT_VALUE_METHOD) {
-                machine_panic("root-value method entry implementation is not a root-value method");
-            }
-            if (root_value_method_root_id(implementation_object) != entry_spec->implementation_root_id) {
-                machine_panic("root-value method root id does not match entry");
-            }
-            continue;
-        }
         if (entry_spec->implementation_kind == RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED) {
             validate_compiled_method(implementation_object, entry_spec);
             continue;
         }
-        if (entry_spec->implementation_kind != RECORZ_MVP_METHOD_IMPLEMENTATION_INTERPRETED) {
-            machine_panic("method entry implementation kind is unknown");
-        }
-        validate_interpreted_method(implementation_object, entry_spec);
+        machine_panic("method entry implementation kind is unknown");
     }
 }
 
@@ -2382,53 +2135,6 @@ static void perform_send(
     const char *text
 );
 
-static void execute_accessor_method(
-    const struct recorz_mvp_heap_object *receiver_object,
-    const struct recorz_mvp_heap_object *accessor_method
-) {
-    uint32_t field_index = accessor_method_field_index(accessor_method);
-
-    push(heap_get_field(receiver_object, (uint8_t)field_index));
-}
-
-static void execute_field_send_method(
-    const struct recorz_mvp_heap_object *receiver_object,
-    const struct recorz_mvp_heap_object *field_send_method
-) {
-    struct recorz_mvp_value field_receiver =
-        heap_get_field(receiver_object, (uint8_t)field_send_method_field_index(field_send_method));
-    uint8_t selector = (uint8_t)field_send_method_selector(field_send_method);
-
-    remember_send_context(selector, 0U, field_receiver, 0);
-    perform_send(field_receiver, selector, 0U, 0, 0);
-}
-
-static void execute_root_send_method(
-    struct recorz_mvp_value receiver,
-    const struct recorz_mvp_heap_object *root_send_method,
-    uint16_t argument_count,
-    const struct recorz_mvp_value arguments[]
-) {
-    struct recorz_mvp_value root_receiver = seed_root_value(root_send_method_root_id(root_send_method));
-    uint8_t selector = (uint8_t)root_send_method_selector(root_send_method);
-    uint32_t return_mode = root_send_method_return_mode(root_send_method);
-
-    remember_send_context(selector, argument_count, root_receiver, arguments);
-    perform_send(root_receiver, selector, argument_count, arguments, 0);
-    if (return_mode == RECORZ_MVP_METHOD_RETURN_RESULT) {
-        return;
-    }
-    if (return_mode != RECORZ_MVP_METHOD_RETURN_RECEIVER) {
-        machine_panic("root-send method return mode is unknown");
-    }
-    (void)pop_value();
-    push(receiver);
-}
-
-static void execute_root_value_method(const struct recorz_mvp_heap_object *root_value_method) {
-    push(seed_root_value(root_value_method_root_id(root_value_method)));
-}
-
 static void execute_compiled_method(
     const struct recorz_mvp_heap_object *receiver_object,
     struct recorz_mvp_value receiver,
@@ -2496,66 +2202,6 @@ static void execute_compiled_method(
     machine_panic("compiled method did not return");
 }
 
-static void execute_interpreted_method(
-    struct recorz_mvp_value receiver,
-    uint16_t argument_count,
-    const struct recorz_mvp_value arguments[],
-    const struct recorz_mvp_heap_object *interpreted_method
-) {
-    struct recorz_mvp_value method_stack[INTERPRETED_METHOD_MAX_INSTRUCTIONS + MAX_SEND_ARGS];
-    uint32_t method_stack_size = 0U;
-    uint8_t instruction_index;
-
-    (void)argument_count;
-    if (interpreted_method->kind != RECORZ_MVP_OBJECT_INTERPRETED_METHOD) {
-        machine_panic("method entry implementation is not an interpreted method");
-    }
-    for (instruction_index = 0U; instruction_index < interpreted_method->field_count; ++instruction_index) {
-        uint32_t instruction = interpreted_method_instruction_word(interpreted_method, instruction_index);
-        uint8_t opcode = interpreted_method_instruction_opcode(instruction);
-        uint8_t operand_a = interpreted_method_instruction_operand_a(instruction);
-        uint16_t operand_b = interpreted_method_instruction_operand_b(instruction);
-
-        switch (opcode) {
-            case INTERPRETED_METHOD_OP_PUSH_ROOT:
-                method_stack[method_stack_size++] = seed_root_value((uint32_t)operand_a);
-                break;
-            case INTERPRETED_METHOD_OP_PUSH_ARGUMENT:
-                method_stack[method_stack_size++] = arguments[operand_a];
-                break;
-            case INTERPRETED_METHOD_OP_SEND: {
-                struct recorz_mvp_value send_receiver;
-                struct recorz_mvp_value send_arguments[MAX_SEND_ARGS];
-                uint16_t send_index;
-
-                if (method_stack_size < (uint32_t)operand_b + 1U) {
-                    machine_panic("interpreted method send stack underflow");
-                }
-                for (send_index = operand_b; send_index > 0U; --send_index) {
-                    send_arguments[send_index - 1U] = method_stack[--method_stack_size];
-                }
-                send_receiver = method_stack[--method_stack_size];
-                remember_send_context(operand_a, operand_b, send_receiver, send_arguments);
-                perform_send(send_receiver, operand_a, operand_b, send_arguments, 0);
-                method_stack[method_stack_size++] = pop_value();
-                break;
-            }
-            case INTERPRETED_METHOD_OP_RETURN_TOP:
-                if (method_stack_size == 0U) {
-                    machine_panic("interpreted method returnTop stack underflow");
-                }
-                push(method_stack[method_stack_size - 1U]);
-                return;
-            case INTERPRETED_METHOD_OP_RETURN_RECEIVER:
-                push(receiver);
-                return;
-            default:
-                machine_panic("interpreted method opcode is unknown");
-        }
-    }
-    machine_panic("interpreted method did not return");
-}
-
 static void dispatch_heap_object_send(
     const struct recorz_mvp_heap_object *object,
     uint8_t selector,
@@ -2589,52 +2235,12 @@ static void dispatch_heap_object_send(
     if (entry_spec->selector != selector || entry_spec->argument_count != argument_count) {
         machine_panic("method descriptor entry does not match send site");
     }
-    if (entry_spec->implementation_kind == RECORZ_MVP_METHOD_IMPLEMENTATION_ACCESSOR) {
-        if (implementation_value.kind != RECORZ_MVP_VALUE_OBJECT) {
-            machine_panic("accessor method entry is missing an implementation object");
-        }
-        implementation_object = heap_object_for_value(implementation_value);
-        execute_accessor_method(object, implementation_object);
-        return;
-    }
-    if (entry_spec->implementation_kind == RECORZ_MVP_METHOD_IMPLEMENTATION_FIELD_SEND) {
-        if (implementation_value.kind != RECORZ_MVP_VALUE_OBJECT) {
-            machine_panic("field-send method entry is missing an implementation object");
-        }
-        implementation_object = heap_object_for_value(implementation_value);
-        execute_field_send_method(object, implementation_object);
-        return;
-    }
-    if (entry_spec->implementation_kind == RECORZ_MVP_METHOD_IMPLEMENTATION_ROOT_SEND) {
-        if (implementation_value.kind != RECORZ_MVP_VALUE_OBJECT) {
-            machine_panic("root-send method entry is missing an implementation object");
-        }
-        implementation_object = heap_object_for_value(implementation_value);
-        execute_root_send_method(receiver, implementation_object, argument_count, arguments);
-        return;
-    }
-    if (entry_spec->implementation_kind == RECORZ_MVP_METHOD_IMPLEMENTATION_ROOT_VALUE) {
-        if (implementation_value.kind != RECORZ_MVP_VALUE_OBJECT) {
-            machine_panic("root-value method entry is missing an implementation object");
-        }
-        implementation_object = heap_object_for_value(implementation_value);
-        execute_root_value_method(implementation_object);
-        return;
-    }
     if (entry_spec->implementation_kind == RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED) {
         if (implementation_value.kind != RECORZ_MVP_VALUE_OBJECT) {
             machine_panic("compiled method entry is missing an implementation object");
         }
         implementation_object = heap_object_for_value(implementation_value);
         execute_compiled_method(object, receiver, argument_count, arguments, implementation_object);
-        return;
-    }
-    if (entry_spec->implementation_kind == RECORZ_MVP_METHOD_IMPLEMENTATION_INTERPRETED) {
-        if (implementation_value.kind != RECORZ_MVP_VALUE_OBJECT) {
-            machine_panic("interpreted method entry is missing an implementation object");
-        }
-        implementation_object = heap_object_for_value(implementation_value);
-        execute_interpreted_method(receiver, argument_count, arguments, implementation_object);
         return;
     }
     if (entry_spec->implementation_kind != RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE) {

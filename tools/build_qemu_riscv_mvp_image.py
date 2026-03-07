@@ -857,35 +857,11 @@ def build_seed_manifest() -> bytes:
         SEED_OBJECT_METHOD_DESCRIPTOR,
         SEED_OBJECT_METHOD_ENTRY,
         SEED_OBJECT_SELECTOR,
-        SEED_OBJECT_ACCESSOR_METHOD,
-        SEED_OBJECT_FIELD_SEND_METHOD,
-        SEED_OBJECT_ROOT_SEND_METHOD,
-        SEED_OBJECT_ROOT_VALUE_METHOD,
-        SEED_OBJECT_INTERPRETED_METHOD,
         SEED_OBJECT_COMPILED_METHOD,
     ]
     class_indices = {
-        SEED_OBJECT_TRANSCRIPT: class_class_index + 1,
-        SEED_OBJECT_DISPLAY: class_class_index + 2,
-        SEED_OBJECT_BITBLT: class_class_index + 3,
-        SEED_OBJECT_GLYPHS: class_class_index + 4,
-        SEED_OBJECT_FORM_FACTORY: class_class_index + 5,
-        SEED_OBJECT_BITMAP_FACTORY: class_class_index + 6,
-        SEED_OBJECT_TEXT_LAYOUT: class_class_index + 7,
-        SEED_OBJECT_TEXT_STYLE: class_class_index + 8,
-        SEED_OBJECT_BITMAP: class_class_index + 9,
-        SEED_OBJECT_FORM: class_class_index + 10,
-        SEED_OBJECT_TEXT_METRICS: class_class_index + 11,
-        SEED_OBJECT_TEXT_BEHAVIOR: class_class_index + 12,
-        SEED_OBJECT_METHOD_DESCRIPTOR: class_class_index + 13,
-        SEED_OBJECT_METHOD_ENTRY: class_class_index + 14,
-        SEED_OBJECT_SELECTOR: class_class_index + 15,
-        SEED_OBJECT_ACCESSOR_METHOD: class_class_index + 16,
-        SEED_OBJECT_FIELD_SEND_METHOD: class_class_index + 17,
-        SEED_OBJECT_ROOT_SEND_METHOD: class_class_index + 18,
-        SEED_OBJECT_ROOT_VALUE_METHOD: class_class_index + 19,
-        SEED_OBJECT_INTERPRETED_METHOD: class_class_index + 20,
-        SEED_OBJECT_COMPILED_METHOD: class_class_index + 21,
+        class_kind: class_class_index + offset
+        for offset, class_kind in enumerate(class_kinds_in_order[1:], start=1)
     }
 
     for seed_object in seed_objects:
@@ -896,16 +872,6 @@ def build_seed_manifest() -> bytes:
     method_count_by_kind: dict[int, int] = {}
     selector_indices_by_value: dict[int, int] = {}
     selector_seed_objects: list[SeedObject] = []
-    accessor_method_indices: dict[str, int] = {}
-    accessor_method_seed_objects: list[SeedObject] = []
-    field_send_method_indices: dict[str, int] = {}
-    field_send_method_seed_objects: list[SeedObject] = []
-    root_send_method_indices: dict[str, int] = {}
-    root_send_method_seed_objects: list[SeedObject] = []
-    root_value_method_indices: dict[str, int] = {}
-    root_value_method_seed_objects: list[SeedObject] = []
-    interpreted_method_indices: dict[str, int] = {}
-    interpreted_method_seed_objects: list[SeedObject] = []
     compiled_method_indices: dict[str, int] = {}
     compiled_method_seed_objects: list[SeedObject] = []
     method_entry_indices: dict[str, int] = {}
@@ -924,99 +890,7 @@ def build_seed_manifest() -> bytes:
             )
         )
 
-    accessor_method_start_index = selector_start_index + len(selector_seed_objects)
-    for entry_name, _owner_kind, _selector, _argument_count in METHOD_ENTRY_DEFINITIONS:
-        field_index = ACCESSOR_METHOD_FIELD_BY_ENTRY_NAME.get(entry_name)
-        if field_index is None:
-            continue
-        accessor_method_indices[entry_name] = accessor_method_start_index + len(accessor_method_seed_objects)
-        accessor_method_seed_objects.append(
-            SeedObject(
-                SEED_OBJECT_ACCESSOR_METHOD,
-                class_indices[SEED_OBJECT_ACCESSOR_METHOD],
-                [
-                    (SEED_FIELD_SMALL_INTEGER, field_index),
-                ],
-            )
-        )
-
-    field_send_method_start_index = accessor_method_start_index + len(accessor_method_seed_objects)
-    for entry_name, method_spec in FIELD_SEND_METHOD_SPEC_BY_ENTRY_NAME.items():
-        field_index, selector = method_spec
-        field_send_method_indices[entry_name] = field_send_method_start_index + len(field_send_method_seed_objects)
-        field_send_method_seed_objects.append(
-            SeedObject(
-                SEED_OBJECT_FIELD_SEND_METHOD,
-                class_indices[SEED_OBJECT_FIELD_SEND_METHOD],
-                [
-                    (SEED_FIELD_SMALL_INTEGER, field_index),
-                    (SEED_FIELD_OBJECT_INDEX, selector_indices_by_value[SELECTOR_VALUES[SELECTOR_IDS[selector]]]),
-                ],
-            )
-        )
-
-    root_send_method_start_index = field_send_method_start_index + len(field_send_method_seed_objects)
-    for entry_name, method_spec in ROOT_SEND_METHOD_SPEC_BY_ENTRY_NAME.items():
-        root_id, selector, return_mode = method_spec
-        root_send_method_indices[entry_name] = root_send_method_start_index + len(root_send_method_seed_objects)
-        root_send_method_seed_objects.append(
-            SeedObject(
-                SEED_OBJECT_ROOT_SEND_METHOD,
-                class_indices[SEED_OBJECT_ROOT_SEND_METHOD],
-                [
-                    (SEED_FIELD_SMALL_INTEGER, root_id),
-                    (SEED_FIELD_OBJECT_INDEX, selector_indices_by_value[SELECTOR_VALUES[SELECTOR_IDS[selector]]]),
-                    (SEED_FIELD_SMALL_INTEGER, return_mode),
-                ],
-            )
-        )
-
-    root_value_method_start_index = root_send_method_start_index + len(root_send_method_seed_objects)
-    for entry_name, root_id in ROOT_VALUE_METHOD_ROOT_BY_ENTRY_NAME.items():
-        root_value_method_indices[entry_name] = root_value_method_start_index + len(root_value_method_seed_objects)
-        root_value_method_seed_objects.append(
-            SeedObject(
-                SEED_OBJECT_ROOT_VALUE_METHOD,
-                class_indices[SEED_OBJECT_ROOT_VALUE_METHOD],
-                [
-                    (SEED_FIELD_SMALL_INTEGER, root_id),
-                ],
-            )
-        )
-
-    interpreted_method_start_index = root_value_method_start_index + len(root_value_method_seed_objects)
-    for entry_name, program in INTERPRETED_METHOD_PROGRAM_BY_ENTRY_NAME.items():
-        encoded_fields: list[tuple[int, int]] = []
-
-        for opcode_name, operand_a, operand_b in program:
-            if opcode_name == "send":
-                encoded_fields.append(
-                    (
-                        SEED_FIELD_SMALL_INTEGER,
-                        encode_interpreted_instruction(
-                            opcode_name,
-                            SELECTOR_VALUES[SELECTOR_IDS[str(operand_a)]],
-                            int(operand_b),
-                        ),
-                    )
-                )
-            else:
-                encoded_fields.append(
-                    (
-                        SEED_FIELD_SMALL_INTEGER,
-                        encode_interpreted_instruction(opcode_name, int(operand_a), int(operand_b)),
-                    )
-                )
-        interpreted_method_indices[entry_name] = interpreted_method_start_index + len(interpreted_method_seed_objects)
-        interpreted_method_seed_objects.append(
-            SeedObject(
-                SEED_OBJECT_INTERPRETED_METHOD,
-                class_indices[SEED_OBJECT_INTERPRETED_METHOD],
-                encoded_fields,
-            )
-        )
-
-    compiled_method_start_index = interpreted_method_start_index + len(interpreted_method_seed_objects)
+    compiled_method_start_index = selector_start_index + len(selector_seed_objects)
     for entry_name, program in COMPILED_METHOD_PROGRAM_BY_ENTRY_NAME.items():
         encoded_fields = [
             (SEED_FIELD_SMALL_INTEGER, instruction)
@@ -1036,24 +910,9 @@ def build_seed_manifest() -> bytes:
         implementation_kind = SEED_FIELD_NIL
         implementation_index = 0
 
-        if entry_name in accessor_method_indices:
-            implementation_kind = SEED_FIELD_OBJECT_INDEX
-            implementation_index = accessor_method_indices[entry_name]
-        elif entry_name in field_send_method_indices:
-            implementation_kind = SEED_FIELD_OBJECT_INDEX
-            implementation_index = field_send_method_indices[entry_name]
-        elif entry_name in root_send_method_indices:
-            implementation_kind = SEED_FIELD_OBJECT_INDEX
-            implementation_index = root_send_method_indices[entry_name]
-        elif entry_name in root_value_method_indices:
-            implementation_kind = SEED_FIELD_OBJECT_INDEX
-            implementation_index = root_value_method_indices[entry_name]
-        elif entry_name in compiled_method_indices:
+        if entry_name in compiled_method_indices:
             implementation_kind = SEED_FIELD_OBJECT_INDEX
             implementation_index = compiled_method_indices[entry_name]
-        elif entry_name in interpreted_method_indices:
-            implementation_kind = SEED_FIELD_OBJECT_INDEX
-            implementation_index = interpreted_method_indices[entry_name]
         method_entry_indices[entry_name] = method_entry_start_index + len(method_entry_seed_objects)
         method_entry_seed_objects.append(
             SeedObject(
@@ -1106,11 +965,6 @@ def build_seed_manifest() -> bytes:
 
     seed_objects.extend(class_seed_objects)
     seed_objects.extend(selector_seed_objects)
-    seed_objects.extend(accessor_method_seed_objects)
-    seed_objects.extend(field_send_method_seed_objects)
-    seed_objects.extend(root_send_method_seed_objects)
-    seed_objects.extend(root_value_method_seed_objects)
-    seed_objects.extend(interpreted_method_seed_objects)
     seed_objects.extend(compiled_method_seed_objects)
     seed_objects.extend(method_entry_seed_objects)
     seed_objects.extend(method_seed_objects)

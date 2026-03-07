@@ -43,9 +43,9 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         self.assertEqual(summary["entry"]["program_section"], "program")
         self.assertEqual(summary["program"]["instruction_count"], 7)
         self.assertEqual(summary["program"]["literal_count"], 1)
-        self.assertEqual(summary["seed"]["object_count"], 235)
-        self.assertEqual(summary["seed"]["class_descriptor_count"], 22)
-        self.assertEqual(summary["seed"]["class_link_count"], 235)
+        self.assertEqual(summary["seed"]["object_count"], 230)
+        self.assertEqual(summary["seed"]["class_descriptor_count"], 17)
+        self.assertEqual(summary["seed"]["class_link_count"], 230)
         self.assertEqual(summary["seed"]["method_descriptor_count"], 22)
         self.assertEqual(summary["seed"]["selector_object_count"], 17)
         self.assertEqual(summary["seed"]["accessor_method_object_count"], 0)
@@ -103,7 +103,7 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         seed = bytearray(mvp.build_seed_manifest())
         header_size = struct.calcsize(mvp.SEED_HEADER_FORMAT)
         object_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
-        method_offset = header_size + (213 * object_size) + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
+        method_offset = header_size + (208 * object_size) + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
         primitive_kind_field_offset = method_offset + (2 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
 
         seed[primitive_kind_field_offset + 1 : primitive_kind_field_offset + 5] = struct.pack("<i", mvp.SEED_OBJECT_DISPLAY)
@@ -115,7 +115,7 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         seed = bytearray(mvp.build_seed_manifest())
         header_size = struct.calcsize(mvp.SEED_HEADER_FORMAT)
         object_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
-        class_instance_kind_entry_object_index = 191 + (
+        class_instance_kind_entry_object_index = 186 + (
             mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND"] - 1
         )
         entry_offset = header_size + (
@@ -148,7 +148,7 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         seed = bytearray(mvp.build_seed_manifest())
         header_size = struct.calcsize(mvp.SEED_HEADER_FORMAT)
         object_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
-        bitmap_width_entry_index = 191 + (
+        bitmap_width_entry_index = 186 + (
             mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_BITMAP_WIDTH"] - 1
         )
         implementation_offset = (
@@ -168,7 +168,7 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         seed = bytearray(mvp.build_seed_manifest())
         header_size = struct.calcsize(mvp.SEED_HEADER_FORMAT)
         object_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
-        form_width_entry_index = 191 + (
+        form_width_entry_index = 186 + (
             mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_FORM_WIDTH"] - 1
         )
         implementation_offset = (
@@ -188,7 +188,7 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         seed = bytearray(mvp.build_seed_manifest())
         header_size = struct.calcsize(mvp.SEED_HEADER_FORMAT)
         object_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
-        transcript_cr_entry_index = 191 + (
+        transcript_cr_entry_index = 186 + (
             mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR"] - 1
         )
         implementation_offset = (
@@ -208,7 +208,7 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         seed = bytearray(mvp.build_seed_manifest())
         header_size = struct.calcsize(mvp.SEED_HEADER_FORMAT)
         object_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
-        display_default_form_entry_index = 191 + (
+        display_default_form_entry_index = 186 + (
             mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM"] - 1
         )
         implementation_offset = (
