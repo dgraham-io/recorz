@@ -9,6 +9,7 @@ import struct
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -340,7 +341,7 @@ class DynamicSeedObjectSectionSpec:
 
 @dataclass(frozen=True)
 class DynamicSeedBuildStepSpec:
-    builder_name: str
+    builder: Callable[[DynamicSeedBuildState], list[SeedObject]]
     result_attribute: str
 
 
@@ -421,13 +422,6 @@ DYNAMIC_SEED_OBJECT_SECTION_SPECS = [
     DynamicSeedObjectSectionSpec("compiled_methods", "compiled_method_seed_objects"),
     DynamicSeedObjectSectionSpec("method_entries", "method_entry_seed_objects"),
     DynamicSeedObjectSectionSpec("method_descriptors", "method_seed_objects"),
-]
-DYNAMIC_SEED_BUILD_STEP_SPECS = [
-    DynamicSeedBuildStepSpec("build_selector_seed_section", "selector_seed_objects"),
-    DynamicSeedBuildStepSpec("build_compiled_method_seed_section", "compiled_method_seed_objects"),
-    DynamicSeedBuildStepSpec("build_method_entry_seed_section", "method_entry_seed_objects"),
-    DynamicSeedBuildStepSpec("build_method_descriptor_seed_section", "method_seed_objects"),
-    DynamicSeedBuildStepSpec("build_class_seed_section", "class_seed_objects"),
 ]
 GLYPH_BITMAP_NAME_PREFIX = "GlyphBitmap"
 GLYPH_BITMAP_WIDTH = 5
@@ -1364,6 +1358,15 @@ def build_class_seed_section(
     return class_seed_objects
 
 
+DYNAMIC_SEED_BUILD_STEP_SPECS = [
+    DynamicSeedBuildStepSpec(build_selector_seed_section, "selector_seed_objects"),
+    DynamicSeedBuildStepSpec(build_compiled_method_seed_section, "compiled_method_seed_objects"),
+    DynamicSeedBuildStepSpec(build_method_entry_seed_section, "method_entry_seed_objects"),
+    DynamicSeedBuildStepSpec(build_method_descriptor_seed_section, "method_seed_objects"),
+    DynamicSeedBuildStepSpec(build_class_seed_section, "class_seed_objects"),
+]
+
+
 def build_selector_seed_objects(
     selector_start_index: int,
     selector_class_index: int,
@@ -1540,7 +1543,7 @@ def build_dynamic_seed_sections(seed_objects: list[SeedObject]) -> DynamicSeedSe
         seed_object.class_index = class_indices[seed_object.object_kind]
 
     for build_step_spec in DYNAMIC_SEED_BUILD_STEP_SPECS:
-        dynamic_section_results[build_step_spec.result_attribute] = globals()[build_step_spec.builder_name](build_state)
+        dynamic_section_results[build_step_spec.result_attribute] = build_step_spec.builder(build_state)
     dynamic_sections = DynamicSeedSections(
         seed_layout=seed_layout,
         class_indices=build_state.class_indices,

@@ -418,3 +418,8 @@
 - Updated `build_dynamic_seed_sections()` to run selector, compiled-method, method-entry, method-descriptor, and class seed object builders through that explicit step sequence while keeping the generated seed image and target VM behavior unchanged.
 - Extended the focused lowering regressions to lock the new dynamic build-step spec list alongside the existing dynamic section specs.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Replace String-Based Dynamic Builder Dispatch
+- Replaced the string-based `globals()` dispatch inside the dynamic seed build-step specs with direct callable metadata, so the staged builder sequence is now explicit without another name-lookup indirection layer.
+- Kept the same dependency order and result attributes, but moved `DynamicSeedBuildStepSpec` onto direct builder callables and extended the focused regressions to lock both the callable sequence and the builder names.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
