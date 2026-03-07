@@ -147,6 +147,10 @@ static struct recorz_mvp_value panic_send_arguments[MAX_SEND_ARGS];
 static struct recorz_mvp_value nil_value(void);
 static uint32_t small_integer_u32(struct recorz_mvp_value value, const char *message);
 static void heap_set_class(uint16_t handle, uint16_t class_handle);
+static uint32_t compiled_method_instruction_word(const struct recorz_mvp_heap_object *compiled_method, uint8_t index);
+static uint8_t compiled_method_instruction_opcode(uint32_t instruction);
+static uint8_t compiled_method_instruction_operand_a(uint32_t instruction);
+static uint16_t compiled_method_instruction_operand_b(uint32_t instruction);
 
 static void panic_put_u32(uint32_t value) {
     char digits[10];
@@ -223,13 +227,21 @@ static const char *opcode_name(uint8_t opcode) {
         case RECORZ_MVP_OP_POP:
             return "pop";
         case RECORZ_MVP_OP_RETURN:
-            return "return";
+            return "returnTop";
         case RECORZ_MVP_OP_PUSH_NIL:
             return "pushNil";
         case RECORZ_MVP_OP_PUSH_LEXICAL:
             return "pushLexical";
         case RECORZ_MVP_OP_STORE_LEXICAL:
             return "storeLexical";
+        case RECORZ_MVP_OP_PUSH_ROOT:
+            return "pushRoot";
+        case RECORZ_MVP_OP_PUSH_ARGUMENT:
+            return "pushArgument";
+        case RECORZ_MVP_OP_PUSH_FIELD:
+            return "pushField";
+        case RECORZ_MVP_OP_RETURN_RECEIVER:
+            return "returnReceiver";
     }
     return "unknown";
 }
@@ -1621,13 +1633,6 @@ static struct recorz_mvp_value pop_value(void) {
     return stack[--stack_size];
 }
 
-static struct recorz_mvp_value peek_value(void) {
-    if (stack_size == 0U) {
-        machine_panic("bytecode stack is empty");
-    }
-    return stack[stack_size - 1U];
-}
-
 static struct recorz_mvp_value literal_value(const struct recorz_mvp_literal *literal) {
     if (literal->kind == RECORZ_MVP_LITERAL_STRING) {
         return string_value(literal->string);
@@ -1637,6 +1642,46 @@ static struct recorz_mvp_value literal_value(const struct recorz_mvp_literal *li
     }
     machine_panic("unknown literal kind");
     return nil_value();
+}
+
+typedef struct recorz_mvp_instruction (*recorz_mvp_instruction_reader)(
+    const void *instruction_source,
+    uint32_t instruction_index
+);
+
+struct recorz_mvp_executable {
+    const void *instruction_source;
+    recorz_mvp_instruction_reader read_instruction;
+    uint32_t instruction_count;
+    const struct recorz_mvp_literal *literals;
+    uint32_t literal_count;
+    uint16_t lexical_count;
+};
+
+static struct recorz_mvp_instruction read_program_instruction(
+    const void *instruction_source,
+    uint32_t instruction_index
+) {
+    return ((const struct recorz_mvp_instruction *)instruction_source)[instruction_index];
+}
+
+static struct recorz_mvp_instruction decode_instruction_word(uint32_t instruction) {
+    struct recorz_mvp_instruction decoded;
+
+    decoded.opcode = compiled_method_instruction_opcode(instruction);
+    decoded.operand_a = compiled_method_instruction_operand_a(instruction);
+    decoded.operand_b = compiled_method_instruction_operand_b(instruction);
+    return decoded;
+}
+
+static struct recorz_mvp_instruction read_compiled_method_instruction(
+    const void *instruction_source,
+    uint32_t instruction_index
+) {
+    const struct recorz_mvp_heap_object *compiled_method =
+        (const struct recorz_mvp_heap_object *)instruction_source;
+
+    return decode_instruction_word(compiled_method_instruction_word(compiled_method, (uint8_t)instruction_index));
 }
 
 typedef void (*recorz_mvp_method_entry_handler)(
@@ -1852,6 +1897,167 @@ static void perform_send(
     const char *text
 );
 
+static void activation_push(
+    struct recorz_mvp_value activation_stack[],
+    uint32_t *activation_stack_size,
+    struct recorz_mvp_value value
+) {
+    if (*activation_stack_size >= STACK_LIMIT) {
+        machine_panic("activation stack overflow");
+    }
+    activation_stack[(*activation_stack_size)++] = value;
+}
+
+static struct recorz_mvp_value activation_pop(
+    struct recorz_mvp_value activation_stack[],
+    uint32_t *activation_stack_size
+) {
+    if (*activation_stack_size == 0U) {
+        machine_panic("activation stack underflow");
+    }
+    return activation_stack[--(*activation_stack_size)];
+}
+
+static struct recorz_mvp_value activation_peek(
+    const struct recorz_mvp_value activation_stack[],
+    uint32_t activation_stack_size
+) {
+    if (activation_stack_size == 0U) {
+        machine_panic("activation stack is empty");
+    }
+    return activation_stack[activation_stack_size - 1U];
+}
+
+static void execute_executable(
+    const struct recorz_mvp_executable *executable,
+    const struct recorz_mvp_heap_object *receiver_object,
+    struct recorz_mvp_value receiver,
+    uint16_t argument_count,
+    const struct recorz_mvp_value arguments[]
+) {
+    struct recorz_mvp_value activation_stack[STACK_LIMIT];
+    struct recorz_mvp_value lexical[LEXICAL_LIMIT];
+    uint32_t activation_stack_size = 0U;
+    uint32_t lexical_index;
+    uint32_t pc = 0U;
+
+    if (executable->lexical_count > LEXICAL_LIMIT) {
+        machine_panic("too many lexical slots for MVP VM");
+    }
+    for (lexical_index = 0U; lexical_index < executable->lexical_count; ++lexical_index) {
+        lexical[lexical_index] = nil_value();
+    }
+
+    while (pc < executable->instruction_count) {
+        struct recorz_mvp_instruction instruction =
+            executable->read_instruction(executable->instruction_source, pc++);
+
+        panic_phase = "execute";
+        panic_pc = pc - 1U;
+        panic_instruction = instruction;
+        panic_have_instruction = 1U;
+        panic_have_send = 0U;
+
+        switch (instruction.opcode) {
+            case RECORZ_MVP_OP_PUSH_GLOBAL:
+                activation_push(activation_stack, &activation_stack_size, global_value(instruction.operand_a));
+                break;
+            case RECORZ_MVP_OP_PUSH_LITERAL:
+                if ((uint32_t)instruction.operand_b >= executable->literal_count) {
+                    machine_panic("literal out of range");
+                }
+                activation_push(
+                    activation_stack,
+                    &activation_stack_size,
+                    literal_value(&executable->literals[instruction.operand_b])
+                );
+                break;
+            case RECORZ_MVP_OP_PUSH_NIL:
+                activation_push(activation_stack, &activation_stack_size, nil_value());
+                break;
+            case RECORZ_MVP_OP_PUSH_LEXICAL:
+                if ((uint32_t)instruction.operand_b >= executable->lexical_count) {
+                    machine_panic("lexical read out of range");
+                }
+                activation_push(activation_stack, &activation_stack_size, lexical[instruction.operand_b]);
+                break;
+            case RECORZ_MVP_OP_STORE_LEXICAL:
+                if ((uint32_t)instruction.operand_b >= executable->lexical_count) {
+                    machine_panic("lexical write out of range");
+                }
+                lexical[instruction.operand_b] = activation_pop(activation_stack, &activation_stack_size);
+                break;
+            case RECORZ_MVP_OP_DUP:
+                activation_push(
+                    activation_stack,
+                    &activation_stack_size,
+                    activation_peek(activation_stack, activation_stack_size)
+                );
+                break;
+            case RECORZ_MVP_OP_POP:
+                (void)activation_pop(activation_stack, &activation_stack_size);
+                break;
+            case RECORZ_MVP_OP_PUSH_ROOT:
+                activation_push(
+                    activation_stack,
+                    &activation_stack_size,
+                    seed_root_value((uint32_t)instruction.operand_a)
+                );
+                break;
+            case RECORZ_MVP_OP_PUSH_ARGUMENT:
+                if (instruction.operand_a >= argument_count) {
+                    machine_panic("argument read out of range");
+                }
+                activation_push(activation_stack, &activation_stack_size, arguments[instruction.operand_a]);
+                break;
+            case RECORZ_MVP_OP_PUSH_FIELD:
+                if (receiver_object == 0) {
+                    machine_panic("pushField requires a receiver object");
+                }
+                activation_push(
+                    activation_stack,
+                    &activation_stack_size,
+                    heap_get_field(receiver_object, instruction.operand_a)
+                );
+                break;
+            case RECORZ_MVP_OP_SEND: {
+                struct recorz_mvp_value send_arguments[MAX_SEND_ARGS];
+                struct recorz_mvp_value send_receiver;
+                uint16_t send_index;
+
+                if (instruction.operand_b > MAX_SEND_ARGS) {
+                    machine_panic("too many bytecode arguments");
+                }
+                if (activation_stack_size < (uint32_t)instruction.operand_b + 1U) {
+                    machine_panic("send stack underflow");
+                }
+                for (send_index = instruction.operand_b; send_index > 0U; --send_index) {
+                    send_arguments[send_index - 1U] = activation_pop(activation_stack, &activation_stack_size);
+                }
+                send_receiver = activation_pop(activation_stack, &activation_stack_size);
+                panic_phase = "send";
+                remember_send_context(instruction.operand_a, instruction.operand_b, send_receiver, send_arguments);
+                perform_send(send_receiver, instruction.operand_a, instruction.operand_b, send_arguments, 0);
+                activation_push(activation_stack, &activation_stack_size, pop_value());
+                break;
+            }
+            case RECORZ_MVP_OP_RETURN:
+                if (activation_stack_size == 0U) {
+                    machine_panic("returnTop stack underflow");
+                }
+                push(activation_peek(activation_stack, activation_stack_size));
+                return;
+            case RECORZ_MVP_OP_RETURN_RECEIVER:
+                push(receiver);
+                return;
+            default:
+                machine_panic("unknown opcode in MVP VM");
+        }
+    }
+
+    machine_panic("executable did not return");
+}
+
 static void execute_compiled_method(
     const struct recorz_mvp_heap_object *receiver_object,
     struct recorz_mvp_value receiver,
@@ -1859,64 +2065,19 @@ static void execute_compiled_method(
     const struct recorz_mvp_value arguments[],
     const struct recorz_mvp_heap_object *compiled_method
 ) {
-    struct recorz_mvp_value method_stack[COMPILED_METHOD_MAX_INSTRUCTIONS + MAX_SEND_ARGS];
-    uint32_t method_stack_size = 0U;
-    uint8_t instruction_index;
+    const struct recorz_mvp_executable executable = {
+        .instruction_source = compiled_method,
+        .read_instruction = read_compiled_method_instruction,
+        .instruction_count = compiled_method->field_count,
+        .literals = 0,
+        .literal_count = 0U,
+        .lexical_count = 0U,
+    };
 
-    (void)argument_count;
     if (compiled_method->kind != RECORZ_MVP_OBJECT_COMPILED_METHOD) {
         machine_panic("method entry implementation is not a compiled method");
     }
-    for (instruction_index = 0U; instruction_index < compiled_method->field_count; ++instruction_index) {
-        uint32_t instruction = compiled_method_instruction_word(compiled_method, instruction_index);
-        uint8_t opcode = compiled_method_instruction_opcode(instruction);
-        uint8_t operand_a = compiled_method_instruction_operand_a(instruction);
-        uint16_t operand_b = compiled_method_instruction_operand_b(instruction);
-
-        switch (opcode) {
-            case COMPILED_METHOD_OP_PUSH_GLOBAL:
-                method_stack[method_stack_size++] = global_value(operand_a);
-                break;
-            case COMPILED_METHOD_OP_PUSH_ROOT:
-                method_stack[method_stack_size++] = seed_root_value((uint32_t)operand_a);
-                break;
-            case COMPILED_METHOD_OP_PUSH_ARGUMENT:
-                method_stack[method_stack_size++] = arguments[operand_a];
-                break;
-            case COMPILED_METHOD_OP_PUSH_FIELD:
-                method_stack[method_stack_size++] = heap_get_field(receiver_object, operand_a);
-                break;
-            case COMPILED_METHOD_OP_SEND: {
-                struct recorz_mvp_value send_receiver;
-                struct recorz_mvp_value send_arguments[MAX_SEND_ARGS];
-                uint16_t send_index;
-
-                if (method_stack_size < (uint32_t)operand_b + 1U) {
-                    machine_panic("compiled method send stack underflow");
-                }
-                for (send_index = operand_b; send_index > 0U; --send_index) {
-                    send_arguments[send_index - 1U] = method_stack[--method_stack_size];
-                }
-                send_receiver = method_stack[--method_stack_size];
-                remember_send_context(operand_a, operand_b, send_receiver, send_arguments);
-                perform_send(send_receiver, operand_a, operand_b, send_arguments, 0);
-                method_stack[method_stack_size++] = pop_value();
-                break;
-            }
-            case COMPILED_METHOD_OP_RETURN_TOP:
-                if (method_stack_size == 0U) {
-                    machine_panic("compiled method returnTop stack underflow");
-                }
-                push(method_stack[method_stack_size - 1U]);
-                return;
-            case COMPILED_METHOD_OP_RETURN_RECEIVER:
-                push(receiver);
-                return;
-            default:
-                machine_panic("compiled method opcode is unknown");
-        }
-    }
-    machine_panic("compiled method did not return");
+    execute_executable(&executable, receiver_object, receiver, argument_count, arguments);
 }
 
 static void dispatch_heap_object_send(
@@ -2033,30 +2194,16 @@ static void perform_send(
     machine_panic("unsupported receiver in MVP VM");
 }
 
-static void dispatch_send(const struct recorz_mvp_program *program, uint8_t selector, uint16_t argument_count) {
-    struct recorz_mvp_value arguments[MAX_SEND_ARGS];
-    struct recorz_mvp_value receiver;
-    uint16_t send_argument_count = argument_count;
-    (void)program;
-
-    if (argument_count > MAX_SEND_ARGS) {
-        machine_panic("too many bytecode arguments");
-    }
-
-    while (argument_count > 0U) {
-        arguments[argument_count - 1U] = pop_value();
-        --argument_count;
-    }
-    receiver = pop_value();
-    panic_phase = "send";
-    remember_send_context(selector, send_argument_count, receiver, arguments);
-    perform_send(receiver, selector, send_argument_count, arguments, 0);
-}
-
 void recorz_mvp_vm_run(const struct recorz_mvp_program *program, const struct recorz_mvp_seed *seed) {
-    uint32_t pc = 0U;
-    struct recorz_mvp_value lexical[LEXICAL_LIMIT];
-    uint32_t lexical_index;
+    const struct recorz_mvp_executable executable = {
+        .instruction_source = program->instructions,
+        .read_instruction = read_program_instruction,
+        .instruction_count = program->instruction_count,
+        .literals = program->literals,
+        .literal_count = program->literal_count,
+        .lexical_count = program->lexical_count,
+    };
+
     stack_size = 0U;
     panic_phase = "bootstrap";
     panic_pc = 0U;
@@ -2064,66 +2211,7 @@ void recorz_mvp_vm_run(const struct recorz_mvp_program *program, const struct re
     panic_have_send = 0U;
     machine_set_panic_hook(vm_panic_hook);
     initialize_roots(seed);
-
-    if (program->lexical_count > LEXICAL_LIMIT) {
-        machine_panic("too many lexical slots for MVP VM");
-    }
-    for (lexical_index = 0U; lexical_index < program->lexical_count; ++lexical_index) {
-        lexical[lexical_index] = nil_value();
-    }
-
-    while (pc < program->instruction_count) {
-        const struct recorz_mvp_instruction instruction = program->instructions[pc++];
-
-        panic_phase = "execute";
-        panic_pc = pc - 1U;
-        panic_instruction = instruction;
-        panic_have_instruction = 1U;
-        panic_have_send = 0U;
-
-        switch (instruction.opcode) {
-            case RECORZ_MVP_OP_PUSH_GLOBAL:
-                push(global_value(instruction.operand_a));
-                break;
-            case RECORZ_MVP_OP_PUSH_LITERAL:
-                if ((uint32_t)instruction.operand_b >= program->literal_count) {
-                    machine_panic("literal out of range");
-                }
-                push(literal_value(&program->literals[instruction.operand_b]));
-                break;
-            case RECORZ_MVP_OP_PUSH_NIL:
-                push(nil_value());
-                break;
-            case RECORZ_MVP_OP_PUSH_LEXICAL:
-                if ((uint32_t)instruction.operand_b >= program->lexical_count) {
-                    machine_panic("lexical read out of range");
-                }
-                push(lexical[instruction.operand_b]);
-                break;
-            case RECORZ_MVP_OP_STORE_LEXICAL:
-                if ((uint32_t)instruction.operand_b >= program->lexical_count) {
-                    machine_panic("lexical write out of range");
-                }
-                lexical[instruction.operand_b] = pop_value();
-                break;
-            case RECORZ_MVP_OP_SEND:
-                dispatch_send(program, instruction.operand_a, instruction.operand_b);
-                break;
-            case RECORZ_MVP_OP_DUP:
-                push(peek_value());
-                break;
-            case RECORZ_MVP_OP_POP:
-                (void)pop_value();
-                break;
-            case RECORZ_MVP_OP_RETURN:
-                panic_phase = "return";
-                machine_set_panic_hook(0);
-                return;
-            default:
-                machine_panic("unknown opcode in MVP VM");
-        }
-    }
-
-    panic_phase = "done";
+    execute_executable(&executable, 0, nil_value(), 0U, 0);
+    panic_phase = "return";
     machine_set_panic_hook(0);
 }

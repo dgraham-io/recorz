@@ -100,6 +100,26 @@
       "name": "store_lexical",
       "constant": "RECORZ_MVP_OP_STORE_LEXICAL",
       "value": 9
+    },
+    {
+      "name": "push_root",
+      "constant": "RECORZ_MVP_OP_PUSH_ROOT",
+      "value": 10
+    },
+    {
+      "name": "push_argument",
+      "constant": "RECORZ_MVP_OP_PUSH_ARGUMENT",
+      "value": 11
+    },
+    {
+      "name": "push_field",
+      "constant": "RECORZ_MVP_OP_PUSH_FIELD",
+      "value": 12
+    },
+    {
+      "name": "return_receiver",
+      "constant": "RECORZ_MVP_OP_RETURN_RECEIVER",
+      "value": 13
     }
   ],
   "literal_kinds": [
@@ -123,23 +143,23 @@
         "value": 1
       },
       {
-        "name": "push_root",
-        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_ROOT",
+        "name": "push_literal",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_LITERAL",
         "value": 2
-      },
-      {
-        "name": "push_argument",
-        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_ARGUMENT",
-        "value": 3
-      },
-      {
-        "name": "push_field",
-        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_FIELD",
-        "value": 4
       },
       {
         "name": "send",
         "constant": "RECORZ_MVP_COMPILED_METHOD_OP_SEND",
+        "value": 3
+      },
+      {
+        "name": "dup",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_DUP",
+        "value": 4
+      },
+      {
+        "name": "pop",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_POP",
         "value": 5
       },
       {
@@ -148,9 +168,39 @@
         "value": 6
       },
       {
+        "name": "push_nil",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_NIL",
+        "value": 7
+      },
+      {
+        "name": "push_lexical",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_LEXICAL",
+        "value": 8
+      },
+      {
+        "name": "store_lexical",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_STORE_LEXICAL",
+        "value": 9
+      },
+      {
+        "name": "push_root",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_ROOT",
+        "value": 10
+      },
+      {
+        "name": "push_argument",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_ARGUMENT",
+        "value": 11
+      },
+      {
+        "name": "push_field",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_FIELD",
+        "value": 12
+      },
+      {
         "name": "return_receiver",
         "constant": "RECORZ_MVP_COMPILED_METHOD_OP_RETURN_RECEIVER",
-        "value": 7
+        "value": 13
       }
     ]
   },

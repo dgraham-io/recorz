@@ -609,3 +609,10 @@
 - The target now decides between primitive-backed and compiled-backed methods from the `MethodEntry` implementation field itself, while still validating selector/arity/primitive-kind through the image-owned method descriptors and compiled method objects.
 - Stopped emitting the dead `RECORZ_MVP_GENERATED_METHOD_ENTRY_SPECS` macro from the generated runtime header and extended the focused lowering regression to lock that removal.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Unify Do-It And Method Execution Paths
+- Extended the shared MVP instruction set so the compiled-method opcode family now covers both the seeded kernel-method subset and the current do-it subset (`pushLiteral`, `pushLexical`, `storeLexical`, `dup`, `pop`, `pushRoot`, `pushArgument`, `pushField`, `returnTop`, and `returnReceiver` all share one numeric execution model).
+- Replaced the separate top-level do-it interpreter in `platform/qemu-riscv64/vm.c` with one `execute_executable()` activation engine that now runs both top-level programs and seeded compiled methods, using the same local stack/lexical model and the same send/return behavior.
+- Kept the program section wrapper intact for now, but made it feed that same activation engine instead of a bespoke bytecode loop, which removes the remaining runtime split between do-it execution and kernel method execution.
+- Updated the runtime spec/header generation and focused lowering regressions to lock the unified opcode numbering and the absence of the old split execution path.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
