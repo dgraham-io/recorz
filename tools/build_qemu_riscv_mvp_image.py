@@ -353,6 +353,17 @@ class DynamicSeedBuildStepSpec:
     state_update_fields: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class DynamicSeedSectionSpec:
+    layout_section_name: str
+    count_source: str
+    builder: Callable[[DynamicSeedBuildState], DynamicSeedBuildStepResult]
+    build_order: int
+    required_layout_sections: tuple[str, ...] = ()
+    required_state_fields: tuple[str, ...] = ()
+    state_update_fields: tuple[str, ...] = ()
+
+
 @dataclass
 class DynamicSeedBuildState:
     seed_layout: dict[str, SeedLayoutSection]
@@ -435,21 +446,6 @@ KERNEL_CLASS_NAME_TO_OBJECT_KIND = {
     spec.class_name: constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, spec.class_name)
     for spec in KERNEL_SOURCE_CLASS_SPECS
 }
-SEED_LAYOUT_SECTION_SPECS = [
-    SeedLayoutSectionSpec("class_descriptors", "class_kind_order"),
-    SeedLayoutSectionSpec("selectors", "selector_value_order"),
-    SeedLayoutSectionSpec("compiled_methods", "compiled_method_entry_order"),
-    SeedLayoutSectionSpec("method_entries", "method_entry_order"),
-    SeedLayoutSectionSpec("method_descriptors", "builtin_method_definitions"),
-]
-SEED_LAYOUT_SECTION_NAMES = [section_spec.name for section_spec in SEED_LAYOUT_SECTION_SPECS]
-DYNAMIC_SEED_OBJECT_SECTION_SPECS = [
-    DynamicSeedObjectSectionSpec("class_descriptors"),
-    DynamicSeedObjectSectionSpec("selectors"),
-    DynamicSeedObjectSectionSpec("compiled_methods"),
-    DynamicSeedObjectSectionSpec("method_entries"),
-    DynamicSeedObjectSectionSpec("method_descriptors"),
-]
 GLYPH_BITMAP_NAME_PREFIX = "GlyphBitmap"
 GLYPH_BITMAP_WIDTH = 5
 GLYPH_BITMAP_HEIGHT = 7
@@ -1408,29 +1404,51 @@ def build_class_seed_section(
     return DynamicSeedBuildStepResult(class_seed_objects, {})
 
 
-DYNAMIC_SEED_BUILD_STEP_SPECS = [
-    DynamicSeedBuildStepSpec(
+DYNAMIC_SEED_SECTION_SPECS = [
+    DynamicSeedSectionSpec(
+        "class_descriptors",
+        "class_kind_order",
+        build_class_seed_section,
+        4,
+        ("method_descriptors",),
+        (
+            "class_kind_order",
+            "class_class_index",
+            "class_indices",
+            "method_start_by_kind",
+            "method_count_by_kind",
+        ),
+    ),
+    DynamicSeedSectionSpec(
         "selectors",
+        "selector_value_order",
         build_selector_seed_section,
+        0,
         required_state_fields=("seed_layout", "class_indices"),
         state_update_fields=("selector_indices_by_value",),
     ),
-    DynamicSeedBuildStepSpec(
+    DynamicSeedSectionSpec(
         "compiled_methods",
+        "compiled_method_entry_order",
         build_compiled_method_seed_section,
+        1,
         required_state_fields=("seed_layout", "class_indices"),
         state_update_fields=("compiled_method_indices",),
     ),
-    DynamicSeedBuildStepSpec(
+    DynamicSeedSectionSpec(
         "method_entries",
+        "method_entry_order",
         build_method_entry_seed_section,
+        2,
         ("compiled_methods",),
         ("seed_layout", "class_indices", "compiled_method_indices"),
         ("method_entry_indices",),
     ),
-    DynamicSeedBuildStepSpec(
+    DynamicSeedSectionSpec(
         "method_descriptors",
+        "builtin_method_definitions",
         build_method_descriptor_seed_section,
+        3,
         ("selectors", "method_entries"),
         (
             "seed_layout",
@@ -1441,18 +1459,6 @@ DYNAMIC_SEED_BUILD_STEP_SPECS = [
         ),
         ("method_start_by_kind", "method_count_by_kind"),
     ),
-    DynamicSeedBuildStepSpec(
-        "class_descriptors",
-        build_class_seed_section,
-        ("method_descriptors",),
-        (
-            "class_kind_order",
-            "class_class_index",
-            "class_indices",
-            "method_start_by_kind",
-            "method_count_by_kind",
-        ),
-    ),
 ]
 INITIAL_DYNAMIC_SEED_STATE_FIELDS = (
     "seed_layout",
@@ -1460,6 +1466,43 @@ INITIAL_DYNAMIC_SEED_STATE_FIELDS = (
     "class_class_index",
     "class_indices",
 )
+
+
+def build_seed_layout_section_specs() -> list[SeedLayoutSectionSpec]:
+    return [
+        SeedLayoutSectionSpec(section_spec.layout_section_name, section_spec.count_source)
+        for section_spec in DYNAMIC_SEED_SECTION_SPECS
+    ]
+
+
+def build_dynamic_seed_object_section_specs() -> list[DynamicSeedObjectSectionSpec]:
+    return [
+        DynamicSeedObjectSectionSpec(section_spec.layout_section_name)
+        for section_spec in DYNAMIC_SEED_SECTION_SPECS
+    ]
+
+
+def build_dynamic_seed_build_step_specs() -> list[DynamicSeedBuildStepSpec]:
+    build_orders = [section_spec.build_order for section_spec in DYNAMIC_SEED_SECTION_SPECS]
+    if len(set(build_orders)) != len(build_orders):
+        raise AssertionError("dynamic seed section specs declare duplicate build orders")
+    ordered_section_specs = sorted(DYNAMIC_SEED_SECTION_SPECS, key=lambda section_spec: section_spec.build_order)
+    return [
+        DynamicSeedBuildStepSpec(
+            section_spec.layout_section_name,
+            section_spec.builder,
+            section_spec.required_layout_sections,
+            section_spec.required_state_fields,
+            section_spec.state_update_fields,
+        )
+        for section_spec in ordered_section_specs
+    ]
+
+
+SEED_LAYOUT_SECTION_SPECS = build_seed_layout_section_specs()
+SEED_LAYOUT_SECTION_NAMES = [section_spec.name for section_spec in SEED_LAYOUT_SECTION_SPECS]
+DYNAMIC_SEED_OBJECT_SECTION_SPECS = build_dynamic_seed_object_section_specs()
+DYNAMIC_SEED_BUILD_STEP_SPECS = build_dynamic_seed_build_step_specs()
 
 
 def build_selector_seed_objects(

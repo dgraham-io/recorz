@@ -447,3 +447,9 @@
 - Extended both build-step validation and runtime execution checks to reject missing, invalid, or out-of-order required state fields before any dynamic seed section is assembled.
 - Extended the focused lowering regressions to lock the required-state-field tuples and the declared initial dynamic seed state alongside the existing section and state-update contracts.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Unify Dynamic Seed Section Specs
+- Added one `DynamicSeedSectionSpec` layer as the source of truth for dynamic seed layout count sources, build order, section dependencies, and state contracts, instead of keeping separate hand-authored layout/build/object spec lists in parallel.
+- Derived `SEED_LAYOUT_SECTION_SPECS`, `DYNAMIC_SEED_OBJECT_SECTION_SPECS`, and `DYNAMIC_SEED_BUILD_STEP_SPECS` from that unified section spec layer, including a duplicate-build-order check in the builder helper.
+- Extended the focused lowering regressions to lock the unified dynamic section spec list and the unchanged derived layout/build/object views.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

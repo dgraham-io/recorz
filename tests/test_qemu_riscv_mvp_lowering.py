@@ -725,6 +725,69 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
 
     def test_declares_seed_layout_sections_and_derives_layout(self) -> None:
         self.assertEqual(
+            mvp.DYNAMIC_SEED_SECTION_SPECS,
+            [
+                mvp.DynamicSeedSectionSpec(
+                    "class_descriptors",
+                    "class_kind_order",
+                    mvp.build_class_seed_section,
+                    4,
+                    ("method_descriptors",),
+                    (
+                        "class_kind_order",
+                        "class_class_index",
+                        "class_indices",
+                        "method_start_by_kind",
+                        "method_count_by_kind",
+                    ),
+                ),
+                mvp.DynamicSeedSectionSpec(
+                    "selectors",
+                    "selector_value_order",
+                    mvp.build_selector_seed_section,
+                    0,
+                    required_state_fields=("seed_layout", "class_indices"),
+                    state_update_fields=("selector_indices_by_value",),
+                ),
+                mvp.DynamicSeedSectionSpec(
+                    "compiled_methods",
+                    "compiled_method_entry_order",
+                    mvp.build_compiled_method_seed_section,
+                    1,
+                    required_state_fields=("seed_layout", "class_indices"),
+                    state_update_fields=("compiled_method_indices",),
+                ),
+                mvp.DynamicSeedSectionSpec(
+                    "method_entries",
+                    "method_entry_order",
+                    mvp.build_method_entry_seed_section,
+                    2,
+                    ("compiled_methods",),
+                    ("seed_layout", "class_indices", "compiled_method_indices"),
+                    ("method_entry_indices",),
+                ),
+                mvp.DynamicSeedSectionSpec(
+                    "method_descriptors",
+                    "builtin_method_definitions",
+                    mvp.build_method_descriptor_seed_section,
+                    3,
+                    ("selectors", "method_entries"),
+                    (
+                        "seed_layout",
+                        "class_kind_order",
+                        "class_indices",
+                        "selector_indices_by_value",
+                        "method_entry_indices",
+                    ),
+                    ("method_start_by_kind", "method_count_by_kind"),
+                ),
+            ],
+        )
+        self.assertEqual(
+            [spec.build_order for spec in mvp.DYNAMIC_SEED_SECTION_SPECS],
+            [4, 0, 1, 2, 3],
+        )
+        self.assertEqual(
             mvp.SEED_LAYOUT_SECTION_SPECS,
             [
                 mvp.SeedLayoutSectionSpec("class_descriptors", "class_kind_order"),
