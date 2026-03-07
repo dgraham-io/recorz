@@ -58,14 +58,6 @@ OP_PUSH_NIL = "RECORZ_MVP_OP_PUSH_NIL"
 LITERAL_STRING = "RECORZ_MVP_LITERAL_STRING"
 LITERAL_SMALL_INTEGER = "RECORZ_MVP_LITERAL_SMALL_INTEGER"
 
-GLOBAL_SPECS = [
-    ("Transcript", "RECORZ_MVP_GLOBAL_TRANSCRIPT"),
-    ("Display", "RECORZ_MVP_GLOBAL_DISPLAY"),
-    ("BitBlt", "RECORZ_MVP_GLOBAL_BITBLT"),
-    ("Glyphs", "RECORZ_MVP_GLOBAL_GLYPHS"),
-    ("Form", "RECORZ_MVP_GLOBAL_FORM"),
-    ("Bitmap", "RECORZ_MVP_GLOBAL_BITMAP"),
-]
 SELECTOR_SPECS = [
     ("show:", "RECORZ_MVP_SELECTOR_SHOW"),
     ("cr", "RECORZ_MVP_SELECTOR_CR"),
@@ -194,7 +186,6 @@ SEED_ROOT_SPECS = [
     ("transcript_metrics", "RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS"),
 ]
 
-GLOBAL_IDS, GLOBAL_VALUES, GLOBAL_DEFINITIONS = build_named_constant_maps(GLOBAL_SPECS)
 SELECTOR_IDS, SELECTOR_VALUES, SELECTOR_DEFINITIONS = build_named_constant_maps(SELECTOR_SPECS)
 SEED_FIELD_KIND_IDS, SEED_FIELD_KIND_VALUES, SEED_FIELD_KIND_DEFINITIONS = build_named_constant_maps(
     SEED_FIELD_KIND_SPECS,
@@ -938,6 +929,10 @@ def kernel_object_kind_constant_name(class_name: str) -> str:
     return f"RECORZ_MVP_OBJECT_{kernel_class_entry_stem(class_name)}"
 
 
+def kernel_global_constant_name(global_name: str) -> str:
+    return f"RECORZ_MVP_GLOBAL_{kernel_class_entry_stem(global_name)}"
+
+
 def kernel_selector_entry_stem(selector: str) -> str:
     keyword_parts = [part for part in selector.split(":") if part]
     if keyword_parts:
@@ -977,6 +972,21 @@ def append_enum_definition(lines: list[str], enum_name: str, entries: list[tuple
             "",
         ]
     )
+
+
+def build_global_specs_from_boot_object_exports(
+    fixed_boot_graph_spec: FixedBootGraphSpec,
+) -> list[tuple[str, str]]:
+    global_specs: list[tuple[str, str]] = []
+
+    for object_spec in flatten_boot_object_specs(fixed_boot_graph_spec):
+        for global_name in object_spec.global_exports:
+            global_specs.append((global_name, kernel_global_constant_name(global_name)))
+    return global_specs
+
+
+GLOBAL_SPECS = build_global_specs_from_boot_object_exports(FIXED_BOOT_GRAPH_SPEC)
+GLOBAL_IDS, GLOBAL_VALUES, GLOBAL_DEFINITIONS = build_named_constant_maps(GLOBAL_SPECS)
 
 
 def parse_kernel_method_chunk(

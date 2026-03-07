@@ -450,7 +450,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             mvp.PRIMITIVE_BINDING_VALUES["formNewline"],
         )
 
-    def test_derives_global_and_selector_maps_from_specs(self) -> None:
+    def test_derives_global_maps_from_boot_object_exports_and_selector_maps_from_specs(self) -> None:
         self.assertEqual(
             mvp.GLOBAL_SPECS,
             [
@@ -461,6 +461,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("Form", "RECORZ_MVP_GLOBAL_FORM"),
                 ("Bitmap", "RECORZ_MVP_GLOBAL_BITMAP"),
             ],
+        )
+        self.assertEqual(
+            mvp.GLOBAL_SPECS,
+            mvp.build_global_specs_from_boot_object_exports(mvp.FIXED_BOOT_GRAPH_SPEC),
         )
         self.assertEqual(mvp.GLOBAL_IDS["Transcript"], "RECORZ_MVP_GLOBAL_TRANSCRIPT")
         self.assertEqual(mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_BITMAP"], 6)

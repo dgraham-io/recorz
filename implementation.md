@@ -537,3 +537,9 @@
 - Updated the builder to parse that glyph family declaration, derive the `GLYPH_BITMAP_*` compatibility views from it, and materialize the glyph bitmap boot family in `FIXED_BOOT_GRAPH_SPEC` from the parsed source declaration instead of a Python-authored family spec.
 - Extended the method-source loader to skip glyph family declaration chunks and added focused lowering regressions for the parsed glyph family declaration and the source-derived glyph metadata.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Derive Global Specs From Boot Object Exports
+- Removed the hand-kept `GLOBAL_SPECS` list from the builder and now derive the active global constant table from the source-declared fixed boot graph's `globalExports:` metadata.
+- Added a small `kernel_global_constant_name()` helper plus `build_global_specs_from_boot_object_exports()` so the generated global ids and enum definitions flow from the same source-owned boot object declarations that already define the fixed singleton/root objects.
+- Extended the focused lowering regressions to lock both the expected global table contents and the fact that the live `GLOBAL_SPECS` list is derived from `FIXED_BOOT_GRAPH_SPEC`.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
