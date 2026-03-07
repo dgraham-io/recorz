@@ -489,6 +489,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "transcript_metrics": "TranscriptMetrics",
             },
         )
+        self.assertEqual(mvp.BOOT_OBJECT_SPECS_BEFORE_GLYPHS[0].global_exports, ("Transcript",))
+        self.assertEqual(mvp.BOOT_OBJECT_SPECS_BEFORE_GLYPHS[4].global_exports, ("Form",))
+        self.assertEqual(mvp.BOOT_OBJECT_SPECS_BEFORE_GLYPHS[6].root_exports, ("transcript_layout",))
+        self.assertEqual(mvp.BOOT_OBJECT_SPECS_AFTER_GLYPHS[0].root_exports, ("transcript_metrics",))
         self.assertEqual(mvp.GLYPH_FALLBACK_CODE, 32)
         self.assertEqual(
             mvp.build_named_object_bindings(

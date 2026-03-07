@@ -261,22 +261,6 @@ KERNEL_CLASS_NAME_TO_OBJECT_KIND = {
         "Class",
     )
 }
-GLOBAL_NAME_TO_BOOT_OBJECT_NAME = {
-    "Transcript": "Transcript",
-    "Display": "Display",
-    "BitBlt": "BitBlt",
-    "Glyphs": "Glyphs",
-    "Form": "FormFactory",
-    "Bitmap": "BitmapFactory",
-}
-SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME = {
-    "default_form": "DefaultForm",
-    "framebuffer_bitmap": "FramebufferBitmap",
-    "transcript_behavior": "TranscriptBehavior",
-    "transcript_layout": "TranscriptLayout",
-    "transcript_style": "TranscriptStyle",
-    "transcript_metrics": "TranscriptMetrics",
-}
 FIELD_SPEC_SMALL_INTEGER = "small_integer"
 FIELD_SPEC_OBJECT_REF = "object_ref"
 FIELD_SPEC_GLYPH_REF = "glyph_ref"
@@ -337,6 +321,8 @@ class BootObjectSpec:
     name: str
     object_kind_name: str
     field_specs: tuple[tuple[str, object], ...]
+    global_exports: tuple[str, ...] = ()
+    root_exports: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -415,12 +401,12 @@ GLYPH_BITMAP_WIDTH = 5
 GLYPH_BITMAP_HEIGHT = 7
 GLYPH_BITMAP_CODE_COUNT = 128
 BOOT_OBJECT_SPECS_BEFORE_GLYPHS = [
-    BootObjectSpec("Transcript", "Transcript", ()),
-    BootObjectSpec("Display", "Display", ()),
-    BootObjectSpec("BitBlt", "BitBlt", ()),
-    BootObjectSpec("Glyphs", "Glyphs", ()),
-    BootObjectSpec("FormFactory", "FormFactory", ()),
-    BootObjectSpec("BitmapFactory", "BitmapFactory", ()),
+    BootObjectSpec("Transcript", "Transcript", (), global_exports=("Transcript",)),
+    BootObjectSpec("Display", "Display", (), global_exports=("Display",)),
+    BootObjectSpec("BitBlt", "BitBlt", (), global_exports=("BitBlt",)),
+    BootObjectSpec("Glyphs", "Glyphs", (), global_exports=("Glyphs",)),
+    BootObjectSpec("FormFactory", "FormFactory", (), global_exports=("Form",)),
+    BootObjectSpec("BitmapFactory", "BitmapFactory", (), global_exports=("Bitmap",)),
     BootObjectSpec(
         "TranscriptLayout",
         "TextLayout",
@@ -430,6 +416,7 @@ BOOT_OBJECT_SPECS_BEFORE_GLYPHS = [
             (FIELD_SPEC_SMALL_INTEGER, 4),
             (FIELD_SPEC_SMALL_INTEGER, 2),
         ),
+        root_exports=("transcript_layout",),
     ),
     BootObjectSpec(
         "TranscriptStyle",
@@ -438,6 +425,7 @@ BOOT_OBJECT_SPECS_BEFORE_GLYPHS = [
             (FIELD_SPEC_SMALL_INTEGER, 0x00486020),
             (FIELD_SPEC_SMALL_INTEGER, 0x00F2F2F2),
         ),
+        root_exports=("transcript_style",),
     ),
     BootObjectSpec(
         "FramebufferBitmap",
@@ -448,6 +436,7 @@ BOOT_OBJECT_SPECS_BEFORE_GLYPHS = [
             (FIELD_SPEC_SMALL_INTEGER, BITMAP_STORAGE_FRAMEBUFFER),
             (FIELD_SPEC_SMALL_INTEGER, 0),
         ),
+        root_exports=("framebuffer_bitmap",),
     ),
     BootObjectSpec(
         "DefaultForm",
@@ -455,6 +444,7 @@ BOOT_OBJECT_SPECS_BEFORE_GLYPHS = [
         (
             (FIELD_SPEC_OBJECT_REF, "FramebufferBitmap"),
         ),
+        root_exports=("default_form",),
     ),
 ]
 BOOT_OBJECT_SPECS_AFTER_GLYPHS = [
@@ -465,6 +455,7 @@ BOOT_OBJECT_SPECS_AFTER_GLYPHS = [
             (FIELD_SPEC_SMALL_INTEGER, 6),
             (FIELD_SPEC_SMALL_INTEGER, 8),
         ),
+        root_exports=("transcript_metrics",),
     ),
     BootObjectSpec(
         "TranscriptBehavior",
@@ -473,6 +464,7 @@ BOOT_OBJECT_SPECS_AFTER_GLYPHS = [
             (FIELD_SPEC_GLYPH_REF, GLYPH_FALLBACK_CODE),
             (FIELD_SPEC_SMALL_INTEGER, 1),
         ),
+        root_exports=("transcript_behavior",),
     ),
 ]
 
@@ -501,6 +493,24 @@ BOOT_OBJECT_FAMILY_SPECS = [
 ]
 BOOT_OBJECT_FAMILY_NAMES = [family_spec.name for family_spec in BOOT_OBJECT_FAMILY_SPECS]
 BOOT_OBJECT_FIXED_COUNT = sum(len(family_spec.object_specs) for family_spec in BOOT_OBJECT_FAMILY_SPECS)
+
+
+def build_boot_object_export_map(export_kind: str) -> dict[str, str]:
+    export_map: dict[str, str] = {}
+
+    for family_spec in BOOT_OBJECT_FAMILY_SPECS:
+        for object_spec in family_spec.object_specs:
+            export_names = object_spec.global_exports if export_kind == "global" else object_spec.root_exports
+            for export_name in export_names:
+                if export_name in export_map:
+                    raise AssertionError(f"duplicate boot object export {export_name!r}")
+                export_map[export_name] = object_spec.name
+
+    return export_map
+
+
+GLOBAL_NAME_TO_BOOT_OBJECT_NAME = build_boot_object_export_map("global")
+SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME = build_boot_object_export_map("root")
 KERNEL_METHOD_IMPLEMENTATION_COMPILED = "compiled"
 KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE = "primitive"
 KERNEL_CLASS_HEADER_PATTERN = re.compile(

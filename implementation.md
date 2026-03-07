@@ -370,3 +370,9 @@
 - Added a small `SeedBindings` carrier so the final manifest stage takes an explicit binding payload rather than separate parallel lists.
 - Added a focused regression covering the extracted binding builder and manifest encoder, including the first global/root bindings and the encoded seed header tuple.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Derive Boot Object Export Maps From Specs
+- Added `global_exports` and `root_exports` to `BootObjectSpec` so the fixed boot object declarations now own their exported global/root binding semantics.
+- Replaced the parallel `GLOBAL_NAME_TO_BOOT_OBJECT_NAME` and `SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME` tables with `build_boot_object_export_map()`, derived directly from the declared boot object family specs.
+- Extended the focused binding-map regression to assert the boot object export declarations that now drive the derived global/root maps.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
