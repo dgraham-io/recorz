@@ -524,6 +524,14 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
 
     def test_declares_boot_object_specs_and_materializes_fields(self) -> None:
         self.assertEqual(
+            list(mvp.BOOT_OBJECT_FAMILY_SPECS_BY_NAME),
+            [
+                "before_glyphs",
+                "glyph_bitmaps",
+                "after_glyphs",
+            ],
+        )
+        self.assertEqual(
             [spec.name for spec in mvp.BOOT_OBJECT_SPECS_BEFORE_GLYPHS],
             [
                 "Transcript",
@@ -574,6 +582,9 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "after_glyphs",
             ],
         )
+        self.assertIs(mvp.BOOT_OBJECT_FAMILY_SPECS_BY_NAME["before_glyphs"], mvp.BOOT_OBJECT_FAMILY_SPECS[0])
+        self.assertIs(mvp.BOOT_OBJECT_FAMILY_SPECS_BY_NAME["glyph_bitmaps"], mvp.BOOT_OBJECT_FAMILY_SPECS[1])
+        self.assertIs(mvp.BOOT_OBJECT_FAMILY_SPECS_BY_NAME["after_glyphs"], mvp.BOOT_OBJECT_FAMILY_SPECS[2])
         self.assertEqual(len(mvp.BOOT_OBJECT_FAMILY_SPECS[0].object_specs), 10)
         self.assertTrue(mvp.BOOT_OBJECT_FAMILY_SPECS[1].collect_object_indices)
         self.assertEqual(len(mvp.BOOT_OBJECT_FAMILY_SPECS[1].object_specs), len(mvp.GLYPH_BITMAP_BOOT_SPECS))

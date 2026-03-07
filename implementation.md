@@ -382,3 +382,9 @@
 - Derived `KERNEL_CLASS_BOOT_ORDER`, `CLASS_DESCRIPTOR_KIND_NAMES`, and `KERNEL_CLASS_NAME_TO_OBJECT_KIND` from those declared class specs without changing the generated seed image or target VM behavior.
 - Extended the focused lowering regressions to lock both the new class spec layer and the derived boot-order / descriptor-order lists.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Derive Boot Object Family Views From Family Specs
+- Inlined the fixed pre-glyph, glyph, and post-glyph object declarations directly into `BOOT_OBJECT_FAMILY_SPECS` so the family layout itself is now the source of truth for the fixed boot graph.
+- Added `BOOT_OBJECT_FAMILY_SPECS_BY_NAME` and derived the existing before/after/glyph family views from that map instead of keeping separate top-level boot-object lists in parallel.
+- Extended the focused lowering regressions to lock both the named family map and the derived family views without changing the generated seed image or target VM behavior.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

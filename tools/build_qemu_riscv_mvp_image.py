@@ -387,75 +387,6 @@ GLYPH_BITMAP_NAME_PREFIX = "GlyphBitmap"
 GLYPH_BITMAP_WIDTH = 5
 GLYPH_BITMAP_HEIGHT = 7
 GLYPH_BITMAP_CODE_COUNT = 128
-BOOT_OBJECT_SPECS_BEFORE_GLYPHS = [
-    BootObjectSpec("Transcript", "Transcript", (), global_exports=("Transcript",)),
-    BootObjectSpec("Display", "Display", (), global_exports=("Display",)),
-    BootObjectSpec("BitBlt", "BitBlt", (), global_exports=("BitBlt",)),
-    BootObjectSpec("Glyphs", "Glyphs", (), global_exports=("Glyphs",)),
-    BootObjectSpec("FormFactory", "FormFactory", (), global_exports=("Form",)),
-    BootObjectSpec("BitmapFactory", "BitmapFactory", (), global_exports=("Bitmap",)),
-    BootObjectSpec(
-        "TranscriptLayout",
-        "TextLayout",
-        (
-            (FIELD_SPEC_SMALL_INTEGER, 24),
-            (FIELD_SPEC_SMALL_INTEGER, 24),
-            (FIELD_SPEC_SMALL_INTEGER, 4),
-            (FIELD_SPEC_SMALL_INTEGER, 2),
-        ),
-        root_exports=("transcript_layout",),
-    ),
-    BootObjectSpec(
-        "TranscriptStyle",
-        "TextStyle",
-        (
-            (FIELD_SPEC_SMALL_INTEGER, 0x00486020),
-            (FIELD_SPEC_SMALL_INTEGER, 0x00F2F2F2),
-        ),
-        root_exports=("transcript_style",),
-    ),
-    BootObjectSpec(
-        "FramebufferBitmap",
-        "Bitmap",
-        (
-            (FIELD_SPEC_SMALL_INTEGER, 640),
-            (FIELD_SPEC_SMALL_INTEGER, 480),
-            (FIELD_SPEC_SMALL_INTEGER, BITMAP_STORAGE_FRAMEBUFFER),
-            (FIELD_SPEC_SMALL_INTEGER, 0),
-        ),
-        root_exports=("framebuffer_bitmap",),
-    ),
-    BootObjectSpec(
-        "DefaultForm",
-        "Form",
-        (
-            (FIELD_SPEC_OBJECT_REF, "FramebufferBitmap"),
-        ),
-        root_exports=("default_form",),
-    ),
-]
-BOOT_OBJECT_SPECS_AFTER_GLYPHS = [
-    BootObjectSpec(
-        "TranscriptMetrics",
-        "TextMetrics",
-        (
-            (FIELD_SPEC_SMALL_INTEGER, 6),
-            (FIELD_SPEC_SMALL_INTEGER, 8),
-        ),
-        root_exports=("transcript_metrics",),
-    ),
-    BootObjectSpec(
-        "TranscriptBehavior",
-        "TextBehavior",
-        (
-            (FIELD_SPEC_GLYPH_REF, GLYPH_FALLBACK_CODE),
-            (FIELD_SPEC_SMALL_INTEGER, 1),
-        ),
-        root_exports=("transcript_behavior",),
-    ),
-]
-
-
 def build_glyph_bitmap_boot_specs() -> list[BootObjectSpec]:
     return [
         BootObjectSpec(
@@ -472,13 +403,90 @@ def build_glyph_bitmap_boot_specs() -> list[BootObjectSpec]:
     ]
 
 
-GLYPH_BITMAP_BOOT_SPECS = build_glyph_bitmap_boot_specs()
 BOOT_OBJECT_FAMILY_SPECS = [
-    BootObjectFamilySpec("before_glyphs", tuple(BOOT_OBJECT_SPECS_BEFORE_GLYPHS)),
-    BootObjectFamilySpec("glyph_bitmaps", tuple(GLYPH_BITMAP_BOOT_SPECS), collect_object_indices=True),
-    BootObjectFamilySpec("after_glyphs", tuple(BOOT_OBJECT_SPECS_AFTER_GLYPHS)),
+    BootObjectFamilySpec(
+        "before_glyphs",
+        (
+            BootObjectSpec("Transcript", "Transcript", (), global_exports=("Transcript",)),
+            BootObjectSpec("Display", "Display", (), global_exports=("Display",)),
+            BootObjectSpec("BitBlt", "BitBlt", (), global_exports=("BitBlt",)),
+            BootObjectSpec("Glyphs", "Glyphs", (), global_exports=("Glyphs",)),
+            BootObjectSpec("FormFactory", "FormFactory", (), global_exports=("Form",)),
+            BootObjectSpec("BitmapFactory", "BitmapFactory", (), global_exports=("Bitmap",)),
+            BootObjectSpec(
+                "TranscriptLayout",
+                "TextLayout",
+                (
+                    (FIELD_SPEC_SMALL_INTEGER, 24),
+                    (FIELD_SPEC_SMALL_INTEGER, 24),
+                    (FIELD_SPEC_SMALL_INTEGER, 4),
+                    (FIELD_SPEC_SMALL_INTEGER, 2),
+                ),
+                root_exports=("transcript_layout",),
+            ),
+            BootObjectSpec(
+                "TranscriptStyle",
+                "TextStyle",
+                (
+                    (FIELD_SPEC_SMALL_INTEGER, 0x00486020),
+                    (FIELD_SPEC_SMALL_INTEGER, 0x00F2F2F2),
+                ),
+                root_exports=("transcript_style",),
+            ),
+            BootObjectSpec(
+                "FramebufferBitmap",
+                "Bitmap",
+                (
+                    (FIELD_SPEC_SMALL_INTEGER, 640),
+                    (FIELD_SPEC_SMALL_INTEGER, 480),
+                    (FIELD_SPEC_SMALL_INTEGER, BITMAP_STORAGE_FRAMEBUFFER),
+                    (FIELD_SPEC_SMALL_INTEGER, 0),
+                ),
+                root_exports=("framebuffer_bitmap",),
+            ),
+            BootObjectSpec(
+                "DefaultForm",
+                "Form",
+                (
+                    (FIELD_SPEC_OBJECT_REF, "FramebufferBitmap"),
+                ),
+                root_exports=("default_form",),
+            ),
+        ),
+    ),
+    BootObjectFamilySpec("glyph_bitmaps", tuple(build_glyph_bitmap_boot_specs()), collect_object_indices=True),
+    BootObjectFamilySpec(
+        "after_glyphs",
+        (
+            BootObjectSpec(
+                "TranscriptMetrics",
+                "TextMetrics",
+                (
+                    (FIELD_SPEC_SMALL_INTEGER, 6),
+                    (FIELD_SPEC_SMALL_INTEGER, 8),
+                ),
+                root_exports=("transcript_metrics",),
+            ),
+            BootObjectSpec(
+                "TranscriptBehavior",
+                "TextBehavior",
+                (
+                    (FIELD_SPEC_GLYPH_REF, GLYPH_FALLBACK_CODE),
+                    (FIELD_SPEC_SMALL_INTEGER, 1),
+                ),
+                root_exports=("transcript_behavior",),
+            ),
+        ),
+    ),
 ]
+BOOT_OBJECT_FAMILY_SPECS_BY_NAME = {
+    family_spec.name: family_spec
+    for family_spec in BOOT_OBJECT_FAMILY_SPECS
+}
 BOOT_OBJECT_FAMILY_NAMES = [family_spec.name for family_spec in BOOT_OBJECT_FAMILY_SPECS]
+BOOT_OBJECT_SPECS_BEFORE_GLYPHS = BOOT_OBJECT_FAMILY_SPECS_BY_NAME["before_glyphs"].object_specs
+GLYPH_BITMAP_BOOT_SPECS = BOOT_OBJECT_FAMILY_SPECS_BY_NAME["glyph_bitmaps"].object_specs
+BOOT_OBJECT_SPECS_AFTER_GLYPHS = BOOT_OBJECT_FAMILY_SPECS_BY_NAME["after_glyphs"].object_specs
 BOOT_OBJECT_FIXED_COUNT = sum(len(family_spec.object_specs) for family_spec in BOOT_OBJECT_FAMILY_SPECS)
 
 
