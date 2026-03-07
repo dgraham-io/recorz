@@ -501,3 +501,9 @@
 - Left the existing derived globals in place for readability and compatibility, but made the active seed build context consume the same data through one boot-image-owned derivation path.
 - Extended the focused lowering regressions to lock the context-owned fixed count, glyph specs, and export maps alongside the existing fixed/dynamic view coverage.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Move Dynamic State Contract Into Boot Context
+- Added `initial_dynamic_seed_state_fields` to `BootImageSeedBuildContext` and derived it from the boot image model plus the dynamic build state shape, so the dynamic section validator and builder no longer rely on a standalone neighboring global for their initial state contract.
+- Updated the dynamic seed validation and execution paths to consume that context-owned initial state field set, while keeping `INITIAL_DYNAMIC_SEED_STATE_FIELDS` as a derived compatibility alias for focused tests and readability.
+- Extended the focused lowering regressions to lock the fact that the active initial dynamic state contract now lives on `BOOT_IMAGE_SEED_BUILD_CONTEXT`.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

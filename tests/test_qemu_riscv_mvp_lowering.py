@@ -642,6 +642,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             mvp.BOOT_IMAGE_SPEC.ordering_spec.method_entry_order,
         )
         self.assertEqual(
+            mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.initial_dynamic_seed_state_fields,
+            mvp.INITIAL_DYNAMIC_SEED_STATE_FIELDS,
+        )
+        self.assertEqual(
             mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.dynamic_seed_object_section_specs,
             tuple(mvp.DYNAMIC_SEED_OBJECT_SECTION_SPECS),
         )
@@ -986,6 +990,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertEqual(
             mvp.INITIAL_DYNAMIC_SEED_STATE_FIELDS,
+            mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.initial_dynamic_seed_state_fields,
+        )
+        self.assertEqual(
+            mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.initial_dynamic_seed_state_fields,
             (
                 "seed_layout",
                 "class_kind_order",

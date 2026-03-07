@@ -391,6 +391,7 @@ class BootImageSeedBuildContext:
     selector_value_order: tuple[int, ...]
     compiled_method_entry_order: tuple[str, ...]
     method_entry_order: tuple[str, ...]
+    initial_dynamic_seed_state_fields: tuple[str, ...]
     fixed_boot_object_count: int
     glyph_bitmap_boot_specs: tuple[BootObjectSpec, ...]
     seed_layout_section_specs: tuple[SeedLayoutSectionSpec, ...]
@@ -1517,15 +1518,17 @@ DYNAMIC_SEED_SECTION_SPECS = [
         ("method_start_by_kind", "method_count_by_kind"),
     ),
 ]
-INITIAL_DYNAMIC_SEED_STATE_FIELDS = (
-    "seed_layout",
-    "class_kind_order",
-    "class_class_index",
-    "class_indices",
-    "selector_value_order",
-    "compiled_method_entry_order",
-    "method_entry_order",
-)
+def build_initial_dynamic_seed_state_fields(
+    boot_image_spec: BootImageSpec,
+) -> tuple[str, ...]:
+    ordering_field_names = tuple(BootImageOrderingSpec.__annotations__)
+    return (
+        "seed_layout",
+        ordering_field_names[0],
+        "class_class_index",
+        "class_indices",
+        *ordering_field_names[1:],
+    )
 
 
 def build_seed_layout_section_specs(
@@ -1591,6 +1594,7 @@ def build_boot_image_seed_build_context(
         selector_value_order=boot_image_spec.ordering_spec.selector_value_order,
         compiled_method_entry_order=boot_image_spec.ordering_spec.compiled_method_entry_order,
         method_entry_order=boot_image_spec.ordering_spec.method_entry_order,
+        initial_dynamic_seed_state_fields=build_initial_dynamic_seed_state_fields(boot_image_spec),
         fixed_boot_object_count=len(boot_object_specs_in_order),
         glyph_bitmap_boot_specs=glyph_bitmap_boot_specs,
         seed_layout_section_specs=tuple(seed_layout_section_specs),
@@ -1627,6 +1631,7 @@ DYNAMIC_SEED_BUILD_STEP_SPECS = build_dynamic_seed_build_step_specs(BOOT_IMAGE_S
 BOOT_IMAGE_SEED_BUILD_CONTEXT = build_boot_image_seed_build_context(
     BOOT_IMAGE_SPEC,
 )
+INITIAL_DYNAMIC_SEED_STATE_FIELDS = BOOT_IMAGE_SEED_BUILD_CONTEXT.initial_dynamic_seed_state_fields
 
 
 def build_selector_seed_objects(
@@ -1798,7 +1803,7 @@ def validate_dynamic_seed_build_step_specs(
     produced_section_names: set[str] = set()
     produced_state_field_names: set[str] = set()
     valid_state_field_names = set(DynamicSeedBuildState.__annotations__)
-    available_state_field_names = set(INITIAL_DYNAMIC_SEED_STATE_FIELDS)
+    available_state_field_names = set(build_context.initial_dynamic_seed_state_fields)
 
     for build_step_spec in build_context.dynamic_seed_build_step_specs:
         if build_step_spec.layout_section_name not in declared_section_names:
@@ -1923,7 +1928,7 @@ def build_dynamic_seed_sections(
     )
     dynamic_section_results: dict[str, list[SeedObject]] = {}
     built_layout_sections: set[str] = set()
-    available_state_fields = set(INITIAL_DYNAMIC_SEED_STATE_FIELDS)
+    available_state_fields = set(build_context.initial_dynamic_seed_state_fields)
 
     for seed_object in seed_objects:
         seed_object.class_index = class_indices[seed_object.object_kind]
