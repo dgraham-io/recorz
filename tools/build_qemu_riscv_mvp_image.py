@@ -339,10 +339,17 @@ class DynamicSeedObjectSectionSpec:
 
 
 @dataclass(frozen=True)
+class DynamicSeedBuildStepResult:
+    seed_objects: list[SeedObject]
+    state_updates: dict[str, object]
+
+
+@dataclass(frozen=True)
 class DynamicSeedBuildStepSpec:
     layout_section_name: str
-    builder: Callable[[DynamicSeedBuildState], list[SeedObject]]
+    builder: Callable[[DynamicSeedBuildState], DynamicSeedBuildStepResult]
     required_layout_sections: tuple[str, ...] = ()
+    state_update_fields: tuple[str, ...] = ()
 
 
 @dataclass
@@ -1321,39 +1328,54 @@ def validate_dynamic_seed_section_counts(
 
 def build_selector_seed_section(
     build_state: DynamicSeedBuildState,
-) -> list[SeedObject]:
-    build_state.selector_indices_by_value, selector_seed_objects = build_selector_seed_objects(
+) -> DynamicSeedBuildStepResult:
+    selector_indices_by_value, selector_seed_objects = build_selector_seed_objects(
         build_state.seed_layout["selectors"].start_index,
         build_state.class_indices[SEED_OBJECT_SELECTOR],
     )
-    return selector_seed_objects
+    return DynamicSeedBuildStepResult(
+        selector_seed_objects,
+        {
+            "selector_indices_by_value": selector_indices_by_value,
+        },
+    )
 
 
 def build_compiled_method_seed_section(
     build_state: DynamicSeedBuildState,
-) -> list[SeedObject]:
-    build_state.compiled_method_indices, compiled_method_seed_objects = build_compiled_method_seed_objects(
+) -> DynamicSeedBuildStepResult:
+    compiled_method_indices, compiled_method_seed_objects = build_compiled_method_seed_objects(
         build_state.seed_layout["compiled_methods"].start_index,
         build_state.class_indices[SEED_OBJECT_COMPILED_METHOD],
     )
-    return compiled_method_seed_objects
+    return DynamicSeedBuildStepResult(
+        compiled_method_seed_objects,
+        {
+            "compiled_method_indices": compiled_method_indices,
+        },
+    )
 
 
 def build_method_entry_seed_section(
     build_state: DynamicSeedBuildState,
-) -> list[SeedObject]:
-    build_state.method_entry_indices, method_entry_seed_objects = build_method_entry_seed_objects(
+) -> DynamicSeedBuildStepResult:
+    method_entry_indices, method_entry_seed_objects = build_method_entry_seed_objects(
         build_state.seed_layout["method_entries"].start_index,
         build_state.class_indices[SEED_OBJECT_METHOD_ENTRY],
         build_state.compiled_method_indices,
     )
-    return method_entry_seed_objects
+    return DynamicSeedBuildStepResult(
+        method_entry_seed_objects,
+        {
+            "method_entry_indices": method_entry_indices,
+        },
+    )
 
 
 def build_method_descriptor_seed_section(
     build_state: DynamicSeedBuildState,
-) -> list[SeedObject]:
-    build_state.method_start_by_kind, build_state.method_count_by_kind, method_seed_objects = (
+) -> DynamicSeedBuildStepResult:
+    method_start_by_kind, method_count_by_kind, method_seed_objects = (
         build_method_descriptor_seed_objects(
             build_state.class_kind_order,
             build_state.class_indices[SEED_OBJECT_METHOD_DESCRIPTOR],
@@ -1362,29 +1384,51 @@ def build_method_descriptor_seed_section(
             build_state.seed_layout["method_descriptors"].start_index,
         )
     )
-    return method_seed_objects
+    return DynamicSeedBuildStepResult(
+        method_seed_objects,
+        {
+            "method_start_by_kind": method_start_by_kind,
+            "method_count_by_kind": method_count_by_kind,
+        },
+    )
 
 
 def build_class_seed_section(
     build_state: DynamicSeedBuildState,
-) -> list[SeedObject]:
-    build_state.class_indices, class_seed_objects = build_class_seed_objects(
+) -> DynamicSeedBuildStepResult:
+    class_indices, class_seed_objects = build_class_seed_objects(
         build_state.class_kind_order,
         build_state.class_class_index,
         build_state.method_start_by_kind,
         build_state.method_count_by_kind,
     )
-    return class_seed_objects
+    if class_indices != build_state.class_indices:
+        raise AssertionError("class seed section rebuilt unexpected class indices")
+    return DynamicSeedBuildStepResult(class_seed_objects, {})
 
 
 DYNAMIC_SEED_BUILD_STEP_SPECS = [
-    DynamicSeedBuildStepSpec("selectors", build_selector_seed_section),
-    DynamicSeedBuildStepSpec("compiled_methods", build_compiled_method_seed_section),
-    DynamicSeedBuildStepSpec("method_entries", build_method_entry_seed_section, ("compiled_methods",)),
+    DynamicSeedBuildStepSpec(
+        "selectors",
+        build_selector_seed_section,
+        state_update_fields=("selector_indices_by_value",),
+    ),
+    DynamicSeedBuildStepSpec(
+        "compiled_methods",
+        build_compiled_method_seed_section,
+        state_update_fields=("compiled_method_indices",),
+    ),
+    DynamicSeedBuildStepSpec(
+        "method_entries",
+        build_method_entry_seed_section,
+        ("compiled_methods",),
+        ("method_entry_indices",),
+    ),
     DynamicSeedBuildStepSpec(
         "method_descriptors",
         build_method_descriptor_seed_section,
         ("selectors", "method_entries"),
+        ("method_start_by_kind", "method_count_by_kind"),
     ),
     DynamicSeedBuildStepSpec("class_descriptors", build_class_seed_section, ("method_descriptors",)),
 ]
@@ -1547,6 +1591,8 @@ def build_fixed_boot_seed_objects() -> tuple[list[SeedObject], dict[str, int], l
 def validate_dynamic_seed_build_step_specs() -> None:
     declared_section_names = {section_spec.layout_section_name for section_spec in DYNAMIC_SEED_OBJECT_SECTION_SPECS}
     produced_section_names: set[str] = set()
+    produced_state_field_names: set[str] = set()
+    valid_state_field_names = set(DynamicSeedBuildState.__annotations__)
 
     for build_step_spec in DYNAMIC_SEED_BUILD_STEP_SPECS:
         if build_step_spec.layout_section_name not in declared_section_names:
@@ -1567,7 +1613,28 @@ def validate_dynamic_seed_build_step_specs() -> None:
                 f"dynamic seed build step {build_step_spec.layout_section_name!r} requires undeclared prior sections "
                 + ", ".join(repr(section_name) for section_name in missing_required_sections)
             )
+        invalid_state_fields = [
+            field_name
+            for field_name in build_step_spec.state_update_fields
+            if field_name not in valid_state_field_names
+        ]
+        if invalid_state_fields:
+            raise AssertionError(
+                f"dynamic seed build step {build_step_spec.layout_section_name!r} declares unknown state updates "
+                + ", ".join(repr(field_name) for field_name in invalid_state_fields)
+            )
+        duplicate_state_fields = [
+            field_name
+            for field_name in build_step_spec.state_update_fields
+            if field_name in produced_state_field_names
+        ]
+        if duplicate_state_fields:
+            raise AssertionError(
+                f"dynamic seed build step {build_step_spec.layout_section_name!r} redeclares state updates "
+                + ", ".join(repr(field_name) for field_name in duplicate_state_fields)
+            )
         produced_section_names.add(build_step_spec.layout_section_name)
+        produced_state_field_names.update(build_step_spec.state_update_fields)
 
     if produced_section_names != declared_section_names:
         missing_section_names = sorted(declared_section_names - produced_section_names)
@@ -1578,6 +1645,23 @@ def validate_dynamic_seed_build_step_specs() -> None:
         if extra_section_names:
             details.append("extra " + ", ".join(repr(section_name) for section_name in extra_section_names))
         raise AssertionError("dynamic seed build step coverage does not match declared object sections: " + "; ".join(details))
+
+
+def apply_dynamic_seed_build_step_result(
+    build_state: DynamicSeedBuildState,
+    build_step_spec: DynamicSeedBuildStepSpec,
+    build_step_result: DynamicSeedBuildStepResult,
+) -> list[SeedObject]:
+    state_update_fields = tuple(build_step_result.state_updates)
+
+    if state_update_fields != build_step_spec.state_update_fields:
+        raise AssertionError(
+            f"dynamic seed build step {build_step_spec.layout_section_name!r} returned unexpected state updates "
+            f"{state_update_fields!r}; expected {build_step_spec.state_update_fields!r}"
+        )
+    for field_name in build_step_spec.state_update_fields:
+        setattr(build_state, field_name, build_step_result.state_updates[field_name])
+    return build_step_result.seed_objects
 
 
 def build_dynamic_seed_sections(seed_objects: list[SeedObject]) -> DynamicSeedSections:
@@ -1614,7 +1698,11 @@ def build_dynamic_seed_sections(seed_objects: list[SeedObject]) -> DynamicSeedSe
                 f"dynamic seed build step {build_step_spec.layout_section_name!r} is running before required sections "
                 + ", ".join(repr(section_name) for section_name in missing_required_sections)
             )
-        dynamic_section_results[build_step_spec.layout_section_name] = build_step_spec.builder(build_state)
+        dynamic_section_results[build_step_spec.layout_section_name] = apply_dynamic_seed_build_step_result(
+            build_state,
+            build_step_spec,
+            build_step_spec.builder(build_state),
+        )
         built_layout_sections.add(build_step_spec.layout_section_name)
     dynamic_sections = DynamicSeedSections(
         seed_layout=seed_layout,

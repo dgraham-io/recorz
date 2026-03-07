@@ -435,3 +435,9 @@
 - Added validation for both the declared build-step coverage and the runtime build order, catching duplicate, missing, or out-of-order dynamic seed section dependencies before the seed manifest is assembled.
 - Extended the focused lowering regressions to lock the new dependency tuples and the validation path without changing the generated seed image or target VM behavior.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Centralize Dynamic Seed State Updates
+- Added `DynamicSeedBuildStepResult` plus per-step `state_update_fields` metadata so the dynamic seed builder now applies shared-state updates through one explicit result path instead of mutating `DynamicSeedBuildState` ad hoc inside each step.
+- Kept the same dynamic section order and dependency contract, but moved selector, compiled-method, method-entry, and method-descriptor state propagation behind `apply_dynamic_seed_build_step_result()` and made the class section assert that it does not unexpectedly rewrite the class index map.
+- Extended the focused lowering regressions to lock the declared state-update fields alongside the existing section order and dependency metadata.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

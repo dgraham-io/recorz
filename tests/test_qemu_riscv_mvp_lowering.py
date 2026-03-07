@@ -747,17 +747,27 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(
             mvp.DYNAMIC_SEED_BUILD_STEP_SPECS,
             [
-                mvp.DynamicSeedBuildStepSpec("selectors", mvp.build_selector_seed_section),
-                mvp.DynamicSeedBuildStepSpec("compiled_methods", mvp.build_compiled_method_seed_section),
+                mvp.DynamicSeedBuildStepSpec(
+                    "selectors",
+                    mvp.build_selector_seed_section,
+                    state_update_fields=("selector_indices_by_value",),
+                ),
+                mvp.DynamicSeedBuildStepSpec(
+                    "compiled_methods",
+                    mvp.build_compiled_method_seed_section,
+                    state_update_fields=("compiled_method_indices",),
+                ),
                 mvp.DynamicSeedBuildStepSpec(
                     "method_entries",
                     mvp.build_method_entry_seed_section,
                     ("compiled_methods",),
+                    ("method_entry_indices",),
                 ),
                 mvp.DynamicSeedBuildStepSpec(
                     "method_descriptors",
                     mvp.build_method_descriptor_seed_section,
                     ("selectors", "method_entries"),
+                    ("method_start_by_kind", "method_count_by_kind"),
                 ),
                 mvp.DynamicSeedBuildStepSpec(
                     "class_descriptors",
@@ -784,6 +794,16 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("compiled_methods",),
                 ("selectors", "method_entries"),
                 ("method_descriptors",),
+            ],
+        )
+        self.assertEqual(
+            [spec.state_update_fields for spec in mvp.DYNAMIC_SEED_BUILD_STEP_SPECS],
+            [
+                ("selector_indices_by_value",),
+                ("compiled_method_indices",),
+                ("method_entry_indices",),
+                ("method_start_by_kind", "method_count_by_kind"),
+                (),
             ],
         )
         self.assertEqual(
