@@ -132,7 +132,7 @@ IMAGE_ENTRY_FORMAT = "<4sHHHHHH"
 IMAGE_ENTRY_KIND_DOIT = 1
 
 SEED_MAGIC = b"RCZS"
-SEED_VERSION = 10
+SEED_VERSION = 11
 SEED_HEADER_FORMAT = "<4sHHHHHH"
 SEED_BINDING_FORMAT = "<HH"
 SEED_OBJECT_HEADER_FORMAT = "<BBH"
@@ -146,6 +146,9 @@ METHOD_FIELD_SELECTOR = 0
 METHOD_FIELD_ARGUMENT_COUNT = 1
 METHOD_FIELD_PRIMITIVE_KIND = 2
 METHOD_FIELD_ENTRY = 3
+METHOD_ENTRY_FIELD_EXECUTION_ID = 0
+METHOD_ENTRY_FIELD_IMPLEMENTATION = 1
+ACCESSOR_METHOD_FIELD_FIELD_INDEX = 0
 
 SEED_FIELD_NIL = 0
 SEED_FIELD_SMALL_INTEGER = 1
@@ -167,6 +170,7 @@ SEED_OBJECT_CLASS = 13
 SEED_OBJECT_METHOD_DESCRIPTOR = 14
 SEED_OBJECT_METHOD_ENTRY = 15
 SEED_OBJECT_SELECTOR = 16
+SEED_OBJECT_ACCESSOR_METHOD = 17
 
 SEED_ROOT_DEFAULT_FORM = 1
 SEED_ROOT_FRAMEBUFFER_BITMAP = 2
@@ -252,8 +256,14 @@ METHOD_ENTRY_SPECS = {
     METHOD_ENTRY_VALUES[name]: (owner_kind, SELECTOR_VALUES[SELECTOR_IDS[selector]], argument_count)
     for name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS
 }
+ACCESSOR_METHOD_FIELD_BY_ENTRY_NAME = {
+    "RECORZ_MVP_METHOD_ENTRY_BITMAP_WIDTH": 0,
+    "RECORZ_MVP_METHOD_ENTRY_BITMAP_HEIGHT": 1,
+    "RECORZ_MVP_METHOD_ENTRY_FORM_BITS": 0,
+    "RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND": 1,
+}
 BUILTIN_METHODS_BY_KIND: dict[int, list[tuple[str, int, str]]] = {
-    kind: [] for kind in range(SEED_OBJECT_TRANSCRIPT, SEED_OBJECT_SELECTOR + 1)
+    kind: [] for kind in range(SEED_OBJECT_TRANSCRIPT, SEED_OBJECT_ACCESSOR_METHOD + 1)
 }
 for entry_name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS:
     BUILTIN_METHODS_BY_KIND[owner_kind].append((selector, argument_count, entry_name))
@@ -512,6 +522,7 @@ def build_seed_manifest() -> bytes:
         SEED_OBJECT_METHOD_DESCRIPTOR,
         SEED_OBJECT_METHOD_ENTRY,
         SEED_OBJECT_SELECTOR,
+        SEED_OBJECT_ACCESSOR_METHOD,
     ]
     class_indices = {
         SEED_OBJECT_TRANSCRIPT: class_class_index + 1,
@@ -529,6 +540,7 @@ def build_seed_manifest() -> bytes:
         SEED_OBJECT_METHOD_DESCRIPTOR: class_class_index + 13,
         SEED_OBJECT_METHOD_ENTRY: class_class_index + 14,
         SEED_OBJECT_SELECTOR: class_class_index + 15,
+        SEED_OBJECT_ACCESSOR_METHOD: class_class_index + 16,
     }
 
     for seed_object in seed_objects:
@@ -539,6 +551,8 @@ def build_seed_manifest() -> bytes:
     method_count_by_kind: dict[int, int] = {}
     selector_indices_by_value: dict[int, int] = {}
     selector_seed_objects: list[SeedObject] = []
+    accessor_method_indices: dict[str, int] = {}
+    accessor_method_seed_objects: list[SeedObject] = []
     method_entry_indices: dict[str, int] = {}
     method_entry_seed_objects: list[SeedObject] = []
     method_seed_objects: list[SeedObject] = []
@@ -555,7 +569,23 @@ def build_seed_manifest() -> bytes:
             )
         )
 
-    method_entry_start_index = selector_start_index + len(selector_seed_objects)
+    accessor_method_start_index = selector_start_index + len(selector_seed_objects)
+    for entry_name, _owner_kind, _selector, _argument_count in METHOD_ENTRY_DEFINITIONS:
+        field_index = ACCESSOR_METHOD_FIELD_BY_ENTRY_NAME.get(entry_name)
+        if field_index is None:
+            continue
+        accessor_method_indices[entry_name] = accessor_method_start_index + len(accessor_method_seed_objects)
+        accessor_method_seed_objects.append(
+            SeedObject(
+                SEED_OBJECT_ACCESSOR_METHOD,
+                class_indices[SEED_OBJECT_ACCESSOR_METHOD],
+                [
+                    (SEED_FIELD_SMALL_INTEGER, field_index),
+                ],
+            )
+        )
+
+    method_entry_start_index = accessor_method_start_index + len(accessor_method_seed_objects)
     for entry_name, _owner_kind, _selector, _argument_count in METHOD_ENTRY_DEFINITIONS:
         method_entry_indices[entry_name] = method_entry_start_index + len(method_entry_seed_objects)
         method_entry_seed_objects.append(
@@ -564,6 +594,10 @@ def build_seed_manifest() -> bytes:
                 class_indices[SEED_OBJECT_METHOD_ENTRY],
                 [
                     (SEED_FIELD_SMALL_INTEGER, METHOD_ENTRY_VALUES[entry_name]),
+                    (
+                        SEED_FIELD_OBJECT_INDEX if entry_name in accessor_method_indices else SEED_FIELD_NIL,
+                        accessor_method_indices.get(entry_name, 0),
+                    ),
                 ],
             )
         )
@@ -608,6 +642,7 @@ def build_seed_manifest() -> bytes:
 
     seed_objects.extend(class_seed_objects)
     seed_objects.extend(selector_seed_objects)
+    seed_objects.extend(accessor_method_seed_objects)
     seed_objects.extend(method_entry_seed_objects)
     seed_objects.extend(method_seed_objects)
 

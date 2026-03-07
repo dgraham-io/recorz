@@ -97,6 +97,7 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
     method_descriptor_count = 0
     method_entry_object_count = 0
     selector_object_count = 0
+    accessor_method_object_count = 0
     selector_ids: set[int] = set()
     method_entry_ids: set[int] = set()
     for _ in range(object_count):
@@ -132,6 +133,8 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
                 raise ImageInspectionError("seed manifest contains duplicate selector objects")
             selector_ids.add(int(selector_id_field[1]))
             selector_object_count += 1
+        if object_kind == mvp.SEED_OBJECT_ACCESSOR_METHOD:
+            accessor_method_object_count += 1
         objects.append(
             {
                 "object_kind": object_kind,
@@ -234,9 +237,10 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
                 entry_summary = objects[entry_index]
                 if entry_summary["object_kind"] != mvp.SEED_OBJECT_METHOD_ENTRY:
                     raise ImageInspectionError("seed manifest method descriptor entry field is invalid")
-                if int(entry_summary["field_count"]) <= 0:
+                if int(entry_summary["field_count"]) <= mvp.METHOD_ENTRY_FIELD_IMPLEMENTATION:
                     raise ImageInspectionError("seed manifest method entry object is missing required fields")
-                entry_id_field = entry_summary["fields"][0]
+                entry_id_field = entry_summary["fields"][mvp.METHOD_ENTRY_FIELD_EXECUTION_ID]
+                implementation_field = entry_summary["fields"][mvp.METHOD_ENTRY_FIELD_IMPLEMENTATION]
                 if (
                     entry_id_field[0] != mvp.SEED_FIELD_SMALL_INTEGER
                     or entry_id_field[1] <= 0
@@ -252,6 +256,32 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
                     or entry_spec[2] != argument_count_field[1]
                 ):
                     raise ImageInspectionError("seed manifest method descriptor entry metadata does not match selector")
+                accessor_expected = None
+                if entry_id_field[1] == mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_BITMAP_WIDTH"]:
+                    accessor_expected = 0
+                elif entry_id_field[1] == mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_BITMAP_HEIGHT"]:
+                    accessor_expected = 1
+                elif entry_id_field[1] == mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_FORM_BITS"]:
+                    accessor_expected = 0
+                elif entry_id_field[1] == mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND"]:
+                    accessor_expected = 1
+                if accessor_expected is None:
+                    if implementation_field[0] != mvp.SEED_FIELD_NIL:
+                        raise ImageInspectionError("primitive method entry unexpectedly has an implementation object")
+                else:
+                    if implementation_field[0] != mvp.SEED_FIELD_OBJECT_INDEX:
+                        raise ImageInspectionError("accessor method entry is missing an implementation object")
+                    implementation_index = int(implementation_field[1])
+                    if implementation_index < 0 or implementation_index >= object_count:
+                        raise ImageInspectionError("accessor method entry implementation is out of range")
+                    implementation_summary = objects[implementation_index]
+                    if implementation_summary["object_kind"] != mvp.SEED_OBJECT_ACCESSOR_METHOD:
+                        raise ImageInspectionError("accessor method entry implementation is invalid")
+                    if int(implementation_summary["field_count"]) <= 0:
+                        raise ImageInspectionError("accessor method object is missing required fields")
+                    accessor_field = implementation_summary["fields"][0]
+                    if accessor_field[0] != mvp.SEED_FIELD_SMALL_INTEGER or accessor_field[1] != accessor_expected:
+                        raise ImageInspectionError("accessor method entry field index is invalid")
                 method_entry_ids.add(int(entry_id_field[1]))
             declared_method_count += method_count
 
@@ -297,6 +327,7 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
         "method_descriptor_count": method_descriptor_count,
         "method_entry_object_count": method_entry_object_count,
         "selector_object_count": selector_object_count,
+        "accessor_method_object_count": accessor_method_object_count,
         "declared_method_count": declared_method_count,
         "method_entry_count": len(method_entry_ids),
         "global_binding_count": global_binding_count,
@@ -424,6 +455,7 @@ def render_summary(summary: dict[str, object]) -> str:
         f"objects={seed['object_count']} classes={seed['class_descriptor_count']} class_links={seed['class_link_count']} "
         f"methods={seed['declared_method_count']} method_descriptors={seed['method_descriptor_count']} "
         f"selector_objects={seed['selector_object_count']} "
+        f"accessor_method_objects={seed['accessor_method_object_count']} "
         f"method_entry_objects={seed['method_entry_object_count']} "
         f"method_entries={seed['method_entry_count']} "
         f"globals={seed['global_binding_count']} roots={seed['root_binding_count']} "

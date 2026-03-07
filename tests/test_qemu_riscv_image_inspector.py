@@ -43,11 +43,12 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         self.assertEqual(summary["entry"]["program_section"], "program")
         self.assertEqual(summary["program"]["instruction_count"], 7)
         self.assertEqual(summary["program"]["literal_count"], 1)
-        self.assertEqual(summary["seed"]["object_count"], 217)
-        self.assertEqual(summary["seed"]["class_descriptor_count"], 16)
-        self.assertEqual(summary["seed"]["class_link_count"], 217)
+        self.assertEqual(summary["seed"]["object_count"], 222)
+        self.assertEqual(summary["seed"]["class_descriptor_count"], 17)
+        self.assertEqual(summary["seed"]["class_link_count"], 222)
         self.assertEqual(summary["seed"]["method_descriptor_count"], 22)
         self.assertEqual(summary["seed"]["selector_object_count"], 17)
+        self.assertEqual(summary["seed"]["accessor_method_object_count"], 4)
         self.assertEqual(summary["seed"]["method_entry_object_count"], 22)
         self.assertEqual(summary["seed"]["declared_method_count"], 22)
         self.assertEqual(summary["seed"]["method_entry_count"], 22)
@@ -97,7 +98,7 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         seed = bytearray(mvp.build_seed_manifest())
         header_size = struct.calcsize(mvp.SEED_HEADER_FORMAT)
         object_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
-        method_offset = header_size + (195 * object_size) + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
+        method_offset = header_size + (200 * object_size) + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
         primitive_kind_field_offset = method_offset + (2 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
 
         seed[primitive_kind_field_offset + 1 : primitive_kind_field_offset + 5] = struct.pack("<i", mvp.SEED_OBJECT_DISPLAY)
@@ -109,7 +110,7 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         seed = bytearray(mvp.build_seed_manifest())
         header_size = struct.calcsize(mvp.SEED_HEADER_FORMAT)
         object_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
-        class_instance_kind_entry_object_index = 173 + (
+        class_instance_kind_entry_object_index = 178 + (
             mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND"] - 1
         )
         entry_offset = header_size + (
@@ -128,12 +129,32 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         seed = bytearray(mvp.build_seed_manifest())
         header_size = struct.calcsize(mvp.SEED_HEADER_FORMAT)
         object_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
-        second_selector_offset = header_size + (157 * object_size) + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
+        second_selector_offset = header_size + (158 * object_size) + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
 
         seed[second_selector_offset + 1 : second_selector_offset + 5] = struct.pack(
             "<i",
             mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SHOW"],
         )
+
+        with self.assertRaises(inspector.ImageInspectionError):
+            inspector.inspect_seed_manifest(bytes(seed))
+
+    def test_rejects_accessor_method_entry_without_implementation(self) -> None:
+        seed = bytearray(mvp.build_seed_manifest())
+        header_size = struct.calcsize(mvp.SEED_HEADER_FORMAT)
+        object_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
+        bitmap_width_entry_index = 178 + (
+            mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_BITMAP_WIDTH"] - 1
+        )
+        implementation_offset = (
+            header_size
+            + (bitmap_width_entry_index * object_size)
+            + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
+            + struct.calcsize(mvp.SEED_FIELD_FORMAT)
+        )
+
+        seed[implementation_offset] = mvp.SEED_FIELD_NIL
+        seed[implementation_offset + 1 : implementation_offset + 5] = struct.pack("<i", 0)
 
         with self.assertRaises(inspector.ImageInspectionError):
             inspector.inspect_seed_manifest(bytes(seed))
