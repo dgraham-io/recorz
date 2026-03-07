@@ -1,0 +1,10 @@
+| helper |
+Display clear.
+helper := KernelInstaller fileInClassChunks: 'RecorzKernelClass: #Helper
+!
+cr
+    ^self'.
+Transcript show: 'CLASS '.
+Transcript show: helper instanceKind printString.
+Transcript cr.
+Transcript show: 'CREATED'.

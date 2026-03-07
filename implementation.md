@@ -6,6 +6,12 @@
 - Added an end-to-end demo and QEMU integration test proving that a `Display` class chunk can be filed in from inside the image without an external update payload and immediately change framebuffer-visible behavior.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v`, `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_method_update_integration -v`, and `make -C platform/qemu-riscv64 clean all inspect-image`.
 
+## 2026-03-07 - Dynamic Class Creation From In-Image Class File-In
+- Extended `KernelInstaller>>fileInClassChunks:` so it resolves an existing class or creates a new live `Class` object on demand when the class chunk names a missing class.
+- Added a tiny dynamic class registry in the target VM so newly created classes persist for later lookups and file-ins, and emit a serial log when a new class is created.
+- Added an end-to-end QEMU demo and integration test proving that a `RecorzKernelClass: #Helper` chunk can create a missing class, install a method onto it, and continue rendering without any host-side update payload.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v`, `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_method_update_integration -v`, and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
 ## 2026-03-06 - Boot Image Metadata
 - Added image-level evolution metadata to the QEMU MVP `RCZI` boot image: a feature bitmap plus an FNV-1a checksum.
 - Updated the target image loader to reject unknown feature flags and verify the checksum before handing control to the program and seed loaders.

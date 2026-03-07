@@ -17,6 +17,7 @@
 #define METHOD_SOURCE_LINE_LIMIT 128U
 #define METHOD_SOURCE_NAME_LIMIT 64U
 #define METHOD_SOURCE_CHUNK_LIMIT 512U
+#define DYNAMIC_CLASS_LIMIT 16U
 
 #define FORM_FIELD_BITS RECORZ_MVP_FORM_FIELD_BITS
 #define BITMAP_FIELD_WIDTH RECORZ_MVP_BITMAP_FIELD_WIDTH
@@ -123,9 +124,12 @@ static uint16_t heap_size = 0U;
 static uint16_t class_handles_by_kind[MAX_OBJECT_KIND + 1U];
 static uint16_t selector_handles_by_id[RECORZ_MVP_SELECTOR_FILE_IN_CLASS_CHUNKS + 1U];
 static uint16_t global_handles[RECORZ_MVP_GLOBAL_KERNEL_INSTALLER + 1U];
+static uint16_t dynamic_class_handles[DYNAMIC_CLASS_LIMIT];
+static char dynamic_class_names[DYNAMIC_CLASS_LIMIT][METHOD_SOURCE_NAME_LIMIT];
 static uint16_t default_form_handle = 0U;
 static uint16_t framebuffer_bitmap_handle = 0U;
 static uint16_t next_dynamic_method_entry_execution_id = RECORZ_MVP_METHOD_ENTRY_COUNT;
+static uint16_t dynamic_class_count = 0U;
 static uint16_t glyph_bitmap_handles[128];
 static uint16_t glyph_fallback_handle = 0U;
 static uint16_t transcript_layout_handle = 0U;
@@ -1824,6 +1828,7 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
     uint32_t code_index;
     uint16_t seed_index;
     uint16_t global_index;
+    uint16_t dynamic_index;
 
     if (seed->object_count > HEAP_LIMIT) {
         machine_panic("seed object count exceeds heap capacity");
@@ -1832,6 +1837,11 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
     heap_size = 0U;
     mono_bitmap_count = 0U;
     next_dynamic_method_entry_execution_id = RECORZ_MVP_METHOD_ENTRY_COUNT;
+    dynamic_class_count = 0U;
+    for (dynamic_index = 0U; dynamic_index < DYNAMIC_CLASS_LIMIT; ++dynamic_index) {
+        dynamic_class_handles[dynamic_index] = 0U;
+        dynamic_class_names[dynamic_index][0] = '\0';
+    }
     for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
         seeded_handles[seed_index] = heap_allocate(seed->objects[seed_index].object_kind);
     }
@@ -2462,6 +2472,7 @@ static void file_in_method_chunks_on_class(
 
 static const struct recorz_mvp_heap_object *lookup_class_by_name(const char *class_name) {
     uint8_t kind;
+    uint16_t dynamic_index;
 
     if (class_name == 0 || *class_name == '\0') {
         machine_panic("KernelInstaller class name is empty");
@@ -2474,7 +2485,44 @@ static const struct recorz_mvp_heap_object *lookup_class_by_name(const char *cla
             return (const struct recorz_mvp_heap_object *)heap_object(class_handles_by_kind[kind]);
         }
     }
+    for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
+        if (source_names_equal(class_name, dynamic_class_names[dynamic_index])) {
+            return (const struct recorz_mvp_heap_object *)heap_object(dynamic_class_handles[dynamic_index]);
+        }
+    }
     return 0;
+}
+
+static const struct recorz_mvp_heap_object *ensure_class_named(const char *class_name) {
+    const struct recorz_mvp_heap_object *class_object = lookup_class_by_name(class_name);
+    uint16_t class_handle;
+    uint32_t name_index = 0U;
+
+    if (class_object != 0) {
+        return class_object;
+    }
+    if (dynamic_class_count >= DYNAMIC_CLASS_LIMIT) {
+        machine_panic("dynamic class registry overflow");
+    }
+    class_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_CLASS);
+    heap_set_field(class_handle, CLASS_FIELD_SUPERCLASS, nil_value());
+    heap_set_field(class_handle, CLASS_FIELD_INSTANCE_KIND, small_integer_value((int32_t)RECORZ_MVP_OBJECT_CLASS));
+    heap_set_field(class_handle, CLASS_FIELD_METHOD_START, nil_value());
+    heap_set_field(class_handle, CLASS_FIELD_METHOD_COUNT, small_integer_value(0));
+    while (class_name[name_index] != '\0') {
+        if (name_index + 1U >= METHOD_SOURCE_NAME_LIMIT) {
+            machine_panic("dynamic class name exceeds buffer capacity");
+        }
+        dynamic_class_names[dynamic_class_count][name_index] = class_name[name_index];
+        ++name_index;
+    }
+    dynamic_class_names[dynamic_class_count][name_index] = '\0';
+    dynamic_class_handles[dynamic_class_count] = class_handle;
+    ++dynamic_class_count;
+    machine_puts("recorz qemu-riscv64 mvp: created class ");
+    machine_puts(class_name);
+    machine_putc('\n');
+    return (const struct recorz_mvp_heap_object *)heap_object(class_handle);
 }
 
 static void execute_entry_kernel_installer_compiled_method_word0_word1_word2_word3_instruction_count(
@@ -2632,10 +2680,7 @@ static void execute_entry_kernel_installer_file_in_class_chunks(
         machine_panic("KernelInstaller fileInClassChunks: source is empty");
     }
     source_parse_class_name_from_chunk(chunk, class_name, sizeof(class_name));
-    class_object = lookup_class_by_name(class_name);
-    if (class_object == 0) {
-        machine_panic("KernelInstaller fileInClassChunks: could not resolve class");
-    }
+    class_object = ensure_class_named(class_name);
     file_in_method_chunks_on_class(arguments[0].string, class_object);
     push(object_value(heap_handle_for_object(class_object)));
 }
