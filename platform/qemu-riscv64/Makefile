@@ -14,7 +14,7 @@ QEMU_RUN_ARGS := $(QEMU_UPDATE_ARGS) $(QEMU_EXTRA_ARGS)
 CFLAGS := -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -ffreestanding -O2 -Wall -Wextra -I$(CURDIR) -I$(BUILD_DIR)
 LDFLAGS := -T $(CURDIR)/linker.ld
 
-EXAMPLE := $(ROOT)/examples/qemu_riscv_fb_demo.rz
+EXAMPLE ?= $(ROOT)/examples/qemu_riscv_fb_demo.rz
 IMAGE_SCRIPT := $(ROOT)/tools/build_qemu_riscv_mvp_image.py
 GENERATED_BINDINGS_SCRIPT := $(ROOT)/tools/generate_qemu_riscv_mvp_runtime_bindings_header.py
 KERNEL_MVP_SOURCES := $(wildcard $(ROOT)/kernel/mvp/*.rz)
@@ -32,14 +32,14 @@ OBJECTS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(filter %.c,$(SOURCES))) \
 	$(patsubst %.S,$(BUILD_DIR)/%.o,$(filter %.S,$(SOURCES))) \
 	$(GENERATED_IMAGE_OBJECT)
 
-.PHONY: all run run-headless screenshot inspect-image clean
+.PHONY: all run run-headless screenshot inspect-image clean FORCE
 
 all: $(ELF)
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-$(GENERATED_IMAGE): $(IMAGE_SCRIPT) $(EXAMPLE) $(KERNEL_MVP_SOURCES) $(ROOT)/platform/qemu-riscv64/runtime_spec.json $(ROOT)/src/recorz/parser.py $(ROOT)/src/recorz/ast.py $(ROOT)/src/recorz/compiler.py $(ROOT)/src/recorz/model.py | $(BUILD_DIR)
+$(GENERATED_IMAGE): FORCE $(IMAGE_SCRIPT) $(EXAMPLE) $(KERNEL_MVP_SOURCES) $(ROOT)/platform/qemu-riscv64/runtime_spec.json $(ROOT)/src/recorz/parser.py $(ROOT)/src/recorz/ast.py $(ROOT)/src/recorz/compiler.py $(ROOT)/src/recorz/model.py | $(BUILD_DIR)
 	PYTHONPATH=$(ROOT)/src $(PYTHON) $(IMAGE_SCRIPT) $(EXAMPLE) $(GENERATED_IMAGE)
 
 $(GENERATED_BINDINGS_HEADER): $(GENERATED_BINDINGS_SCRIPT) $(IMAGE_SCRIPT) $(KERNEL_MVP_SOURCES) $(ROOT)/platform/qemu-riscv64/runtime_spec.json $(ROOT)/src/recorz/parser.py $(ROOT)/src/recorz/ast.py $(ROOT)/src/recorz/compiler.py $(ROOT)/src/recorz/model.py | $(BUILD_DIR)

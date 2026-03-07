@@ -709,3 +709,9 @@
 - Matched the pre-VM fallback framebuffer clear color in `platform/qemu-riscv64/display.c` to the same warm background so boot and cleared-form output stay visually consistent.
 - Updated the QEMU render and method-update integration tests in `tests/test_qemu_riscv_render_integration.py`, `tests/test_qemu_riscv_method_update_integration.py`, and `tests/test_qemu_riscv_mvp_lowering.py` to lock the new seeded palette and the lighter default demo output.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image screenshot`.
+
+## 2026-03-07 - Rebuild QEMU Image When EXAMPLE Changes
+- Fixed `platform/qemu-riscv64/Makefile` so changing `EXAMPLE=...` always takes effect even when reusing the same `BUILD_DIR` and not running `clean`; the generated embedded image is now rebuilt on each QEMU image build invocation instead of relying on stale timestamp comparisons against whichever example happened to be built last.
+- Switched the default `EXAMPLE` assignment in the QEMU Makefile to `?=` so command-line example selection remains explicit and conventional.
+- Added `tests/test_qemu_riscv_makefile.py` to lock the regression: it runs `make inspect-image` twice against the same build directory, first with the framebuffer demo and then with the stateful-class demo, and asserts that the generated image checksum and program manifest change without a clean build in between.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 EXAMPLE=/Users/david/repos/recorz/examples/qemu_riscv_in_image_stateful_class_demo.rz inspect-image`.
