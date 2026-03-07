@@ -459,3 +459,9 @@
 - Switched the fixed boot seed builder to materialize directly from `FIXED_BOOT_GRAPH_SPEC.family_specs` while preserving the existing derived `BOOT_OBJECT_FAMILY_*` and `BOOT_OBJECT_SPECS_*` views for readability and stable test coverage.
 - Extended the focused lowering regressions to lock the new fixed boot graph source-of-truth alongside the unchanged derived family views and boot object order.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Introduce Top-Level Boot Image Spec
+- Added `BootImageSpec` as a top-level declaration over the fixed boot graph and dynamic seed section specs, so the builder now has one explicit boot-model object spanning both halves of the seed image.
+- Switched the derived dynamic section views and fixed boot materialization path to consume `BOOT_IMAGE_SPEC`, while preserving the existing `FIXED_BOOT_GRAPH_SPEC`, `DYNAMIC_SEED_SECTION_SPECS`, and helper-derived views for stability.
+- Extended the focused lowering regressions to lock the new `BOOT_IMAGE_SPEC` and the fact that the existing fixed/dynamic spec views remain derived from it.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

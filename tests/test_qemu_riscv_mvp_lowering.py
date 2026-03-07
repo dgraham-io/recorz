@@ -618,6 +618,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "after_glyphs",
             ],
         )
+        self.assertIs(mvp.BOOT_IMAGE_SPEC.fixed_boot_graph_spec, mvp.FIXED_BOOT_GRAPH_SPEC)
         self.assertEqual(
             tuple(mvp.BOOT_OBJECT_FAMILY_SPECS),
             mvp.FIXED_BOOT_GRAPH_SPEC.family_specs,
@@ -736,6 +737,13 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
 
     def test_declares_seed_layout_sections_and_derives_layout(self) -> None:
+        self.assertEqual(
+            mvp.BOOT_IMAGE_SPEC,
+            mvp.BootImageSpec(
+                fixed_boot_graph_spec=mvp.FIXED_BOOT_GRAPH_SPEC,
+                dynamic_seed_section_specs=tuple(mvp.DYNAMIC_SEED_SECTION_SPECS),
+            ),
+        )
         self.assertEqual(
             mvp.DYNAMIC_SEED_SECTION_SPECS,
             [

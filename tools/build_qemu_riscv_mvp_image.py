@@ -369,6 +369,12 @@ class DynamicSeedSectionSpec:
     state_update_fields: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class BootImageSpec:
+    fixed_boot_graph_spec: FixedBootGraphSpec
+    dynamic_seed_section_specs: tuple[DynamicSeedSectionSpec, ...]
+
+
 @dataclass
 class DynamicSeedBuildState:
     seed_layout: dict[str, SeedLayoutSection]
@@ -1488,25 +1494,31 @@ INITIAL_DYNAMIC_SEED_STATE_FIELDS = (
 )
 
 
-def build_seed_layout_section_specs() -> list[SeedLayoutSectionSpec]:
+def build_seed_layout_section_specs(
+    dynamic_seed_section_specs: tuple[DynamicSeedSectionSpec, ...],
+) -> list[SeedLayoutSectionSpec]:
     return [
         SeedLayoutSectionSpec(section_spec.layout_section_name, section_spec.count_source)
-        for section_spec in DYNAMIC_SEED_SECTION_SPECS
+        for section_spec in dynamic_seed_section_specs
     ]
 
 
-def build_dynamic_seed_object_section_specs() -> list[DynamicSeedObjectSectionSpec]:
+def build_dynamic_seed_object_section_specs(
+    dynamic_seed_section_specs: tuple[DynamicSeedSectionSpec, ...],
+) -> list[DynamicSeedObjectSectionSpec]:
     return [
         DynamicSeedObjectSectionSpec(section_spec.layout_section_name)
-        for section_spec in DYNAMIC_SEED_SECTION_SPECS
+        for section_spec in dynamic_seed_section_specs
     ]
 
 
-def build_dynamic_seed_build_step_specs() -> list[DynamicSeedBuildStepSpec]:
-    build_orders = [section_spec.build_order for section_spec in DYNAMIC_SEED_SECTION_SPECS]
+def build_dynamic_seed_build_step_specs(
+    dynamic_seed_section_specs: tuple[DynamicSeedSectionSpec, ...],
+) -> list[DynamicSeedBuildStepSpec]:
+    build_orders = [section_spec.build_order for section_spec in dynamic_seed_section_specs]
     if len(set(build_orders)) != len(build_orders):
         raise AssertionError("dynamic seed section specs declare duplicate build orders")
-    ordered_section_specs = sorted(DYNAMIC_SEED_SECTION_SPECS, key=lambda section_spec: section_spec.build_order)
+    ordered_section_specs = sorted(dynamic_seed_section_specs, key=lambda section_spec: section_spec.build_order)
     return [
         DynamicSeedBuildStepSpec(
             section_spec.layout_section_name,
@@ -1519,10 +1531,21 @@ def build_dynamic_seed_build_step_specs() -> list[DynamicSeedBuildStepSpec]:
     ]
 
 
-SEED_LAYOUT_SECTION_SPECS = build_seed_layout_section_specs()
+def build_boot_image_spec(
+    fixed_boot_graph_spec: FixedBootGraphSpec,
+    dynamic_seed_section_specs: list[DynamicSeedSectionSpec],
+) -> BootImageSpec:
+    return BootImageSpec(
+        fixed_boot_graph_spec=fixed_boot_graph_spec,
+        dynamic_seed_section_specs=tuple(dynamic_seed_section_specs),
+    )
+
+
+BOOT_IMAGE_SPEC = build_boot_image_spec(FIXED_BOOT_GRAPH_SPEC, DYNAMIC_SEED_SECTION_SPECS)
+SEED_LAYOUT_SECTION_SPECS = build_seed_layout_section_specs(BOOT_IMAGE_SPEC.dynamic_seed_section_specs)
 SEED_LAYOUT_SECTION_NAMES = [section_spec.name for section_spec in SEED_LAYOUT_SECTION_SPECS]
-DYNAMIC_SEED_OBJECT_SECTION_SPECS = build_dynamic_seed_object_section_specs()
-DYNAMIC_SEED_BUILD_STEP_SPECS = build_dynamic_seed_build_step_specs()
+DYNAMIC_SEED_OBJECT_SECTION_SPECS = build_dynamic_seed_object_section_specs(BOOT_IMAGE_SPEC.dynamic_seed_section_specs)
+DYNAMIC_SEED_BUILD_STEP_SPECS = build_dynamic_seed_build_step_specs(BOOT_IMAGE_SPEC.dynamic_seed_section_specs)
 
 
 def build_selector_seed_objects(
@@ -1659,7 +1682,7 @@ def build_fixed_boot_seed_objects() -> tuple[list[SeedObject], dict[str, int], l
     seed_object_indices_by_name: dict[str, int] = {}
     glyph_object_indices: list[int] = []
 
-    for family_spec in FIXED_BOOT_GRAPH_SPEC.family_specs:
+    for family_spec in BOOT_IMAGE_SPEC.fixed_boot_graph_spec.family_specs:
         for spec in family_spec.object_specs:
             object_index = add_named_seed_object(
                 seed_objects,
