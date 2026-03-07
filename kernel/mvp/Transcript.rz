@@ -1,5 +1,8 @@
 RecorzKernelClass: #Transcript descriptorOrder: 1 sourceBootOrder: 0 instanceVariableNames: ''
 !
+RecorzKernelBootObject: #Transcript family: #beforeGlyphs order: 0 class: #Transcript
+globalExports: 'Transcript'
+!
 show: text
     Display defaultForm writeString: text.
     ^self

@@ -1,4 +1,7 @@
 RecorzKernelClass: #Glyphs descriptorOrder: 4 sourceBootOrder: 3 instanceVariableNames: ''
 !
+RecorzKernelBootObject: #Glyphs family: #beforeGlyphs order: 3 class: #Glyphs
+globalExports: 'Glyphs'
+!
 at: codePoint
     <primitive: #glyphsAt>

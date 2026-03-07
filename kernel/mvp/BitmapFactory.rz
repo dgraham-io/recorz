@@ -1,4 +1,7 @@
 RecorzKernelClass: #BitmapFactory descriptorOrder: 6 sourceBootOrder: 5 instanceVariableNames: ''
 !
+RecorzKernelBootObject: #BitmapFactory family: #beforeGlyphs order: 5 class: #BitmapFactory
+globalExports: 'Bitmap'
+!
 monoWidth: width height: height
     <primitive: #bitmapFactoryMonoWidthHeight>

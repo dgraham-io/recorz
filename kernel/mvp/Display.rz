@@ -1,5 +1,8 @@
 RecorzKernelClass: #Display descriptorOrder: 2 sourceBootOrder: 1 instanceVariableNames: ''
 !
+RecorzKernelBootObject: #Display family: #beforeGlyphs order: 1 class: #Display
+globalExports: 'Display'
+!
 defaultForm
     ^Display defaultForm
 !

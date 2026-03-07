@@ -294,6 +294,18 @@ class KernelMethodSource:
 
 
 @dataclass(frozen=True)
+class KernelBootObjectDeclaration:
+    name: str
+    family_name: str
+    family_order: int
+    class_name: str
+    field_specs: tuple[tuple[str, object], ...]
+    global_exports: tuple[str, ...]
+    root_exports: tuple[str, ...]
+    relative_path: str
+
+
+@dataclass(frozen=True)
 class KernelClassHeader:
     class_name: str
     descriptor_order: int
@@ -592,6 +604,13 @@ KERNEL_CLASS_HEADER_PATTERN = re.compile(
     r"^RecorzKernelClass:\s*#(?P<class_name>[A-Za-z_]\w*)\s+descriptorOrder:\s*(?P<descriptor_order>\d+)"
     r"(?:\s+sourceBootOrder:\s*(?P<source_boot_order>\d+))?\s+instanceVariableNames:\s*'(?P<instance_variables>[^']*)'$"
 )
+KERNEL_BOOT_OBJECT_HEADER_PATTERN = re.compile(
+    r"^RecorzKernelBootObject:\s*#(?P<name>[A-Za-z_]\w*)\s+family:\s*#(?P<family_name>[A-Za-z_]\w*)"
+    r"\s+order:\s*(?P<family_order>\d+)\s+class:\s*#(?P<class_name>[A-Za-z_]\w*)$"
+)
+KERNEL_BOOT_OBJECT_ATTRIBUTE_PATTERN = re.compile(
+    r"^(?P<attribute_name>fields|globalExports|rootExports):\s*'(?P<attribute_value>[^']*)'$"
+)
 KERNEL_PRIMITIVE_DECLARATION_PATTERN = re.compile(r"^<primitive:\s*#(?P<binding>[A-Za-z_]\w*)>$")
 ACCESSOR_METHOD_FIELD_BY_ENTRY_NAME: dict[str, int] = {}
 FIELD_SEND_METHOD_SPEC_BY_ENTRY_NAME: dict[str, tuple[int, str]] = {}
@@ -680,6 +699,63 @@ def parse_kernel_class_header(header_source: str, relative_path: str) -> KernelC
     )
 
 
+def parse_kernel_boot_object_field_specs(field_source: str, relative_path: str) -> tuple[tuple[str, object], ...]:
+    field_specs: list[tuple[str, object]] = []
+
+    for token in field_source.split():
+        if ":" not in token:
+            raise LoweringError(
+                f"kernel MVP boot object field {token!r} in {relative_path} must use kind:value syntax"
+            )
+        field_kind_name, field_value = token.split(":", 1)
+        if field_kind_name == "small":
+            field_specs.append((FIELD_SPEC_SMALL_INTEGER, int(field_value)))
+            continue
+        if field_kind_name == "object":
+            field_specs.append((FIELD_SPEC_OBJECT_REF, field_value))
+            continue
+        if field_kind_name == "glyph":
+            field_specs.append((FIELD_SPEC_GLYPH_REF, int(field_value)))
+            continue
+        raise LoweringError(
+            f"kernel MVP boot object field kind {field_kind_name!r} in {relative_path} is unsupported"
+        )
+
+    return tuple(field_specs)
+
+
+def parse_kernel_boot_object_chunk(chunk_source: str, relative_path: str) -> KernelBootObjectDeclaration:
+    lines = [line.strip() for line in chunk_source.splitlines() if line.strip()]
+    if not lines:
+        raise LoweringError(f"kernel MVP boot object chunk in {relative_path} is empty")
+    header_match = KERNEL_BOOT_OBJECT_HEADER_PATTERN.fullmatch(lines[0])
+    if header_match is None:
+        raise LoweringError(f"kernel MVP boot object chunk in {relative_path} has an invalid header")
+
+    attributes: dict[str, str] = {}
+    for line in lines[1:]:
+        attribute_match = KERNEL_BOOT_OBJECT_ATTRIBUTE_PATTERN.fullmatch(line)
+        if attribute_match is None:
+            raise LoweringError(f"kernel MVP boot object chunk in {relative_path} has an invalid attribute line")
+        attribute_name = attribute_match.group("attribute_name")
+        if attribute_name in attributes:
+            raise LoweringError(
+                f"kernel MVP boot object chunk in {relative_path} repeats attribute {attribute_name!r}"
+            )
+        attributes[attribute_name] = attribute_match.group("attribute_value")
+
+    return KernelBootObjectDeclaration(
+        name=header_match.group("name"),
+        family_name=re.sub(r"(?<!^)(?=[A-Z])", "_", header_match.group("family_name")).lower(),
+        family_order=int(header_match.group("family_order")),
+        class_name=header_match.group("class_name"),
+        field_specs=parse_kernel_boot_object_field_specs(attributes.get("fields", ""), relative_path),
+        global_exports=tuple(name for name in attributes.get("globalExports", "").split() if name),
+        root_exports=tuple(name for name in attributes.get("rootExports", "").split() if name),
+        relative_path=relative_path,
+    )
+
+
 def load_kernel_class_headers() -> dict[str, KernelClassHeader]:
     class_headers_by_name: dict[str, KernelClassHeader] = {}
 
@@ -732,6 +808,45 @@ KERNEL_CLASS_NAME_TO_OBJECT_KIND = {
     class_name: constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, class_name)
     for class_name in KERNEL_CLASS_HEADERS_BY_NAME
 }
+
+
+def load_kernel_boot_object_declarations() -> dict[str, KernelBootObjectDeclaration]:
+    boot_object_declarations_by_name: dict[str, KernelBootObjectDeclaration] = {}
+    family_order_by_name: dict[str, set[int]] = {}
+
+    for method_path in sorted(KERNEL_MVP_ROOT.glob("*.rz")):
+        relative_path = method_path.name
+        chunk_sources = split_kernel_method_chunks(method_path.read_text(encoding="utf-8"))
+        if not chunk_sources:
+            raise LoweringError(f"kernel MVP class file {relative_path} is empty")
+        class_header = parse_kernel_class_header(chunk_sources[0], relative_path)
+
+        for chunk_source in chunk_sources[1:]:
+            if not chunk_source.lstrip().startswith("RecorzKernelBootObject:"):
+                continue
+            declaration = parse_kernel_boot_object_chunk(chunk_source, relative_path)
+            if declaration.class_name != class_header.class_name:
+                raise LoweringError(
+                    f"kernel MVP boot object {declaration.name} in {relative_path} must declare class #{class_header.class_name}"
+                )
+            if declaration.name in boot_object_declarations_by_name:
+                raise LoweringError(f"kernel MVP boot object {declaration.name} is declared more than once")
+            if declaration.class_name not in KERNEL_CLASS_HEADERS_BY_NAME:
+                raise LoweringError(
+                    f"kernel MVP boot object {declaration.name} in {relative_path} declares unknown class {declaration.class_name}"
+                )
+            family_orders = family_order_by_name.setdefault(declaration.family_name, set())
+            if declaration.family_order in family_orders:
+                raise LoweringError(
+                    f"kernel MVP boot family {declaration.family_name!r} repeats order {declaration.family_order}"
+                )
+            family_orders.add(declaration.family_order)
+            boot_object_declarations_by_name[declaration.name] = declaration
+
+    return boot_object_declarations_by_name
+
+
+KERNEL_BOOT_OBJECT_DECLARATIONS_BY_NAME = load_kernel_boot_object_declarations()
 
 
 def upper_snake_name(name: str) -> str:
@@ -842,6 +957,8 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
         chunk_signatures: set[tuple[str, int]] = set()
 
         for chunk_source in chunk_sources[1:]:
+            if chunk_source.lstrip().startswith("RecorzKernelBootObject:"):
+                continue
             selector, argument_count, implementation_kind, primitive_binding = parse_kernel_method_chunk(
                 class_name,
                 instance_variables,

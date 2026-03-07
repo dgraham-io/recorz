@@ -1,1 +1,5 @@
 RecorzKernelClass: #TextMetrics descriptorOrder: 11 instanceVariableNames: 'cellWidth cellHeight'
+!
+RecorzKernelBootObject: #TranscriptMetrics family: #afterGlyphs order: 0 class: #TextMetrics
+fields: 'small:6 small:8'
+rootExports: 'transcript_metrics'

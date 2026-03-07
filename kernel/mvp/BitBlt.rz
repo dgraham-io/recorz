@@ -1,5 +1,8 @@
 RecorzKernelClass: #BitBlt descriptorOrder: 3 sourceBootOrder: 2 instanceVariableNames: ''
 !
+RecorzKernelBootObject: #BitBlt family: #beforeGlyphs order: 2 class: #BitBlt
+globalExports: 'BitBlt'
+!
 fillForm: form color: color
     <primitive: #bitbltFillFormColor>
 !

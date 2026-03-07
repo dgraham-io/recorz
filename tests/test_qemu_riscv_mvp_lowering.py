@@ -346,6 +346,51 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             mvp.KernelClassHeader("CompiledMethod", 16, None, ("word0", "word1", "word2", "word3")),
         )
 
+    def test_parses_kernel_boot_object_chunk(self) -> None:
+        self.assertEqual(
+            mvp.parse_kernel_boot_object_chunk(
+                "\n".join(
+                    [
+                        "RecorzKernelBootObject: #DefaultForm family: #beforeGlyphs order: 9 class: #Form",
+                        "fields: 'object:FramebufferBitmap'",
+                        "rootExports: 'default_form'",
+                    ]
+                ),
+                "Form.rz",
+            ),
+            mvp.KernelBootObjectDeclaration(
+                "DefaultForm",
+                "before_glyphs",
+                9,
+                "Form",
+                ((mvp.FIELD_SPEC_OBJECT_REF, "FramebufferBitmap"),),
+                (),
+                ("default_form",),
+                "Form.rz",
+            ),
+        )
+        self.assertEqual(
+            mvp.parse_kernel_boot_object_chunk(
+                "\n".join(
+                    [
+                        "RecorzKernelBootObject: #Transcript family: #beforeGlyphs order: 0 class: #Transcript",
+                        "globalExports: 'Transcript'",
+                    ]
+                ),
+                "Transcript.rz",
+            ),
+            mvp.KernelBootObjectDeclaration(
+                "Transcript",
+                "before_glyphs",
+                0,
+                "Transcript",
+                (),
+                ("Transcript",),
+                (),
+                "Transcript.rz",
+            ),
+        )
+
     def test_parses_primitive_kernel_method_chunk(self) -> None:
         self.assertEqual(
             mvp.parse_kernel_method_chunk(
@@ -454,6 +499,32 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertEqual(mvp.SEED_ROOT_VALUES["RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS"], 6)
         self.assertEqual(mvp.SEED_ROOT_DEFINITIONS[0], ("RECORZ_MVP_SEED_ROOT_DEFAULT_FORM", 1))
+        self.assertEqual(
+            mvp.KERNEL_BOOT_OBJECT_DECLARATIONS_BY_NAME["DefaultForm"],
+            mvp.KernelBootObjectDeclaration(
+                "DefaultForm",
+                "before_glyphs",
+                9,
+                "Form",
+                ((mvp.FIELD_SPEC_OBJECT_REF, "FramebufferBitmap"),),
+                (),
+                ("default_form",),
+                "Form.rz",
+            ),
+        )
+        self.assertEqual(
+            mvp.KERNEL_BOOT_OBJECT_DECLARATIONS_BY_NAME["TranscriptBehavior"],
+            mvp.KernelBootObjectDeclaration(
+                "TranscriptBehavior",
+                "after_glyphs",
+                1,
+                "TextBehavior",
+                ((mvp.FIELD_SPEC_GLYPH_REF, 32), (mvp.FIELD_SPEC_SMALL_INTEGER, 1)),
+                (),
+                ("transcript_behavior",),
+                "TextBehavior.rz",
+            ),
+        )
 
     def test_derives_method_entry_order_from_boot_class_order_and_source_chunks(self) -> None:
         self.assertEqual(

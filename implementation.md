@@ -519,3 +519,9 @@
 - Replaced the Python-side full class list with parsed class headers, derived `CLASS_DESCRIPTOR_KIND_NAMES` from `descriptorOrder`, and continued deriving the source boot subset from `sourceBootOrder`, making the class descriptor order and source class set both source-owned.
 - Updated the method-source loader to accept header-only support classes in the kernel source tree and extended the focused lowering regressions to lock the full descriptor-order header set.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Add Source Boot Object Declarations
+- Added `RecorzKernelBootObject:` chunk syntax to `.rz` files and extended the builder to parse source-owned boot object declarations, including family/order metadata, object/glyph/small-integer field specs, and global/root exports.
+- Declared the fixed singleton/root objects alongside their owning classes in `kernel/mvp/*.rz`, while keeping the live fixed boot graph builder unchanged in this step so the new declaration path could land independently.
+- Updated the method-source loader to skip boot object declaration chunks and extended the focused lowering regressions to lock parsed boot object declarations sourced from `.rz` files.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
