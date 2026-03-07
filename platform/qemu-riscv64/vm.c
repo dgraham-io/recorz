@@ -2,7 +2,6 @@
 
 #include <stdint.h>
 
-#include "recorz_mvp_generated_runtime_bindings.h"
 #include "display.h"
 #include "machine.h"
 

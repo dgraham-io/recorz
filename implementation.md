@@ -285,3 +285,10 @@
 - Renamed the one region-copy primitive handler function so its C name now follows the same binding-derived naming convention as the rest of the generated table.
 - Updated the focused header-generation test to assert the generated primitive-handler macro alongside the existing method-entry and primitive-binding enums.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-06 - Generate Core Runtime Constants Header
+- Extended the generated QEMU runtime header so it now also defines the target opcode, global, selector, literal-kind, object-kind, seed-field-kind, and seed-root enums from the host builder metadata.
+- Reduced `platform/qemu-riscv64/vm.h` back to limits and data-structure definitions by removing the duplicated checked-in runtime enums and including the generated header instead.
+- Updated the QEMU Makefile so every target C object rebuilds after the generated runtime header changes, keeping `program.c`, `seed.c`, and the VM consistently aligned with the same generated constants.
+- Expanded the focused header-generation test to assert the new generated runtime enums alongside the existing method-entry and primitive-binding content.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
