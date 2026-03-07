@@ -58,33 +58,6 @@ OP_PUSH_NIL = "RECORZ_MVP_OP_PUSH_NIL"
 LITERAL_STRING = "RECORZ_MVP_LITERAL_STRING"
 LITERAL_SMALL_INTEGER = "RECORZ_MVP_LITERAL_SMALL_INTEGER"
 
-SELECTOR_SPECS = [
-    ("show:", "RECORZ_MVP_SELECTOR_SHOW"),
-    ("cr", "RECORZ_MVP_SELECTOR_CR"),
-    ("writeString:", "RECORZ_MVP_SELECTOR_WRITE_STRING"),
-    ("newline", "RECORZ_MVP_SELECTOR_NEWLINE"),
-    ("defaultForm", "RECORZ_MVP_SELECTOR_DEFAULT_FORM"),
-    ("clear", "RECORZ_MVP_SELECTOR_CLEAR"),
-    ("width", "RECORZ_MVP_SELECTOR_WIDTH"),
-    ("height", "RECORZ_MVP_SELECTOR_HEIGHT"),
-    ("bits", "RECORZ_MVP_SELECTOR_BITS"),
-    ("+", "RECORZ_MVP_SELECTOR_ADD"),
-    ("-", "RECORZ_MVP_SELECTOR_SUBTRACT"),
-    ("*", "RECORZ_MVP_SELECTOR_MULTIPLY"),
-    ("printString", "RECORZ_MVP_SELECTOR_PRINT_STRING"),
-    ("fillForm:color:", "RECORZ_MVP_SELECTOR_FILL_FORM_COLOR"),
-    ("at:", "RECORZ_MVP_SELECTOR_AT"),
-    ("copyBitmap:toForm:x:y:scale:", "RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE"),
-    ("copyBitmap:toForm:x:y:scale:color:", "RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR"),
-    (
-        "copyBitmap:sourceX:sourceY:width:height:toForm:x:y:scale:color:",
-        "RECORZ_MVP_SELECTOR_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR",
-    ),
-    ("monoWidth:height:", "RECORZ_MVP_SELECTOR_MONO_WIDTH_HEIGHT"),
-    ("fromBits:", "RECORZ_MVP_SELECTOR_FROM_BITS"),
-    ("class", "RECORZ_MVP_SELECTOR_CLASS"),
-    ("instanceKind", "RECORZ_MVP_SELECTOR_INSTANCE_KIND"),
-]
 OPCODE_VALUES = {
     OP_PUSH_GLOBAL: 1,
     OP_PUSH_LITERAL: 2,
@@ -186,7 +159,6 @@ SEED_ROOT_SPECS = [
     ("transcript_metrics", "RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS"),
 ]
 
-SELECTOR_IDS, SELECTOR_VALUES, SELECTOR_DEFINITIONS = build_named_constant_maps(SELECTOR_SPECS)
 SEED_FIELD_KIND_IDS, SEED_FIELD_KIND_VALUES, SEED_FIELD_KIND_DEFINITIONS = build_named_constant_maps(
     SEED_FIELD_KIND_SPECS,
     start=0,
@@ -293,6 +265,13 @@ class KernelBootObjectDeclaration:
     field_specs: tuple[tuple[str, object], ...]
     global_exports: tuple[str, ...]
     root_exports: tuple[str, ...]
+    relative_path: str
+
+
+@dataclass(frozen=True)
+class KernelSelectorDeclaration:
+    selector: str
+    selector_order: int
     relative_path: str
 
 
@@ -585,6 +564,9 @@ KERNEL_BOOT_OBJECT_HEADER_PATTERN = re.compile(
     r"^RecorzKernelBootObject:\s*#(?P<name>[A-Za-z_]\w*)\s+family:\s*#(?P<family_name>[A-Za-z_]\w*)"
     r"\s+order:\s*(?P<family_order>\d+)\s+class:\s*#(?P<class_name>[A-Za-z_]\w*)$"
 )
+KERNEL_SELECTOR_PATTERN = re.compile(
+    r"^RecorzKernelSelector:\s*#(?P<selector>\S+)\s+order:\s*(?P<selector_order>\d+)$"
+)
 KERNEL_GLYPH_BITMAP_FAMILY_PATTERN = re.compile(
     r"^RecorzKernelGlyphBitmapFamily:\s*#(?P<name_prefix>[A-Za-z_]\w*)\s+family:\s*#(?P<family_name>[A-Za-z_]\w*)"
     r"\s+class:\s*#(?P<class_name>[A-Za-z_]\w*)\s+width:\s*(?P<width>\d+)\s+height:\s*(?P<height>\d+)"
@@ -738,6 +720,18 @@ def parse_kernel_boot_object_chunk(chunk_source: str, relative_path: str) -> Ker
     )
 
 
+def parse_kernel_selector_chunk(chunk_source: str, relative_path: str) -> KernelSelectorDeclaration:
+    normalized_header = " ".join(line.strip() for line in chunk_source.splitlines() if line.strip())
+    match = KERNEL_SELECTOR_PATTERN.fullmatch(normalized_header)
+    if match is None:
+        raise LoweringError(f"kernel MVP selector chunk in {relative_path} has an invalid header")
+    return KernelSelectorDeclaration(
+        selector=match.group("selector"),
+        selector_order=int(match.group("selector_order")),
+        relative_path=relative_path,
+    )
+
+
 def parse_kernel_glyph_bitmap_family_chunk(
     chunk_source: str,
     relative_path: str,
@@ -851,6 +845,50 @@ def load_kernel_boot_object_declarations() -> dict[str, KernelBootObjectDeclarat
 KERNEL_BOOT_OBJECT_DECLARATIONS_BY_NAME = load_kernel_boot_object_declarations()
 
 
+def load_kernel_selector_declarations() -> dict[str, KernelSelectorDeclaration]:
+    selector_declarations_by_selector: dict[str, KernelSelectorDeclaration] = {}
+
+    for method_path in sorted(KERNEL_MVP_ROOT.glob("*.rz")):
+        relative_path = method_path.name
+        chunk_sources = split_kernel_method_chunks(method_path.read_text(encoding="utf-8"))
+        if not chunk_sources:
+            raise LoweringError(f"kernel MVP class file {relative_path} is empty")
+        class_header = parse_kernel_class_header(chunk_sources[0], relative_path)
+
+        for chunk_source in chunk_sources[1:]:
+            if not chunk_source.lstrip().startswith("RecorzKernelSelector:"):
+                continue
+            declaration = parse_kernel_selector_chunk(chunk_source, relative_path)
+            if class_header.class_name != "Selector":
+                raise LoweringError(
+                    f"kernel MVP selector {declaration.selector!r} in {relative_path} must be declared in class #Selector"
+                )
+            if declaration.selector in selector_declarations_by_selector:
+                raise LoweringError(
+                    f"kernel MVP selector {declaration.selector!r} is declared more than once"
+                )
+            selector_declarations_by_selector[declaration.selector] = declaration
+
+    selector_declarations_in_order = sorted(
+        selector_declarations_by_selector.values(),
+        key=lambda declaration: declaration.selector_order,
+    )
+    expected_selector_orders = list(range(len(selector_declarations_in_order)))
+    actual_selector_orders = [declaration.selector_order for declaration in selector_declarations_in_order]
+    if actual_selector_orders != expected_selector_orders:
+        raise LoweringError(
+            "kernel MVP selectors must declare a contiguous order range starting at 0"
+        )
+    return selector_declarations_by_selector
+
+
+KERNEL_SELECTOR_DECLARATIONS_BY_SELECTOR = load_kernel_selector_declarations()
+KERNEL_SELECTOR_DECLARATIONS_IN_ORDER = sorted(
+    KERNEL_SELECTOR_DECLARATIONS_BY_SELECTOR.values(),
+    key=lambda declaration: declaration.selector_order,
+)
+
+
 def load_kernel_glyph_bitmap_family_declaration() -> KernelGlyphBitmapFamilyDeclaration:
     glyph_family_declaration: KernelGlyphBitmapFamilyDeclaration | None = None
 
@@ -933,13 +971,32 @@ def kernel_global_constant_name(global_name: str) -> str:
     return f"RECORZ_MVP_GLOBAL_{kernel_class_entry_stem(global_name)}"
 
 
-def kernel_selector_entry_stem(selector: str) -> str:
-    keyword_parts = [part for part in selector.split(":") if part]
-    if keyword_parts:
+def kernel_selector_constant_stem(selector: str) -> str:
+    if ":" in selector:
+        keyword_parts = [part for part in selector.split(":") if part]
         return "_".join(upper_snake_name(part) for part in keyword_parts)
     if re.fullmatch(r"[A-Za-z_]\w*", selector):
         return upper_snake_name(selector)
-    raise LoweringError(f"kernel MVP selector {selector!r} cannot be converted into a method entry name")
+    if selector == "+":
+        return "ADD"
+    if selector == "-":
+        return "SUBTRACT"
+    if selector == "*":
+        return "MULTIPLY"
+    raise LoweringError(f"kernel MVP selector {selector!r} cannot be converted into a constant stem")
+
+
+def kernel_selector_constant_name(selector: str) -> str:
+    return f"RECORZ_MVP_SELECTOR_{kernel_selector_constant_stem(selector)}"
+
+
+def kernel_selector_entry_stem(selector: str) -> str:
+    if selector in {"+", "-", "*"}:
+        raise LoweringError(f"kernel MVP selector {selector!r} cannot be converted into a method entry name")
+    try:
+        return kernel_selector_constant_stem(selector)
+    except LoweringError as error:
+        raise LoweringError(f"kernel MVP selector {selector!r} cannot be converted into a method entry name") from error
 
 
 def kernel_method_entry_name(class_name: str, selector: str) -> str:
@@ -985,8 +1042,19 @@ def build_global_specs_from_boot_object_exports(
     return global_specs
 
 
+def build_selector_specs_from_declarations(
+    selector_declarations: list[KernelSelectorDeclaration] | tuple[KernelSelectorDeclaration, ...],
+) -> list[tuple[str, str]]:
+    return [
+        (declaration.selector, kernel_selector_constant_name(declaration.selector))
+        for declaration in selector_declarations
+    ]
+
+
 GLOBAL_SPECS = build_global_specs_from_boot_object_exports(FIXED_BOOT_GRAPH_SPEC)
 GLOBAL_IDS, GLOBAL_VALUES, GLOBAL_DEFINITIONS = build_named_constant_maps(GLOBAL_SPECS)
+SELECTOR_SPECS = build_selector_specs_from_declarations(KERNEL_SELECTOR_DECLARATIONS_IN_ORDER)
+SELECTOR_IDS, SELECTOR_VALUES, SELECTOR_DEFINITIONS = build_named_constant_maps(SELECTOR_SPECS)
 
 
 def parse_kernel_method_chunk(
@@ -1041,6 +1109,8 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
             if chunk_source.lstrip().startswith("RecorzKernelBootObject:"):
                 continue
             if chunk_source.lstrip().startswith("RecorzKernelGlyphBitmapFamily:"):
+                continue
+            if chunk_source.lstrip().startswith("RecorzKernelSelector:"):
                 continue
             selector, argument_count, implementation_kind, primitive_binding = parse_kernel_method_chunk(
                 class_name,
@@ -1197,6 +1267,30 @@ def compile_kernel_method_program(class_name: str, instance_variables: list[str]
 
 
 KERNEL_METHOD_SOURCE_BY_ENTRY_NAME = load_kernel_method_sources()
+
+
+def validate_kernel_method_selectors(
+    method_sources_by_entry_name: dict[str, KernelMethodSource],
+    selector_declarations_by_selector: dict[str, KernelSelectorDeclaration],
+) -> None:
+    undeclared_selectors = sorted(
+        {
+            source.selector
+            for source in method_sources_by_entry_name.values()
+            if source.selector not in selector_declarations_by_selector
+        }
+    )
+    if undeclared_selectors:
+        raise LoweringError(
+            "kernel MVP methods use undeclared selectors: "
+            + ", ".join(repr(selector) for selector in undeclared_selectors)
+        )
+
+
+validate_kernel_method_selectors(
+    KERNEL_METHOD_SOURCE_BY_ENTRY_NAME,
+    KERNEL_SELECTOR_DECLARATIONS_BY_SELECTOR,
+)
 METHOD_ENTRY_ORDER = list(KERNEL_METHOD_SOURCE_BY_ENTRY_NAME)
 METHOD_ENTRY_DEFINITIONS: list[tuple[str, int, str, int]] = [
     (

@@ -1,1 +1,45 @@
 RecorzKernelClass: #Selector descriptorOrder: 15 instanceVariableNames: 'value'
+!
+RecorzKernelSelector: #show: order: 0
+!
+RecorzKernelSelector: #cr order: 1
+!
+RecorzKernelSelector: #writeString: order: 2
+!
+RecorzKernelSelector: #newline order: 3
+!
+RecorzKernelSelector: #defaultForm order: 4
+!
+RecorzKernelSelector: #clear order: 5
+!
+RecorzKernelSelector: #width order: 6
+!
+RecorzKernelSelector: #height order: 7
+!
+RecorzKernelSelector: #bits order: 8
+!
+RecorzKernelSelector: #+ order: 9
+!
+RecorzKernelSelector: #- order: 10
+!
+RecorzKernelSelector: #* order: 11
+!
+RecorzKernelSelector: #printString order: 12
+!
+RecorzKernelSelector: #fillForm:color: order: 13
+!
+RecorzKernelSelector: #at: order: 14
+!
+RecorzKernelSelector: #copyBitmap:toForm:x:y:scale: order: 15
+!
+RecorzKernelSelector: #copyBitmap:toForm:x:y:scale:color: order: 16
+!
+RecorzKernelSelector: #copyBitmap:sourceX:sourceY:width:height:toForm:x:y:scale:color: order: 17
+!
+RecorzKernelSelector: #monoWidth:height: order: 18
+!
+RecorzKernelSelector: #fromBits: order: 19
+!
+RecorzKernelSelector: #class order: 20
+!
+RecorzKernelSelector: #instanceKind order: 21

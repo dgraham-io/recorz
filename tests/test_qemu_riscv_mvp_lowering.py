@@ -409,6 +409,26 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ),
         )
 
+    def test_parses_kernel_selector_chunk(self) -> None:
+        self.assertEqual(
+            mvp.parse_kernel_selector_chunk(
+                "RecorzKernelSelector: #copyBitmap:sourceX:sourceY:width:height:toForm:x:y:scale:color: order: 17",
+                "Selector.rz",
+            ),
+            mvp.KernelSelectorDeclaration(
+                "copyBitmap:sourceX:sourceY:width:height:toForm:x:y:scale:color:",
+                17,
+                "Selector.rz",
+            ),
+        )
+        self.assertEqual(
+            mvp.parse_kernel_selector_chunk(
+                "RecorzKernelSelector: #+ order: 9",
+                "Selector.rz",
+            ),
+            mvp.KernelSelectorDeclaration("+", 9, "Selector.rz"),
+        )
+
     def test_parses_primitive_kernel_method_chunk(self) -> None:
         self.assertEqual(
             mvp.parse_kernel_method_chunk(
@@ -450,7 +470,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             mvp.PRIMITIVE_BINDING_VALUES["formNewline"],
         )
 
-    def test_derives_global_maps_from_boot_object_exports_and_selector_maps_from_specs(self) -> None:
+    def test_derives_global_maps_from_boot_object_exports_and_selector_maps_from_source(self) -> None:
         self.assertEqual(
             mvp.GLOBAL_SPECS,
             [
@@ -466,10 +486,18 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             mvp.GLOBAL_SPECS,
             mvp.build_global_specs_from_boot_object_exports(mvp.FIXED_BOOT_GRAPH_SPEC),
         )
+        self.assertEqual(
+            mvp.SELECTOR_SPECS,
+            mvp.build_selector_specs_from_declarations(mvp.KERNEL_SELECTOR_DECLARATIONS_IN_ORDER),
+        )
         self.assertEqual(mvp.GLOBAL_IDS["Transcript"], "RECORZ_MVP_GLOBAL_TRANSCRIPT")
         self.assertEqual(mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_BITMAP"], 6)
         self.assertEqual(mvp.GLOBAL_DEFINITIONS[-1], ("RECORZ_MVP_GLOBAL_BITMAP", 6))
         self.assertEqual(mvp.SELECTOR_IDS["writeString:"], "RECORZ_MVP_SELECTOR_WRITE_STRING")
+        self.assertEqual(
+            mvp.KERNEL_SELECTOR_DECLARATIONS_BY_SELECTOR["+"],
+            mvp.KernelSelectorDeclaration("+", 9, "Selector.rz"),
+        )
         self.assertEqual(mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_INSTANCE_KIND"], 22)
         self.assertEqual(
             mvp.SELECTOR_DEFINITIONS[16],

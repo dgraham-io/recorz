@@ -543,3 +543,9 @@
 - Added a small `kernel_global_constant_name()` helper plus `build_global_specs_from_boot_object_exports()` so the generated global ids and enum definitions flow from the same source-owned boot object declarations that already define the fixed singleton/root objects.
 - Extended the focused lowering regressions to lock both the expected global table contents and the fact that the live `GLOBAL_SPECS` list is derived from `FIXED_BOOT_GRAPH_SPEC`.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Declare Target Selectors In Kernel Source
+- Added `RecorzKernelSelector:` declaration syntax and declared the full MVP target selector universe in [kernel/mvp/Selector.rz](/Users/david/repos/recorz/kernel/mvp/Selector.rz), including selectors used only by the do-it interpreter such as arithmetic and `printString`.
+- Updated the builder to parse and validate source-declared selector order, derive the active `SELECTOR_SPECS` table and generated selector constants from those declarations, and skip selector declaration chunks when loading kernel methods.
+- Added validation that every source-defined kernel method selector is declared in the selector source file and extended the focused lowering regressions to lock parsed selector declarations and the source-derived selector map.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
