@@ -429,6 +429,22 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             mvp.KernelSelectorDeclaration("+", 9, "Selector.rz"),
         )
 
+    def test_parses_kernel_root_chunk(self) -> None:
+        self.assertEqual(
+            mvp.parse_kernel_root_chunk(
+                "RecorzKernelRoot: #default_form object: #DefaultForm order: 0",
+                "Form.rz",
+            ),
+            mvp.KernelRootDeclaration("default_form", "DefaultForm", 0, "Form.rz"),
+        )
+        self.assertEqual(
+            mvp.parse_kernel_root_chunk(
+                "RecorzKernelRoot: #transcript_metrics object: #TranscriptMetrics order: 5",
+                "TextMetrics.rz",
+            ),
+            mvp.KernelRootDeclaration("transcript_metrics", "TranscriptMetrics", 5, "TextMetrics.rz"),
+        )
+
     def test_parses_primitive_kernel_method_chunk(self) -> None:
         self.assertEqual(
             mvp.parse_kernel_method_chunk(
@@ -538,6 +554,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.OBJECT_KIND_DEFINITIONS[-1], ("RECORZ_MVP_OBJECT_COMPILED_METHOD", 22))
         self.assertEqual(
             mvp.SEED_ROOT_SPECS,
+            mvp.build_root_specs_from_declarations(mvp.KERNEL_ROOT_DECLARATIONS_IN_ORDER),
+        )
+        self.assertEqual(
+            mvp.SEED_ROOT_SPECS,
             [
                 ("default_form", "RECORZ_MVP_SEED_ROOT_DEFAULT_FORM"),
                 ("framebuffer_bitmap", "RECORZ_MVP_SEED_ROOT_FRAMEBUFFER_BITMAP"),
@@ -549,6 +569,14 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertEqual(mvp.SEED_ROOT_VALUES["RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS"], 6)
         self.assertEqual(mvp.SEED_ROOT_DEFINITIONS[0], ("RECORZ_MVP_SEED_ROOT_DEFAULT_FORM", 1))
+        self.assertEqual(
+            mvp.KERNEL_ROOT_DECLARATIONS_BY_NAME["default_form"],
+            mvp.KernelRootDeclaration("default_form", "DefaultForm", 0, "Form.rz"),
+        )
+        self.assertEqual(
+            mvp.KERNEL_ROOT_DECLARATIONS_BY_NAME["transcript_metrics"],
+            mvp.KernelRootDeclaration("transcript_metrics", "TranscriptMetrics", 5, "TextMetrics.rz"),
+        )
         self.assertEqual(
             mvp.KERNEL_BOOT_OBJECT_DECLARATIONS_BY_NAME["DefaultForm"],
             mvp.KernelBootObjectDeclaration(
@@ -631,6 +659,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "Form": "FormFactory",
                 "Bitmap": "BitmapFactory",
             },
+        )
+        self.assertEqual(
+            mvp.SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME,
+            mvp.build_root_object_name_map_from_declarations(mvp.KERNEL_ROOT_DECLARATIONS_IN_ORDER),
         )
         self.assertEqual(
             mvp.SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME,

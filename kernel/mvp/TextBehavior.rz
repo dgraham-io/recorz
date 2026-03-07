@@ -3,3 +3,5 @@ RecorzKernelClass: #TextBehavior descriptorOrder: 12 instanceVariableNames: 'fal
 RecorzKernelBootObject: #TranscriptBehavior family: #afterGlyphs order: 1 class: #TextBehavior
 fields: 'glyph:32 small:1'
 rootExports: 'transcript_behavior'
+!
+RecorzKernelRoot: #transcript_behavior object: #TranscriptBehavior order: 2

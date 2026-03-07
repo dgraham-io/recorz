@@ -3,3 +3,5 @@ RecorzKernelClass: #TextMetrics descriptorOrder: 11 instanceVariableNames: 'cell
 RecorzKernelBootObject: #TranscriptMetrics family: #afterGlyphs order: 0 class: #TextMetrics
 fields: 'small:6 small:8'
 rootExports: 'transcript_metrics'
+!
+RecorzKernelRoot: #transcript_metrics object: #TranscriptMetrics order: 5

@@ -4,6 +4,8 @@ RecorzKernelBootObject: #DefaultForm family: #beforeGlyphs order: 9 class: #Form
 fields: 'object:FramebufferBitmap'
 rootExports: 'default_form'
 !
+RecorzKernelRoot: #default_form object: #DefaultForm order: 0
+!
 clear
     <primitive: #formClear>
 !

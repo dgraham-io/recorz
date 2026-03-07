@@ -150,21 +150,11 @@ OBJECT_KIND_SPECS = [
     ("InterpretedMethod", "RECORZ_MVP_OBJECT_INTERPRETED_METHOD"),
     ("CompiledMethod", "RECORZ_MVP_OBJECT_COMPILED_METHOD"),
 ]
-SEED_ROOT_SPECS = [
-    ("default_form", "RECORZ_MVP_SEED_ROOT_DEFAULT_FORM"),
-    ("framebuffer_bitmap", "RECORZ_MVP_SEED_ROOT_FRAMEBUFFER_BITMAP"),
-    ("transcript_behavior", "RECORZ_MVP_SEED_ROOT_TRANSCRIPT_BEHAVIOR"),
-    ("transcript_layout", "RECORZ_MVP_SEED_ROOT_TRANSCRIPT_LAYOUT"),
-    ("transcript_style", "RECORZ_MVP_SEED_ROOT_TRANSCRIPT_STYLE"),
-    ("transcript_metrics", "RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS"),
-]
-
 SEED_FIELD_KIND_IDS, SEED_FIELD_KIND_VALUES, SEED_FIELD_KIND_DEFINITIONS = build_named_constant_maps(
     SEED_FIELD_KIND_SPECS,
     start=0,
 )
 OBJECT_KIND_IDS, OBJECT_KIND_VALUES, OBJECT_KIND_DEFINITIONS = build_named_constant_maps(OBJECT_KIND_SPECS)
-SEED_ROOT_IDS, SEED_ROOT_VALUES, SEED_ROOT_DEFINITIONS = build_named_constant_maps(SEED_ROOT_SPECS)
 
 SEED_FIELD_NIL = constant_value(SEED_FIELD_KIND_IDS, SEED_FIELD_KIND_VALUES, "nil")
 SEED_FIELD_SMALL_INTEGER = constant_value(SEED_FIELD_KIND_IDS, SEED_FIELD_KIND_VALUES, "small_integer")
@@ -192,13 +182,6 @@ SEED_OBJECT_ROOT_SEND_METHOD = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUE
 SEED_OBJECT_ROOT_VALUE_METHOD = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "RootValueMethod")
 SEED_OBJECT_INTERPRETED_METHOD = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "InterpretedMethod")
 SEED_OBJECT_COMPILED_METHOD = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "CompiledMethod")
-
-SEED_ROOT_DEFAULT_FORM = constant_value(SEED_ROOT_IDS, SEED_ROOT_VALUES, "default_form")
-SEED_ROOT_FRAMEBUFFER_BITMAP = constant_value(SEED_ROOT_IDS, SEED_ROOT_VALUES, "framebuffer_bitmap")
-SEED_ROOT_TRANSCRIPT_BEHAVIOR = constant_value(SEED_ROOT_IDS, SEED_ROOT_VALUES, "transcript_behavior")
-SEED_ROOT_TRANSCRIPT_LAYOUT = constant_value(SEED_ROOT_IDS, SEED_ROOT_VALUES, "transcript_layout")
-SEED_ROOT_TRANSCRIPT_STYLE = constant_value(SEED_ROOT_IDS, SEED_ROOT_VALUES, "transcript_style")
-SEED_ROOT_TRANSCRIPT_METRICS = constant_value(SEED_ROOT_IDS, SEED_ROOT_VALUES, "transcript_metrics")
 
 OPCODE_DEFINITIONS = list(OPCODE_VALUES.items())
 LITERAL_KIND_DEFINITIONS = list(LITERAL_VALUES.items())
@@ -272,6 +255,14 @@ class KernelBootObjectDeclaration:
 class KernelSelectorDeclaration:
     selector: str
     selector_order: int
+    relative_path: str
+
+
+@dataclass(frozen=True)
+class KernelRootDeclaration:
+    root_name: str
+    object_name: str
+    root_order: int
     relative_path: str
 
 
@@ -567,6 +558,9 @@ KERNEL_BOOT_OBJECT_HEADER_PATTERN = re.compile(
 KERNEL_SELECTOR_PATTERN = re.compile(
     r"^RecorzKernelSelector:\s*#(?P<selector>\S+)\s+order:\s*(?P<selector_order>\d+)$"
 )
+KERNEL_ROOT_PATTERN = re.compile(
+    r"^RecorzKernelRoot:\s*#(?P<root_name>[A-Za-z_]\w*)\s+object:\s*#(?P<object_name>[A-Za-z_]\w*)\s+order:\s*(?P<root_order>\d+)$"
+)
 KERNEL_GLYPH_BITMAP_FAMILY_PATTERN = re.compile(
     r"^RecorzKernelGlyphBitmapFamily:\s*#(?P<name_prefix>[A-Za-z_]\w*)\s+family:\s*#(?P<family_name>[A-Za-z_]\w*)"
     r"\s+class:\s*#(?P<class_name>[A-Za-z_]\w*)\s+width:\s*(?P<width>\d+)\s+height:\s*(?P<height>\d+)"
@@ -732,6 +726,19 @@ def parse_kernel_selector_chunk(chunk_source: str, relative_path: str) -> Kernel
     )
 
 
+def parse_kernel_root_chunk(chunk_source: str, relative_path: str) -> KernelRootDeclaration:
+    normalized_header = " ".join(line.strip() for line in chunk_source.splitlines() if line.strip())
+    match = KERNEL_ROOT_PATTERN.fullmatch(normalized_header)
+    if match is None:
+        raise LoweringError(f"kernel MVP root chunk in {relative_path} has an invalid header")
+    return KernelRootDeclaration(
+        root_name=match.group("root_name"),
+        object_name=match.group("object_name"),
+        root_order=int(match.group("root_order")),
+        relative_path=relative_path,
+    )
+
+
 def parse_kernel_glyph_bitmap_family_chunk(
     chunk_source: str,
     relative_path: str,
@@ -889,6 +896,54 @@ KERNEL_SELECTOR_DECLARATIONS_IN_ORDER = sorted(
 )
 
 
+def load_kernel_root_declarations(
+    boot_object_declarations_by_name: dict[str, KernelBootObjectDeclaration],
+) -> dict[str, KernelRootDeclaration]:
+    root_declarations_by_name: dict[str, KernelRootDeclaration] = {}
+
+    for method_path in sorted(KERNEL_MVP_ROOT.glob("*.rz")):
+        relative_path = method_path.name
+        chunk_sources = split_kernel_method_chunks(method_path.read_text(encoding="utf-8"))
+        if not chunk_sources:
+            raise LoweringError(f"kernel MVP class file {relative_path} is empty")
+
+        for chunk_source in chunk_sources[1:]:
+            if not chunk_source.lstrip().startswith("RecorzKernelRoot:"):
+                continue
+            declaration = parse_kernel_root_chunk(chunk_source, relative_path)
+            if declaration.root_name in root_declarations_by_name:
+                raise LoweringError(f"kernel MVP root {declaration.root_name!r} is declared more than once")
+            boot_object = boot_object_declarations_by_name.get(declaration.object_name)
+            if boot_object is None:
+                raise LoweringError(
+                    f"kernel MVP root {declaration.root_name!r} in {relative_path} references unknown boot object {declaration.object_name!r}"
+                )
+            if declaration.root_name not in boot_object.root_exports:
+                raise LoweringError(
+                    f"kernel MVP root {declaration.root_name!r} in {relative_path} must reference a boot object that exports it"
+                )
+            root_declarations_by_name[declaration.root_name] = declaration
+
+    root_declarations_in_order = sorted(
+        root_declarations_by_name.values(),
+        key=lambda declaration: declaration.root_order,
+    )
+    expected_root_orders = list(range(len(root_declarations_in_order)))
+    actual_root_orders = [declaration.root_order for declaration in root_declarations_in_order]
+    if actual_root_orders != expected_root_orders:
+        raise LoweringError(
+            "kernel MVP roots must declare a contiguous order range starting at 0"
+        )
+    return root_declarations_by_name
+
+
+KERNEL_ROOT_DECLARATIONS_BY_NAME = load_kernel_root_declarations(KERNEL_BOOT_OBJECT_DECLARATIONS_BY_NAME)
+KERNEL_ROOT_DECLARATIONS_IN_ORDER = sorted(
+    KERNEL_ROOT_DECLARATIONS_BY_NAME.values(),
+    key=lambda declaration: declaration.root_order,
+)
+
+
 def load_kernel_glyph_bitmap_family_declaration() -> KernelGlyphBitmapFamilyDeclaration:
     glyph_family_declaration: KernelGlyphBitmapFamilyDeclaration | None = None
 
@@ -971,6 +1026,10 @@ def kernel_global_constant_name(global_name: str) -> str:
     return f"RECORZ_MVP_GLOBAL_{kernel_class_entry_stem(global_name)}"
 
 
+def kernel_root_constant_name(root_name: str) -> str:
+    return f"RECORZ_MVP_SEED_ROOT_{upper_snake_name(root_name)}"
+
+
 def kernel_selector_constant_stem(selector: str) -> str:
     if ":" in selector:
         keyword_parts = [part for part in selector.split(":") if part]
@@ -1051,8 +1110,34 @@ def build_selector_specs_from_declarations(
     ]
 
 
+def build_root_object_name_map_from_declarations(
+    root_declarations: list[KernelRootDeclaration] | tuple[KernelRootDeclaration, ...],
+) -> dict[str, str]:
+    return {
+        declaration.root_name: declaration.object_name
+        for declaration in root_declarations
+    }
+
+
+def build_root_specs_from_declarations(
+    root_declarations: list[KernelRootDeclaration] | tuple[KernelRootDeclaration, ...],
+) -> list[tuple[str, str]]:
+    return [
+        (declaration.root_name, kernel_root_constant_name(declaration.root_name))
+        for declaration in root_declarations
+    ]
+
+
 GLOBAL_SPECS = build_global_specs_from_boot_object_exports(FIXED_BOOT_GRAPH_SPEC)
 GLOBAL_IDS, GLOBAL_VALUES, GLOBAL_DEFINITIONS = build_named_constant_maps(GLOBAL_SPECS)
+SEED_ROOT_SPECS = build_root_specs_from_declarations(KERNEL_ROOT_DECLARATIONS_IN_ORDER)
+SEED_ROOT_IDS, SEED_ROOT_VALUES, SEED_ROOT_DEFINITIONS = build_named_constant_maps(SEED_ROOT_SPECS)
+SEED_ROOT_DEFAULT_FORM = constant_value(SEED_ROOT_IDS, SEED_ROOT_VALUES, "default_form")
+SEED_ROOT_FRAMEBUFFER_BITMAP = constant_value(SEED_ROOT_IDS, SEED_ROOT_VALUES, "framebuffer_bitmap")
+SEED_ROOT_TRANSCRIPT_BEHAVIOR = constant_value(SEED_ROOT_IDS, SEED_ROOT_VALUES, "transcript_behavior")
+SEED_ROOT_TRANSCRIPT_LAYOUT = constant_value(SEED_ROOT_IDS, SEED_ROOT_VALUES, "transcript_layout")
+SEED_ROOT_TRANSCRIPT_STYLE = constant_value(SEED_ROOT_IDS, SEED_ROOT_VALUES, "transcript_style")
+SEED_ROOT_TRANSCRIPT_METRICS = constant_value(SEED_ROOT_IDS, SEED_ROOT_VALUES, "transcript_metrics")
 SELECTOR_SPECS = build_selector_specs_from_declarations(KERNEL_SELECTOR_DECLARATIONS_IN_ORDER)
 SELECTOR_IDS, SELECTOR_VALUES, SELECTOR_DEFINITIONS = build_named_constant_maps(SELECTOR_SPECS)
 
@@ -1107,6 +1192,8 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
 
         for chunk_source in chunk_sources[1:]:
             if chunk_source.lstrip().startswith("RecorzKernelBootObject:"):
+                continue
+            if chunk_source.lstrip().startswith("RecorzKernelRoot:"):
                 continue
             if chunk_source.lstrip().startswith("RecorzKernelGlyphBitmapFamily:"):
                 continue
@@ -1914,7 +2001,9 @@ def build_boot_image_seed_build_context(
         dynamic_seed_object_section_specs=tuple(dynamic_seed_object_section_specs),
         dynamic_seed_build_step_specs=tuple(dynamic_seed_build_step_specs),
         global_name_to_boot_object_name=build_boot_object_export_map(boot_object_specs_in_order, "global"),
-        seed_root_name_to_boot_object_name=build_boot_object_export_map(boot_object_specs_in_order, "root"),
+        seed_root_name_to_boot_object_name=build_root_object_name_map_from_declarations(
+            KERNEL_ROOT_DECLARATIONS_IN_ORDER
+        ),
     )
 
 
@@ -1936,7 +2025,9 @@ BOOT_OBJECT_SPEC_NAMES_IN_ORDER = [object_spec.name for object_spec in BOOT_OBJE
 BOOT_OBJECT_SPECS_BY_NAME = build_boot_object_spec_map(BOOT_OBJECT_SPECS_IN_ORDER)
 BOOT_OBJECT_FIXED_COUNT = len(BOOT_OBJECT_SPECS_IN_ORDER)
 GLOBAL_NAME_TO_BOOT_OBJECT_NAME = build_boot_object_export_map(BOOT_OBJECT_SPECS_IN_ORDER, "global")
-SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME = build_boot_object_export_map(BOOT_OBJECT_SPECS_IN_ORDER, "root")
+SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME = build_root_object_name_map_from_declarations(
+    KERNEL_ROOT_DECLARATIONS_IN_ORDER
+)
 SEED_LAYOUT_SECTION_SPECS = build_seed_layout_section_specs(BOOT_IMAGE_SPEC.dynamic_seed_section_specs)
 SEED_LAYOUT_SECTION_NAMES = [section_spec.name for section_spec in SEED_LAYOUT_SECTION_SPECS]
 DYNAMIC_SEED_OBJECT_SECTION_SPECS = build_dynamic_seed_object_section_specs(BOOT_IMAGE_SPEC.dynamic_seed_section_specs)

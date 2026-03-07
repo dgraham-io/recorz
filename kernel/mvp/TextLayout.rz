@@ -3,3 +3,5 @@ RecorzKernelClass: #TextLayout descriptorOrder: 7 instanceVariableNames: 'left t
 RecorzKernelBootObject: #TranscriptLayout family: #beforeGlyphs order: 6 class: #TextLayout
 fields: 'small:24 small:24 small:4 small:2'
 rootExports: 'transcript_layout'
+!
+RecorzKernelRoot: #transcript_layout object: #TranscriptLayout order: 3

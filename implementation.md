@@ -549,3 +549,9 @@
 - Updated the builder to parse and validate source-declared selector order, derive the active `SELECTOR_SPECS` table and generated selector constants from those declarations, and skip selector declaration chunks when loading kernel methods.
 - Added validation that every source-defined kernel method selector is declared in the selector source file and extended the focused lowering regressions to lock parsed selector declarations and the source-derived selector map.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Declare Seed Roots In Kernel Source
+- Added `RecorzKernelRoot:` declaration syntax and declared the full seed-root order in the owning `.rz` class files, so root ids are no longer authored by the builder-side `SEED_ROOT_SPECS` list.
+- Updated the builder to parse and validate source-declared roots, derive the active `SEED_ROOT_SPECS` table and root constant ids from those declarations, and skip root declaration chunks during kernel method loading.
+- Switched the active root-object binding map to derive from root declarations rather than from the boot-object export helper alone, while still validating that each declared root points at a boot object that exports it.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
