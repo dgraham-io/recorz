@@ -561,3 +561,9 @@
 - Replaced the hand-kept `OBJECT_KIND_SPECS` table with a source-derived path built from parsed class headers, and dropped the dead historical method-shape kinds from the live runtime object-kind universe.
 - Updated the target VM's object-kind name switch and the focused lowering/inspector expectations to match the smaller source-declared object-kind set while keeping the boot image behavior unchanged.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Derive Field Indices From Class Headers
+- Replaced the live `Class`, `MethodDescriptor`, and `MethodEntry` field index constants in the builder with a source-derived path based on parsed `instanceVariableNames:` from `RecorzKernelClass:` headers.
+- Added a small `kernel_instance_variable_index()` helper so builder-side seed/class assembly now follows the same source-owned slot order already declared in the kernel `.rz` files.
+- Extended the focused lowering regressions to lock the new source-derived field indices for the support/runtime classes that the seed builder actively materializes.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

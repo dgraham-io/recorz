@@ -101,16 +101,6 @@ SEED_BINDING_FORMAT = "<HH"
 SEED_OBJECT_HEADER_FORMAT = "<BBH"
 SEED_FIELD_FORMAT = "<Bi"
 SEED_INVALID_OBJECT_INDEX = 0xFFFF
-CLASS_FIELD_SUPERCLASS = 0
-CLASS_FIELD_INSTANCE_KIND = 1
-CLASS_FIELD_METHOD_START = 2
-CLASS_FIELD_METHOD_COUNT = 3
-METHOD_FIELD_SELECTOR = 0
-METHOD_FIELD_ARGUMENT_COUNT = 1
-METHOD_FIELD_PRIMITIVE_KIND = 2
-METHOD_FIELD_ENTRY = 3
-METHOD_ENTRY_FIELD_EXECUTION_ID = 0
-METHOD_ENTRY_FIELD_IMPLEMENTATION = 1
 ACCESSOR_METHOD_FIELD_FIELD_INDEX = 0
 FIELD_SEND_METHOD_FIELD_FIELD_INDEX = 0
 FIELD_SEND_METHOD_FIELD_SELECTOR = 1
@@ -802,6 +792,28 @@ SEED_OBJECT_METHOD_DESCRIPTOR = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALU
 SEED_OBJECT_METHOD_ENTRY = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "MethodEntry")
 SEED_OBJECT_SELECTOR = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "Selector")
 SEED_OBJECT_COMPILED_METHOD = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "CompiledMethod")
+
+
+def kernel_instance_variable_index(class_name: str, field_name: str) -> int:
+    class_header = KERNEL_CLASS_HEADERS_BY_NAME[class_name]
+    try:
+        return class_header.instance_variables.index(field_name)
+    except ValueError as error:
+        raise LoweringError(
+            f"kernel MVP class #{class_name} does not declare instance variable {field_name!r}"
+        ) from error
+
+
+CLASS_FIELD_SUPERCLASS = kernel_instance_variable_index("Class", "superclass")
+CLASS_FIELD_INSTANCE_KIND = kernel_instance_variable_index("Class", "instanceKind")
+CLASS_FIELD_METHOD_START = kernel_instance_variable_index("Class", "methodStart")
+CLASS_FIELD_METHOD_COUNT = kernel_instance_variable_index("Class", "methodCount")
+METHOD_FIELD_SELECTOR = kernel_instance_variable_index("MethodDescriptor", "selector")
+METHOD_FIELD_ARGUMENT_COUNT = kernel_instance_variable_index("MethodDescriptor", "argumentCount")
+METHOD_FIELD_PRIMITIVE_KIND = kernel_instance_variable_index("MethodDescriptor", "primitiveKind")
+METHOD_FIELD_ENTRY = kernel_instance_variable_index("MethodDescriptor", "entry")
+METHOD_ENTRY_FIELD_EXECUTION_ID = kernel_instance_variable_index("MethodEntry", "executionId")
+METHOD_ENTRY_FIELD_IMPLEMENTATION = kernel_instance_variable_index("MethodEntry", "implementation")
 
 
 def load_kernel_boot_object_declarations() -> dict[str, KernelBootObjectDeclaration]:

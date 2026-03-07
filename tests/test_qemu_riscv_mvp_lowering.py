@@ -574,6 +574,12 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["BitBlt"], mvp.SEED_OBJECT_BITBLT)
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["CompiledMethod"], mvp.SEED_OBJECT_COMPILED_METHOD)
         self.assertEqual(mvp.OBJECT_KIND_DEFINITIONS[-1], ("RECORZ_MVP_OBJECT_COMPILED_METHOD", 17))
+        self.assertEqual(mvp.CLASS_FIELD_METHOD_START, mvp.kernel_instance_variable_index("Class", "methodStart"))
+        self.assertEqual(mvp.METHOD_FIELD_ENTRY, mvp.kernel_instance_variable_index("MethodDescriptor", "entry"))
+        self.assertEqual(
+            mvp.METHOD_ENTRY_FIELD_IMPLEMENTATION,
+            mvp.kernel_instance_variable_index("MethodEntry", "implementation"),
+        )
         self.assertEqual(
             mvp.SEED_ROOT_SPECS,
             mvp.build_root_specs_from_declarations(mvp.KERNEL_ROOT_DECLARATIONS_IN_ORDER),
