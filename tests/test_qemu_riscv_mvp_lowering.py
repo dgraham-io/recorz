@@ -745,6 +745,16 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
+            mvp.DYNAMIC_SEED_BUILD_STEP_SPECS,
+            [
+                mvp.DynamicSeedBuildStepSpec("build_selector_seed_section", "selector_seed_objects"),
+                mvp.DynamicSeedBuildStepSpec("build_compiled_method_seed_section", "compiled_method_seed_objects"),
+                mvp.DynamicSeedBuildStepSpec("build_method_entry_seed_section", "method_entry_seed_objects"),
+                mvp.DynamicSeedBuildStepSpec("build_method_descriptor_seed_section", "method_seed_objects"),
+                mvp.DynamicSeedBuildStepSpec("build_class_seed_section", "class_seed_objects"),
+            ],
+        )
+        self.assertEqual(
             mvp.SEED_LAYOUT_SECTION_NAMES,
             [
                 "class_descriptors",

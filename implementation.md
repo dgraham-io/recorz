@@ -412,3 +412,9 @@
 - Updated `build_dynamic_seed_sections()` and `build_seed_manifest()` to use that section sequence for dynamic section count validation and final seed-object extension order without changing the generated seed image or target VM behavior.
 - Extended the focused lowering regressions to lock the new dynamic object section spec list and the helper-driven validation/assembly path.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Derive Dynamic Builder Step Order From Specs
+- Added a small `DynamicSeedBuildStepSpec` layer plus a `DynamicSeedBuildState` carrier so the dynamic seed builder now declares its dependency-ordered helper sequence instead of hand-wiring the same helper calls inline.
+- Updated `build_dynamic_seed_sections()` to run selector, compiled-method, method-entry, method-descriptor, and class seed object builders through that explicit step sequence while keeping the generated seed image and target VM behavior unchanged.
+- Extended the focused lowering regressions to lock the new dynamic build-step spec list alongside the existing dynamic section specs.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

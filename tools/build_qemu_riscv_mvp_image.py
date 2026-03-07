@@ -338,6 +338,25 @@ class DynamicSeedObjectSectionSpec:
     result_attribute: str
 
 
+@dataclass(frozen=True)
+class DynamicSeedBuildStepSpec:
+    builder_name: str
+    result_attribute: str
+
+
+@dataclass
+class DynamicSeedBuildState:
+    seed_layout: dict[str, SeedLayoutSection]
+    class_kind_order: list[int]
+    class_class_index: int
+    class_indices: dict[int, int]
+    selector_indices_by_value: dict[int, int]
+    compiled_method_indices: dict[str, int]
+    method_entry_indices: dict[str, int]
+    method_start_by_kind: dict[int, int]
+    method_count_by_kind: dict[int, int]
+
+
 @dataclass
 class DynamicSeedSections:
     seed_layout: dict[str, SeedLayoutSection]
@@ -402,6 +421,13 @@ DYNAMIC_SEED_OBJECT_SECTION_SPECS = [
     DynamicSeedObjectSectionSpec("compiled_methods", "compiled_method_seed_objects"),
     DynamicSeedObjectSectionSpec("method_entries", "method_entry_seed_objects"),
     DynamicSeedObjectSectionSpec("method_descriptors", "method_seed_objects"),
+]
+DYNAMIC_SEED_BUILD_STEP_SPECS = [
+    DynamicSeedBuildStepSpec("build_selector_seed_section", "selector_seed_objects"),
+    DynamicSeedBuildStepSpec("build_compiled_method_seed_section", "compiled_method_seed_objects"),
+    DynamicSeedBuildStepSpec("build_method_entry_seed_section", "method_entry_seed_objects"),
+    DynamicSeedBuildStepSpec("build_method_descriptor_seed_section", "method_seed_objects"),
+    DynamicSeedBuildStepSpec("build_class_seed_section", "class_seed_objects"),
 ]
 GLYPH_BITMAP_NAME_PREFIX = "GlyphBitmap"
 GLYPH_BITMAP_WIDTH = 5
@@ -1280,6 +1306,64 @@ def validate_dynamic_seed_section_counts(
             )
 
 
+def build_selector_seed_section(
+    build_state: DynamicSeedBuildState,
+) -> list[SeedObject]:
+    build_state.selector_indices_by_value, selector_seed_objects = build_selector_seed_objects(
+        build_state.seed_layout["selectors"].start_index,
+        build_state.class_indices[SEED_OBJECT_SELECTOR],
+    )
+    return selector_seed_objects
+
+
+def build_compiled_method_seed_section(
+    build_state: DynamicSeedBuildState,
+) -> list[SeedObject]:
+    build_state.compiled_method_indices, compiled_method_seed_objects = build_compiled_method_seed_objects(
+        build_state.seed_layout["compiled_methods"].start_index,
+        build_state.class_indices[SEED_OBJECT_COMPILED_METHOD],
+    )
+    return compiled_method_seed_objects
+
+
+def build_method_entry_seed_section(
+    build_state: DynamicSeedBuildState,
+) -> list[SeedObject]:
+    build_state.method_entry_indices, method_entry_seed_objects = build_method_entry_seed_objects(
+        build_state.seed_layout["method_entries"].start_index,
+        build_state.class_indices[SEED_OBJECT_METHOD_ENTRY],
+        build_state.compiled_method_indices,
+    )
+    return method_entry_seed_objects
+
+
+def build_method_descriptor_seed_section(
+    build_state: DynamicSeedBuildState,
+) -> list[SeedObject]:
+    build_state.method_start_by_kind, build_state.method_count_by_kind, method_seed_objects = (
+        build_method_descriptor_seed_objects(
+            build_state.class_kind_order,
+            build_state.class_indices[SEED_OBJECT_METHOD_DESCRIPTOR],
+            build_state.selector_indices_by_value,
+            build_state.method_entry_indices,
+            build_state.seed_layout["method_descriptors"].start_index,
+        )
+    )
+    return method_seed_objects
+
+
+def build_class_seed_section(
+    build_state: DynamicSeedBuildState,
+) -> list[SeedObject]:
+    build_state.class_indices, class_seed_objects = build_class_seed_objects(
+        build_state.class_kind_order,
+        build_state.class_class_index,
+        build_state.method_start_by_kind,
+        build_state.method_count_by_kind,
+    )
+    return class_seed_objects
+
+
 def build_selector_seed_objects(
     selector_start_index: int,
     selector_class_index: int,
@@ -1439,44 +1523,32 @@ def build_dynamic_seed_sections(seed_objects: list[SeedObject]) -> DynamicSeedSe
     class_class_index = seed_layout["class_descriptors"].start_index
     class_kind_order = CLASS_DESCRIPTOR_KIND_ORDER
     class_indices = build_class_index_map(class_kind_order, class_class_index)
+    build_state = DynamicSeedBuildState(
+        seed_layout=seed_layout,
+        class_kind_order=class_kind_order,
+        class_class_index=class_class_index,
+        class_indices=class_indices,
+        selector_indices_by_value={},
+        compiled_method_indices={},
+        method_entry_indices={},
+        method_start_by_kind={},
+        method_count_by_kind={},
+    )
+    dynamic_section_results: dict[str, list[SeedObject]] = {}
 
     for seed_object in seed_objects:
         seed_object.class_index = class_indices[seed_object.object_kind]
 
-    selector_indices_by_value, selector_seed_objects = build_selector_seed_objects(
-        seed_layout["selectors"].start_index,
-        class_indices[SEED_OBJECT_SELECTOR],
-    )
-    compiled_method_indices, compiled_method_seed_objects = build_compiled_method_seed_objects(
-        seed_layout["compiled_methods"].start_index,
-        class_indices[SEED_OBJECT_COMPILED_METHOD],
-    )
-    method_entry_indices, method_entry_seed_objects = build_method_entry_seed_objects(
-        seed_layout["method_entries"].start_index,
-        class_indices[SEED_OBJECT_METHOD_ENTRY],
-        compiled_method_indices,
-    )
-    method_start_by_kind, method_count_by_kind, method_seed_objects = build_method_descriptor_seed_objects(
-        class_kind_order,
-        class_indices[SEED_OBJECT_METHOD_DESCRIPTOR],
-        selector_indices_by_value,
-        method_entry_indices,
-        seed_layout["method_descriptors"].start_index,
-    )
-    class_indices, class_seed_objects = build_class_seed_objects(
-        class_kind_order,
-        class_class_index,
-        method_start_by_kind,
-        method_count_by_kind,
-    )
+    for build_step_spec in DYNAMIC_SEED_BUILD_STEP_SPECS:
+        dynamic_section_results[build_step_spec.result_attribute] = globals()[build_step_spec.builder_name](build_state)
     dynamic_sections = DynamicSeedSections(
         seed_layout=seed_layout,
-        class_indices=class_indices,
-        class_seed_objects=class_seed_objects,
-        selector_seed_objects=selector_seed_objects,
-        compiled_method_seed_objects=compiled_method_seed_objects,
-        method_entry_seed_objects=method_entry_seed_objects,
-        method_seed_objects=method_seed_objects,
+        class_indices=build_state.class_indices,
+        class_seed_objects=dynamic_section_results["class_seed_objects"],
+        selector_seed_objects=dynamic_section_results["selector_seed_objects"],
+        compiled_method_seed_objects=dynamic_section_results["compiled_method_seed_objects"],
+        method_entry_seed_objects=dynamic_section_results["method_entry_seed_objects"],
+        method_seed_objects=dynamic_section_results["method_seed_objects"],
     )
     validate_dynamic_seed_section_counts(seed_layout, dynamic_sections)
     return dynamic_sections
