@@ -97,6 +97,7 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
     method_descriptor_count = 0
     method_entry_object_count = 0
     selector_object_count = 0
+    selector_ids: set[int] = set()
     method_entry_ids: set[int] = set()
     for _ in range(object_count):
         object_kind, field_count, class_index = struct.unpack_from(mvp.SEED_OBJECT_HEADER_FORMAT, blob, offset)
@@ -118,6 +119,18 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
         if object_kind == mvp.SEED_OBJECT_METHOD_ENTRY:
             method_entry_object_count += 1
         if object_kind == mvp.SEED_OBJECT_SELECTOR:
+            if field_count <= 0:
+                raise ImageInspectionError("seed manifest selector object is missing required fields")
+            selector_id_field = fields[0]
+            if (
+                selector_id_field[0] != mvp.SEED_FIELD_SMALL_INTEGER
+                or selector_id_field[1] < mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SHOW"]
+                or selector_id_field[1] > mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_INSTANCE_KIND"]
+            ):
+                raise ImageInspectionError("seed manifest selector object id field is invalid")
+            if int(selector_id_field[1]) in selector_ids:
+                raise ImageInspectionError("seed manifest contains duplicate selector objects")
+            selector_ids.add(int(selector_id_field[1]))
             selector_object_count += 1
         objects.append(
             {

@@ -124,6 +124,20 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         with self.assertRaises(inspector.ImageInspectionError):
             inspector.inspect_seed_manifest(bytes(seed))
 
+    def test_rejects_duplicate_selector_objects(self) -> None:
+        seed = bytearray(mvp.build_seed_manifest())
+        header_size = struct.calcsize(mvp.SEED_HEADER_FORMAT)
+        object_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
+        second_selector_offset = header_size + (157 * object_size) + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
+
+        seed[second_selector_offset + 1 : second_selector_offset + 5] = struct.pack(
+            "<i",
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SHOW"],
+        )
+
+        with self.assertRaises(inspector.ImageInspectionError):
+            inspector.inspect_seed_manifest(bytes(seed))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -221,6 +221,7 @@ static struct recorz_mvp_heap_object heap[HEAP_LIMIT];
 static uint32_t stack_size = 0U;
 static uint16_t heap_size = 0U;
 static uint16_t class_handles_by_kind[RECORZ_MVP_OBJECT_SELECTOR + 1U];
+static uint16_t selector_handles_by_id[RECORZ_MVP_SELECTOR_INSTANCE_KIND + 1U];
 static uint16_t global_handles[RECORZ_MVP_GLOBAL_BITMAP + 1U];
 static uint16_t default_form_handle = 0U;
 static uint16_t framebuffer_bitmap_handle = 0U;
@@ -788,6 +789,7 @@ static const struct recorz_mvp_heap_object *lookup_builtin_method_descriptor(
     uint16_t argument_count
 ) {
     const struct recorz_mvp_heap_object *method_object = class_method_start_object(class_object);
+    const struct recorz_mvp_heap_object *selector_object;
     uint32_t method_count = class_method_count(class_object);
     uint32_t method_index;
 
@@ -797,6 +799,13 @@ static const struct recorz_mvp_heap_object *lookup_builtin_method_descriptor(
     if (method_object == 0) {
         machine_panic("class with methods is missing a method start");
     }
+    if (selector == 0U || selector > RECORZ_MVP_SELECTOR_INSTANCE_KIND) {
+        machine_panic("selector id is out of range");
+    }
+    if (selector_handles_by_id[selector] == 0U) {
+        return 0;
+    }
+    selector_object = (const struct recorz_mvp_heap_object *)heap_object(selector_handles_by_id[selector]);
     for (method_index = 0U; method_index < method_count; ++method_index) {
         const struct recorz_mvp_heap_object *candidate =
             (const struct recorz_mvp_heap_object *)heap_object((uint16_t)(method_object - heap + 1U + method_index));
@@ -804,7 +813,7 @@ static const struct recorz_mvp_heap_object *lookup_builtin_method_descriptor(
         if (candidate->kind != RECORZ_MVP_OBJECT_METHOD_DESCRIPTOR) {
             machine_panic("class method range contains a non-method descriptor");
         }
-        if (method_descriptor_selector(candidate) == selector) {
+        if (method_descriptor_selector_object(candidate) == selector_object) {
             if (method_descriptor_argument_count(candidate) != argument_count) {
                 machine_panic("selector argument count does not match method descriptor");
             }
@@ -963,6 +972,27 @@ static void initialize_class_handle_cache(const struct recorz_mvp_seed *seed) {
         if (class_handles_by_kind[object->kind] == 0U) {
             class_handles_by_kind[object->kind] = object->class_handle;
         }
+    }
+}
+
+static void initialize_selector_handle_cache(const struct recorz_mvp_seed *seed) {
+    uint16_t seed_index;
+    uint16_t selector_id;
+
+    for (selector_id = 0U; selector_id <= RECORZ_MVP_SELECTOR_INSTANCE_KIND; ++selector_id) {
+        selector_handles_by_id[selector_id] = 0U;
+    }
+    for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
+        const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(seeded_handles[seed_index]);
+
+        if (object->kind != RECORZ_MVP_OBJECT_SELECTOR) {
+            continue;
+        }
+        selector_id = (uint16_t)selector_object_selector_id(object);
+        if (selector_handles_by_id[selector_id] != 0U) {
+            machine_panic("seed contains duplicate selector objects");
+        }
+        selector_handles_by_id[selector_id] = seeded_handles[seed_index];
     }
 }
 
@@ -1508,6 +1538,7 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
     }
     validate_seed_class_graph(seed);
     initialize_class_handle_cache(seed);
+    initialize_selector_handle_cache(seed);
 
     for (global_index = 0U; global_index <= RECORZ_MVP_GLOBAL_BITMAP; ++global_index) {
         global_handles[global_index] = 0U;
