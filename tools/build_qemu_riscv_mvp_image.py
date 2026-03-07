@@ -20,6 +20,24 @@ from recorz.compiler import compile_do_it, compile_method  # noqa: E402
 from recorz.model import BindingRef, SendSite, SymbolAtom  # noqa: E402
 
 
+def build_named_constant_maps(
+    specs: list[tuple[str, str]],
+) -> tuple[dict[str, str], dict[str, int], list[tuple[str, int]]]:
+    ids: dict[str, str] = {}
+    values: dict[str, int] = {}
+    definitions: list[tuple[str, int]] = []
+
+    for index, (name, constant_name) in enumerate(specs, start=1):
+        if name in ids:
+            raise AssertionError(f"duplicate named constant spec {name!r}")
+        if constant_name in values:
+            raise AssertionError(f"duplicate constant name {constant_name!r}")
+        ids[name] = constant_name
+        values[constant_name] = index
+        definitions.append((constant_name, index))
+    return ids, values, definitions
+
+
 OP_PUSH_GLOBAL = "RECORZ_MVP_OP_PUSH_GLOBAL"
 OP_PUSH_LITERAL = "RECORZ_MVP_OP_PUSH_LITERAL"
 OP_PUSH_LEXICAL = "RECORZ_MVP_OP_PUSH_LEXICAL"
@@ -33,38 +51,41 @@ OP_PUSH_NIL = "RECORZ_MVP_OP_PUSH_NIL"
 LITERAL_STRING = "RECORZ_MVP_LITERAL_STRING"
 LITERAL_SMALL_INTEGER = "RECORZ_MVP_LITERAL_SMALL_INTEGER"
 
-GLOBAL_IDS = {
-    "Transcript": "RECORZ_MVP_GLOBAL_TRANSCRIPT",
-    "Display": "RECORZ_MVP_GLOBAL_DISPLAY",
-    "BitBlt": "RECORZ_MVP_GLOBAL_BITBLT",
-    "Glyphs": "RECORZ_MVP_GLOBAL_GLYPHS",
-    "Form": "RECORZ_MVP_GLOBAL_FORM",
-    "Bitmap": "RECORZ_MVP_GLOBAL_BITMAP",
-}
-SELECTOR_IDS = {
-    "show:": "RECORZ_MVP_SELECTOR_SHOW",
-    "cr": "RECORZ_MVP_SELECTOR_CR",
-    "writeString:": "RECORZ_MVP_SELECTOR_WRITE_STRING",
-    "newline": "RECORZ_MVP_SELECTOR_NEWLINE",
-    "defaultForm": "RECORZ_MVP_SELECTOR_DEFAULT_FORM",
-    "clear": "RECORZ_MVP_SELECTOR_CLEAR",
-    "width": "RECORZ_MVP_SELECTOR_WIDTH",
-    "height": "RECORZ_MVP_SELECTOR_HEIGHT",
-    "bits": "RECORZ_MVP_SELECTOR_BITS",
-    "+": "RECORZ_MVP_SELECTOR_ADD",
-    "-": "RECORZ_MVP_SELECTOR_SUBTRACT",
-    "*": "RECORZ_MVP_SELECTOR_MULTIPLY",
-    "printString": "RECORZ_MVP_SELECTOR_PRINT_STRING",
-    "fillForm:color:": "RECORZ_MVP_SELECTOR_FILL_FORM_COLOR",
-    "at:": "RECORZ_MVP_SELECTOR_AT",
-    "copyBitmap:toForm:x:y:scale:": "RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE",
-    "copyBitmap:toForm:x:y:scale:color:": "RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR",
-    "copyBitmap:sourceX:sourceY:width:height:toForm:x:y:scale:color:": "RECORZ_MVP_SELECTOR_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR",
-    "monoWidth:height:": "RECORZ_MVP_SELECTOR_MONO_WIDTH_HEIGHT",
-    "fromBits:": "RECORZ_MVP_SELECTOR_FROM_BITS",
-    "class": "RECORZ_MVP_SELECTOR_CLASS",
-    "instanceKind": "RECORZ_MVP_SELECTOR_INSTANCE_KIND",
-}
+GLOBAL_SPECS = [
+    ("Transcript", "RECORZ_MVP_GLOBAL_TRANSCRIPT"),
+    ("Display", "RECORZ_MVP_GLOBAL_DISPLAY"),
+    ("BitBlt", "RECORZ_MVP_GLOBAL_BITBLT"),
+    ("Glyphs", "RECORZ_MVP_GLOBAL_GLYPHS"),
+    ("Form", "RECORZ_MVP_GLOBAL_FORM"),
+    ("Bitmap", "RECORZ_MVP_GLOBAL_BITMAP"),
+]
+SELECTOR_SPECS = [
+    ("show:", "RECORZ_MVP_SELECTOR_SHOW"),
+    ("cr", "RECORZ_MVP_SELECTOR_CR"),
+    ("writeString:", "RECORZ_MVP_SELECTOR_WRITE_STRING"),
+    ("newline", "RECORZ_MVP_SELECTOR_NEWLINE"),
+    ("defaultForm", "RECORZ_MVP_SELECTOR_DEFAULT_FORM"),
+    ("clear", "RECORZ_MVP_SELECTOR_CLEAR"),
+    ("width", "RECORZ_MVP_SELECTOR_WIDTH"),
+    ("height", "RECORZ_MVP_SELECTOR_HEIGHT"),
+    ("bits", "RECORZ_MVP_SELECTOR_BITS"),
+    ("+", "RECORZ_MVP_SELECTOR_ADD"),
+    ("-", "RECORZ_MVP_SELECTOR_SUBTRACT"),
+    ("*", "RECORZ_MVP_SELECTOR_MULTIPLY"),
+    ("printString", "RECORZ_MVP_SELECTOR_PRINT_STRING"),
+    ("fillForm:color:", "RECORZ_MVP_SELECTOR_FILL_FORM_COLOR"),
+    ("at:", "RECORZ_MVP_SELECTOR_AT"),
+    ("copyBitmap:toForm:x:y:scale:", "RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE"),
+    ("copyBitmap:toForm:x:y:scale:color:", "RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR"),
+    (
+        "copyBitmap:sourceX:sourceY:width:height:toForm:x:y:scale:color:",
+        "RECORZ_MVP_SELECTOR_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR",
+    ),
+    ("monoWidth:height:", "RECORZ_MVP_SELECTOR_MONO_WIDTH_HEIGHT"),
+    ("fromBits:", "RECORZ_MVP_SELECTOR_FROM_BITS"),
+    ("class", "RECORZ_MVP_SELECTOR_CLASS"),
+    ("instanceKind", "RECORZ_MVP_SELECTOR_INSTANCE_KIND"),
+]
 OPCODE_VALUES = {
     OP_PUSH_GLOBAL: 1,
     OP_PUSH_LITERAL: 2,
@@ -75,38 +96,6 @@ OPCODE_VALUES = {
     OP_PUSH_NIL: 7,
     OP_PUSH_LEXICAL: 8,
     OP_STORE_LEXICAL: 9,
-}
-GLOBAL_VALUES = {
-    "RECORZ_MVP_GLOBAL_TRANSCRIPT": 1,
-    "RECORZ_MVP_GLOBAL_DISPLAY": 2,
-    "RECORZ_MVP_GLOBAL_BITBLT": 3,
-    "RECORZ_MVP_GLOBAL_GLYPHS": 4,
-    "RECORZ_MVP_GLOBAL_FORM": 5,
-    "RECORZ_MVP_GLOBAL_BITMAP": 6,
-}
-SELECTOR_VALUES = {
-    "RECORZ_MVP_SELECTOR_SHOW": 1,
-    "RECORZ_MVP_SELECTOR_CR": 2,
-    "RECORZ_MVP_SELECTOR_WRITE_STRING": 3,
-    "RECORZ_MVP_SELECTOR_NEWLINE": 4,
-    "RECORZ_MVP_SELECTOR_DEFAULT_FORM": 5,
-    "RECORZ_MVP_SELECTOR_CLEAR": 6,
-    "RECORZ_MVP_SELECTOR_WIDTH": 7,
-    "RECORZ_MVP_SELECTOR_HEIGHT": 8,
-    "RECORZ_MVP_SELECTOR_ADD": 9,
-    "RECORZ_MVP_SELECTOR_SUBTRACT": 10,
-    "RECORZ_MVP_SELECTOR_MULTIPLY": 11,
-    "RECORZ_MVP_SELECTOR_PRINT_STRING": 12,
-    "RECORZ_MVP_SELECTOR_BITS": 13,
-    "RECORZ_MVP_SELECTOR_FILL_FORM_COLOR": 14,
-    "RECORZ_MVP_SELECTOR_AT": 15,
-    "RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE": 16,
-    "RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR": 17,
-    "RECORZ_MVP_SELECTOR_MONO_WIDTH_HEIGHT": 18,
-    "RECORZ_MVP_SELECTOR_FROM_BITS": 19,
-    "RECORZ_MVP_SELECTOR_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR": 20,
-    "RECORZ_MVP_SELECTOR_CLASS": 21,
-    "RECORZ_MVP_SELECTOR_INSTANCE_KIND": 22,
 }
 LITERAL_VALUES = {
     LITERAL_STRING: 1,
@@ -199,9 +188,10 @@ SEED_ROOT_TRANSCRIPT_LAYOUT = 4
 SEED_ROOT_TRANSCRIPT_STYLE = 5
 SEED_ROOT_TRANSCRIPT_METRICS = 6
 
+GLOBAL_IDS, GLOBAL_VALUES, GLOBAL_DEFINITIONS = build_named_constant_maps(GLOBAL_SPECS)
+SELECTOR_IDS, SELECTOR_VALUES, SELECTOR_DEFINITIONS = build_named_constant_maps(SELECTOR_SPECS)
+
 OPCODE_DEFINITIONS = list(OPCODE_VALUES.items())
-GLOBAL_DEFINITIONS = list(GLOBAL_VALUES.items())
-SELECTOR_DEFINITIONS = list(SELECTOR_VALUES.items())
 LITERAL_KIND_DEFINITIONS = list(LITERAL_VALUES.items())
 OBJECT_KIND_DEFINITIONS = [
     ("RECORZ_MVP_OBJECT_TRANSCRIPT", SEED_OBJECT_TRANSCRIPT),

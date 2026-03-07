@@ -380,6 +380,28 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             mvp.PRIMITIVE_BINDING_VALUES["formNewline"],
         )
 
+    def test_derives_global_and_selector_maps_from_specs(self) -> None:
+        self.assertEqual(
+            mvp.GLOBAL_SPECS,
+            [
+                ("Transcript", "RECORZ_MVP_GLOBAL_TRANSCRIPT"),
+                ("Display", "RECORZ_MVP_GLOBAL_DISPLAY"),
+                ("BitBlt", "RECORZ_MVP_GLOBAL_BITBLT"),
+                ("Glyphs", "RECORZ_MVP_GLOBAL_GLYPHS"),
+                ("Form", "RECORZ_MVP_GLOBAL_FORM"),
+                ("Bitmap", "RECORZ_MVP_GLOBAL_BITMAP"),
+            ],
+        )
+        self.assertEqual(mvp.GLOBAL_IDS["Transcript"], "RECORZ_MVP_GLOBAL_TRANSCRIPT")
+        self.assertEqual(mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_BITMAP"], 6)
+        self.assertEqual(mvp.GLOBAL_DEFINITIONS[-1], ("RECORZ_MVP_GLOBAL_BITMAP", 6))
+        self.assertEqual(mvp.SELECTOR_IDS["writeString:"], "RECORZ_MVP_SELECTOR_WRITE_STRING")
+        self.assertEqual(mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_INSTANCE_KIND"], 22)
+        self.assertEqual(
+            mvp.SELECTOR_DEFINITIONS[16],
+            ("RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR", 17),
+        )
+
     def test_renders_generated_runtime_bindings_header(self) -> None:
         header = mvp.render_generated_runtime_bindings_header()
 

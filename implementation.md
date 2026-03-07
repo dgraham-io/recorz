@@ -292,3 +292,9 @@
 - Updated the QEMU Makefile so every target C object rebuilds after the generated runtime header changes, keeping `program.c`, `seed.c`, and the VM consistently aligned with the same generated constants.
 - Expanded the focused header-generation test to assert the new generated runtime enums alongside the existing method-entry and primitive-binding content.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-06 - Derive Builder Selector And Global Maps From Shared Specs
+- Replaced the parallel `GLOBAL_IDS`/`GLOBAL_VALUES` and `SELECTOR_IDS`/`SELECTOR_VALUES` tables in `build_qemu_riscv_mvp_image.py` with one declarative spec list per domain and a small helper that derives the lookup maps and generated enum definitions.
+- Kept the host compiler/lowerer behavior and the generated target header unchanged, but removed another duplicated host-side contract layer from the builder.
+- Added a focused regression that asserts the source-of-truth spec lists and the derived global/selector lookup tables used by the lowerer and image builder.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
