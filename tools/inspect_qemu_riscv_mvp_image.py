@@ -49,6 +49,10 @@ ROOT_VALUE_METHOD_ROOT_BY_ENTRY_ID = {
     mvp.METHOD_ENTRY_VALUES[name]: root_id
     for name, root_id in mvp.ROOT_VALUE_METHOD_ROOT_BY_ENTRY_NAME.items()
 }
+PRIMITIVE_BINDING_BY_ENTRY_ID = {
+    mvp.METHOD_ENTRY_VALUES[name]: binding_id
+    for name, binding_id in mvp.PRIMITIVE_BINDING_BY_ENTRY_NAME.items()
+}
 COMPILED_METHOD_PROGRAM_BY_ENTRY_ID = {
     mvp.METHOD_ENTRY_VALUES[name]: list(program)
     for name, program in mvp.COMPILED_METHOD_PROGRAM_BY_ENTRY_NAME.items()
@@ -304,13 +308,17 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
                     or entry_spec[2] != argument_count_field[1]
                 ):
                     raise ImageInspectionError("seed manifest method descriptor entry metadata does not match selector")
+                method_entry_ids.add(int(entry_id_field[1]))
                 accessor_expected = ACCESSOR_METHOD_FIELD_BY_ENTRY_ID.get(int(entry_id_field[1]))
                 field_send_expected = FIELD_SEND_METHOD_SPEC_BY_ENTRY_ID.get(int(entry_id_field[1]))
                 root_send_expected = ROOT_SEND_METHOD_SPEC_BY_ENTRY_ID.get(int(entry_id_field[1]))
                 root_value_expected = ROOT_VALUE_METHOD_ROOT_BY_ENTRY_ID.get(int(entry_id_field[1]))
+                primitive_binding_expected = PRIMITIVE_BINDING_BY_ENTRY_ID.get(int(entry_id_field[1]))
                 compiled_expected = COMPILED_METHOD_PROGRAM_BY_ENTRY_ID.get(int(entry_id_field[1]))
                 interpreted_expected = INTERPRETED_METHOD_PROGRAM_BY_ENTRY_ID.get(int(entry_id_field[1]))
                 if (
+                    primitive_binding_expected is None
+                    and
                     accessor_expected is None
                     and field_send_expected is None
                     and root_send_expected is None
@@ -318,9 +326,15 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
                     and compiled_expected is None
                     and interpreted_expected is None
                 ):
-                    if implementation_field[0] != mvp.SEED_FIELD_NIL:
-                        raise ImageInspectionError("primitive method entry unexpectedly has an implementation object")
-                elif accessor_expected is not None:
+                    raise ImageInspectionError("seed manifest method entry does not match any known implementation")
+                if primitive_binding_expected is not None:
+                    if (
+                        implementation_field[0] != mvp.SEED_FIELD_SMALL_INTEGER
+                        or implementation_field[1] != primitive_binding_expected
+                    ):
+                        raise ImageInspectionError("primitive method entry binding id is invalid")
+                    continue
+                if accessor_expected is not None:
                     if implementation_field[0] != mvp.SEED_FIELD_OBJECT_INDEX:
                         raise ImageInspectionError("accessor method entry is missing an implementation object")
                     implementation_index = int(implementation_field[1])
@@ -455,7 +469,6 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
                         field = implementation_summary["fields"][field_index]
                         if field[0] != mvp.SEED_FIELD_SMALL_INTEGER or field[1] != expected_instruction:
                             raise ImageInspectionError("interpreted method instruction does not match entry")
-                method_entry_ids.add(int(entry_id_field[1]))
             declared_method_count += method_count
 
     globals_summary: dict[str, int] = {}

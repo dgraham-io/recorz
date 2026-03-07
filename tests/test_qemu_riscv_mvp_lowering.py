@@ -367,6 +367,19 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             "RECORZ_MVP_METHOD_ENTRY_FORM_FACTORY_FROM_BITS",
         )
 
+    def test_derives_primitive_binding_ids_from_kernel_sources(self) -> None:
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["bitbltFillFormColor"], 1)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["glyphsAt"], 5)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formClear"], 8)
+        self.assertEqual(
+            mvp.PRIMITIVE_BINDING_BY_ENTRY_NAME["RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING"],
+            mvp.PRIMITIVE_BINDING_VALUES["formWriteString"],
+        )
+        self.assertEqual(
+            mvp.PRIMITIVE_BINDING_BY_ENTRY_NAME["RECORZ_MVP_METHOD_ENTRY_FORM_NEWLINE"],
+            mvp.PRIMITIVE_BINDING_VALUES["formNewline"],
+        )
+
     def test_builds_seed_manifest_with_expected_header(self) -> None:
         manifest = mvp.build_seed_manifest()
         (

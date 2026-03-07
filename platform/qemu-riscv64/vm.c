@@ -80,7 +80,7 @@ struct recorz_mvp_method_entry_spec {
     uint8_t argument_count;
     uint8_t primitive_kind;
     uint8_t implementation_kind;
-    uint8_t implementation_field_index;
+    uint8_t primitive_binding_id;
     uint8_t implementation_selector;
     uint8_t implementation_root_id;
     uint8_t implementation_return_mode;
@@ -167,7 +167,7 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         2U,
         RECORZ_MVP_OBJECT_BITBLT,
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
-        0U,
+        RECORZ_MVP_PRIMITIVE_BITBLT_FILL_FORM_COLOR,
         0U,
         0U,
         0U,
@@ -177,7 +177,7 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         5U,
         RECORZ_MVP_OBJECT_BITBLT,
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
-        0U,
+        RECORZ_MVP_PRIMITIVE_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE,
         0U,
         0U,
         0U,
@@ -187,7 +187,7 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         6U,
         RECORZ_MVP_OBJECT_BITBLT,
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
-        0U,
+        RECORZ_MVP_PRIMITIVE_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR,
         0U,
         0U,
         0U,
@@ -197,7 +197,7 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         10U,
         RECORZ_MVP_OBJECT_BITBLT,
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
-        0U,
+        RECORZ_MVP_PRIMITIVE_BITBLT_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR,
         0U,
         0U,
         0U,
@@ -207,7 +207,7 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         1U,
         RECORZ_MVP_OBJECT_GLYPHS,
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
-        0U,
+        RECORZ_MVP_PRIMITIVE_GLYPHS_AT,
         0U,
         0U,
         0U,
@@ -217,7 +217,7 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         1U,
         RECORZ_MVP_OBJECT_FORM_FACTORY,
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
-        0U,
+        RECORZ_MVP_PRIMITIVE_FORM_FACTORY_FROM_BITS,
         0U,
         0U,
         0U,
@@ -227,7 +227,7 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         2U,
         RECORZ_MVP_OBJECT_BITMAP_FACTORY,
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
-        0U,
+        RECORZ_MVP_PRIMITIVE_BITMAP_FACTORY_MONO_WIDTH_HEIGHT,
         0U,
         0U,
         0U,
@@ -257,7 +257,7 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         0U,
         RECORZ_MVP_OBJECT_FORM,
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
-        0U,
+        RECORZ_MVP_PRIMITIVE_FORM_CLEAR,
         0U,
         0U,
         0U,
@@ -267,7 +267,7 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         1U,
         RECORZ_MVP_OBJECT_FORM,
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
-        0U,
+        RECORZ_MVP_PRIMITIVE_FORM_WRITE_STRING,
         0U,
         0U,
         0U,
@@ -277,7 +277,7 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         0U,
         RECORZ_MVP_OBJECT_FORM,
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
-        0U,
+        RECORZ_MVP_PRIMITIVE_FORM_NEWLINE,
         0U,
         0U,
         0U,
@@ -1213,8 +1213,11 @@ static void validate_class_method_table(
             machine_panic("method descriptor primitive kind does not match entry");
         }
         if (entry_spec->implementation_kind == RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE) {
-            if (implementation_value.kind != RECORZ_MVP_VALUE_NIL) {
-                machine_panic("primitive method entry unexpectedly has an implementation object");
+            if (implementation_value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+                machine_panic("primitive method entry binding id is not a small integer");
+            }
+            if ((uint32_t)implementation_value.integer != entry_spec->primitive_binding_id) {
+                machine_panic("primitive method entry binding id does not match entry");
             }
             continue;
         }
@@ -2112,19 +2115,19 @@ static void execute_entry_form_newline(
     push(receiver);
 }
 
-static const recorz_mvp_method_entry_handler method_entry_handlers[RECORZ_MVP_METHOD_ENTRY_COUNT] = {
-    [RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR] = execute_entry_bitblt_fill_form_color,
-    [RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE] = execute_entry_bitblt_copy_bitmap_to_form_x_y_scale,
-    [RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR] =
+static const recorz_mvp_method_entry_handler primitive_binding_handlers[RECORZ_MVP_PRIMITIVE_COUNT] = {
+    [RECORZ_MVP_PRIMITIVE_BITBLT_FILL_FORM_COLOR] = execute_entry_bitblt_fill_form_color,
+    [RECORZ_MVP_PRIMITIVE_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE] = execute_entry_bitblt_copy_bitmap_to_form_x_y_scale,
+    [RECORZ_MVP_PRIMITIVE_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR] =
         execute_entry_bitblt_copy_bitmap_to_form_x_y_scale_color,
-    [RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR] =
+    [RECORZ_MVP_PRIMITIVE_BITBLT_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR] =
         execute_entry_bitblt_copy_bitmap_source_x_source_y_width_height_to_form_x_y_scale_color,
-    [RECORZ_MVP_METHOD_ENTRY_GLYPHS_AT] = execute_entry_glyphs_at,
-    [RECORZ_MVP_METHOD_ENTRY_FORM_FACTORY_FROM_BITS] = execute_entry_form_factory_from_bits,
-    [RECORZ_MVP_METHOD_ENTRY_BITMAP_FACTORY_MONO_WIDTH_HEIGHT] = execute_entry_bitmap_factory_mono_width_height,
-    [RECORZ_MVP_METHOD_ENTRY_FORM_CLEAR] = execute_entry_form_clear,
-    [RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING] = execute_entry_form_write_string,
-    [RECORZ_MVP_METHOD_ENTRY_FORM_NEWLINE] = execute_entry_form_newline,
+    [RECORZ_MVP_PRIMITIVE_GLYPHS_AT] = execute_entry_glyphs_at,
+    [RECORZ_MVP_PRIMITIVE_FORM_FACTORY_FROM_BITS] = execute_entry_form_factory_from_bits,
+    [RECORZ_MVP_PRIMITIVE_BITMAP_FACTORY_MONO_WIDTH_HEIGHT] = execute_entry_bitmap_factory_mono_width_height,
+    [RECORZ_MVP_PRIMITIVE_FORM_CLEAR] = execute_entry_form_clear,
+    [RECORZ_MVP_PRIMITIVE_FORM_WRITE_STRING] = execute_entry_form_write_string,
+    [RECORZ_MVP_PRIMITIVE_FORM_NEWLINE] = execute_entry_form_newline,
 };
 
 static void perform_send(
@@ -2218,6 +2221,7 @@ static void dispatch_heap_object_send(
     const struct recorz_mvp_method_entry_spec *entry_spec;
     recorz_mvp_method_entry_handler handler;
     uint32_t entry;
+    uint32_t primitive_binding_id;
 
     if (selector == RECORZ_MVP_SELECTOR_CLASS) {
         push(object_value(object->class_handle));
@@ -2246,9 +2250,19 @@ static void dispatch_heap_object_send(
     if (entry_spec->implementation_kind != RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE) {
         machine_panic("method entry implementation kind is unknown");
     }
-    handler = method_entry_handlers[entry];
+    if (implementation_value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+        machine_panic("primitive method entry binding id is not a small integer");
+    }
+    primitive_binding_id = (uint32_t)implementation_value.integer;
+    if (primitive_binding_id != entry_spec->primitive_binding_id) {
+        machine_panic("primitive method entry binding id does not match entry");
+    }
+    if (primitive_binding_id >= RECORZ_MVP_PRIMITIVE_COUNT) {
+        machine_panic("primitive method entry binding id is out of range");
+    }
+    handler = primitive_binding_handlers[primitive_binding_id];
     if (handler == 0) {
-        machine_panic("method descriptor entry handler is not installed");
+        machine_panic("primitive binding handler is not installed");
     }
     handler(object, receiver, arguments, text);
 }

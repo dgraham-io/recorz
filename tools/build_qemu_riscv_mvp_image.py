@@ -629,6 +629,15 @@ COMPILED_METHOD_PROGRAM_BY_ENTRY_NAME = {
     for entry_name, source in KERNEL_METHOD_SOURCE_BY_ENTRY_NAME.items()
     if source.implementation_kind == KERNEL_METHOD_IMPLEMENTATION_COMPILED
 }
+PRIMITIVE_BINDING_VALUES: dict[str, int] = {}
+PRIMITIVE_BINDING_BY_ENTRY_NAME: dict[str, int] = {}
+for entry_name, source in KERNEL_METHOD_SOURCE_BY_ENTRY_NAME.items():
+    if source.implementation_kind != KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE:
+        continue
+    assert source.primitive_binding is not None
+    if source.primitive_binding not in PRIMITIVE_BINDING_VALUES:
+        PRIMITIVE_BINDING_VALUES[source.primitive_binding] = len(PRIMITIVE_BINDING_VALUES) + 1
+    PRIMITIVE_BINDING_BY_ENTRY_NAME[entry_name] = PRIMITIVE_BINDING_VALUES[source.primitive_binding]
 
 
 class Lowerer:
@@ -934,12 +943,15 @@ def build_seed_manifest() -> bytes:
 
     method_entry_start_index = compiled_method_start_index + len(compiled_method_seed_objects)
     for entry_name, _owner_kind, _selector, _argument_count in METHOD_ENTRY_DEFINITIONS:
-        implementation_kind = SEED_FIELD_NIL
-        implementation_index = 0
+        implementation_field_kind = SEED_FIELD_NIL
+        implementation_field_value = 0
 
         if entry_name in compiled_method_indices:
-            implementation_kind = SEED_FIELD_OBJECT_INDEX
-            implementation_index = compiled_method_indices[entry_name]
+            implementation_field_kind = SEED_FIELD_OBJECT_INDEX
+            implementation_field_value = compiled_method_indices[entry_name]
+        elif entry_name in PRIMITIVE_BINDING_BY_ENTRY_NAME:
+            implementation_field_kind = SEED_FIELD_SMALL_INTEGER
+            implementation_field_value = PRIMITIVE_BINDING_BY_ENTRY_NAME[entry_name]
         method_entry_indices[entry_name] = method_entry_start_index + len(method_entry_seed_objects)
         method_entry_seed_objects.append(
             SeedObject(
@@ -947,7 +959,7 @@ def build_seed_manifest() -> bytes:
                 class_indices[SEED_OBJECT_METHOD_ENTRY],
                 [
                     (SEED_FIELD_SMALL_INTEGER, METHOD_ENTRY_VALUES[entry_name]),
-                    (implementation_kind, implementation_index),
+                    (implementation_field_kind, implementation_field_value),
                 ],
             )
         )

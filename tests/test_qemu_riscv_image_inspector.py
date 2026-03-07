@@ -164,6 +164,28 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         with self.assertRaises(inspector.ImageInspectionError):
             inspector.inspect_seed_manifest(bytes(seed))
 
+    def test_rejects_primitive_binding_mismatch(self) -> None:
+        seed = bytearray(mvp.build_seed_manifest())
+        header_size = struct.calcsize(mvp.SEED_HEADER_FORMAT)
+        object_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
+        form_clear_entry_index = 186 + (
+            mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_FORM_CLEAR"] - 1
+        )
+        implementation_offset = (
+            header_size
+            + (form_clear_entry_index * object_size)
+            + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
+            + struct.calcsize(mvp.SEED_FIELD_FORMAT)
+        )
+
+        seed[implementation_offset + 1 : implementation_offset + 5] = struct.pack(
+            "<i",
+            mvp.PRIMITIVE_BINDING_VALUES["formNewline"],
+        )
+
+        with self.assertRaises(inspector.ImageInspectionError):
+            inspector.inspect_seed_manifest(bytes(seed))
+
     def test_rejects_compiled_form_width_entry_without_implementation(self) -> None:
         seed = bytearray(mvp.build_seed_manifest())
         header_size = struct.calcsize(mvp.SEED_HEADER_FORMAT)
