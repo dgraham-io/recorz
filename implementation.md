@@ -346,3 +346,9 @@
 - Reused the same boot-spec materialization path already used for other seed objects and derived the seed header glyph count from the declared glyph bitmap specs instead of a hardcoded literal.
 - Added a focused regression covering the declared glyph bitmap spec family and updated the seed-header test to derive the glyph count from the declared glyph bitmap specs.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Declare Boot Object Families
+- Added an explicit `BOOT_OBJECT_FAMILY_SPECS` layout for the fixed pre-glyph objects, glyph bitmaps, and post-glyph objects, plus derived family names and a fixed boot object count from that layout.
+- Replaced the three separate boot-object passes in `build_seed_manifest()` with one family-driven materialization loop and added internal checks that the boot object count and collected glyph indices still match the declared family specs.
+- Added a focused regression covering the declared boot object family order, the glyph-index-collecting family, and the derived fixed boot object count.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

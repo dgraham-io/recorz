@@ -555,6 +555,21 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
 
+    def test_declares_boot_object_families(self) -> None:
+        self.assertEqual(
+            mvp.BOOT_OBJECT_FAMILY_NAMES,
+            [
+                "before_glyphs",
+                "glyph_bitmaps",
+                "after_glyphs",
+            ],
+        )
+        self.assertEqual(len(mvp.BOOT_OBJECT_FAMILY_SPECS[0].object_specs), 10)
+        self.assertTrue(mvp.BOOT_OBJECT_FAMILY_SPECS[1].collect_object_indices)
+        self.assertEqual(len(mvp.BOOT_OBJECT_FAMILY_SPECS[1].object_specs), len(mvp.GLYPH_BITMAP_BOOT_SPECS))
+        self.assertEqual(len(mvp.BOOT_OBJECT_FAMILY_SPECS[2].object_specs), 2)
+        self.assertEqual(mvp.BOOT_OBJECT_FIXED_COUNT, 140)
+
     def test_declares_glyph_bitmap_boot_specs(self) -> None:
         self.assertEqual(mvp.GLYPH_BITMAP_NAME_PREFIX, "GlyphBitmap")
         self.assertEqual(mvp.GLYPH_BITMAP_WIDTH, 5)

@@ -340,6 +340,13 @@ class BootObjectSpec:
 
 
 @dataclass(frozen=True)
+class BootObjectFamilySpec:
+    name: str
+    object_specs: tuple[BootObjectSpec, ...]
+    collect_object_indices: bool = False
+
+
+@dataclass(frozen=True)
 class SeedLayoutSection:
     start_index: int
     count: int
@@ -470,6 +477,13 @@ def build_glyph_bitmap_boot_specs() -> list[BootObjectSpec]:
 
 
 GLYPH_BITMAP_BOOT_SPECS = build_glyph_bitmap_boot_specs()
+BOOT_OBJECT_FAMILY_SPECS = [
+    BootObjectFamilySpec("before_glyphs", tuple(BOOT_OBJECT_SPECS_BEFORE_GLYPHS)),
+    BootObjectFamilySpec("glyph_bitmaps", tuple(GLYPH_BITMAP_BOOT_SPECS), collect_object_indices=True),
+    BootObjectFamilySpec("after_glyphs", tuple(BOOT_OBJECT_SPECS_AFTER_GLYPHS)),
+]
+BOOT_OBJECT_FAMILY_NAMES = [family_spec.name for family_spec in BOOT_OBJECT_FAMILY_SPECS]
+BOOT_OBJECT_FIXED_COUNT = sum(len(family_spec.object_specs) for family_spec in BOOT_OBJECT_FAMILY_SPECS)
 KERNEL_METHOD_IMPLEMENTATION_COMPILED = "compiled"
 KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE = "primitive"
 KERNEL_CLASS_HEADER_PATTERN = re.compile(
@@ -1321,28 +1335,22 @@ def build_seed_manifest() -> bytes:
         return object_index
 
     glyph_object_indices: list[int] = []
-    for spec in BOOT_OBJECT_SPECS_BEFORE_GLYPHS:
-        add_seed_object(
-            spec.name,
-            constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, spec.object_kind_name),
-            materialize_boot_object_fields(spec.field_specs, seed_object_indices_by_name, glyph_object_indices),
-        )
-    for spec in GLYPH_BITMAP_BOOT_SPECS:
-        glyph_object_indices.append(
-            add_seed_object(
+    for family_spec in BOOT_OBJECT_FAMILY_SPECS:
+        for spec in family_spec.object_specs:
+            object_index = add_seed_object(
                 spec.name,
                 constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, spec.object_kind_name),
                 materialize_boot_object_fields(spec.field_specs, seed_object_indices_by_name, glyph_object_indices),
             )
-        )
-    for spec in BOOT_OBJECT_SPECS_AFTER_GLYPHS:
-        add_seed_object(
-            spec.name,
-            constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, spec.object_kind_name),
-            materialize_boot_object_fields(spec.field_specs, seed_object_indices_by_name, glyph_object_indices),
-        )
+            if family_spec.collect_object_indices:
+                glyph_object_indices.append(object_index)
 
-    seed_layout = build_seed_layout(len(seed_objects), CLASS_DESCRIPTOR_KIND_ORDER)
+    if len(seed_objects) != BOOT_OBJECT_FIXED_COUNT:
+        raise AssertionError("boot object count does not match declared boot object families")
+    if len(glyph_object_indices) != len(GLYPH_BITMAP_BOOT_SPECS):
+        raise AssertionError("glyph object indices do not match declared glyph bitmap specs")
+
+    seed_layout = build_seed_layout(BOOT_OBJECT_FIXED_COUNT, CLASS_DESCRIPTOR_KIND_ORDER)
     class_class_index = seed_layout["class_descriptors"].start_index
     class_kind_order = CLASS_DESCRIPTOR_KIND_ORDER
     class_indices = build_class_index_map(class_kind_order, class_class_index)
