@@ -128,10 +128,6 @@ SEED_FIELD_OBJECT_INDEX = constant_value(SEED_FIELD_KIND_IDS, SEED_FIELD_KIND_VA
 OPCODE_DEFINITIONS = list(OPCODE_VALUES.items())
 LITERAL_KIND_DEFINITIONS = list(LITERAL_VALUES.items())
 
-BITMAP_STORAGE_FRAMEBUFFER = 1
-BITMAP_STORAGE_GLYPH_MONO = 2
-GLYPH_FALLBACK_CODE = 32
-
 FIELD_SPEC_SMALL_INTEGER = "small_integer"
 FIELD_SPEC_OBJECT_REF = "object_ref"
 FIELD_SPEC_GLYPH_REF = "glyph_ref"
@@ -375,18 +371,6 @@ class DynamicSeedSections:
 class SeedBindings:
     global_bindings: list[tuple[int, int]]
     root_bindings: list[tuple[int, int]]
-
-TRANSCRIPT_LAYOUT_FIELD_VALUES = (24, 24, 4, 2)
-TRANSCRIPT_STYLE_FIELD_VALUES = (0x00486020, 0x00F2F2F2)
-FRAMEBUFFER_BITMAP_FIELD_VALUES = (640, 480, BITMAP_STORAGE_FRAMEBUFFER, 0)
-TRANSCRIPT_METRICS_FIELD_VALUES = (6, 8)
-DEFAULT_FORM_BOOT_FIELD_SPECS = (
-    (FIELD_SPEC_OBJECT_REF, "FramebufferBitmap"),
-)
-TRANSCRIPT_BEHAVIOR_BOOT_FIELD_SPECS = (
-    (FIELD_SPEC_GLYPH_REF, GLYPH_FALLBACK_CODE),
-    (FIELD_SPEC_SMALL_INTEGER, 1),
-)
 
 
 def build_small_integer_boot_field_specs(field_values: tuple[int, ...]) -> tuple[tuple[str, int], ...]:
@@ -876,6 +860,28 @@ def load_kernel_boot_object_declarations() -> dict[str, KernelBootObjectDeclarat
 KERNEL_BOOT_OBJECT_DECLARATIONS_BY_NAME = load_kernel_boot_object_declarations()
 
 
+def boot_object_field_specs(object_name: str) -> tuple[tuple[str, object], ...]:
+    return KERNEL_BOOT_OBJECT_DECLARATIONS_BY_NAME[object_name].field_specs
+
+
+def boot_object_small_integer_field_values(object_name: str) -> tuple[int, ...]:
+    field_values: list[int] = []
+    for field_kind, field_value in boot_object_field_specs(object_name):
+        if field_kind != FIELD_SPEC_SMALL_INTEGER:
+            raise LoweringError(
+                f"kernel MVP boot object {object_name} does not declare only small-integer field values"
+            )
+        field_values.append(int(field_value))
+    return tuple(field_values)
+
+
+def boot_object_first_glyph_field_value(object_name: str) -> int:
+    for field_kind, field_value in boot_object_field_specs(object_name):
+        if field_kind == FIELD_SPEC_GLYPH_REF:
+            return int(field_value)
+    raise LoweringError(f"kernel MVP boot object {object_name} does not declare a glyph field")
+
+
 def load_kernel_selector_declarations() -> dict[str, KernelSelectorDeclaration]:
     selector_declarations_by_selector: dict[str, KernelSelectorDeclaration] = {}
 
@@ -996,6 +1002,15 @@ def load_kernel_glyph_bitmap_family_declaration() -> KernelGlyphBitmapFamilyDecl
 
 
 KERNEL_GLYPH_BITMAP_FAMILY_DECLARATION = load_kernel_glyph_bitmap_family_declaration()
+DEFAULT_FORM_BOOT_FIELD_SPECS = boot_object_field_specs("DefaultForm")
+TRANSCRIPT_BEHAVIOR_BOOT_FIELD_SPECS = boot_object_field_specs("TranscriptBehavior")
+TRANSCRIPT_LAYOUT_FIELD_VALUES = boot_object_small_integer_field_values("TranscriptLayout")
+TRANSCRIPT_STYLE_FIELD_VALUES = boot_object_small_integer_field_values("TranscriptStyle")
+FRAMEBUFFER_BITMAP_FIELD_VALUES = boot_object_small_integer_field_values("FramebufferBitmap")
+TRANSCRIPT_METRICS_FIELD_VALUES = boot_object_small_integer_field_values("TranscriptMetrics")
+BITMAP_STORAGE_FRAMEBUFFER = FRAMEBUFFER_BITMAP_FIELD_VALUES[2]
+BITMAP_STORAGE_GLYPH_MONO = KERNEL_GLYPH_BITMAP_FAMILY_DECLARATION.storage_kind
+GLYPH_FALLBACK_CODE = boot_object_first_glyph_field_value("TranscriptBehavior")
 GLYPH_BITMAP_NAME_PREFIX = KERNEL_GLYPH_BITMAP_FAMILY_DECLARATION.name_prefix
 GLYPH_BITMAP_WIDTH = KERNEL_GLYPH_BITMAP_FAMILY_DECLARATION.width
 GLYPH_BITMAP_HEIGHT = KERNEL_GLYPH_BITMAP_FAMILY_DECLARATION.height

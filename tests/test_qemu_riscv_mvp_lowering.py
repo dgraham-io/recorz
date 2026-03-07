@@ -778,6 +778,13 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "after_glyphs",
             ],
         )
+        self.assertEqual(mvp.TRANSCRIPT_LAYOUT_FIELD_VALUES, mvp.boot_object_small_integer_field_values("TranscriptLayout"))
+        self.assertEqual(mvp.TRANSCRIPT_STYLE_FIELD_VALUES, mvp.boot_object_small_integer_field_values("TranscriptStyle"))
+        self.assertEqual(mvp.FRAMEBUFFER_BITMAP_FIELD_VALUES, mvp.boot_object_small_integer_field_values("FramebufferBitmap"))
+        self.assertEqual(mvp.TRANSCRIPT_METRICS_FIELD_VALUES, mvp.boot_object_small_integer_field_values("TranscriptMetrics"))
+        self.assertEqual(mvp.DEFAULT_FORM_BOOT_FIELD_SPECS, mvp.boot_object_field_specs("DefaultForm"))
+        self.assertEqual(mvp.TRANSCRIPT_BEHAVIOR_BOOT_FIELD_SPECS, mvp.boot_object_field_specs("TranscriptBehavior"))
+        self.assertEqual(mvp.GLYPH_FALLBACK_CODE, mvp.boot_object_first_glyph_field_value("TranscriptBehavior"))
         self.assertEqual(mvp.TRANSCRIPT_LAYOUT_FIELD_VALUES, (24, 24, 4, 2))
         self.assertEqual(mvp.TRANSCRIPT_STYLE_FIELD_VALUES, (0x00486020, 0x00F2F2F2))
         self.assertEqual(mvp.FRAMEBUFFER_BITMAP_FIELD_VALUES, (640, 480, mvp.BITMAP_STORAGE_FRAMEBUFFER, 0))

@@ -573,3 +573,9 @@
 - Added `materialize_named_seed_fields()` so the dynamic seed builder now describes those runtime objects in terms of field names rather than builder-authored slot positions.
 - Extended the focused lowering regressions to lock the new named-field materialization behavior, including sparse compiled-method word materialization with explicit `nil` padding for skipped slots.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Derive Fixed Boot Payload Constants From Source Declarations
+- Removed the remaining hand-authored fixed boot payload compatibility constants for transcript layout/style/metrics, the framebuffer bitmap, the default form, and transcript behavior from the builder.
+- Added small helpers that derive boot object field specs, small-integer payload tuples, and glyph references directly from parsed `RecorzKernelBootObject:` declarations, then rebuilt the compatibility constants from those source-owned declarations.
+- Also switched the live `BITMAP_STORAGE_FRAMEBUFFER`, `BITMAP_STORAGE_GLYPH_MONO`, and `GLYPH_FALLBACK_CODE` compatibility values to derive from the source-declared framebuffer/glyph/behavior metadata instead of hard-coded Python integers.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
