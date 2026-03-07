@@ -6,6 +6,7 @@
 
 #define RECORZ_MVP_PROGRAM_INSTRUCTION_LIMIT 512U
 #define RECORZ_MVP_PROGRAM_LITERAL_LIMIT 128U
+#define RECORZ_MVP_PROGRAM_OBJECT_FIELD_LIMIT 4U
 
 static struct recorz_mvp_instruction loaded_instructions[RECORZ_MVP_PROGRAM_INSTRUCTION_LIMIT];
 static struct recorz_mvp_literal loaded_literals[RECORZ_MVP_PROGRAM_LITERAL_LIMIT];
@@ -41,6 +42,11 @@ static void validate_instruction(
         case RECORZ_MVP_OP_STORE_LEXICAL:
             if (instruction->operand_a != 0U || instruction->operand_b >= lexical_count) {
                 machine_panic("program manifest lexical operand is invalid");
+            }
+            return;
+        case RECORZ_MVP_OP_STORE_FIELD:
+            if (instruction->operand_a >= RECORZ_MVP_PROGRAM_OBJECT_FIELD_LIMIT || instruction->operand_b != 0U) {
+                machine_panic("program manifest field write operand is invalid");
             }
             return;
         case RECORZ_MVP_OP_SEND:

@@ -55,6 +55,7 @@
 #define COMPILED_METHOD_OP_SEND RECORZ_MVP_COMPILED_METHOD_OP_SEND
 #define COMPILED_METHOD_OP_RETURN_TOP RECORZ_MVP_COMPILED_METHOD_OP_RETURN_TOP
 #define COMPILED_METHOD_OP_RETURN_RECEIVER RECORZ_MVP_COMPILED_METHOD_OP_RETURN_RECEIVER
+#define COMPILED_METHOD_OP_STORE_FIELD RECORZ_MVP_COMPILED_METHOD_OP_STORE_FIELD
 
 #define BITMAP_STORAGE_FRAMEBUFFER RECORZ_MVP_BITMAP_STORAGE_FRAMEBUFFER
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
@@ -282,6 +283,8 @@ static const char *opcode_name(uint8_t opcode) {
             return "pushField";
         case RECORZ_MVP_OP_RETURN_RECEIVER:
             return "returnReceiver";
+        case RECORZ_MVP_OP_STORE_FIELD:
+            return "storeField";
     }
     return "unknown";
 }
@@ -1272,6 +1275,27 @@ static uint8_t live_instance_field_count_for_class(const struct recorz_mvp_heap_
     return 0U;
 }
 
+static uint8_t class_field_index_for_name(
+    const struct recorz_mvp_heap_object *class_object,
+    const char *field_name,
+    uint8_t *field_index_out
+) {
+    const struct recorz_mvp_dynamic_class_definition *dynamic_definition =
+        dynamic_class_definition_for_handle(heap_handle_for_object(class_object));
+    uint8_t field_index;
+
+    if (dynamic_definition == 0) {
+        return 0U;
+    }
+    for (field_index = 0U; field_index < dynamic_definition->instance_variable_count; ++field_index) {
+        if (source_names_equal(field_name, dynamic_definition->instance_variable_names[field_index])) {
+            *field_index_out = field_index;
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
 static uint32_t primitive_kind_for_heap_object(const struct recorz_mvp_heap_object *object) {
     return class_instance_kind(class_object_for_heap_object(object));
 }
@@ -1325,6 +1349,15 @@ static void validate_compiled_method(
                     machine_panic("compiled method pushField index is out of range");
                 }
                 ++stack_depth;
+                break;
+            case COMPILED_METHOD_OP_STORE_FIELD:
+                if (operand_a >= OBJECT_FIELD_LIMIT) {
+                    machine_panic("compiled method storeField index is out of range");
+                }
+                if (stack_depth == 0U) {
+                    machine_panic("compiled method storeField stack underflow");
+                }
+                --stack_depth;
                 break;
             case COMPILED_METHOD_OP_SEND:
                 if (operand_a < RECORZ_MVP_SELECTOR_SHOW ||
@@ -2456,11 +2489,13 @@ static void execute_entry_kernel_installer_class_named(
 }
 
 static uint8_t compile_source_operand_push(
+    const struct recorz_mvp_heap_object *class_object,
     const char *name,
     const char *argument_name,
     uint32_t instruction_words[],
     uint8_t *instruction_count
 ) {
+    uint8_t field_index;
     uint8_t global_id;
 
     if (*instruction_count >= COMPILED_METHOD_MAX_INSTRUCTIONS) {
@@ -2468,6 +2503,10 @@ static uint8_t compile_source_operand_push(
     }
     if (argument_name[0] != '\0' && source_names_equal(name, argument_name)) {
         instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_ARGUMENT, 0U, 0U);
+        return 1U;
+    }
+    if (class_field_index_for_name(class_object, name, &field_index)) {
+        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_FIELD, field_index, 0U);
         return 1U;
     }
     global_id = source_global_id_for_name(name);
@@ -2479,6 +2518,7 @@ static uint8_t compile_source_operand_push(
 }
 
 static uint8_t compile_source_statement_line(
+    const struct recorz_mvp_heap_object *class_object,
     const char *line,
     const char *argument_name,
     uint32_t instruction_words[],
@@ -2521,7 +2561,7 @@ static uint8_t compile_source_statement_line(
 
     if (source_names_equal(cursor, "Display defaultForm writeString: text.")) {
         instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_ROOT, RECORZ_MVP_SEED_ROOT_DEFAULT_FORM, 0U);
-        if (!compile_source_operand_push("text", argument_name, instruction_words, instruction_count)) {
+        if (!compile_source_operand_push(class_object, "text", argument_name, instruction_words, instruction_count)) {
             machine_panic("KernelInstaller source method uses an unknown argument operand");
         }
         instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_SEND, RECORZ_MVP_SELECTOR_WRITE_STRING, 1U);
@@ -2533,6 +2573,31 @@ static uint8_t compile_source_statement_line(
         return 0U;
     }
     cursor = source_skip_horizontal_space(cursor);
+    if (cursor[0] == ':' && cursor[1] == '=') {
+        uint8_t field_index;
+
+        cursor += 2;
+        cursor = source_skip_horizontal_space(cursor);
+        if (!class_field_index_for_name(class_object, receiver_name, &field_index)) {
+            machine_panic("KernelInstaller source method assignment target must be an instance variable");
+        }
+        cursor = source_parse_identifier(cursor, argument_buffer, sizeof(argument_buffer));
+        if (cursor == 0) {
+            machine_panic("KernelInstaller source method assignment right-hand side is invalid");
+        }
+        cursor = source_skip_horizontal_space(cursor);
+        if (*cursor != '.' || cursor[1] != '\0') {
+            machine_panic("KernelInstaller source method assignment has unexpected trailing text");
+        }
+        if (!compile_source_operand_push(class_object, argument_buffer, argument_name, instruction_words, instruction_count)) {
+            machine_panic("KernelInstaller source method assignment uses an unsupported right-hand side");
+        }
+        if (*instruction_count >= COMPILED_METHOD_MAX_INSTRUCTIONS) {
+            machine_panic("KernelInstaller source method exceeds compiled method capacity");
+        }
+        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_STORE_FIELD, field_index, 0U);
+        return 1U;
+    }
     if (
         source_names_equal(receiver_name, "Display") &&
         cursor[0] == 'd' &&
@@ -2552,7 +2617,7 @@ static uint8_t compile_source_statement_line(
         cursor = source_skip_horizontal_space(cursor);
         instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_ROOT, RECORZ_MVP_SEED_ROOT_DEFAULT_FORM, 0U);
     } else {
-        if (!compile_source_operand_push(receiver_name, argument_name, instruction_words, instruction_count)) {
+        if (!compile_source_operand_push(class_object, receiver_name, argument_name, instruction_words, instruction_count)) {
             machine_panic("KernelInstaller source method uses an unsupported receiver expression");
         }
     }
@@ -2568,25 +2633,16 @@ static uint8_t compile_source_statement_line(
         if (cursor == 0 || !source_char_is_identifier_start(*cursor)) {
             machine_panic("KernelInstaller source method keyword send is missing an argument");
         }
-        if (*instruction_count >= COMPILED_METHOD_MAX_INSTRUCTIONS) {
-            machine_panic("KernelInstaller source method exceeds compiled method capacity");
+        cursor = source_parse_identifier(cursor, argument_buffer, sizeof(argument_buffer));
+        if (cursor == 0) {
+            machine_panic("KernelInstaller source method keyword argument is invalid");
         }
-        if (source_names_equal(cursor, "text.") || source_names_equal(cursor, "text")) {
-            if (!compile_source_operand_push("text", argument_name, instruction_words, instruction_count)) {
-                machine_panic("KernelInstaller source method uses an unsupported keyword argument");
-            }
-        } else {
-            cursor = source_parse_identifier(cursor, argument_buffer, sizeof(argument_buffer));
-            if (cursor == 0) {
-                machine_panic("KernelInstaller source method keyword argument is invalid");
-            }
-            cursor = source_skip_horizontal_space(cursor);
-            if (*cursor != '.' || cursor[1] != '\0') {
-                machine_panic("KernelInstaller source method statement has unexpected trailing text");
-            }
-            if (!compile_source_operand_push(argument_buffer, argument_name, instruction_words, instruction_count)) {
-                machine_panic("KernelInstaller source method uses an unsupported keyword argument");
-            }
+        cursor = source_skip_horizontal_space(cursor);
+        if (*cursor != '.' || cursor[1] != '\0') {
+            machine_panic("KernelInstaller source method statement has unexpected trailing text");
+        }
+        if (!compile_source_operand_push(class_object, argument_buffer, argument_name, instruction_words, instruction_count)) {
+            machine_panic("KernelInstaller source method uses an unsupported keyword argument");
         }
         {
             uint32_t selector_length = 0U;
@@ -2619,7 +2675,47 @@ static uint8_t compile_source_statement_line(
     return 1U;
 }
 
+static void compile_source_return_line(
+    const struct recorz_mvp_heap_object *class_object,
+    const char *line,
+    const char *argument_name,
+    uint32_t instruction_words[],
+    uint8_t *instruction_count
+) {
+    char return_name[METHOD_SOURCE_NAME_LIMIT];
+    const char *cursor = source_skip_horizontal_space(line);
+
+    if (*cursor != '^') {
+        machine_panic("KernelInstaller source method return is invalid");
+    }
+    ++cursor;
+    cursor = source_skip_horizontal_space(cursor);
+    if (source_names_equal(cursor, "self")) {
+        if (*instruction_count >= COMPILED_METHOD_MAX_INSTRUCTIONS) {
+            machine_panic("KernelInstaller source method exceeds compiled method capacity");
+        }
+        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_RETURN_RECEIVER, 0U, 0U);
+        return;
+    }
+    cursor = source_parse_identifier(cursor, return_name, sizeof(return_name));
+    if (cursor == 0) {
+        machine_panic("KernelInstaller source method return expression is unsupported");
+    }
+    cursor = source_skip_horizontal_space(cursor);
+    if (*cursor != '\0') {
+        machine_panic("KernelInstaller source method return has unexpected trailing text");
+    }
+    if (!compile_source_operand_push(class_object, return_name, argument_name, instruction_words, instruction_count)) {
+        machine_panic("KernelInstaller source method return uses an unsupported operand");
+    }
+    if (*instruction_count >= COMPILED_METHOD_MAX_INSTRUCTIONS) {
+        machine_panic("KernelInstaller source method exceeds compiled method capacity");
+    }
+    instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_RETURN_TOP, 0U, 0U);
+}
+
 static uint16_t compile_source_method_and_allocate(
+    const struct recorz_mvp_heap_object *class_object,
     const char *source,
     uint8_t *selector_id_out,
     uint16_t *argument_count_out
@@ -2696,20 +2792,14 @@ static uint16_t compile_source_method_and_allocate(
         }
         return_line[return_index] = '\0';
     } else {
-        if (!compile_source_statement_line(statement_line, argument_name, instruction_words, &instruction_count)) {
+        if (!compile_source_statement_line(class_object, statement_line, argument_name, instruction_words, &instruction_count)) {
             machine_panic("KernelInstaller source method statement is unsupported");
         }
         if (source_copy_trimmed_line(&cursor, return_line, sizeof(return_line)) == 0U) {
             machine_panic("KernelInstaller source method is missing a return");
         }
     }
-    if (!source_names_equal(return_line, "^self")) {
-        machine_panic("KernelInstaller source method currently supports only ^self returns");
-    }
-    if (instruction_count >= COMPILED_METHOD_MAX_INSTRUCTIONS) {
-        machine_panic("KernelInstaller source method exceeds compiled method capacity");
-    }
-    instruction_words[instruction_count++] = encode_compiled_method_word(COMPILED_METHOD_OP_RETURN_RECEIVER, 0U, 0U);
+    compile_source_return_line(class_object, return_line, argument_name, instruction_words, &instruction_count);
     if (source_copy_trimmed_line(&cursor, trailing_line, sizeof(trailing_line)) != 0U) {
         machine_panic("KernelInstaller source method has unexpected trailing lines");
     }
@@ -2737,7 +2827,7 @@ static void file_in_method_chunks_on_class(
         if (source_starts_with(chunk, "RecorzKernelClass:")) {
             continue;
         }
-        compiled_method_handle = compile_source_method_and_allocate(chunk, &selector_id, &argument_count);
+        compiled_method_handle = compile_source_method_and_allocate(class_object, chunk, &selector_id, &argument_count);
         validate_compiled_method(heap_object(compiled_method_handle), argument_count);
         install_compiled_method_update(class_object, selector_id, argument_count, compiled_method_handle);
         ++installed_method_count;
@@ -2968,7 +3058,7 @@ static void execute_entry_kernel_installer_install_method_source_on_class(
     if (class_object->kind != RECORZ_MVP_OBJECT_CLASS) {
         machine_panic("KernelInstaller installMethodSource:onClass: expects a Class");
     }
-    compiled_method_handle = compile_source_method_and_allocate(arguments[0].string, &selector_id, &argument_count);
+    compiled_method_handle = compile_source_method_and_allocate(class_object, arguments[0].string, &selector_id, &argument_count);
     validate_compiled_method(heap_object(compiled_method_handle), argument_count);
     install_compiled_method_update(class_object, selector_id, argument_count, compiled_method_handle);
     push(receiver);
@@ -3158,6 +3248,16 @@ static void execute_executable(
                     activation_stack,
                     &activation_stack_size,
                     heap_get_field(receiver_object, instruction.operand_a)
+                );
+                break;
+            case RECORZ_MVP_OP_STORE_FIELD:
+                if (receiver_object == 0) {
+                    machine_panic("storeField requires a receiver object");
+                }
+                heap_set_field(
+                    heap_handle_for_object(receiver_object),
+                    instruction.operand_a,
+                    activation_pop(activation_stack, &activation_stack_size)
                 );
                 break;
             case RECORZ_MVP_OP_SEND: {

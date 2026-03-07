@@ -688,3 +688,10 @@
 - Updated `Class>>new` in `platform/qemu-riscv64/vm.c` to size freshly allocated generic `Object` instances from that live class metadata, which is the first runtime step toward real stateful dynamically filed-in classes.
 - Switched the existing in-image class creation and instance demos under `examples/` to use explicit `superclass: #Object instanceVariableNames: 'value'` headers so the richer live class definition path is exercised by the normal QEMU integration suite.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Add Live Instance Field Bytecodes
+- Extended the shared runtime contract in `platform/qemu-riscv64/runtime_spec.json` with a new `store_field` opcode for both the top-level program stream and seeded/live compiled methods, keeping field mutation on the same unified execution model rather than inventing a target-only special case.
+- Threaded that new opcode through the target runtime in `platform/qemu-riscv64/vm.c` and `platform/qemu-riscv64/program.c`: compiled-method validation, program validation, opcode naming, and the unified `execute_executable()` activation engine now all understand instance field writes alongside the existing field reads.
+- Widened the tiny in-image source compiler in `platform/qemu-riscv64/vm.c` so live class methods can now resolve instance-variable names from the class metadata added in the previous step, compile `field := argument.` assignments to `storeField`, and return `^field` or `^argument` through the same compiled-method path already used for other live-installed methods.
+- Updated `tests/test_qemu_riscv_mvp_lowering.py` to lock the generated runtime header for the new shared opcode values and reverified the normal QEMU/image path with the expanded execution contract.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
