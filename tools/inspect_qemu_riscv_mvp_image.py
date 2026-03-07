@@ -140,6 +140,11 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
     root_value_method_object_count = 0
     interpreted_method_object_count = 0
     compiled_method_object_count = 0
+    accessor_method_kind = getattr(mvp, "SEED_OBJECT_ACCESSOR_METHOD", None)
+    field_send_method_kind = getattr(mvp, "SEED_OBJECT_FIELD_SEND_METHOD", None)
+    root_send_method_kind = getattr(mvp, "SEED_OBJECT_ROOT_SEND_METHOD", None)
+    root_value_method_kind = getattr(mvp, "SEED_OBJECT_ROOT_VALUE_METHOD", None)
+    interpreted_method_kind = getattr(mvp, "SEED_OBJECT_INTERPRETED_METHOD", None)
     selector_ids: set[int] = set()
     method_entry_ids: set[int] = set()
     for _ in range(object_count):
@@ -175,15 +180,15 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
                 raise ImageInspectionError("seed manifest contains duplicate selector objects")
             selector_ids.add(int(selector_id_field[1]))
             selector_object_count += 1
-        if object_kind == mvp.SEED_OBJECT_ACCESSOR_METHOD:
+        if accessor_method_kind is not None and object_kind == accessor_method_kind:
             accessor_method_object_count += 1
-        if object_kind == mvp.SEED_OBJECT_FIELD_SEND_METHOD:
+        if field_send_method_kind is not None and object_kind == field_send_method_kind:
             field_send_method_object_count += 1
-        if object_kind == mvp.SEED_OBJECT_ROOT_SEND_METHOD:
+        if root_send_method_kind is not None and object_kind == root_send_method_kind:
             root_send_method_object_count += 1
-        if object_kind == mvp.SEED_OBJECT_ROOT_VALUE_METHOD:
+        if root_value_method_kind is not None and object_kind == root_value_method_kind:
             root_value_method_object_count += 1
-        if object_kind == mvp.SEED_OBJECT_INTERPRETED_METHOD:
+        if interpreted_method_kind is not None and object_kind == interpreted_method_kind:
             interpreted_method_object_count += 1
         if object_kind == mvp.SEED_OBJECT_COMPILED_METHOD:
             compiled_method_object_count += 1

@@ -1,1 +1,1 @@
-RecorzKernelClass: #MethodDescriptor descriptorOrder: 13 instanceVariableNames: 'selector argumentCount primitiveKind entry'
+RecorzKernelClass: #MethodDescriptor descriptorOrder: 13 objectKindOrder: 13 instanceVariableNames: 'selector argumentCount primitiveKind entry'

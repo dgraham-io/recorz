@@ -1,4 +1,4 @@
-RecorzKernelClass: #Selector descriptorOrder: 15 instanceVariableNames: 'value'
+RecorzKernelClass: #Selector descriptorOrder: 15 objectKindOrder: 15 instanceVariableNames: 'value'
 !
 RecorzKernelSelector: #show: order: 0
 !

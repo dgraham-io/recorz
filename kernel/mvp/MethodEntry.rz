@@ -1,1 +1,1 @@
-RecorzKernelClass: #MethodEntry descriptorOrder: 14 instanceVariableNames: 'executionId implementation'
+RecorzKernelClass: #MethodEntry descriptorOrder: 14 objectKindOrder: 14 instanceVariableNames: 'executionId implementation'

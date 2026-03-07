@@ -1,4 +1,4 @@
-RecorzKernelClass: #Display descriptorOrder: 2 sourceBootOrder: 1 instanceVariableNames: ''
+RecorzKernelClass: #Display descriptorOrder: 2 objectKindOrder: 1 sourceBootOrder: 1 instanceVariableNames: ''
 !
 RecorzKernelBootObject: #Display family: #beforeGlyphs order: 1 class: #Display
 globalExports: 'Display'

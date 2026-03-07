@@ -1,4 +1,4 @@
-RecorzKernelClass: #TextLayout descriptorOrder: 7 instanceVariableNames: 'left top scale lineSpacing'
+RecorzKernelClass: #TextLayout descriptorOrder: 7 objectKindOrder: 8 instanceVariableNames: 'left top scale lineSpacing'
 !
 RecorzKernelBootObject: #TranscriptLayout family: #beforeGlyphs order: 6 class: #TextLayout
 fields: 'small:24 small:24 small:4 small:2'

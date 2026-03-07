@@ -1,4 +1,4 @@
-RecorzKernelClass: #TextBehavior descriptorOrder: 12 instanceVariableNames: 'fallbackGlyph clearOnOverflow'
+RecorzKernelClass: #TextBehavior descriptorOrder: 12 objectKindOrder: 11 instanceVariableNames: 'fallbackGlyph clearOnOverflow'
 !
 RecorzKernelBootObject: #TranscriptBehavior family: #afterGlyphs order: 1 class: #TextBehavior
 fields: 'glyph:32 small:1'

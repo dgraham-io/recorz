@@ -1,4 +1,4 @@
-RecorzKernelClass: #Class descriptorOrder: 0 sourceBootOrder: 8 instanceVariableNames: 'superclass instanceKind methodStart methodCount'
+RecorzKernelClass: #Class descriptorOrder: 0 objectKindOrder: 12 sourceBootOrder: 8 instanceVariableNames: 'superclass instanceKind methodStart methodCount'
 !
 instanceKind
     ^instanceKind

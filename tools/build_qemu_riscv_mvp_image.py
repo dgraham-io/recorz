@@ -126,62 +126,14 @@ SEED_FIELD_KIND_SPECS = [
     ("small_integer", "RECORZ_MVP_SEED_FIELD_SMALL_INTEGER"),
     ("object_index", "RECORZ_MVP_SEED_FIELD_OBJECT_INDEX"),
 ]
-OBJECT_KIND_SPECS = [
-    ("Transcript", "RECORZ_MVP_OBJECT_TRANSCRIPT"),
-    ("Display", "RECORZ_MVP_OBJECT_DISPLAY"),
-    ("Form", "RECORZ_MVP_OBJECT_FORM"),
-    ("Bitmap", "RECORZ_MVP_OBJECT_BITMAP"),
-    ("BitBlt", "RECORZ_MVP_OBJECT_BITBLT"),
-    ("Glyphs", "RECORZ_MVP_OBJECT_GLYPHS"),
-    ("FormFactory", "RECORZ_MVP_OBJECT_FORM_FACTORY"),
-    ("BitmapFactory", "RECORZ_MVP_OBJECT_BITMAP_FACTORY"),
-    ("TextLayout", "RECORZ_MVP_OBJECT_TEXT_LAYOUT"),
-    ("TextStyle", "RECORZ_MVP_OBJECT_TEXT_STYLE"),
-    ("TextMetrics", "RECORZ_MVP_OBJECT_TEXT_METRICS"),
-    ("TextBehavior", "RECORZ_MVP_OBJECT_TEXT_BEHAVIOR"),
-    ("Class", "RECORZ_MVP_OBJECT_CLASS"),
-    ("MethodDescriptor", "RECORZ_MVP_OBJECT_METHOD_DESCRIPTOR"),
-    ("MethodEntry", "RECORZ_MVP_OBJECT_METHOD_ENTRY"),
-    ("Selector", "RECORZ_MVP_OBJECT_SELECTOR"),
-    ("AccessorMethod", "RECORZ_MVP_OBJECT_ACCESSOR_METHOD"),
-    ("FieldSendMethod", "RECORZ_MVP_OBJECT_FIELD_SEND_METHOD"),
-    ("RootSendMethod", "RECORZ_MVP_OBJECT_ROOT_SEND_METHOD"),
-    ("RootValueMethod", "RECORZ_MVP_OBJECT_ROOT_VALUE_METHOD"),
-    ("InterpretedMethod", "RECORZ_MVP_OBJECT_INTERPRETED_METHOD"),
-    ("CompiledMethod", "RECORZ_MVP_OBJECT_COMPILED_METHOD"),
-]
 SEED_FIELD_KIND_IDS, SEED_FIELD_KIND_VALUES, SEED_FIELD_KIND_DEFINITIONS = build_named_constant_maps(
     SEED_FIELD_KIND_SPECS,
     start=0,
 )
-OBJECT_KIND_IDS, OBJECT_KIND_VALUES, OBJECT_KIND_DEFINITIONS = build_named_constant_maps(OBJECT_KIND_SPECS)
 
 SEED_FIELD_NIL = constant_value(SEED_FIELD_KIND_IDS, SEED_FIELD_KIND_VALUES, "nil")
 SEED_FIELD_SMALL_INTEGER = constant_value(SEED_FIELD_KIND_IDS, SEED_FIELD_KIND_VALUES, "small_integer")
 SEED_FIELD_OBJECT_INDEX = constant_value(SEED_FIELD_KIND_IDS, SEED_FIELD_KIND_VALUES, "object_index")
-
-SEED_OBJECT_TRANSCRIPT = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "Transcript")
-SEED_OBJECT_DISPLAY = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "Display")
-SEED_OBJECT_FORM = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "Form")
-SEED_OBJECT_BITMAP = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "Bitmap")
-SEED_OBJECT_BITBLT = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "BitBlt")
-SEED_OBJECT_GLYPHS = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "Glyphs")
-SEED_OBJECT_FORM_FACTORY = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "FormFactory")
-SEED_OBJECT_BITMAP_FACTORY = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "BitmapFactory")
-SEED_OBJECT_TEXT_LAYOUT = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "TextLayout")
-SEED_OBJECT_TEXT_STYLE = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "TextStyle")
-SEED_OBJECT_TEXT_METRICS = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "TextMetrics")
-SEED_OBJECT_TEXT_BEHAVIOR = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "TextBehavior")
-SEED_OBJECT_CLASS = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "Class")
-SEED_OBJECT_METHOD_DESCRIPTOR = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "MethodDescriptor")
-SEED_OBJECT_METHOD_ENTRY = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "MethodEntry")
-SEED_OBJECT_SELECTOR = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "Selector")
-SEED_OBJECT_ACCESSOR_METHOD = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "AccessorMethod")
-SEED_OBJECT_FIELD_SEND_METHOD = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "FieldSendMethod")
-SEED_OBJECT_ROOT_SEND_METHOD = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "RootSendMethod")
-SEED_OBJECT_ROOT_VALUE_METHOD = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "RootValueMethod")
-SEED_OBJECT_INTERPRETED_METHOD = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "InterpretedMethod")
-SEED_OBJECT_COMPILED_METHOD = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "CompiledMethod")
 
 OPCODE_DEFINITIONS = list(OPCODE_VALUES.items())
 LITERAL_KIND_DEFINITIONS = list(LITERAL_VALUES.items())
@@ -282,6 +234,7 @@ class KernelGlyphBitmapFamilyDeclaration:
 class KernelClassHeader:
     class_name: str
     descriptor_order: int
+    object_kind_order: int
     source_boot_order: int | None
     instance_variables: tuple[str, ...]
 
@@ -549,6 +502,7 @@ KERNEL_METHOD_IMPLEMENTATION_COMPILED = "compiled"
 KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE = "primitive"
 KERNEL_CLASS_HEADER_PATTERN = re.compile(
     r"^RecorzKernelClass:\s*#(?P<class_name>[A-Za-z_]\w*)\s+descriptorOrder:\s*(?P<descriptor_order>\d+)"
+    r"\s+objectKindOrder:\s*(?P<object_kind_order>\d+)"
     r"(?:\s+sourceBootOrder:\s*(?P<source_boot_order>\d+))?\s+instanceVariableNames:\s*'(?P<instance_variables>[^']*)'$"
 )
 KERNEL_BOOT_OBJECT_HEADER_PATTERN = re.compile(
@@ -652,6 +606,7 @@ def parse_kernel_class_header(header_source: str, relative_path: str) -> KernelC
     return KernelClassHeader(
         class_name=match.group("class_name"),
         descriptor_order=int(match.group("descriptor_order")),
+        object_kind_order=int(match.group("object_kind_order")),
         source_boot_order=int(match.group("source_boot_order")) if match.group("source_boot_order") is not None else None,
         instance_variables=instance_variables,
     )
@@ -784,10 +739,20 @@ def load_kernel_class_headers() -> dict[str, KernelClassHeader]:
     return class_headers_by_name
 
 
+def object_kind_constant_name_from_class_name(class_name: str) -> str:
+    if class_name == "BitBlt":
+        return "RECORZ_MVP_OBJECT_BITBLT"
+    return f"RECORZ_MVP_OBJECT_{re.sub(r'(?<!^)(?=[A-Z])', '_', class_name).upper()}"
+
+
 KERNEL_CLASS_HEADERS_BY_NAME = load_kernel_class_headers()
 KERNEL_CLASS_HEADERS_IN_DESCRIPTOR_ORDER = sorted(
     KERNEL_CLASS_HEADERS_BY_NAME.values(),
     key=lambda class_header: class_header.descriptor_order,
+)
+KERNEL_CLASS_HEADERS_IN_OBJECT_KIND_ORDER = sorted(
+    KERNEL_CLASS_HEADERS_BY_NAME.values(),
+    key=lambda class_header: class_header.object_kind_order,
 )
 KERNEL_SOURCE_CLASS_HEADERS = sorted(
     (
@@ -801,16 +766,42 @@ expected_source_boot_orders = list(range(len(KERNEL_SOURCE_CLASS_HEADERS)))
 actual_source_boot_orders = [class_header.source_boot_order for class_header in KERNEL_SOURCE_CLASS_HEADERS]
 if actual_source_boot_orders != expected_source_boot_orders:
     raise LoweringError("kernel MVP source class headers must declare a contiguous sourceBootOrder range starting at 0")
+expected_object_kind_orders = list(range(len(KERNEL_CLASS_HEADERS_IN_OBJECT_KIND_ORDER)))
+actual_object_kind_orders = [class_header.object_kind_order for class_header in KERNEL_CLASS_HEADERS_IN_OBJECT_KIND_ORDER]
+if actual_object_kind_orders != expected_object_kind_orders:
+    raise LoweringError("kernel MVP class headers must declare a contiguous objectKindOrder range starting at 0")
 CLASS_DESCRIPTOR_KIND_NAMES = [class_header.class_name for class_header in KERNEL_CLASS_HEADERS_IN_DESCRIPTOR_ORDER]
-CLASS_DESCRIPTOR_KIND_ORDER = [
-    constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, kind_name)
-    for kind_name in CLASS_DESCRIPTOR_KIND_NAMES
-]
 KERNEL_CLASS_BOOT_ORDER = [class_header.class_name for class_header in KERNEL_SOURCE_CLASS_HEADERS]
+OBJECT_KIND_SPECS = [
+    (class_header.class_name, object_kind_constant_name_from_class_name(class_header.class_name))
+    for class_header in KERNEL_CLASS_HEADERS_IN_OBJECT_KIND_ORDER
+]
+OBJECT_KIND_IDS, OBJECT_KIND_VALUES, OBJECT_KIND_DEFINITIONS = build_named_constant_maps(OBJECT_KIND_SPECS)
 KERNEL_CLASS_NAME_TO_OBJECT_KIND = {
     class_name: constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, class_name)
     for class_name in KERNEL_CLASS_HEADERS_BY_NAME
 }
+CLASS_DESCRIPTOR_KIND_ORDER = [
+    KERNEL_CLASS_NAME_TO_OBJECT_KIND[kind_name]
+    for kind_name in CLASS_DESCRIPTOR_KIND_NAMES
+]
+SEED_OBJECT_TRANSCRIPT = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "Transcript")
+SEED_OBJECT_DISPLAY = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "Display")
+SEED_OBJECT_FORM = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "Form")
+SEED_OBJECT_BITMAP = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "Bitmap")
+SEED_OBJECT_BITBLT = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "BitBlt")
+SEED_OBJECT_GLYPHS = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "Glyphs")
+SEED_OBJECT_FORM_FACTORY = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "FormFactory")
+SEED_OBJECT_BITMAP_FACTORY = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "BitmapFactory")
+SEED_OBJECT_TEXT_LAYOUT = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "TextLayout")
+SEED_OBJECT_TEXT_STYLE = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "TextStyle")
+SEED_OBJECT_TEXT_METRICS = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "TextMetrics")
+SEED_OBJECT_TEXT_BEHAVIOR = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "TextBehavior")
+SEED_OBJECT_CLASS = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "Class")
+SEED_OBJECT_METHOD_DESCRIPTOR = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "MethodDescriptor")
+SEED_OBJECT_METHOD_ENTRY = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "MethodEntry")
+SEED_OBJECT_SELECTOR = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "Selector")
+SEED_OBJECT_COMPILED_METHOD = constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, "CompiledMethod")
 
 
 def load_kernel_boot_object_declarations() -> dict[str, KernelBootObjectDeclaration]:
@@ -1019,7 +1010,7 @@ def kernel_class_entry_stem(class_name: str) -> str:
 
 
 def kernel_object_kind_constant_name(class_name: str) -> str:
-    return f"RECORZ_MVP_OBJECT_{kernel_class_entry_stem(class_name)}"
+    return object_kind_constant_name_from_class_name(class_name)
 
 
 def kernel_global_constant_name(global_name: str) -> str:

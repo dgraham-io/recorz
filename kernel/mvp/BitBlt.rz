@@ -1,4 +1,4 @@
-RecorzKernelClass: #BitBlt descriptorOrder: 3 sourceBootOrder: 2 instanceVariableNames: ''
+RecorzKernelClass: #BitBlt descriptorOrder: 3 objectKindOrder: 4 sourceBootOrder: 2 instanceVariableNames: ''
 !
 RecorzKernelBootObject: #BitBlt family: #beforeGlyphs order: 2 class: #BitBlt
 globalExports: 'BitBlt'

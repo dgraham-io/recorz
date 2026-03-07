@@ -343,16 +343,6 @@ static const char *object_kind_name(uint8_t kind) {
             return "MethodEntry";
         case RECORZ_MVP_OBJECT_SELECTOR:
             return "Selector";
-        case RECORZ_MVP_OBJECT_ACCESSOR_METHOD:
-            return "AccessorMethod";
-        case RECORZ_MVP_OBJECT_FIELD_SEND_METHOD:
-            return "FieldSendMethod";
-        case RECORZ_MVP_OBJECT_ROOT_SEND_METHOD:
-            return "RootSendMethod";
-        case RECORZ_MVP_OBJECT_ROOT_VALUE_METHOD:
-            return "RootValueMethod";
-        case RECORZ_MVP_OBJECT_INTERPRETED_METHOD:
-            return "InterpretedMethod";
         case RECORZ_MVP_OBJECT_COMPILED_METHOD:
             return "CompiledMethod";
     }

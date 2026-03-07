@@ -1,4 +1,4 @@
-RecorzKernelClass: #FormFactory descriptorOrder: 5 sourceBootOrder: 4 instanceVariableNames: ''
+RecorzKernelClass: #FormFactory descriptorOrder: 5 objectKindOrder: 6 sourceBootOrder: 4 instanceVariableNames: ''
 !
 RecorzKernelBootObject: #FormFactory family: #beforeGlyphs order: 4 class: #FormFactory
 globalExports: 'Form'

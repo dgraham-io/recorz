@@ -1,4 +1,4 @@
-RecorzKernelClass: #Transcript descriptorOrder: 1 sourceBootOrder: 0 instanceVariableNames: ''
+RecorzKernelClass: #Transcript descriptorOrder: 1 objectKindOrder: 0 sourceBootOrder: 0 instanceVariableNames: ''
 !
 RecorzKernelBootObject: #Transcript family: #beforeGlyphs order: 0 class: #Transcript
 globalExports: 'Transcript'

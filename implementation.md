@@ -555,3 +555,9 @@
 - Updated the builder to parse and validate source-declared roots, derive the active `SEED_ROOT_SPECS` table and root constant ids from those declarations, and skip root declaration chunks during kernel method loading.
 - Switched the active root-object binding map to derive from root declarations rather than from the boot-object export helper alone, while still validating that each declared root points at a boot object that exports it.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Derive Object Kinds From Class Headers
+- Extended `RecorzKernelClass:` headers with `objectKindOrder:` and declared the live runtime object-kind order in the kernel source files themselves, so the builder no longer owns the active object-kind list.
+- Replaced the hand-kept `OBJECT_KIND_SPECS` table with a source-derived path built from parsed class headers, and dropped the dead historical method-shape kinds from the live runtime object-kind universe.
+- Updated the target VM's object-kind name switch and the focused lowering/inspector expectations to match the smaller source-declared object-kind set while keeping the boot image behavior unchanged.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
