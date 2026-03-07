@@ -641,3 +641,10 @@
 - Added `examples/qemu_riscv_in_image_install_demo.rz` plus a QEMU integration test that proves the running image can create and install `Display>>cr` for itself and render successfully without any host `UPDATE_PAYLOAD`, then updated the host inspector/runtime-lowering tests for the new class/global/selector/method counts.
 - Fixed the target seed/global array range in `platform/qemu-riscv64/vm.h` so the new `KernelInstaller` global no longer relied on undefined behavior.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Add In-Image Source Method Installer
+- Extended `kernel/mvp/KernelInstaller.rz` and `kernel/mvp/Selector.rz` with `installMethodSource:onClass:` so the running image can install a tiny source-defined method without rebuilding the boot image and without supplying raw compiled-method words.
+- Added a narrow target-side method-source compiler in `platform/qemu-riscv64/vm.c` that accepts one Smalltalk-shaped method chunk in the current MVP subset, lowers it to the existing compiled-method instruction format, allocates a live `CompiledMethod`, and reuses the append/replace installer path already used by the raw-word installer.
+- Added `examples/qemu_riscv_in_image_source_install_demo.rz` plus an end-to-end QEMU integration test that proves the running image can compile and install `Display>>cr` from source text and immediately render the changed behavior.
+- Updated `platform/qemu-riscv64/program.c`, `platform/qemu-riscv64/vm.c`, `tools/inspect_qemu_riscv_mvp_image.py`, and the focused image/lowering tests so the expanded selector/method-entry universe for the new installer remains consistent across host and target, including the target-side selector-range validation paths.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

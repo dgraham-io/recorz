@@ -45,7 +45,7 @@ static void validate_instruction(
             return;
         case RECORZ_MVP_OP_SEND:
             if (instruction->operand_a < RECORZ_MVP_SELECTOR_SHOW ||
-                instruction->operand_a > RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT) {
+                instruction->operand_a > RECORZ_MVP_SELECTOR_INSTALL_METHOD_SOURCE_ON_CLASS) {
                 machine_panic("program manifest selector operand is out of range");
             }
             return;

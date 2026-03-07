@@ -12,6 +12,7 @@ PLATFORM_DIR = ROOT / "platform" / "qemu-riscv64"
 BUILD_DIR = ROOT / "misc" / "qemu-riscv64-method-update-test"
 APPEND_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-append-method-test"
 IN_IMAGE_INSTALL_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-in-image-install-test"
+IN_IMAGE_SOURCE_INSTALL_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-in-image-source-install-test"
 PPM_PATH = BUILD_DIR / "recorz-qemu-riscv64-mvp.ppm"
 QEMU_LOG_PATH = BUILD_DIR / "qemu.log"
 UPDATE_TOOL_PATH = ROOT / "tools" / "build_qemu_riscv_method_update.py"
@@ -22,6 +23,7 @@ UPDATE_SOURCE_PATH = ROOT / "examples" / "qemu_riscv_transcript_cr_noop_update.r
 APPEND_DEMO_PATH = ROOT / "examples" / "qemu_riscv_append_method_demo.rz"
 APPEND_UPDATE_SOURCE_PATH = ROOT / "examples" / "qemu_riscv_display_cr_update.rz"
 IN_IMAGE_INSTALL_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_install_demo.rz"
+IN_IMAGE_SOURCE_INSTALL_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_source_install_demo.rz"
 
 
 def _read_ppm(path: Path) -> tuple[int, int, bytes]:
@@ -240,6 +242,32 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
         updated_log, width, height, updated_data = self.render_demo(
             build_dir=IN_IMAGE_INSTALL_BUILD_DIR,
             example_path=IN_IMAGE_INSTALL_DEMO_PATH,
+            update_payload=None,
+        )
+
+        self.assertEqual((width, height), (640, 480))
+        self.assertNotIn("applied method update", updated_log)
+        self.assertIn("recorz qemu-riscv64 mvp: rendered", updated_log)
+
+        line_1 = _region_histogram(updated_data, width, 24, 24, 220, 56)
+        line_2 = _region_histogram(updated_data, width, 24, 58, 220, 90)
+        self.assertGreater(line_1[foreground], 300)
+        self.assertGreater(line_2[foreground], 300)
+
+    def test_in_image_source_installer_adds_missing_selector_without_update_payload(self) -> None:
+        foreground = (72, 96, 32)
+
+        baseline_output = self.capture_timeout_output(
+            build_dir=APPEND_BUILD_DIR,
+            example_path=APPEND_DEMO_PATH,
+            update_payload=None,
+        )
+        self.assertIn("panic: selector is not understood by receiver class", baseline_output)
+        self.assertIn("vm: send selector=cr args=0", baseline_output)
+
+        updated_log, width, height, updated_data = self.render_demo(
+            build_dir=IN_IMAGE_SOURCE_INSTALL_BUILD_DIR,
+            example_path=IN_IMAGE_SOURCE_INSTALL_DEMO_PATH,
             update_payload=None,
         )
 

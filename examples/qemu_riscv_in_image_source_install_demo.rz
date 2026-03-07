@@ -1,0 +1,9 @@
+KernelInstaller
+    installMethodSource: 'cr
+    Display newline.
+    ^self'
+    onClass: Display class.
+Display clear.
+Display writeString: 'AAA'.
+Display cr.
+Display writeString: 'BBB'.

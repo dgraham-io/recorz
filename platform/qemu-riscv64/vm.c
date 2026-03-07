@@ -14,6 +14,8 @@
 #define MONO_BITMAP_LIMIT 16U
 #define MONO_BITMAP_MAX_WIDTH 32U
 #define MONO_BITMAP_MAX_HEIGHT 64U
+#define METHOD_SOURCE_LINE_LIMIT 128U
+#define METHOD_SOURCE_NAME_LIMIT 64U
 
 #define FORM_FIELD_BITS RECORZ_MVP_FORM_FIELD_BITS
 #define BITMAP_FIELD_WIDTH RECORZ_MVP_BITMAP_FIELD_WIDTH
@@ -118,7 +120,7 @@ static struct recorz_mvp_heap_object heap[HEAP_LIMIT];
 static uint32_t stack_size = 0U;
 static uint16_t heap_size = 0U;
 static uint16_t class_handles_by_kind[MAX_OBJECT_KIND + 1U];
-static uint16_t selector_handles_by_id[RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT + 1U];
+static uint16_t selector_handles_by_id[RECORZ_MVP_SELECTOR_INSTALL_METHOD_SOURCE_ON_CLASS + 1U];
 static uint16_t global_handles[RECORZ_MVP_GLOBAL_KERNEL_INSTALLER + 1U];
 static uint16_t default_form_handle = 0U;
 static uint16_t framebuffer_bitmap_handle = 0U;
@@ -158,6 +160,10 @@ static void install_compiled_method_update(
     uint8_t selector,
     uint16_t argument_count,
     uint16_t compiled_method_handle
+);
+static uint16_t allocate_compiled_method_from_words(
+    const uint32_t instruction_words[],
+    uint8_t instruction_count
 );
 
 static void panic_put_u32(uint32_t value) {
@@ -300,6 +306,12 @@ static const char *selector_name(uint8_t selector) {
             return "class";
         case RECORZ_MVP_SELECTOR_INSTANCE_KIND:
             return "instanceKind";
+        case RECORZ_MVP_SELECTOR_COMPILED_METHOD_WORD0_WORD1_WORD2_WORD3_INSTRUCTION_COUNT:
+            return "compiledMethodWord0:word1:word2:word3:instructionCount:";
+        case RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT:
+            return "installCompiledMethod:onClass:selectorId:argumentCount:";
+        case RECORZ_MVP_SELECTOR_INSTALL_METHOD_SOURCE_ON_CLASS:
+            return "installMethodSource:onClass:";
     }
     return "unknown";
 }
@@ -411,6 +423,145 @@ static uint32_t read_u32_le(const uint8_t *bytes) {
            ((uint32_t)bytes[1] << 8U) |
            ((uint32_t)bytes[2] << 16U) |
            ((uint32_t)bytes[3] << 24U);
+}
+
+static uint32_t encode_compiled_method_word(uint8_t opcode, uint8_t operand_a, uint16_t operand_b) {
+    return (uint32_t)opcode |
+           ((uint32_t)operand_a << 8U) |
+           ((uint32_t)operand_b << 16U);
+}
+
+static uint8_t source_char_is_identifier_start(char ch) {
+    return (uint8_t)(
+        (ch >= 'A' && ch <= 'Z') ||
+        (ch >= 'a' && ch <= 'z') ||
+        ch == '_'
+    );
+}
+
+static uint8_t source_char_is_identifier_char(char ch) {
+    return (uint8_t)(
+        source_char_is_identifier_start(ch) ||
+        (ch >= '0' && ch <= '9')
+    );
+}
+
+static uint8_t source_names_equal(const char *left, const char *right) {
+    uint32_t index = 0U;
+
+    if (left == 0 || right == 0) {
+        return 0U;
+    }
+    while (left[index] != '\0' && right[index] != '\0') {
+        if (left[index] != right[index]) {
+            return 0U;
+        }
+        ++index;
+    }
+    return (uint8_t)(left[index] == right[index]);
+}
+
+static const char *source_skip_horizontal_space(const char *cursor) {
+    while (*cursor == ' ' || *cursor == '\t' || *cursor == '\r') {
+        ++cursor;
+    }
+    return cursor;
+}
+
+static const char *source_skip_blank_lines(const char *cursor) {
+    cursor = source_skip_horizontal_space(cursor);
+    while (*cursor == '\n') {
+        ++cursor;
+        cursor = source_skip_horizontal_space(cursor);
+    }
+    return cursor;
+}
+
+static uint32_t source_copy_trimmed_line(const char **cursor_ref, char buffer[], uint32_t buffer_size) {
+    const char *cursor = *cursor_ref;
+    const char *trimmed_start;
+    const char *end;
+    uint32_t length = 0U;
+
+    cursor = source_skip_blank_lines(cursor);
+    if (*cursor == '\0') {
+        *cursor_ref = cursor;
+        buffer[0] = '\0';
+        return 0U;
+    }
+    trimmed_start = source_skip_horizontal_space(cursor);
+    end = trimmed_start;
+    while (*end != '\0' && *end != '\n') {
+        ++end;
+    }
+    while (end > trimmed_start && (end[-1] == ' ' || end[-1] == '\t' || end[-1] == '\r')) {
+        --end;
+    }
+    while (trimmed_start + length < end) {
+        if (length + 1U >= buffer_size) {
+            machine_panic("KernelInstaller source line exceeds buffer capacity");
+        }
+        buffer[length] = trimmed_start[length];
+        ++length;
+    }
+    buffer[length] = '\0';
+    cursor = (*end == '\n') ? end + 1 : end;
+    *cursor_ref = cursor;
+    return length;
+}
+
+static const char *source_parse_identifier(const char *cursor, char buffer[], uint32_t buffer_size) {
+    uint32_t length = 0U;
+
+    if (!source_char_is_identifier_start(*cursor)) {
+        return 0;
+    }
+    while (source_char_is_identifier_char(*cursor)) {
+        if (length + 1U >= buffer_size) {
+            machine_panic("KernelInstaller identifier exceeds buffer capacity");
+        }
+        buffer[length++] = *cursor++;
+    }
+    buffer[length] = '\0';
+    return cursor;
+}
+
+static uint8_t source_global_id_for_name(const char *name) {
+    if (source_names_equal(name, "Transcript")) {
+        return RECORZ_MVP_GLOBAL_TRANSCRIPT;
+    }
+    if (source_names_equal(name, "Display")) {
+        return RECORZ_MVP_GLOBAL_DISPLAY;
+    }
+    if (source_names_equal(name, "BitBlt")) {
+        return RECORZ_MVP_GLOBAL_BITBLT;
+    }
+    if (source_names_equal(name, "Glyphs")) {
+        return RECORZ_MVP_GLOBAL_GLYPHS;
+    }
+    if (source_names_equal(name, "Form")) {
+        return RECORZ_MVP_GLOBAL_FORM;
+    }
+    if (source_names_equal(name, "Bitmap")) {
+        return RECORZ_MVP_GLOBAL_BITMAP;
+    }
+    if (source_names_equal(name, "KernelInstaller")) {
+        return RECORZ_MVP_GLOBAL_KERNEL_INSTALLER;
+    }
+    return 0U;
+}
+
+static uint8_t source_selector_id_for_name(const char *name) {
+    uint8_t selector;
+
+    for (selector = RECORZ_MVP_SELECTOR_SHOW;
+         selector <= RECORZ_MVP_SELECTOR_INSTALL_METHOD_SOURCE_ON_CLASS;
+         ++selector) {
+        if (source_names_equal(name, selector_name(selector))) {
+            return selector;
+        }
+    }
+    return 0U;
 }
 
 static void vm_panic_hook(const char *message) {
@@ -715,7 +866,7 @@ static struct recorz_mvp_heap_object *mutable_method_descriptor_entry_object(con
 }
 
 static uint16_t selector_object_handle(uint8_t selector) {
-    if (selector == 0U || selector > RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT ||
+    if (selector == 0U || selector > RECORZ_MVP_SELECTOR_INSTALL_METHOD_SOURCE_ON_CLASS ||
         selector_handles_by_id[selector] == 0U) {
         machine_panic("selector handle is not installed");
     }
@@ -799,7 +950,7 @@ static const struct recorz_mvp_heap_object *lookup_builtin_method_descriptor(
     if (method_object == 0) {
         machine_panic("class with methods is missing a method start");
     }
-    if (selector == 0U || selector > RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT) {
+    if (selector == 0U || selector > RECORZ_MVP_SELECTOR_INSTALL_METHOD_SOURCE_ON_CLASS) {
         machine_panic("selector id is out of range");
     }
     if (selector_handles_by_id[selector] == 0U) {
@@ -886,7 +1037,7 @@ static void validate_compiled_method(
                 break;
             case COMPILED_METHOD_OP_SEND:
                 if (operand_a < RECORZ_MVP_SELECTOR_SHOW ||
-                    operand_a > RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT) {
+                    operand_a > RECORZ_MVP_SELECTOR_INSTALL_METHOD_SOURCE_ON_CLASS) {
                     machine_panic("compiled method send selector is out of range");
                 }
                 send_count = operand_b;
@@ -995,7 +1146,7 @@ static void validate_class_method_table(
         entry = method_entry_execution_id(entry_object);
         implementation_value = method_entry_implementation_value(entry_object);
         if (selector < RECORZ_MVP_SELECTOR_SHOW ||
-            selector > RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT) {
+            selector > RECORZ_MVP_SELECTOR_INSTALL_METHOD_SOURCE_ON_CLASS) {
             machine_panic("method descriptor selector is out of range");
         }
         if (argument_count > MAX_SEND_ARGS) {
@@ -1070,7 +1221,7 @@ static void initialize_selector_handle_cache(const struct recorz_mvp_seed *seed)
     uint16_t seed_index;
     uint16_t selector_id;
 
-    for (selector_id = 0U; selector_id <= RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT; ++selector_id) {
+    for (selector_id = 0U; selector_id <= RECORZ_MVP_SELECTOR_INSTALL_METHOD_SOURCE_ON_CLASS; ++selector_id) {
         selector_handles_by_id[selector_id] = 0U;
     }
     for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
@@ -1938,13 +2089,276 @@ static void execute_entry_form_newline(
     push(receiver);
 }
 
+static uint8_t compile_source_operand_push(
+    const char *name,
+    const char *argument_name,
+    uint32_t instruction_words[],
+    uint8_t *instruction_count
+) {
+    uint8_t global_id;
+
+    if (*instruction_count >= COMPILED_METHOD_MAX_INSTRUCTIONS) {
+        machine_panic("KernelInstaller source method exceeds compiled method capacity");
+    }
+    if (argument_name[0] != '\0' && source_names_equal(name, argument_name)) {
+        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_ARGUMENT, 0U, 0U);
+        return 1U;
+    }
+    global_id = source_global_id_for_name(name);
+    if (global_id != 0U) {
+        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_GLOBAL, global_id, 0U);
+        return 1U;
+    }
+    return 0U;
+}
+
+static uint8_t compile_source_statement_line(
+    const char *line,
+    const char *argument_name,
+    uint32_t instruction_words[],
+    uint8_t *instruction_count
+) {
+    char receiver_name[METHOD_SOURCE_NAME_LIMIT];
+    char selector_name_buffer[METHOD_SOURCE_NAME_LIMIT];
+    char argument_buffer[METHOD_SOURCE_NAME_LIMIT];
+    const char *cursor = line;
+    const char *keyword_cursor;
+    uint8_t selector_id;
+
+    cursor = source_skip_horizontal_space(cursor);
+    if (source_names_equal(cursor, "")) {
+        return 1U;
+    }
+    if (source_names_equal(cursor, "Display defaultForm clear.") ||
+        source_names_equal(cursor, "Display defaultForm newline.")) {
+        const char *selector_name = source_names_equal(cursor, "Display defaultForm clear.") ? "clear" : "newline";
+
+        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_ROOT, RECORZ_MVP_SEED_ROOT_DEFAULT_FORM, 0U);
+        selector_id = source_selector_id_for_name(selector_name);
+        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_SEND, selector_id, 0U);
+        return 1U;
+    }
+    if (source_names_equal(cursor, "Display defaultForm")) {
+        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_ROOT, RECORZ_MVP_SEED_ROOT_DEFAULT_FORM, 0U);
+        return 1U;
+    }
+    if (source_names_equal(cursor, "Display newline.")) {
+        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_GLOBAL, RECORZ_MVP_GLOBAL_DISPLAY, 0U);
+        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_SEND, RECORZ_MVP_SELECTOR_NEWLINE, 0U);
+        return 1U;
+    }
+    if (source_names_equal(cursor, "Display clear.")) {
+        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_GLOBAL, RECORZ_MVP_GLOBAL_DISPLAY, 0U);
+        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_SEND, RECORZ_MVP_SELECTOR_CLEAR, 0U);
+        return 1U;
+    }
+
+    if (source_names_equal(cursor, "Display defaultForm writeString: text.")) {
+        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_ROOT, RECORZ_MVP_SEED_ROOT_DEFAULT_FORM, 0U);
+        if (!compile_source_operand_push("text", argument_name, instruction_words, instruction_count)) {
+            machine_panic("KernelInstaller source method uses an unknown argument operand");
+        }
+        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_SEND, RECORZ_MVP_SELECTOR_WRITE_STRING, 1U);
+        return 1U;
+    }
+
+    cursor = source_parse_identifier(cursor, receiver_name, sizeof(receiver_name));
+    if (cursor == 0) {
+        return 0U;
+    }
+    cursor = source_skip_horizontal_space(cursor);
+    if (
+        source_names_equal(receiver_name, "Display") &&
+        cursor[0] == 'd' &&
+        cursor[1] == 'e' &&
+        cursor[2] == 'f' &&
+        cursor[3] == 'a' &&
+        cursor[4] == 'u' &&
+        cursor[5] == 'l' &&
+        cursor[6] == 't' &&
+        cursor[7] == 'F' &&
+        cursor[8] == 'o' &&
+        cursor[9] == 'r' &&
+        cursor[10] == 'm' &&
+        (cursor[11] == ' ' || cursor[11] == '\t')
+    ) {
+        cursor += 11;
+        cursor = source_skip_horizontal_space(cursor);
+        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_ROOT, RECORZ_MVP_SEED_ROOT_DEFAULT_FORM, 0U);
+    } else {
+        if (!compile_source_operand_push(receiver_name, argument_name, instruction_words, instruction_count)) {
+            machine_panic("KernelInstaller source method uses an unsupported receiver expression");
+        }
+    }
+
+    keyword_cursor = source_parse_identifier(cursor, selector_name_buffer, sizeof(selector_name_buffer));
+    if (keyword_cursor == 0) {
+        machine_panic("KernelInstaller source method statement is missing a selector");
+    }
+    cursor = keyword_cursor;
+    if (*cursor == ':') {
+        ++cursor;
+        cursor = source_skip_horizontal_space(cursor);
+        if (cursor == 0 || !source_char_is_identifier_start(*cursor)) {
+            machine_panic("KernelInstaller source method keyword send is missing an argument");
+        }
+        if (*instruction_count >= COMPILED_METHOD_MAX_INSTRUCTIONS) {
+            machine_panic("KernelInstaller source method exceeds compiled method capacity");
+        }
+        if (source_names_equal(cursor, "text.") || source_names_equal(cursor, "text")) {
+            if (!compile_source_operand_push("text", argument_name, instruction_words, instruction_count)) {
+                machine_panic("KernelInstaller source method uses an unsupported keyword argument");
+            }
+        } else {
+            cursor = source_parse_identifier(cursor, argument_buffer, sizeof(argument_buffer));
+            if (cursor == 0) {
+                machine_panic("KernelInstaller source method keyword argument is invalid");
+            }
+            cursor = source_skip_horizontal_space(cursor);
+            if (*cursor != '.' || cursor[1] != '\0') {
+                machine_panic("KernelInstaller source method statement has unexpected trailing text");
+            }
+            if (!compile_source_operand_push(argument_buffer, argument_name, instruction_words, instruction_count)) {
+                machine_panic("KernelInstaller source method uses an unsupported keyword argument");
+            }
+        }
+        {
+            uint32_t selector_length = 0U;
+
+            while (selector_name_buffer[selector_length] != '\0') {
+                ++selector_length;
+            }
+            if (selector_length + 1U >= sizeof(selector_name_buffer)) {
+                machine_panic("KernelInstaller keyword selector exceeds buffer capacity");
+            }
+            selector_name_buffer[selector_length++] = ':';
+            selector_name_buffer[selector_length] = '\0';
+        }
+        selector_id = source_selector_id_for_name(selector_name_buffer);
+        if (selector_id == 0U) {
+            machine_panic("KernelInstaller source method uses an unknown keyword selector");
+        }
+        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_SEND, selector_id, 1U);
+        return 1U;
+    }
+    cursor = source_skip_horizontal_space(cursor);
+    if (*cursor != '.' || cursor[1] != '\0') {
+        machine_panic("KernelInstaller source method statement has unexpected trailing text");
+    }
+    selector_id = source_selector_id_for_name(selector_name_buffer);
+    if (selector_id == 0U) {
+        machine_panic("KernelInstaller source method uses an unknown unary selector");
+    }
+    instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_SEND, selector_id, 0U);
+    return 1U;
+}
+
+static uint16_t compile_source_method_and_allocate(
+    const char *source,
+    uint8_t *selector_id_out,
+    uint16_t *argument_count_out
+) {
+    char header_line[METHOD_SOURCE_LINE_LIMIT];
+    char statement_line[METHOD_SOURCE_LINE_LIMIT];
+    char return_line[METHOD_SOURCE_LINE_LIMIT];
+    char trailing_line[METHOD_SOURCE_LINE_LIMIT];
+    char selector_name_buffer[METHOD_SOURCE_NAME_LIMIT];
+    char argument_name[METHOD_SOURCE_NAME_LIMIT];
+    const char *cursor = source;
+    const char *header_cursor;
+    uint32_t instruction_words[COMPILED_METHOD_MAX_INSTRUCTIONS];
+    uint8_t instruction_count = 0U;
+    uint8_t selector_id;
+    uint16_t argument_count = 0U;
+
+    argument_name[0] = '\0';
+    if (source == 0 || *source == '\0') {
+        machine_panic("KernelInstaller source method string is empty");
+    }
+    if (source_copy_trimmed_line(&cursor, header_line, sizeof(header_line)) == 0U) {
+        machine_panic("KernelInstaller source method is missing a header");
+    }
+    header_cursor = source_parse_identifier(header_line, selector_name_buffer, sizeof(selector_name_buffer));
+    if (header_cursor == 0) {
+        machine_panic("KernelInstaller source method header is invalid");
+    }
+    header_cursor = source_skip_horizontal_space(header_cursor);
+    if (*header_cursor == ':') {
+        ++header_cursor;
+        header_cursor = source_skip_horizontal_space(header_cursor);
+        header_cursor = source_parse_identifier(header_cursor, argument_name, sizeof(argument_name));
+        if (header_cursor == 0) {
+            machine_panic("KernelInstaller source method keyword header is missing an argument name");
+        }
+        header_cursor = source_skip_horizontal_space(header_cursor);
+        if (*header_cursor != '\0') {
+            machine_panic("KernelInstaller source method header has unexpected trailing text");
+        }
+        {
+            uint32_t selector_length = 0U;
+
+            while (selector_name_buffer[selector_length] != '\0') {
+                ++selector_length;
+            }
+            if (selector_length + 1U >= sizeof(selector_name_buffer)) {
+                machine_panic("KernelInstaller source method selector exceeds buffer capacity");
+            }
+            selector_name_buffer[selector_length++] = ':';
+            selector_name_buffer[selector_length] = '\0';
+        }
+        argument_count = 1U;
+    } else if (*header_cursor != '\0') {
+        machine_panic("KernelInstaller source method header has unexpected trailing text");
+    }
+    selector_id = source_selector_id_for_name(selector_name_buffer);
+    if (selector_id == 0U) {
+        machine_panic("KernelInstaller source method uses an unknown selector");
+    }
+
+    if (source_copy_trimmed_line(&cursor, statement_line, sizeof(statement_line)) == 0U) {
+        machine_panic("KernelInstaller source method is missing a return");
+    }
+    if (statement_line[0] == '^') {
+        uint32_t return_index = 0U;
+
+        while (statement_line[return_index] != '\0') {
+            if (return_index + 1U >= sizeof(return_line)) {
+                machine_panic("KernelInstaller source method return exceeds buffer capacity");
+            }
+            return_line[return_index] = statement_line[return_index];
+            ++return_index;
+        }
+        return_line[return_index] = '\0';
+    } else {
+        if (!compile_source_statement_line(statement_line, argument_name, instruction_words, &instruction_count)) {
+            machine_panic("KernelInstaller source method statement is unsupported");
+        }
+        if (source_copy_trimmed_line(&cursor, return_line, sizeof(return_line)) == 0U) {
+            machine_panic("KernelInstaller source method is missing a return");
+        }
+    }
+    if (!source_names_equal(return_line, "^self")) {
+        machine_panic("KernelInstaller source method currently supports only ^self returns");
+    }
+    if (instruction_count >= COMPILED_METHOD_MAX_INSTRUCTIONS) {
+        machine_panic("KernelInstaller source method exceeds compiled method capacity");
+    }
+    instruction_words[instruction_count++] = encode_compiled_method_word(COMPILED_METHOD_OP_RETURN_RECEIVER, 0U, 0U);
+    if (source_copy_trimmed_line(&cursor, trailing_line, sizeof(trailing_line)) != 0U) {
+        machine_panic("KernelInstaller source method has unexpected trailing lines");
+    }
+    *selector_id_out = selector_id;
+    *argument_count_out = argument_count;
+    return allocate_compiled_method_from_words(instruction_words, instruction_count);
+}
+
 static void execute_entry_kernel_installer_compiled_method_word0_word1_word2_word3_instruction_count(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
     const struct recorz_mvp_value arguments[],
     const char *text
 ) {
-    uint16_t compiled_method_handle;
+    uint32_t instruction_words[COMPILED_METHOD_MAX_INSTRUCTIONS];
     uint32_t instruction_count;
     uint32_t instruction_index;
 
@@ -1958,20 +2372,13 @@ static void execute_entry_kernel_installer_compiled_method_word0_word1_word2_wor
     if (instruction_count == 0U || instruction_count > COMPILED_METHOD_MAX_INSTRUCTIONS) {
         machine_panic("KernelInstaller instructionCount is out of range");
     }
-    compiled_method_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_COMPILED_METHOD);
     for (instruction_index = 0U; instruction_index < instruction_count; ++instruction_index) {
-        heap_set_field(
-            compiled_method_handle,
-            (uint8_t)instruction_index,
-            small_integer_value(
-                (int32_t)small_integer_u32(
-                    arguments[instruction_index],
-                    "KernelInstaller compiled method words must be non-negative small integers"
-                )
-            )
+        instruction_words[instruction_index] = small_integer_u32(
+            arguments[instruction_index],
+            "KernelInstaller compiled method words must be non-negative small integers"
         );
     }
-    push(object_value(compiled_method_handle));
+    push(object_value(allocate_compiled_method_from_words(instruction_words, (uint8_t)instruction_count)));
 }
 
 static void execute_entry_kernel_installer_install_compiled_method_on_class_selector_id_argument_count(
@@ -2009,7 +2416,7 @@ static void execute_entry_kernel_installer_install_compiled_method_on_class_sele
         arguments[3],
         "KernelInstaller argumentCount must be a non-negative small integer"
     );
-    if (selector_id == 0U || selector_id > RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT) {
+    if (selector_id == 0U || selector_id > RECORZ_MVP_SELECTOR_INSTALL_METHOD_SOURCE_ON_CLASS) {
         machine_panic("KernelInstaller selectorId is out of range");
     }
     if (argument_count > MAX_SEND_ARGS) {
@@ -2022,6 +2429,35 @@ static void execute_entry_kernel_installer_install_compiled_method_on_class_sele
         (uint16_t)argument_count,
         heap_handle_for_object(compiled_method)
     );
+    push(receiver);
+}
+
+static void execute_entry_kernel_installer_install_method_source_on_class(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const struct recorz_mvp_heap_object *class_object;
+    uint16_t compiled_method_handle;
+    uint8_t selector_id;
+    uint16_t argument_count;
+
+    (void)object;
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("KernelInstaller installMethodSource:onClass: expects a source string");
+    }
+    if (arguments[1].kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("KernelInstaller installMethodSource:onClass: expects a class object");
+    }
+    class_object = heap_object_for_value(arguments[1]);
+    if (class_object->kind != RECORZ_MVP_OBJECT_CLASS) {
+        machine_panic("KernelInstaller installMethodSource:onClass: expects a Class");
+    }
+    compiled_method_handle = compile_source_method_and_allocate(arguments[0].string, &selector_id, &argument_count);
+    validate_compiled_method(heap_object(compiled_method_handle), argument_count);
+    install_compiled_method_update(class_object, selector_id, argument_count, compiled_method_handle);
     push(receiver);
 }
 
@@ -2220,23 +2656,36 @@ static void execute_compiled_method(
     execute_executable(&executable, receiver_object, receiver, argument_count, arguments);
 }
 
-static uint16_t allocate_updated_compiled_method(
-    const uint8_t *blob,
-    uint16_t instruction_count
+static uint16_t allocate_compiled_method_from_words(
+    const uint32_t instruction_words[],
+    uint8_t instruction_count
 ) {
     uint16_t compiled_method_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_COMPILED_METHOD);
-    uint32_t offset = RECORZ_MVP_METHOD_UPDATE_HEADER_SIZE;
-    uint16_t instruction_index;
+    uint8_t instruction_index;
 
     for (instruction_index = 0U; instruction_index < instruction_count; ++instruction_index) {
         heap_set_field(
             compiled_method_handle,
-            (uint8_t)instruction_index,
-            small_integer_value((int32_t)read_u32_le(blob + offset))
+            instruction_index,
+            small_integer_value((int32_t)instruction_words[instruction_index])
         );
-        offset += 4U;
     }
     return compiled_method_handle;
+}
+
+static uint16_t allocate_updated_compiled_method(
+    const uint8_t *blob,
+    uint16_t instruction_count
+) {
+    uint32_t instruction_words[COMPILED_METHOD_MAX_INSTRUCTIONS];
+    uint32_t offset = RECORZ_MVP_METHOD_UPDATE_HEADER_SIZE;
+    uint16_t instruction_index;
+
+    for (instruction_index = 0U; instruction_index < instruction_count; ++instruction_index) {
+        instruction_words[instruction_index] = read_u32_le(blob + offset);
+        offset += 4U;
+    }
+    return allocate_compiled_method_from_words(instruction_words, (uint8_t)instruction_count);
 }
 
 static uint16_t allocate_dynamic_method_entry(uint16_t compiled_method_handle) {
@@ -2385,7 +2834,7 @@ static void apply_method_update_payload(const uint8_t *blob, uint32_t size) {
         machine_panic("method update payload reserved field is nonzero");
     }
     if (selector < RECORZ_MVP_SELECTOR_SHOW ||
-        selector > RECORZ_MVP_SELECTOR_INSTALL_COMPILED_METHOD_ON_CLASS_SELECTOR_ID_ARGUMENT_COUNT) {
+        selector > RECORZ_MVP_SELECTOR_INSTALL_METHOD_SOURCE_ON_CLASS) {
         machine_panic("method update payload selector is out of range");
     }
     if (argument_count > MAX_SEND_ARGS) {

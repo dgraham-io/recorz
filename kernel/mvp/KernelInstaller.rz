@@ -8,3 +8,6 @@ compiledMethodWord0: word0 word1: word1 word2: word2 word3: word3 instructionCou
 !
 installCompiledMethod: compiledMethod onClass: class selectorId: selectorId argumentCount: argumentCount
     <primitive: #kernelInstallerInstallCompiledMethodOnClassSelectorIdArgumentCount>
+!
+installMethodSource: source onClass: class
+    <primitive: #kernelInstallerInstallMethodSourceOnClass>
