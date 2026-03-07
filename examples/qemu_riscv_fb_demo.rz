@@ -5,7 +5,7 @@ width := bits width.
 height := bits height.
 pixels := width * height.
 scratch := Form fromBits: (Bitmap monoWidth: 24 height: 28).
-BitBlt fillForm: form color: 0.
+form clear.
 BitBlt fillForm: scratch color: 0.
 BitBlt copyBitmap: (Glyphs at: 82) toForm: scratch x: 0 y: 0 scale: 4.
 BitBlt copyBitmap: scratch bits sourceX: 0 sourceY: 0 width: 24 height: 28 toForm: form x: 560 y: 24 scale: 1 color: 16711680.

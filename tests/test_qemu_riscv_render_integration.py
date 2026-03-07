@@ -58,16 +58,16 @@ class QemuRiscvRenderIntegrationTests(unittest.TestCase):
 
         width, height, data = _read_ppm(PPM_PATH)
         self.assertEqual((width, height), (640, 480))
-        self.assertEqual(_pixel(data, width, 0, 0), (0, 0, 0))
+        self.assertEqual(_pixel(data, width, 0, 0), (247, 243, 232))
         self.assertEqual(_pixel(data, width, 560, 24), (255, 0, 0))
 
         text_histogram = _region_histogram(data, width, 24, 24, 200, 80)
-        self.assertGreater(text_histogram[(72, 96, 32)], 1000)
-        self.assertGreater(text_histogram[(242, 242, 242)], 500)
+        self.assertGreater(text_histogram[(31, 41, 51)], 1000)
+        self.assertGreater(text_histogram[(247, 243, 232)], 500)
 
         glyph_histogram = _region_histogram(data, width, 560, 24, 584, 52)
         self.assertGreater(glyph_histogram[(255, 0, 0)], 200)
-        self.assertGreater(glyph_histogram[(0, 0, 0)], 200)
+        self.assertGreater(glyph_histogram[(247, 243, 232)], 200)
 
 
 if __name__ == "__main__":

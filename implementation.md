@@ -702,3 +702,10 @@
 - Added `examples/qemu_riscv_in_image_stateful_class_demo.rz` plus integration coverage in `tests/test_qemu_riscv_method_update_integration.py` proving the running image can file in `Helper` with `instanceVariableNames: 'value'`, allocate an instance, run a compiled setter that stores a string into that named field, run a compiled getter that reads it back, and pass the result into `Transcript show:` to render on the framebuffer.
 - Updated `tools/inspect_qemu_riscv_mvp_image.py`, `tests/test_qemu_riscv_mvp_lowering.py`, and `tests/test_qemu_riscv_image_inspector.py` for the enlarged seeded selector table and the new image summary (`objects=261`, `selector_objects=31`) now that the boot image carries the full source-declared selector universe.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Improve Framebuffer Demo Readability
+- Changed the seeded transcript palette in `kernel/mvp/TextStyle.rz` from green-on-light-gray to a darker slate foreground on a warm light background, so the default text output reads clearly without changing the object/message boundary or text rendering model.
+- Updated `examples/qemu_riscv_fb_demo.rz` to clear the default form through `Form>>clear` instead of explicitly painting the whole framebuffer black, which keeps the default demo aligned with the seeded transcript style instead of fighting it.
+- Matched the pre-VM fallback framebuffer clear color in `platform/qemu-riscv64/display.c` to the same warm background so boot and cleared-form output stay visually consistent.
+- Updated the QEMU render and method-update integration tests in `tests/test_qemu_riscv_render_integration.py`, `tests/test_qemu_riscv_method_update_integration.py`, and `tests/test_qemu_riscv_mvp_lowering.py` to lock the new seeded palette and the lighter default demo output.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image screenshot`.

@@ -6,7 +6,8 @@
 #include "machine.h"
 
 static uint32_t framebuffer[RECORZ_DISPLAY_WIDTH * RECORZ_DISPLAY_HEIGHT] __attribute__((aligned(4096)));
-static uint32_t background = 0x00486020U;
+/* Match the seeded transcript background so boot and cleared forms stay legible. */
+static uint32_t background = 0x00F7F3E8U;
 
 static void put_pixel(uint32_t x, uint32_t y, uint32_t color) {
     if (x >= RECORZ_DISPLAY_WIDTH || y >= RECORZ_DISPLAY_HEIGHT) {

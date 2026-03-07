@@ -36,6 +36,8 @@ IN_IMAGE_CLASS_CREATE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_class
 IN_IMAGE_INSTANCE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_instance_demo.rz"
 IN_IMAGE_NAMED_CLASS_INSTANCE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_named_class_instance_demo.rz"
 IN_IMAGE_STATEFUL_CLASS_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_stateful_class_demo.rz"
+TEXT_FOREGROUND = (31, 41, 51)
+TEXT_BACKGROUND = (247, 243, 232)
 
 
 def _read_ppm(path: Path) -> tuple[int, int, bytes]:
@@ -181,9 +183,6 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
             return "".join(parts)
 
     def test_live_method_update_changes_framebuffer_output(self) -> None:
-        foreground = (72, 96, 32)
-        background = (242, 242, 242)
-
         self.build_update_payload("Transcript", UPDATE_SOURCE_PATH, UPDATE_PAYLOAD_PATH)
         baseline_log, width, height, baseline_data = self.render_demo(
             build_dir=BUILD_DIR,
@@ -207,15 +206,13 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
         updated_line_1 = _region_histogram(updated_data, updated_width, 24, 24, 220, 56)
         updated_line_2 = _region_histogram(updated_data, updated_width, 24, 58, 220, 90)
 
-        self.assertGreater(baseline_line_1[foreground], 300)
-        self.assertGreater(baseline_line_2[foreground], 300)
-        self.assertGreater(updated_line_1[foreground], baseline_line_1[foreground] + 500)
-        self.assertEqual(updated_line_2[foreground], 0)
-        self.assertGreater(updated_line_2[background], baseline_line_2[background] + 500)
+        self.assertGreater(baseline_line_1[TEXT_FOREGROUND], 300)
+        self.assertGreater(baseline_line_2[TEXT_FOREGROUND], 300)
+        self.assertGreater(updated_line_1[TEXT_FOREGROUND], baseline_line_1[TEXT_FOREGROUND] + 500)
+        self.assertEqual(updated_line_2[TEXT_FOREGROUND], 0)
+        self.assertGreater(updated_line_2[TEXT_BACKGROUND], baseline_line_2[TEXT_BACKGROUND] + 500)
 
     def test_appended_method_update_adds_missing_selector(self) -> None:
-        foreground = (72, 96, 32)
-
         baseline_output = self.capture_timeout_output(
             build_dir=APPEND_BUILD_DIR,
             example_path=APPEND_DEMO_PATH,
@@ -237,12 +234,10 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
 
         line_1 = _region_histogram(updated_data, width, 24, 24, 220, 56)
         line_2 = _region_histogram(updated_data, width, 24, 58, 220, 90)
-        self.assertGreater(line_1[foreground], 300)
-        self.assertGreater(line_2[foreground], 300)
+        self.assertGreater(line_1[TEXT_FOREGROUND], 300)
+        self.assertGreater(line_2[TEXT_FOREGROUND], 300)
 
     def test_in_image_installer_adds_missing_selector_without_update_payload(self) -> None:
-        foreground = (72, 96, 32)
-
         baseline_output = self.capture_timeout_output(
             build_dir=APPEND_BUILD_DIR,
             example_path=APPEND_DEMO_PATH,
@@ -263,12 +258,10 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
 
         line_1 = _region_histogram(updated_data, width, 24, 24, 220, 56)
         line_2 = _region_histogram(updated_data, width, 24, 58, 220, 90)
-        self.assertGreater(line_1[foreground], 300)
-        self.assertGreater(line_2[foreground], 300)
+        self.assertGreater(line_1[TEXT_FOREGROUND], 300)
+        self.assertGreater(line_2[TEXT_FOREGROUND], 300)
 
     def test_in_image_source_installer_adds_missing_selector_without_update_payload(self) -> None:
-        foreground = (72, 96, 32)
-
         baseline_output = self.capture_timeout_output(
             build_dir=APPEND_BUILD_DIR,
             example_path=APPEND_DEMO_PATH,
@@ -289,12 +282,10 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
 
         line_1 = _region_histogram(updated_data, width, 24, 24, 220, 56)
         line_2 = _region_histogram(updated_data, width, 24, 58, 220, 90)
-        self.assertGreater(line_1[foreground], 300)
-        self.assertGreater(line_2[foreground], 300)
+        self.assertGreater(line_1[TEXT_FOREGROUND], 300)
+        self.assertGreater(line_2[TEXT_FOREGROUND], 300)
 
     def test_in_image_chunk_file_in_updates_multiple_methods_without_update_payload(self) -> None:
-        foreground = (72, 96, 32)
-
         baseline_output = self.capture_timeout_output(
             build_dir=APPEND_BUILD_DIR,
             example_path=APPEND_DEMO_PATH,
@@ -316,13 +307,11 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
         line_1 = _region_histogram(updated_data, width, 24, 24, 220, 56)
         line_2 = _region_histogram(updated_data, width, 24, 58, 220, 90)
         line_3 = _region_histogram(updated_data, width, 24, 92, 220, 124)
-        self.assertGreater(line_1[foreground], 300)
-        self.assertGreater(line_2[foreground], 300)
-        self.assertGreater(line_3[foreground], 300)
+        self.assertGreater(line_1[TEXT_FOREGROUND], 300)
+        self.assertGreater(line_2[TEXT_FOREGROUND], 300)
+        self.assertGreater(line_3[TEXT_FOREGROUND], 300)
 
     def test_in_image_class_file_in_resolves_existing_class_without_update_payload(self) -> None:
-        foreground = (72, 96, 32)
-
         baseline_output = self.capture_timeout_output(
             build_dir=APPEND_BUILD_DIR,
             example_path=APPEND_DEMO_PATH,
@@ -344,13 +333,11 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
         line_1 = _region_histogram(updated_data, width, 24, 24, 220, 56)
         line_2 = _region_histogram(updated_data, width, 24, 58, 220, 90)
         line_3 = _region_histogram(updated_data, width, 24, 92, 220, 124)
-        self.assertGreater(line_1[foreground], 300)
-        self.assertGreater(line_2[foreground], 300)
-        self.assertGreater(line_3[foreground], 300)
+        self.assertGreater(line_1[TEXT_FOREGROUND], 300)
+        self.assertGreater(line_2[TEXT_FOREGROUND], 300)
+        self.assertGreater(line_3[TEXT_FOREGROUND], 300)
 
     def test_in_image_class_file_in_creates_missing_class_without_update_payload(self) -> None:
-        foreground = (72, 96, 32)
-
         updated_log, width, height, updated_data = self.render_demo(
             build_dir=IN_IMAGE_CLASS_CREATE_BUILD_DIR,
             example_path=IN_IMAGE_CLASS_CREATE_DEMO_PATH,
@@ -363,12 +350,10 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
 
         line_1 = _region_histogram(updated_data, width, 24, 24, 220, 56)
         line_2 = _region_histogram(updated_data, width, 24, 58, 220, 90)
-        self.assertGreater(line_1[foreground], 300)
-        self.assertGreater(line_2[foreground], 300)
+        self.assertGreater(line_1[TEXT_FOREGROUND], 300)
+        self.assertGreater(line_2[TEXT_FOREGROUND], 300)
 
     def test_in_image_class_instances_can_send_installed_methods_without_update_payload(self) -> None:
-        foreground = (72, 96, 32)
-
         updated_log, width, height, updated_data = self.render_demo(
             build_dir=IN_IMAGE_INSTANCE_BUILD_DIR,
             example_path=IN_IMAGE_INSTANCE_DEMO_PATH,
@@ -382,13 +367,11 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
         line_1 = _region_histogram(updated_data, width, 24, 24, 220, 56)
         line_2 = _region_histogram(updated_data, width, 24, 58, 220, 90)
         line_3 = _region_histogram(updated_data, width, 24, 92, 220, 124)
-        self.assertGreater(line_1[foreground], 300)
-        self.assertGreater(line_2[foreground], 300)
-        self.assertGreater(line_3[foreground], 300)
+        self.assertGreater(line_1[TEXT_FOREGROUND], 300)
+        self.assertGreater(line_2[TEXT_FOREGROUND], 300)
+        self.assertGreater(line_3[TEXT_FOREGROUND], 300)
 
     def test_in_image_named_class_lookup_can_instantiate_created_class(self) -> None:
-        foreground = (72, 96, 32)
-
         updated_log, width, height, updated_data = self.render_demo(
             build_dir=IN_IMAGE_NAMED_CLASS_INSTANCE_BUILD_DIR,
             example_path=IN_IMAGE_NAMED_CLASS_INSTANCE_DEMO_PATH,
@@ -402,13 +385,11 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
         line_1 = _region_histogram(updated_data, width, 24, 24, 220, 56)
         line_2 = _region_histogram(updated_data, width, 24, 58, 220, 90)
         line_3 = _region_histogram(updated_data, width, 24, 92, 220, 124)
-        self.assertGreater(line_1[foreground], 300)
-        self.assertGreater(line_2[foreground], 300)
-        self.assertGreater(line_3[foreground], 300)
+        self.assertGreater(line_1[TEXT_FOREGROUND], 300)
+        self.assertGreater(line_2[TEXT_FOREGROUND], 300)
+        self.assertGreater(line_3[TEXT_FOREGROUND], 300)
 
     def test_in_image_class_instances_hold_named_state(self) -> None:
-        foreground = (72, 96, 32)
-
         updated_log, width, height, updated_data = self.render_demo(
             build_dir=IN_IMAGE_STATEFUL_CLASS_BUILD_DIR,
             example_path=IN_IMAGE_STATEFUL_CLASS_DEMO_PATH,
@@ -421,9 +402,9 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
 
         line_1 = _region_histogram(updated_data, width, 24, 24, 220, 56)
         line_2 = _region_histogram(updated_data, width, 24, 58, 260, 90)
-        self.assertGreater(line_1[foreground], 150)
-        self.assertGreater(line_2[foreground], 300)
-        self.assertGreater(line_2[foreground], line_1[foreground] + 150)
+        self.assertGreater(line_1[TEXT_FOREGROUND], 150)
+        self.assertGreater(line_2[TEXT_FOREGROUND], 300)
+        self.assertGreater(line_2[TEXT_FOREGROUND], line_1[TEXT_FOREGROUND] + 150)
 
 
 if __name__ == "__main__":

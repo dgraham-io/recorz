@@ -874,7 +874,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.TRANSCRIPT_BEHAVIOR_BOOT_FIELD_SPECS, mvp.boot_object_field_specs("TranscriptBehavior"))
         self.assertEqual(mvp.GLYPH_FALLBACK_CODE, mvp.boot_object_first_glyph_field_value("TranscriptBehavior"))
         self.assertEqual(mvp.TRANSCRIPT_LAYOUT_FIELD_VALUES, (24, 24, 4, 2))
-        self.assertEqual(mvp.TRANSCRIPT_STYLE_FIELD_VALUES, (0x00486020, 0x00F2F2F2))
+        self.assertEqual(mvp.TRANSCRIPT_STYLE_FIELD_VALUES, (0x001F2933, 0x00F7F3E8))
         self.assertEqual(mvp.FRAMEBUFFER_BITMAP_FIELD_VALUES, (640, 480, mvp.BITMAP_STORAGE_FRAMEBUFFER, 0))
         self.assertEqual(mvp.TRANSCRIPT_METRICS_FIELD_VALUES, (6, 8))
         self.assertEqual(
