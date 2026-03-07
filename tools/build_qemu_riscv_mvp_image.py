@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
-from recorz.compiler import compile_do_it  # noqa: E402
+from recorz.compiler import compile_do_it, compile_method  # noqa: E402
 from recorz.model import BindingRef, SendSite, SymbolAtom  # noqa: E402
 
 
@@ -132,7 +132,7 @@ IMAGE_ENTRY_FORMAT = "<4sHHHHHH"
 IMAGE_ENTRY_KIND_DOIT = 1
 
 SEED_MAGIC = b"RCZS"
-SEED_VERSION = 15
+SEED_VERSION = 16
 SEED_HEADER_FORMAT = "<4sHHHHHH"
 SEED_BINDING_FORMAT = "<HH"
 SEED_OBJECT_HEADER_FORMAT = "<BBH"
@@ -155,6 +155,7 @@ ROOT_SEND_METHOD_FIELD_ROOT_ID = 0
 ROOT_SEND_METHOD_FIELD_SELECTOR = 1
 ROOT_SEND_METHOD_FIELD_RETURN_MODE = 2
 ROOT_VALUE_METHOD_FIELD_ROOT_ID = 0
+COMPILED_METHOD_MAX_INSTRUCTIONS = 4
 INTERPRETED_METHOD_MAX_INSTRUCTIONS = 4
 
 SEED_FIELD_NIL = 0
@@ -182,6 +183,7 @@ SEED_OBJECT_FIELD_SEND_METHOD = 18
 SEED_OBJECT_ROOT_SEND_METHOD = 19
 SEED_OBJECT_ROOT_VALUE_METHOD = 20
 SEED_OBJECT_INTERPRETED_METHOD = 21
+SEED_OBJECT_COMPILED_METHOD = 22
 
 SEED_ROOT_DEFAULT_FORM = 1
 SEED_ROOT_FRAMEBUFFER_BITMAP = 2
@@ -267,21 +269,29 @@ METHOD_ENTRY_SPECS = {
     METHOD_ENTRY_VALUES[name]: (owner_kind, SELECTOR_VALUES[SELECTOR_IDS[selector]], argument_count)
     for name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS
 }
-ACCESSOR_METHOD_FIELD_BY_ENTRY_NAME = {
-    "RECORZ_MVP_METHOD_ENTRY_BITMAP_WIDTH": 0,
-    "RECORZ_MVP_METHOD_ENTRY_BITMAP_HEIGHT": 1,
-    "RECORZ_MVP_METHOD_ENTRY_FORM_BITS": 0,
-    "RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND": 1,
-}
-FIELD_SEND_METHOD_SPEC_BY_ENTRY_NAME = {
-    "RECORZ_MVP_METHOD_ENTRY_FORM_WIDTH": (0, "width"),
-    "RECORZ_MVP_METHOD_ENTRY_FORM_HEIGHT": (0, "height"),
-}
+ACCESSOR_METHOD_FIELD_BY_ENTRY_NAME: dict[str, int] = {}
+FIELD_SEND_METHOD_SPEC_BY_ENTRY_NAME: dict[str, tuple[int, str]] = {}
 METHOD_RETURN_RESULT = 1
 METHOD_RETURN_RECEIVER = 2
 ROOT_SEND_METHOD_SPEC_BY_ENTRY_NAME = {
 }
 ROOT_VALUE_METHOD_ROOT_BY_ENTRY_NAME: dict[str, int] = {}
+COMPILED_METHOD_OP_PUSH_GLOBAL = 1
+COMPILED_METHOD_OP_PUSH_ROOT = 2
+COMPILED_METHOD_OP_PUSH_ARGUMENT = 3
+COMPILED_METHOD_OP_PUSH_FIELD = 4
+COMPILED_METHOD_OP_SEND = 5
+COMPILED_METHOD_OP_RETURN_TOP = 6
+COMPILED_METHOD_OP_RETURN_RECEIVER = 7
+COMPILED_METHOD_OPCODE_VALUES = {
+    "push_global": COMPILED_METHOD_OP_PUSH_GLOBAL,
+    "push_root": COMPILED_METHOD_OP_PUSH_ROOT,
+    "push_argument": COMPILED_METHOD_OP_PUSH_ARGUMENT,
+    "push_field": COMPILED_METHOD_OP_PUSH_FIELD,
+    "send": COMPILED_METHOD_OP_SEND,
+    "return_top": COMPILED_METHOD_OP_RETURN_TOP,
+    "return_receiver": COMPILED_METHOD_OP_RETURN_RECEIVER,
+}
 INTERPRETED_METHOD_OP_PUSH_ROOT = 1
 INTERPRETED_METHOD_OP_PUSH_ARGUMENT = 2
 INTERPRETED_METHOD_OP_SEND = 3
@@ -295,40 +305,42 @@ INTERPRETED_METHOD_OPCODE_VALUES = {
     "return_receiver": INTERPRETED_METHOD_OP_RETURN_RECEIVER,
 }
 INTERPRETED_METHOD_PROGRAM_BY_ENTRY_NAME = {
-    "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW": [
-        ("push_root", SEED_ROOT_DEFAULT_FORM, 0),
-        ("push_argument", 0, 0),
-        ("send", "writeString:", 1),
-        ("return_receiver", 0, 0),
-    ],
-    "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR": [
-        ("push_root", SEED_ROOT_DEFAULT_FORM, 0),
-        ("send", "newline", 0),
-        ("return_receiver", 0, 0),
-    ],
     "RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM": [
         ("push_root", SEED_ROOT_DEFAULT_FORM, 0),
         ("return_top", 0, 0),
     ],
-    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_CLEAR": [
-        ("push_root", SEED_ROOT_DEFAULT_FORM, 0),
-        ("send", "clear", 0),
-        ("return_receiver", 0, 0),
-    ],
-    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_WRITE_STRING": [
-        ("push_root", SEED_ROOT_DEFAULT_FORM, 0),
-        ("push_argument", 0, 0),
-        ("send", "writeString:", 1),
-        ("return_receiver", 0, 0),
-    ],
-    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_NEWLINE": [
-        ("push_root", SEED_ROOT_DEFAULT_FORM, 0),
-        ("send", "newline", 0),
-        ("return_receiver", 0, 0),
-    ],
+}
+COMPILED_METHOD_SOURCE_BY_ENTRY_NAME = {
+    "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW": ("Transcript", [], "show: text Display defaultForm writeString: text. ^self"),
+    "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR": ("Transcript", [], "cr Display defaultForm newline. ^self"),
+    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_CLEAR": ("Display", [], "clear Display defaultForm clear. ^self"),
+    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_WRITE_STRING": (
+        "Display",
+        [],
+        "writeString: text Display defaultForm writeString: text. ^self",
+    ),
+    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_NEWLINE": ("Display", [], "newline Display defaultForm newline. ^self"),
+    "RECORZ_MVP_METHOD_ENTRY_BITMAP_WIDTH": (
+        "Bitmap",
+        ["width", "height", "storageKind", "storageId"],
+        "width ^width",
+    ),
+    "RECORZ_MVP_METHOD_ENTRY_BITMAP_HEIGHT": (
+        "Bitmap",
+        ["width", "height", "storageKind", "storageId"],
+        "height ^height",
+    ),
+    "RECORZ_MVP_METHOD_ENTRY_FORM_BITS": ("Form", ["bits"], "bits ^bits"),
+    "RECORZ_MVP_METHOD_ENTRY_FORM_WIDTH": ("Form", ["bits"], "width ^bits width"),
+    "RECORZ_MVP_METHOD_ENTRY_FORM_HEIGHT": ("Form", ["bits"], "height ^bits height"),
+    "RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND": (
+        "Class",
+        ["superclass", "instanceKind", "methodStart", "methodCount"],
+        "instanceKind ^instanceKind",
+    ),
 }
 BUILTIN_METHODS_BY_KIND: dict[int, list[tuple[str, int, str]]] = {
-    kind: [] for kind in range(SEED_OBJECT_TRANSCRIPT, SEED_OBJECT_INTERPRETED_METHOD + 1)
+    kind: [] for kind in range(SEED_OBJECT_TRANSCRIPT, SEED_OBJECT_COMPILED_METHOD + 1)
 }
 for entry_name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS:
     BUILTIN_METHODS_BY_KIND[owner_kind].append((selector, argument_count, entry_name))
@@ -340,6 +352,124 @@ def encode_interpreted_instruction(opcode_name: str, operand_a: int = 0, operand
         | ((operand_a & 0xFF) << 8)
         | ((operand_b & 0xFFFF) << 16)
     )
+
+
+def encode_compiled_method_instruction(opcode_name: str, operand_a: int = 0, operand_b: int = 0) -> int:
+    return (
+        COMPILED_METHOD_OPCODE_VALUES[opcode_name]
+        | ((operand_a & 0xFF) << 8)
+        | ((operand_b & 0xFFFF) << 16)
+    )
+
+
+def compile_kernel_method_program(class_name: str, instance_variables: list[str], source: str) -> list[int]:
+    compiled = compile_method(source, class_name, instance_variables)
+    arg_indices = {name: index for index, name in enumerate(compiled.arg_names)}
+    field_indices = {name: index for index, name in enumerate(instance_variables)}
+    instructions = list(compiled.instructions)
+    return_receiver = False
+    lowered: list[int] = []
+
+    if compiled.literals:
+        raise LoweringError(f"Kernel method {class_name}>>{compiled.selector} uses unsupported literals")
+    if compiled.temp_names:
+        raise LoweringError(f"Kernel method {class_name}>>{compiled.selector} uses unsupported temporaries")
+    if len(instructions) >= 3 and instructions[-3].opcode == "pop" and instructions[-2].opcode == "push_self" and instructions[-1].opcode == "return_local":
+        instructions = instructions[:-3]
+        return_receiver = True
+    elif len(instructions) >= 2 and instructions[-2].opcode == "push_self" and instructions[-1].opcode == "return_local":
+        instructions = instructions[:-2]
+        return_receiver = True
+    elif instructions and instructions[-1].opcode == "return_local":
+        instructions = instructions[:-1]
+    else:
+        raise LoweringError(f"Kernel method {class_name}>>{compiled.selector} has an unsupported return shape")
+    instruction_index = 0
+    while instruction_index < len(instructions):
+        instruction = instructions[instruction_index]
+
+        if instruction.opcode == "push_binding":
+            binding = instruction.operand
+            if not isinstance(binding, BindingRef):
+                raise LoweringError(
+                    f"Kernel method {class_name}>>{compiled.selector} expected a binding operand, found {binding!r}"
+                )
+            if (
+                binding.kind == "global"
+                and binding.name == "Display"
+                and instruction_index + 1 < len(instructions)
+                and instructions[instruction_index + 1].opcode == "send"
+            ):
+                send_site = instructions[instruction_index + 1].operand
+                if (
+                    isinstance(send_site, SendSite)
+                    and not send_site.super_send
+                    and send_site.selector == "defaultForm"
+                    and send_site.argument_count == 0
+                ):
+                    lowered.append(encode_compiled_method_instruction("push_root", SEED_ROOT_DEFAULT_FORM))
+                    instruction_index += 2
+                    continue
+            if binding.kind == "global":
+                global_id = GLOBAL_IDS.get(binding.name)
+                if global_id is None:
+                    raise LoweringError(f"Kernel method {class_name}>>{compiled.selector} uses unsupported global {binding.name!r}")
+                lowered.append(encode_compiled_method_instruction("push_global", GLOBAL_VALUES[global_id]))
+                instruction_index += 1
+                continue
+            if binding.kind == "lexical":
+                if binding.name not in arg_indices:
+                    raise LoweringError(
+                        f"Kernel method {class_name}>>{compiled.selector} uses unsupported lexical {binding.name!r}"
+                    )
+                lowered.append(encode_compiled_method_instruction("push_argument", arg_indices[binding.name]))
+                instruction_index += 1
+                continue
+            if binding.kind == "instance":
+                if binding.name not in field_indices:
+                    raise LoweringError(
+                        f"Kernel method {class_name}>>{compiled.selector} uses unknown instance variable {binding.name!r}"
+                    )
+                lowered.append(encode_compiled_method_instruction("push_field", field_indices[binding.name]))
+                instruction_index += 1
+                continue
+            raise LoweringError(f"Kernel method {class_name}>>{compiled.selector} uses unknown binding kind {binding.kind!r}")
+        if instruction.opcode == "send":
+            send_site = instruction.operand
+            if not isinstance(send_site, SendSite):
+                raise LoweringError(
+                    f"Kernel method {class_name}>>{compiled.selector} expected a send operand, found {send_site!r}"
+                )
+            if send_site.super_send:
+                raise LoweringError(f"Kernel method {class_name}>>{compiled.selector} uses unsupported super send")
+            selector_id = SELECTOR_IDS.get(send_site.selector)
+            if selector_id is None:
+                raise LoweringError(
+                    f"Kernel method {class_name}>>{compiled.selector} uses unsupported selector {send_site.selector!r}"
+                )
+            lowered.append(
+                encode_compiled_method_instruction("send", SELECTOR_VALUES[selector_id], send_site.argument_count)
+            )
+            instruction_index += 1
+            continue
+        raise LoweringError(
+            f"Kernel method {class_name}>>{compiled.selector} uses unsupported compiler opcode {instruction.opcode!r}"
+        )
+    # unreachable
+    lowered.append(
+        encode_compiled_method_instruction("return_receiver" if return_receiver else "return_top")
+    )
+    if not lowered or len(lowered) > COMPILED_METHOD_MAX_INSTRUCTIONS:
+        raise LoweringError(
+            f"Kernel method {class_name}>>{compiled.selector} lowers to {len(lowered)} instructions; MVP compiled methods support at most {COMPILED_METHOD_MAX_INSTRUCTIONS}"
+        )
+    return lowered
+
+
+COMPILED_METHOD_PROGRAM_BY_ENTRY_NAME = {
+    entry_name: compile_kernel_method_program(class_name, list(instance_variables), source)
+    for entry_name, (class_name, instance_variables, source) in COMPILED_METHOD_SOURCE_BY_ENTRY_NAME.items()
+}
 
 
 class Lowerer:
@@ -600,6 +730,7 @@ def build_seed_manifest() -> bytes:
         SEED_OBJECT_ROOT_SEND_METHOD,
         SEED_OBJECT_ROOT_VALUE_METHOD,
         SEED_OBJECT_INTERPRETED_METHOD,
+        SEED_OBJECT_COMPILED_METHOD,
     ]
     class_indices = {
         SEED_OBJECT_TRANSCRIPT: class_class_index + 1,
@@ -622,6 +753,7 @@ def build_seed_manifest() -> bytes:
         SEED_OBJECT_ROOT_SEND_METHOD: class_class_index + 18,
         SEED_OBJECT_ROOT_VALUE_METHOD: class_class_index + 19,
         SEED_OBJECT_INTERPRETED_METHOD: class_class_index + 20,
+        SEED_OBJECT_COMPILED_METHOD: class_class_index + 21,
     }
 
     for seed_object in seed_objects:
@@ -642,6 +774,8 @@ def build_seed_manifest() -> bytes:
     root_value_method_seed_objects: list[SeedObject] = []
     interpreted_method_indices: dict[str, int] = {}
     interpreted_method_seed_objects: list[SeedObject] = []
+    compiled_method_indices: dict[str, int] = {}
+    compiled_method_seed_objects: list[SeedObject] = []
     method_entry_indices: dict[str, int] = {}
     method_entry_seed_objects: list[SeedObject] = []
     method_seed_objects: list[SeedObject] = []
@@ -750,7 +884,22 @@ def build_seed_manifest() -> bytes:
             )
         )
 
-    method_entry_start_index = interpreted_method_start_index + len(interpreted_method_seed_objects)
+    compiled_method_start_index = interpreted_method_start_index + len(interpreted_method_seed_objects)
+    for entry_name, program in COMPILED_METHOD_PROGRAM_BY_ENTRY_NAME.items():
+        encoded_fields = [
+            (SEED_FIELD_SMALL_INTEGER, instruction)
+            for instruction in program
+        ]
+        compiled_method_indices[entry_name] = compiled_method_start_index + len(compiled_method_seed_objects)
+        compiled_method_seed_objects.append(
+            SeedObject(
+                SEED_OBJECT_COMPILED_METHOD,
+                class_indices[SEED_OBJECT_COMPILED_METHOD],
+                encoded_fields,
+            )
+        )
+
+    method_entry_start_index = compiled_method_start_index + len(compiled_method_seed_objects)
     for entry_name, _owner_kind, _selector, _argument_count in METHOD_ENTRY_DEFINITIONS:
         implementation_kind = SEED_FIELD_NIL
         implementation_index = 0
@@ -767,6 +916,9 @@ def build_seed_manifest() -> bytes:
         elif entry_name in root_value_method_indices:
             implementation_kind = SEED_FIELD_OBJECT_INDEX
             implementation_index = root_value_method_indices[entry_name]
+        elif entry_name in compiled_method_indices:
+            implementation_kind = SEED_FIELD_OBJECT_INDEX
+            implementation_index = compiled_method_indices[entry_name]
         elif entry_name in interpreted_method_indices:
             implementation_kind = SEED_FIELD_OBJECT_INDEX
             implementation_index = interpreted_method_indices[entry_name]
@@ -827,6 +979,7 @@ def build_seed_manifest() -> bytes:
     seed_objects.extend(root_send_method_seed_objects)
     seed_objects.extend(root_value_method_seed_objects)
     seed_objects.extend(interpreted_method_seed_objects)
+    seed_objects.extend(compiled_method_seed_objects)
     seed_objects.extend(method_entry_seed_objects)
     seed_objects.extend(method_seed_objects)
 

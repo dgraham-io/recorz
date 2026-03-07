@@ -48,7 +48,16 @@
 #define ROOT_SEND_METHOD_FIELD_SELECTOR 1U
 #define ROOT_SEND_METHOD_FIELD_RETURN_MODE 2U
 #define ROOT_VALUE_METHOD_FIELD_ROOT_ID 0U
+#define COMPILED_METHOD_MAX_INSTRUCTIONS 4U
 #define INTERPRETED_METHOD_MAX_INSTRUCTIONS 4U
+
+#define COMPILED_METHOD_OP_PUSH_GLOBAL 1U
+#define COMPILED_METHOD_OP_PUSH_ROOT 2U
+#define COMPILED_METHOD_OP_PUSH_ARGUMENT 3U
+#define COMPILED_METHOD_OP_PUSH_FIELD 4U
+#define COMPILED_METHOD_OP_SEND 5U
+#define COMPILED_METHOD_OP_RETURN_TOP 6U
+#define COMPILED_METHOD_OP_RETURN_RECEIVER 7U
 
 #define INTERPRETED_METHOD_OP_PUSH_ROOT 1U
 #define INTERPRETED_METHOD_OP_PUSH_ARGUMENT 2U
@@ -98,6 +107,7 @@ enum recorz_mvp_method_implementation_kind {
     RECORZ_MVP_METHOD_IMPLEMENTATION_ROOT_SEND = 4,
     RECORZ_MVP_METHOD_IMPLEMENTATION_ROOT_VALUE = 5,
     RECORZ_MVP_METHOD_IMPLEMENTATION_INTERPRETED = 6,
+    RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED = 7,
 };
 
 enum recorz_mvp_method_return_mode {
@@ -110,7 +120,7 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_SELECTOR_SHOW,
         1U,
         RECORZ_MVP_OBJECT_TRANSCRIPT,
-        RECORZ_MVP_METHOD_IMPLEMENTATION_INTERPRETED,
+        RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED,
         0U,
         0U,
         0U,
@@ -120,7 +130,7 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_SELECTOR_CR,
         0U,
         RECORZ_MVP_OBJECT_TRANSCRIPT,
-        RECORZ_MVP_METHOD_IMPLEMENTATION_INTERPRETED,
+        RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED,
         0U,
         0U,
         0U,
@@ -140,31 +150,31 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_SELECTOR_CLEAR,
         0U,
         RECORZ_MVP_OBJECT_DISPLAY,
-        RECORZ_MVP_METHOD_IMPLEMENTATION_INTERPRETED,
+        RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED,
         0U,
         0U,
         0U,
-        RECORZ_MVP_METHOD_RETURN_RECEIVER,
+        0U,
     },
     [RECORZ_MVP_METHOD_ENTRY_DISPLAY_WRITE_STRING] = {
         RECORZ_MVP_SELECTOR_WRITE_STRING,
         1U,
         RECORZ_MVP_OBJECT_DISPLAY,
-        RECORZ_MVP_METHOD_IMPLEMENTATION_INTERPRETED,
+        RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED,
         0U,
         0U,
         0U,
-        RECORZ_MVP_METHOD_RETURN_RECEIVER,
+        0U,
     },
     [RECORZ_MVP_METHOD_ENTRY_DISPLAY_NEWLINE] = {
         RECORZ_MVP_SELECTOR_NEWLINE,
         0U,
         RECORZ_MVP_OBJECT_DISPLAY,
-        RECORZ_MVP_METHOD_IMPLEMENTATION_INTERPRETED,
+        RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED,
         0U,
         0U,
         0U,
-        RECORZ_MVP_METHOD_RETURN_RECEIVER,
+        0U,
     },
     [RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR] = {
         RECORZ_MVP_SELECTOR_FILL_FORM_COLOR,
@@ -240,8 +250,8 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_SELECTOR_WIDTH,
         0U,
         RECORZ_MVP_OBJECT_BITMAP,
-        RECORZ_MVP_METHOD_IMPLEMENTATION_ACCESSOR,
-        BITMAP_FIELD_WIDTH,
+        RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED,
+        0U,
         0U,
         0U,
         0U,
@@ -250,8 +260,8 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_SELECTOR_HEIGHT,
         0U,
         RECORZ_MVP_OBJECT_BITMAP,
-        RECORZ_MVP_METHOD_IMPLEMENTATION_ACCESSOR,
-        BITMAP_FIELD_HEIGHT,
+        RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED,
+        0U,
         0U,
         0U,
         0U,
@@ -290,8 +300,8 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_SELECTOR_BITS,
         0U,
         RECORZ_MVP_OBJECT_FORM,
-        RECORZ_MVP_METHOD_IMPLEMENTATION_ACCESSOR,
-        FORM_FIELD_BITS,
+        RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED,
+        0U,
         0U,
         0U,
         0U,
@@ -300,9 +310,8 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_SELECTOR_WIDTH,
         0U,
         RECORZ_MVP_OBJECT_FORM,
-        RECORZ_MVP_METHOD_IMPLEMENTATION_FIELD_SEND,
-        FORM_FIELD_BITS,
-        RECORZ_MVP_SELECTOR_WIDTH,
+        RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED,
+        0U,
         0U,
         0U,
     },
@@ -310,9 +319,8 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_SELECTOR_HEIGHT,
         0U,
         RECORZ_MVP_OBJECT_FORM,
-        RECORZ_MVP_METHOD_IMPLEMENTATION_FIELD_SEND,
-        FORM_FIELD_BITS,
-        RECORZ_MVP_SELECTOR_HEIGHT,
+        RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED,
+        0U,
         0U,
         0U,
     },
@@ -320,8 +328,8 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_SELECTOR_INSTANCE_KIND,
         0U,
         RECORZ_MVP_OBJECT_CLASS,
-        RECORZ_MVP_METHOD_IMPLEMENTATION_ACCESSOR,
-        CLASS_FIELD_INSTANCE_KIND,
+        RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED,
+        0U,
         0U,
         0U,
         0U,
@@ -364,7 +372,7 @@ static struct recorz_mvp_value stack[STACK_LIMIT];
 static struct recorz_mvp_heap_object heap[HEAP_LIMIT];
 static uint32_t stack_size = 0U;
 static uint16_t heap_size = 0U;
-static uint16_t class_handles_by_kind[RECORZ_MVP_OBJECT_INTERPRETED_METHOD + 1U];
+static uint16_t class_handles_by_kind[RECORZ_MVP_OBJECT_COMPILED_METHOD + 1U];
 static uint16_t selector_handles_by_id[RECORZ_MVP_SELECTOR_INSTANCE_KIND + 1U];
 static uint16_t global_handles[RECORZ_MVP_GLOBAL_BITMAP + 1U];
 static uint16_t default_form_handle = 0U;
@@ -576,6 +584,8 @@ static const char *object_kind_name(uint8_t kind) {
             return "RootValueMethod";
         case RECORZ_MVP_OBJECT_INTERPRETED_METHOD:
             return "InterpretedMethod";
+        case RECORZ_MVP_OBJECT_COMPILED_METHOD:
+            return "CompiledMethod";
     }
     return "UnknownObject";
 }
@@ -785,7 +795,7 @@ static uint16_t heap_allocate(uint8_t kind) {
 static uint16_t heap_allocate_seeded_class(uint8_t kind) {
     uint16_t handle = heap_allocate(kind);
 
-    if (kind <= RECORZ_MVP_OBJECT_INTERPRETED_METHOD && class_handles_by_kind[kind] != 0U) {
+    if (kind <= RECORZ_MVP_OBJECT_COMPILED_METHOD && class_handles_by_kind[kind] != 0U) {
         heap_set_class(handle, class_handles_by_kind[kind]);
     }
     return handle;
@@ -1028,6 +1038,31 @@ static uint32_t root_value_method_root_id(const struct recorz_mvp_heap_object *r
     );
 }
 
+static uint32_t compiled_method_instruction_word(
+    const struct recorz_mvp_heap_object *compiled_method,
+    uint8_t index
+) {
+    if (compiled_method->kind != RECORZ_MVP_OBJECT_COMPILED_METHOD) {
+        machine_panic("method entry implementation is not a compiled method");
+    }
+    return small_integer_u32(
+        heap_get_field(compiled_method, index),
+        "compiled method instruction is not a small integer"
+    );
+}
+
+static uint8_t compiled_method_instruction_opcode(uint32_t instruction) {
+    return (uint8_t)(instruction & 0xFFU);
+}
+
+static uint8_t compiled_method_instruction_operand_a(uint32_t instruction) {
+    return (uint8_t)((instruction >> 8) & 0xFFU);
+}
+
+static uint16_t compiled_method_instruction_operand_b(uint32_t instruction) {
+    return (uint16_t)((instruction >> 16) & 0xFFFFU);
+}
+
 static uint32_t interpreted_method_instruction_word(
     const struct recorz_mvp_heap_object *interpreted_method,
     uint8_t index
@@ -1124,6 +1159,90 @@ static const struct recorz_mvp_method_entry_spec *method_entry_spec(uint32_t ent
         machine_panic("method descriptor entry is not wired to a built-in method");
     }
     return &method_entry_specs[entry];
+}
+
+static void validate_compiled_method(
+    const struct recorz_mvp_heap_object *compiled_method,
+    const struct recorz_mvp_method_entry_spec *entry_spec
+) {
+    uint8_t instruction_index;
+    uint32_t stack_depth = 0U;
+
+    if (compiled_method->kind != RECORZ_MVP_OBJECT_COMPILED_METHOD) {
+        machine_panic("compiled method entry implementation is not a compiled method");
+    }
+    if (compiled_method->field_count == 0U || compiled_method->field_count > COMPILED_METHOD_MAX_INSTRUCTIONS) {
+        machine_panic("compiled method field count is invalid");
+    }
+    for (instruction_index = 0U; instruction_index < compiled_method->field_count; ++instruction_index) {
+        uint32_t instruction = compiled_method_instruction_word(compiled_method, instruction_index);
+        uint8_t opcode = compiled_method_instruction_opcode(instruction);
+        uint8_t operand_a = compiled_method_instruction_operand_a(instruction);
+        uint16_t operand_b = compiled_method_instruction_operand_b(instruction);
+        uint32_t send_count;
+
+        if (instruction_index + 1U < compiled_method->field_count &&
+            (opcode == COMPILED_METHOD_OP_RETURN_TOP || opcode == COMPILED_METHOD_OP_RETURN_RECEIVER)) {
+            machine_panic("compiled method returns before the final instruction");
+        }
+        switch (opcode) {
+            case COMPILED_METHOD_OP_PUSH_GLOBAL:
+                if (operand_a < RECORZ_MVP_GLOBAL_TRANSCRIPT || operand_a > RECORZ_MVP_GLOBAL_BITMAP) {
+                    machine_panic("compiled method pushGlobal global id is out of range");
+                }
+                ++stack_depth;
+                break;
+            case COMPILED_METHOD_OP_PUSH_ROOT:
+                if (operand_a < RECORZ_MVP_SEED_ROOT_DEFAULT_FORM ||
+                    operand_a > RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS) {
+                    machine_panic("compiled method pushRoot root id is out of range");
+                }
+                ++stack_depth;
+                break;
+            case COMPILED_METHOD_OP_PUSH_ARGUMENT:
+                if (operand_a >= entry_spec->argument_count) {
+                    machine_panic("compiled method pushArgument index is out of range");
+                }
+                ++stack_depth;
+                break;
+            case COMPILED_METHOD_OP_PUSH_FIELD:
+                if (operand_a >= OBJECT_FIELD_LIMIT) {
+                    machine_panic("compiled method pushField index is out of range");
+                }
+                ++stack_depth;
+                break;
+            case COMPILED_METHOD_OP_SEND:
+                if (operand_a < RECORZ_MVP_SELECTOR_SHOW || operand_a > RECORZ_MVP_SELECTOR_INSTANCE_KIND) {
+                    machine_panic("compiled method send selector is out of range");
+                }
+                send_count = operand_b;
+                if (send_count > MAX_SEND_ARGS || send_count > entry_spec->argument_count) {
+                    machine_panic("compiled method send argument count is out of range");
+                }
+                if (stack_depth < send_count + 1U) {
+                    machine_panic("compiled method send stack underflow");
+                }
+                stack_depth -= send_count;
+                break;
+            case COMPILED_METHOD_OP_RETURN_TOP:
+                if (stack_depth == 0U) {
+                    machine_panic("compiled method returnTop stack underflow");
+                }
+                break;
+            case COMPILED_METHOD_OP_RETURN_RECEIVER:
+                break;
+            default:
+                machine_panic("compiled method opcode is unknown");
+        }
+    }
+    if (compiled_method_instruction_opcode(
+            compiled_method_instruction_word(compiled_method, (uint8_t)(compiled_method->field_count - 1U))
+        ) != COMPILED_METHOD_OP_RETURN_TOP &&
+        compiled_method_instruction_opcode(
+            compiled_method_instruction_word(compiled_method, (uint8_t)(compiled_method->field_count - 1U))
+        ) != COMPILED_METHOD_OP_RETURN_RECEIVER) {
+        machine_panic("compiled method is missing a final return");
+    }
 }
 
 static void validate_interpreted_method(
@@ -1347,6 +1466,10 @@ static void validate_class_method_table(
             }
             continue;
         }
+        if (entry_spec->implementation_kind == RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED) {
+            validate_compiled_method(implementation_object, entry_spec);
+            continue;
+        }
         if (entry_spec->implementation_kind != RECORZ_MVP_METHOD_IMPLEMENTATION_INTERPRETED) {
             machine_panic("method entry implementation kind is unknown");
         }
@@ -1383,13 +1506,13 @@ static void initialize_class_handle_cache(const struct recorz_mvp_seed *seed) {
     uint16_t seed_index;
     uint16_t kind;
 
-    for (kind = 0U; kind <= RECORZ_MVP_OBJECT_INTERPRETED_METHOD; ++kind) {
+    for (kind = 0U; kind <= RECORZ_MVP_OBJECT_COMPILED_METHOD; ++kind) {
         class_handles_by_kind[kind] = 0U;
     }
     for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
         const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(seeded_handles[seed_index]);
 
-        if (object->kind > RECORZ_MVP_OBJECT_INTERPRETED_METHOD || object->class_handle == 0U) {
+        if (object->kind > RECORZ_MVP_OBJECT_COMPILED_METHOD || object->class_handle == 0U) {
             continue;
         }
         if (class_handles_by_kind[object->kind] == 0U) {
@@ -2306,6 +2429,73 @@ static void execute_root_value_method(const struct recorz_mvp_heap_object *root_
     push(seed_root_value(root_value_method_root_id(root_value_method)));
 }
 
+static void execute_compiled_method(
+    const struct recorz_mvp_heap_object *receiver_object,
+    struct recorz_mvp_value receiver,
+    uint16_t argument_count,
+    const struct recorz_mvp_value arguments[],
+    const struct recorz_mvp_heap_object *compiled_method
+) {
+    struct recorz_mvp_value method_stack[COMPILED_METHOD_MAX_INSTRUCTIONS + MAX_SEND_ARGS];
+    uint32_t method_stack_size = 0U;
+    uint8_t instruction_index;
+
+    (void)argument_count;
+    if (compiled_method->kind != RECORZ_MVP_OBJECT_COMPILED_METHOD) {
+        machine_panic("method entry implementation is not a compiled method");
+    }
+    for (instruction_index = 0U; instruction_index < compiled_method->field_count; ++instruction_index) {
+        uint32_t instruction = compiled_method_instruction_word(compiled_method, instruction_index);
+        uint8_t opcode = compiled_method_instruction_opcode(instruction);
+        uint8_t operand_a = compiled_method_instruction_operand_a(instruction);
+        uint16_t operand_b = compiled_method_instruction_operand_b(instruction);
+
+        switch (opcode) {
+            case COMPILED_METHOD_OP_PUSH_GLOBAL:
+                method_stack[method_stack_size++] = global_value(operand_a);
+                break;
+            case COMPILED_METHOD_OP_PUSH_ROOT:
+                method_stack[method_stack_size++] = seed_root_value((uint32_t)operand_a);
+                break;
+            case COMPILED_METHOD_OP_PUSH_ARGUMENT:
+                method_stack[method_stack_size++] = arguments[operand_a];
+                break;
+            case COMPILED_METHOD_OP_PUSH_FIELD:
+                method_stack[method_stack_size++] = heap_get_field(receiver_object, operand_a);
+                break;
+            case COMPILED_METHOD_OP_SEND: {
+                struct recorz_mvp_value send_receiver;
+                struct recorz_mvp_value send_arguments[MAX_SEND_ARGS];
+                uint16_t send_index;
+
+                if (method_stack_size < (uint32_t)operand_b + 1U) {
+                    machine_panic("compiled method send stack underflow");
+                }
+                for (send_index = operand_b; send_index > 0U; --send_index) {
+                    send_arguments[send_index - 1U] = method_stack[--method_stack_size];
+                }
+                send_receiver = method_stack[--method_stack_size];
+                remember_send_context(operand_a, operand_b, send_receiver, send_arguments);
+                perform_send(send_receiver, operand_a, operand_b, send_arguments, 0);
+                method_stack[method_stack_size++] = pop_value();
+                break;
+            }
+            case COMPILED_METHOD_OP_RETURN_TOP:
+                if (method_stack_size == 0U) {
+                    machine_panic("compiled method returnTop stack underflow");
+                }
+                push(method_stack[method_stack_size - 1U]);
+                return;
+            case COMPILED_METHOD_OP_RETURN_RECEIVER:
+                push(receiver);
+                return;
+            default:
+                machine_panic("compiled method opcode is unknown");
+        }
+    }
+    machine_panic("compiled method did not return");
+}
+
 static void execute_interpreted_method(
     struct recorz_mvp_value receiver,
     uint16_t argument_count,
@@ -2429,6 +2619,14 @@ static void dispatch_heap_object_send(
         }
         implementation_object = heap_object_for_value(implementation_value);
         execute_root_value_method(implementation_object);
+        return;
+    }
+    if (entry_spec->implementation_kind == RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED) {
+        if (implementation_value.kind != RECORZ_MVP_VALUE_OBJECT) {
+            machine_panic("compiled method entry is missing an implementation object");
+        }
+        implementation_object = heap_object_for_value(implementation_value);
+        execute_compiled_method(object, receiver, argument_count, arguments, implementation_object);
         return;
     }
     if (entry_spec->implementation_kind == RECORZ_MVP_METHOD_IMPLEMENTATION_INTERPRETED) {
