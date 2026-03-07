@@ -43,10 +43,11 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         self.assertEqual(summary["entry"]["program_section"], "program")
         self.assertEqual(summary["program"]["instruction_count"], 7)
         self.assertEqual(summary["program"]["literal_count"], 1)
-        self.assertEqual(summary["seed"]["object_count"], 176)
-        self.assertEqual(summary["seed"]["class_descriptor_count"], 14)
-        self.assertEqual(summary["seed"]["class_link_count"], 176)
+        self.assertEqual(summary["seed"]["object_count"], 199)
+        self.assertEqual(summary["seed"]["class_descriptor_count"], 15)
+        self.assertEqual(summary["seed"]["class_link_count"], 199)
         self.assertEqual(summary["seed"]["method_descriptor_count"], 22)
+        self.assertEqual(summary["seed"]["method_entry_object_count"], 22)
         self.assertEqual(summary["seed"]["declared_method_count"], 22)
         self.assertEqual(summary["seed"]["method_entry_count"], 22)
         self.assertEqual(summary["seed"]["global_binding_count"], 6)
@@ -95,7 +96,7 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         seed = bytearray(mvp.build_seed_manifest())
         header_size = struct.calcsize(mvp.SEED_HEADER_FORMAT)
         object_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
-        method_offset = header_size + (154 * object_size) + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
+        method_offset = header_size + (177 * object_size) + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
         primitive_kind_field_offset = method_offset + (2 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
 
         seed[primitive_kind_field_offset + 1 : primitive_kind_field_offset + 5] = struct.pack("<i", mvp.SEED_OBJECT_DISPLAY)
@@ -107,10 +108,14 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         seed = bytearray(mvp.build_seed_manifest())
         header_size = struct.calcsize(mvp.SEED_HEADER_FORMAT)
         object_size = struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT) + (4 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
-        method_offset = header_size + (154 * object_size) + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
-        entry_field_offset = method_offset + (3 * struct.calcsize(mvp.SEED_FIELD_FORMAT))
+        class_instance_kind_entry_object_index = 155 + (
+            mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND"] - 1
+        )
+        entry_offset = header_size + (
+            class_instance_kind_entry_object_index * object_size
+        ) + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
 
-        seed[entry_field_offset + 1 : entry_field_offset + 5] = struct.pack(
+        seed[entry_offset + 1 : entry_offset + 5] = struct.pack(
             "<i",
             mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW"],
         )

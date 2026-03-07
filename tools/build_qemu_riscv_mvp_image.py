@@ -132,7 +132,7 @@ IMAGE_ENTRY_FORMAT = "<4sHHHHHH"
 IMAGE_ENTRY_KIND_DOIT = 1
 
 SEED_MAGIC = b"RCZS"
-SEED_VERSION = 8
+SEED_VERSION = 9
 SEED_HEADER_FORMAT = "<4sHHHHHH"
 SEED_BINDING_FORMAT = "<HH"
 SEED_OBJECT_HEADER_FORMAT = "<BBH"
@@ -165,6 +165,7 @@ SEED_OBJECT_TEXT_METRICS = 11
 SEED_OBJECT_TEXT_BEHAVIOR = 12
 SEED_OBJECT_CLASS = 13
 SEED_OBJECT_METHOD_DESCRIPTOR = 14
+SEED_OBJECT_METHOD_ENTRY = 15
 
 SEED_ROOT_DEFAULT_FORM = 1
 SEED_ROOT_FRAMEBUFFER_BITMAP = 2
@@ -251,7 +252,7 @@ METHOD_ENTRY_SPECS = {
     for name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS
 }
 BUILTIN_METHODS_BY_KIND: dict[int, list[tuple[str, int, str]]] = {
-    kind: [] for kind in range(SEED_OBJECT_TRANSCRIPT, SEED_OBJECT_METHOD_DESCRIPTOR + 1)
+    kind: [] for kind in range(SEED_OBJECT_TRANSCRIPT, SEED_OBJECT_METHOD_ENTRY + 1)
 }
 for entry_name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS:
     BUILTIN_METHODS_BY_KIND[owner_kind].append((selector, argument_count, entry_name))
@@ -508,6 +509,7 @@ def build_seed_manifest() -> bytes:
         SEED_OBJECT_TEXT_METRICS,
         SEED_OBJECT_TEXT_BEHAVIOR,
         SEED_OBJECT_METHOD_DESCRIPTOR,
+        SEED_OBJECT_METHOD_ENTRY,
     ]
     class_indices = {
         SEED_OBJECT_TRANSCRIPT: class_class_index + 1,
@@ -523,15 +525,32 @@ def build_seed_manifest() -> bytes:
         SEED_OBJECT_TEXT_METRICS: class_class_index + 11,
         SEED_OBJECT_TEXT_BEHAVIOR: class_class_index + 12,
         SEED_OBJECT_METHOD_DESCRIPTOR: class_class_index + 13,
+        SEED_OBJECT_METHOD_ENTRY: class_class_index + 14,
     }
 
     for seed_object in seed_objects:
         seed_object.class_index = class_indices[seed_object.object_kind]
 
-    method_start_index = class_class_index + len(class_kinds_in_order)
+    method_entry_start_index = class_class_index + len(class_kinds_in_order)
     method_start_by_kind: dict[int, int] = {}
     method_count_by_kind: dict[int, int] = {}
+    method_entry_indices: dict[str, int] = {}
+    method_entry_seed_objects: list[SeedObject] = []
     method_seed_objects: list[SeedObject] = []
+
+    for entry_name, _owner_kind, _selector, _argument_count in METHOD_ENTRY_DEFINITIONS:
+        method_entry_indices[entry_name] = method_entry_start_index + len(method_entry_seed_objects)
+        method_entry_seed_objects.append(
+            SeedObject(
+                SEED_OBJECT_METHOD_ENTRY,
+                class_indices[SEED_OBJECT_METHOD_ENTRY],
+                [
+                    (SEED_FIELD_SMALL_INTEGER, METHOD_ENTRY_VALUES[entry_name]),
+                ],
+            )
+        )
+
+    method_start_index = method_entry_start_index + len(method_entry_seed_objects)
 
     for class_kind in class_kinds_in_order:
         method_definitions = BUILTIN_METHODS_BY_KIND.get(class_kind, [])
@@ -547,7 +566,7 @@ def build_seed_manifest() -> bytes:
                         (SEED_FIELD_SMALL_INTEGER, SELECTOR_VALUES[SELECTOR_IDS[selector]]),
                         (SEED_FIELD_SMALL_INTEGER, argument_count),
                         (SEED_FIELD_SMALL_INTEGER, class_kind),
-                        (SEED_FIELD_SMALL_INTEGER, METHOD_ENTRY_VALUES[entry_name]),
+                        (SEED_FIELD_OBJECT_INDEX, method_entry_indices[entry_name]),
                     ],
                 )
             )
@@ -570,6 +589,7 @@ def build_seed_manifest() -> bytes:
     ]
 
     seed_objects.extend(class_seed_objects)
+    seed_objects.extend(method_entry_seed_objects)
     seed_objects.extend(method_seed_objects)
 
     global_bindings = [

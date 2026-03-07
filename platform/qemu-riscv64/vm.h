@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define RECORZ_MVP_HEAP_LIMIT 192U
+#define RECORZ_MVP_HEAP_LIMIT 224U
 #define RECORZ_MVP_GLYPH_CODE_LIMIT 128U
 #define RECORZ_MVP_SEED_INVALID_OBJECT_INDEX 0xFFFFU
 
@@ -73,6 +73,7 @@ enum recorz_mvp_object_kind {
     RECORZ_MVP_OBJECT_TEXT_BEHAVIOR = 12,
     RECORZ_MVP_OBJECT_CLASS = 13,
     RECORZ_MVP_OBJECT_METHOD_DESCRIPTOR = 14,
+    RECORZ_MVP_OBJECT_METHOD_ENTRY = 15,
 };
 
 enum recorz_mvp_method_entry {

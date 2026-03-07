@@ -38,6 +38,7 @@
 #define METHOD_FIELD_ARGUMENT_COUNT 1U
 #define METHOD_FIELD_PRIMITIVE_KIND 2U
 #define METHOD_FIELD_ENTRY 3U
+#define METHOD_ENTRY_FIELD_EXECUTION_ID 0U
 
 #define BITMAP_STORAGE_FRAMEBUFFER 1U
 #define BITMAP_STORAGE_GLYPH_MONO 2U
@@ -218,7 +219,7 @@ static struct recorz_mvp_value stack[STACK_LIMIT];
 static struct recorz_mvp_heap_object heap[HEAP_LIMIT];
 static uint32_t stack_size = 0U;
 static uint16_t heap_size = 0U;
-static uint16_t class_handles_by_kind[RECORZ_MVP_OBJECT_METHOD_DESCRIPTOR + 1U];
+static uint16_t class_handles_by_kind[RECORZ_MVP_OBJECT_METHOD_ENTRY + 1U];
 static uint16_t global_handles[RECORZ_MVP_GLOBAL_BITMAP + 1U];
 static uint16_t default_form_handle = 0U;
 static uint16_t framebuffer_bitmap_handle = 0U;
@@ -415,6 +416,8 @@ static const char *object_kind_name(uint8_t kind) {
             return "Class";
         case RECORZ_MVP_OBJECT_METHOD_DESCRIPTOR:
             return "MethodDescriptor";
+        case RECORZ_MVP_OBJECT_METHOD_ENTRY:
+            return "MethodEntry";
     }
     return "UnknownObject";
 }
@@ -609,7 +612,7 @@ static uint16_t heap_allocate(uint8_t kind) {
 static uint16_t heap_allocate_seeded_class(uint8_t kind) {
     uint16_t handle = heap_allocate(kind);
 
-    if (kind <= RECORZ_MVP_OBJECT_METHOD_DESCRIPTOR && class_handles_by_kind[kind] != 0U) {
+    if (kind <= RECORZ_MVP_OBJECT_METHOD_ENTRY && class_handles_by_kind[kind] != 0U) {
         heap_set_class(handle, class_handles_by_kind[kind]);
     }
     return handle;
@@ -722,10 +725,22 @@ static uint32_t method_descriptor_primitive_kind(const struct recorz_mvp_heap_ob
     );
 }
 
-static uint32_t method_descriptor_entry(const struct recorz_mvp_heap_object *method_object) {
+static const struct recorz_mvp_heap_object *method_descriptor_entry_object(const struct recorz_mvp_heap_object *method_object) {
+    struct recorz_mvp_value entry_value = heap_get_field(method_object, METHOD_FIELD_ENTRY);
+
+    if (entry_value.kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("method descriptor entry is not a method entry object");
+    }
+    return heap_object_for_value(entry_value);
+}
+
+static uint32_t method_entry_execution_id(const struct recorz_mvp_heap_object *entry_object) {
+    if (entry_object->kind != RECORZ_MVP_OBJECT_METHOD_ENTRY) {
+        machine_panic("method descriptor entry does not point at a method entry");
+    }
     return small_integer_u32(
-        heap_get_field(method_object, METHOD_FIELD_ENTRY),
-        "method descriptor entry is not a small integer"
+        heap_get_field(entry_object, METHOD_ENTRY_FIELD_EXECUTION_ID),
+        "method entry execution id is not a small integer"
     );
 }
 
@@ -848,6 +863,7 @@ static void validate_class_method_table(
     for (method_offset = 0U; method_offset < method_count; ++method_offset) {
         const struct recorz_mvp_heap_object *method_object =
             (const struct recorz_mvp_heap_object *)heap_object((uint16_t)(start_handle + method_offset));
+        const struct recorz_mvp_heap_object *entry_object;
         uint32_t selector;
         uint32_t argument_count;
         uint32_t primitive_kind;
@@ -863,7 +879,8 @@ static void validate_class_method_table(
         selector = method_descriptor_selector(method_object);
         argument_count = method_descriptor_argument_count(method_object);
         primitive_kind = method_descriptor_primitive_kind(method_object);
-        entry = method_descriptor_entry(method_object);
+        entry_object = method_descriptor_entry_object(method_object);
+        entry = method_entry_execution_id(entry_object);
         entry_spec = method_entry_spec(entry);
         if (selector < RECORZ_MVP_SELECTOR_SHOW || selector > RECORZ_MVP_SELECTOR_INSTANCE_KIND) {
             machine_panic("method descriptor selector is out of range");
@@ -915,13 +932,13 @@ static void initialize_class_handle_cache(const struct recorz_mvp_seed *seed) {
     uint16_t seed_index;
     uint16_t kind;
 
-    for (kind = 0U; kind <= RECORZ_MVP_OBJECT_METHOD_DESCRIPTOR; ++kind) {
+    for (kind = 0U; kind <= RECORZ_MVP_OBJECT_METHOD_ENTRY; ++kind) {
         class_handles_by_kind[kind] = 0U;
     }
     for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
         const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(seeded_handles[seed_index]);
 
-        if (object->kind > RECORZ_MVP_OBJECT_METHOD_DESCRIPTOR || object->class_handle == 0U) {
+        if (object->kind > RECORZ_MVP_OBJECT_METHOD_ENTRY || object->class_handle == 0U) {
             continue;
         }
         if (class_handles_by_kind[object->kind] == 0U) {
@@ -1935,6 +1952,7 @@ static void dispatch_heap_object_send(
 ) {
     const struct recorz_mvp_heap_object *class_object;
     const struct recorz_mvp_heap_object *method_object;
+    const struct recorz_mvp_heap_object *entry_object;
     const struct recorz_mvp_method_entry_spec *entry_spec;
     recorz_mvp_method_entry_handler handler;
     uint32_t entry;
@@ -1948,7 +1966,8 @@ static void dispatch_heap_object_send(
     if (method_object == 0) {
         machine_panic("selector is not understood by receiver class");
     }
-    entry = method_descriptor_entry(method_object);
+    entry_object = method_descriptor_entry_object(method_object);
+    entry = method_entry_execution_id(entry_object);
     entry_spec = method_entry_spec(entry);
     if (entry_spec->selector != selector || entry_spec->argument_count != argument_count) {
         machine_panic("method descriptor entry does not match send site");
