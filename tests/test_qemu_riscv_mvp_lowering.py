@@ -605,6 +605,83 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
 
+    def test_declares_method_seed_orders_and_materializes_method_seed_objects(self) -> None:
+        self.assertEqual(
+            mvp.SELECTOR_VALUE_ORDER,
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 14, 15, 16, 17, 18, 19, 20, 22],
+        )
+        self.assertEqual(
+            mvp.COMPILED_METHOD_ENTRY_ORDER[:4],
+            [
+                "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW",
+                "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR",
+                "RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM",
+                "RECORZ_MVP_METHOD_ENTRY_DISPLAY_CLEAR",
+            ],
+        )
+        class_indices = mvp.build_class_index_map(mvp.CLASS_DESCRIPTOR_KIND_ORDER, 140)
+        selector_indices, selector_seed_objects = mvp.build_selector_seed_objects(157, class_indices[mvp.SEED_OBJECT_SELECTOR])
+        self.assertEqual(selector_indices[mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SHOW"]], 157)
+        self.assertEqual(selector_indices[mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_INSTANCE_KIND"]], 173)
+        self.assertEqual(
+            selector_seed_objects[0].fields,
+            [(mvp.SEED_FIELD_SMALL_INTEGER, mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SHOW"])],
+        )
+        compiled_method_indices, compiled_method_seed_objects = mvp.build_compiled_method_seed_objects(
+            174,
+            class_indices[mvp.SEED_OBJECT_COMPILED_METHOD],
+        )
+        self.assertEqual(compiled_method_indices["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW"], 174)
+        self.assertEqual(compiled_method_indices["RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND"], 185)
+        self.assertEqual(
+            compiled_method_seed_objects[0].fields,
+            [
+                (mvp.SEED_FIELD_SMALL_INTEGER, instruction)
+                for instruction in mvp.COMPILED_METHOD_PROGRAM_BY_ENTRY_NAME["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW"]
+            ],
+        )
+        method_entry_indices, method_entry_seed_objects = mvp.build_method_entry_seed_objects(
+            186,
+            class_indices[mvp.SEED_OBJECT_METHOD_ENTRY],
+            compiled_method_indices,
+        )
+        self.assertEqual(
+            method_entry_seed_objects[0].fields,
+            [
+                (mvp.SEED_FIELD_SMALL_INTEGER, mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW"]),
+                (mvp.SEED_FIELD_OBJECT_INDEX, 174),
+            ],
+        )
+        bitblt_fill_entry_index = mvp.METHOD_ENTRY_ORDER.index("RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR")
+        self.assertEqual(
+            method_entry_seed_objects[bitblt_fill_entry_index].fields,
+            [
+                (mvp.SEED_FIELD_SMALL_INTEGER, mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR"]),
+                (
+                    mvp.SEED_FIELD_SMALL_INTEGER,
+                    mvp.PRIMITIVE_BINDING_BY_ENTRY_NAME["RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR"],
+                ),
+            ],
+        )
+        method_start_by_kind, method_count_by_kind, method_seed_objects = mvp.build_method_descriptor_seed_objects(
+            mvp.CLASS_DESCRIPTOR_KIND_ORDER,
+            class_indices[mvp.SEED_OBJECT_METHOD_DESCRIPTOR],
+            selector_indices,
+            method_entry_indices,
+            208,
+        )
+        self.assertEqual(method_start_by_kind[mvp.SEED_OBJECT_CLASS], 208)
+        self.assertEqual(method_count_by_kind[mvp.SEED_OBJECT_FORM], 6)
+        self.assertEqual(
+            method_seed_objects[0].fields,
+            [
+                (mvp.SEED_FIELD_OBJECT_INDEX, 173),
+                (mvp.SEED_FIELD_SMALL_INTEGER, 0),
+                (mvp.SEED_FIELD_SMALL_INTEGER, mvp.SEED_OBJECT_CLASS),
+                (mvp.SEED_FIELD_OBJECT_INDEX, 207),
+            ],
+        )
+
     def test_renders_generated_runtime_bindings_header(self) -> None:
         header = mvp.render_generated_runtime_bindings_header()
 

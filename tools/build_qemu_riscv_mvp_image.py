@@ -826,6 +826,10 @@ for entry_name, source in KERNEL_METHOD_SOURCE_BY_ENTRY_NAME.items():
     if source.primitive_binding not in PRIMITIVE_BINDING_VALUES:
         PRIMITIVE_BINDING_VALUES[source.primitive_binding] = len(PRIMITIVE_BINDING_VALUES) + 1
     PRIMITIVE_BINDING_BY_ENTRY_NAME[entry_name] = PRIMITIVE_BINDING_VALUES[source.primitive_binding]
+SELECTOR_VALUE_ORDER = sorted({METHOD_ENTRY_SPECS[METHOD_ENTRY_VALUES[name]][1] for name in METHOD_ENTRY_ORDER})
+COMPILED_METHOD_ENTRY_ORDER = [
+    entry_name for entry_name in METHOD_ENTRY_ORDER if entry_name in COMPILED_METHOD_PROGRAM_BY_ENTRY_NAME
+]
 
 
 def render_generated_runtime_bindings_header() -> str:
@@ -1135,6 +1139,119 @@ def build_class_index_map(class_kind_order: list[int], class_class_index: int) -
     return class_indices
 
 
+def build_selector_seed_objects(
+    selector_start_index: int,
+    selector_class_index: int,
+) -> tuple[dict[int, int], list[SeedObject]]:
+    selector_indices_by_value: dict[int, int] = {}
+    selector_seed_objects: list[SeedObject] = []
+
+    for selector_value in SELECTOR_VALUE_ORDER:
+        selector_indices_by_value[selector_value] = selector_start_index + len(selector_seed_objects)
+        selector_seed_objects.append(
+            SeedObject(
+                SEED_OBJECT_SELECTOR,
+                selector_class_index,
+                [
+                    (SEED_FIELD_SMALL_INTEGER, selector_value),
+                ],
+            )
+        )
+
+    return selector_indices_by_value, selector_seed_objects
+
+
+def build_compiled_method_seed_objects(
+    compiled_method_start_index: int,
+    compiled_method_class_index: int,
+) -> tuple[dict[str, int], list[SeedObject]]:
+    compiled_method_indices: dict[str, int] = {}
+    compiled_method_seed_objects: list[SeedObject] = []
+
+    for entry_name in COMPILED_METHOD_ENTRY_ORDER:
+        program = COMPILED_METHOD_PROGRAM_BY_ENTRY_NAME[entry_name]
+        encoded_fields = [
+            (SEED_FIELD_SMALL_INTEGER, instruction)
+            for instruction in program
+        ]
+        compiled_method_indices[entry_name] = compiled_method_start_index + len(compiled_method_seed_objects)
+        compiled_method_seed_objects.append(
+            SeedObject(
+                SEED_OBJECT_COMPILED_METHOD,
+                compiled_method_class_index,
+                encoded_fields,
+            )
+        )
+
+    return compiled_method_indices, compiled_method_seed_objects
+
+
+def build_method_entry_seed_objects(
+    method_entry_start_index: int,
+    method_entry_class_index: int,
+    compiled_method_indices: dict[str, int],
+) -> tuple[dict[str, int], list[SeedObject]]:
+    method_entry_indices: dict[str, int] = {}
+    method_entry_seed_objects: list[SeedObject] = []
+
+    for entry_name, _owner_kind, _selector, _argument_count in METHOD_ENTRY_DEFINITIONS:
+        implementation_field_kind = SEED_FIELD_NIL
+        implementation_field_value = 0
+
+        if entry_name in compiled_method_indices:
+            implementation_field_kind = SEED_FIELD_OBJECT_INDEX
+            implementation_field_value = compiled_method_indices[entry_name]
+        elif entry_name in PRIMITIVE_BINDING_BY_ENTRY_NAME:
+            implementation_field_kind = SEED_FIELD_SMALL_INTEGER
+            implementation_field_value = PRIMITIVE_BINDING_BY_ENTRY_NAME[entry_name]
+        method_entry_indices[entry_name] = method_entry_start_index + len(method_entry_seed_objects)
+        method_entry_seed_objects.append(
+            SeedObject(
+                SEED_OBJECT_METHOD_ENTRY,
+                method_entry_class_index,
+                [
+                    (SEED_FIELD_SMALL_INTEGER, METHOD_ENTRY_VALUES[entry_name]),
+                    (implementation_field_kind, implementation_field_value),
+                ],
+            )
+        )
+
+    return method_entry_indices, method_entry_seed_objects
+
+
+def build_method_descriptor_seed_objects(
+    class_kind_order: list[int],
+    method_descriptor_class_index: int,
+    selector_indices_by_value: dict[int, int],
+    method_entry_indices: dict[str, int],
+    method_start_index: int,
+) -> tuple[dict[int, int], dict[int, int], list[SeedObject]]:
+    method_start_by_kind: dict[int, int] = {}
+    method_count_by_kind: dict[int, int] = {}
+    method_seed_objects: list[SeedObject] = []
+
+    for class_kind in class_kind_order:
+        method_definitions = BUILTIN_METHODS_BY_KIND.get(class_kind, [])
+        method_count_by_kind[class_kind] = len(method_definitions)
+        if method_definitions:
+            method_start_by_kind[class_kind] = method_start_index + len(method_seed_objects)
+        for selector, argument_count, entry_name in method_definitions:
+            method_seed_objects.append(
+                SeedObject(
+                    SEED_OBJECT_METHOD_DESCRIPTOR,
+                    method_descriptor_class_index,
+                    [
+                        (SEED_FIELD_OBJECT_INDEX, selector_indices_by_value[SELECTOR_VALUES[SELECTOR_IDS[selector]]]),
+                        (SEED_FIELD_SMALL_INTEGER, argument_count),
+                        (SEED_FIELD_SMALL_INTEGER, class_kind),
+                        (SEED_FIELD_OBJECT_INDEX, method_entry_indices[entry_name]),
+                    ],
+                )
+            )
+
+    return method_start_by_kind, method_count_by_kind, method_seed_objects
+
+
 def build_seed_manifest() -> bytes:
     seed_objects: list[SeedObject] = []
     seed_object_indices_by_name: dict[str, int] = {}
@@ -1183,86 +1300,29 @@ def build_seed_manifest() -> bytes:
         seed_object.class_index = class_indices[seed_object.object_kind]
 
     selector_start_index = class_class_index + len(class_kind_order)
-    method_start_by_kind: dict[int, int] = {}
-    method_count_by_kind: dict[int, int] = {}
-    selector_indices_by_value: dict[int, int] = {}
-    selector_seed_objects: list[SeedObject] = []
-    compiled_method_indices: dict[str, int] = {}
-    compiled_method_seed_objects: list[SeedObject] = []
-    method_entry_indices: dict[str, int] = {}
-    method_entry_seed_objects: list[SeedObject] = []
-    method_seed_objects: list[SeedObject] = []
-
-    for selector_value in sorted({METHOD_ENTRY_SPECS[METHOD_ENTRY_VALUES[name]][1] for name, *_rest in METHOD_ENTRY_DEFINITIONS}):
-        selector_indices_by_value[selector_value] = selector_start_index + len(selector_seed_objects)
-        selector_seed_objects.append(
-            SeedObject(
-                SEED_OBJECT_SELECTOR,
-                class_indices[SEED_OBJECT_SELECTOR],
-                [
-                    (SEED_FIELD_SMALL_INTEGER, selector_value),
-                ],
-            )
-        )
-
+    selector_indices_by_value, selector_seed_objects = build_selector_seed_objects(
+        selector_start_index,
+        class_indices[SEED_OBJECT_SELECTOR],
+    )
     compiled_method_start_index = selector_start_index + len(selector_seed_objects)
-    for entry_name, program in COMPILED_METHOD_PROGRAM_BY_ENTRY_NAME.items():
-        encoded_fields = [
-            (SEED_FIELD_SMALL_INTEGER, instruction)
-            for instruction in program
-        ]
-        compiled_method_indices[entry_name] = compiled_method_start_index + len(compiled_method_seed_objects)
-        compiled_method_seed_objects.append(
-            SeedObject(
-                SEED_OBJECT_COMPILED_METHOD,
-                class_indices[SEED_OBJECT_COMPILED_METHOD],
-                encoded_fields,
-            )
-        )
-
+    compiled_method_indices, compiled_method_seed_objects = build_compiled_method_seed_objects(
+        compiled_method_start_index,
+        class_indices[SEED_OBJECT_COMPILED_METHOD],
+    )
     method_entry_start_index = compiled_method_start_index + len(compiled_method_seed_objects)
-    for entry_name, _owner_kind, _selector, _argument_count in METHOD_ENTRY_DEFINITIONS:
-        implementation_field_kind = SEED_FIELD_NIL
-        implementation_field_value = 0
-
-        if entry_name in compiled_method_indices:
-            implementation_field_kind = SEED_FIELD_OBJECT_INDEX
-            implementation_field_value = compiled_method_indices[entry_name]
-        elif entry_name in PRIMITIVE_BINDING_BY_ENTRY_NAME:
-            implementation_field_kind = SEED_FIELD_SMALL_INTEGER
-            implementation_field_value = PRIMITIVE_BINDING_BY_ENTRY_NAME[entry_name]
-        method_entry_indices[entry_name] = method_entry_start_index + len(method_entry_seed_objects)
-        method_entry_seed_objects.append(
-            SeedObject(
-                SEED_OBJECT_METHOD_ENTRY,
-                class_indices[SEED_OBJECT_METHOD_ENTRY],
-                [
-                    (SEED_FIELD_SMALL_INTEGER, METHOD_ENTRY_VALUES[entry_name]),
-                    (implementation_field_kind, implementation_field_value),
-                ],
-            )
-        )
-
+    method_entry_indices, method_entry_seed_objects = build_method_entry_seed_objects(
+        method_entry_start_index,
+        class_indices[SEED_OBJECT_METHOD_ENTRY],
+        compiled_method_indices,
+    )
     method_start_index = method_entry_start_index + len(method_entry_seed_objects)
-
-    for class_kind in class_kind_order:
-        method_definitions = BUILTIN_METHODS_BY_KIND.get(class_kind, [])
-        method_count_by_kind[class_kind] = len(method_definitions)
-        if method_definitions:
-            method_start_by_kind[class_kind] = method_start_index + len(method_seed_objects)
-        for selector, argument_count, entry_name in method_definitions:
-            method_seed_objects.append(
-                SeedObject(
-                    SEED_OBJECT_METHOD_DESCRIPTOR,
-                    class_indices[SEED_OBJECT_METHOD_DESCRIPTOR],
-                    [
-                        (SEED_FIELD_OBJECT_INDEX, selector_indices_by_value[SELECTOR_VALUES[SELECTOR_IDS[selector]]]),
-                        (SEED_FIELD_SMALL_INTEGER, argument_count),
-                        (SEED_FIELD_SMALL_INTEGER, class_kind),
-                        (SEED_FIELD_OBJECT_INDEX, method_entry_indices[entry_name]),
-                    ],
-                )
-            )
+    method_start_by_kind, method_count_by_kind, method_seed_objects = build_method_descriptor_seed_objects(
+        class_kind_order,
+        class_indices[SEED_OBJECT_METHOD_DESCRIPTOR],
+        selector_indices_by_value,
+        method_entry_indices,
+        method_start_index,
+    )
 
     class_indices, class_seed_objects = build_class_seed_objects(
         class_kind_order,

@@ -328,3 +328,9 @@
 - Added small builder helpers for the class index map and class seed object materialization, replacing the remaining inline class-order loop while preserving the existing class descriptor layout.
 - Added a focused regression covering the declared class descriptor order and the helper that materializes class seed objects and class indices.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Declare Method Seed Assembly Helpers
+- Moved the remaining selector, compiled-method, method-entry, and method-descriptor seed-object assembly in `build_seed_manifest()` behind small helpers and explicit derived order lists.
+- Added `SELECTOR_VALUE_ORDER` and `COMPILED_METHOD_ENTRY_ORDER` so the seed builder no longer hides those ordering rules inside inline loops, while preserving the current image layout and object indices.
+- Added a focused regression covering selector seed object ordering, compiled-method and method-entry materialization, and the first method descriptor layout.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
