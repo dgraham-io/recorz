@@ -1,2 +1,4 @@
+RecorzKernelClass: #Glyphs instanceVariableNames: ''
+!
 at: codePoint
     <primitive>

@@ -1,3 +1,5 @@
+RecorzKernelClass: #BitBlt instanceVariableNames: ''
+!
 fillForm: form color: color
     <primitive>
 !

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import struct
 import sys
 from dataclasses import dataclass
@@ -256,6 +257,12 @@ class KernelMethodSource:
     source_text: str
 
 
+@dataclass(frozen=True)
+class KernelClassHeader:
+    class_name: str
+    instance_variables: tuple[str, ...]
+
+
 METHOD_ENTRY_DEFINITIONS: list[tuple[str, int, str, int]] = [
     ("RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW", SEED_OBJECT_TRANSCRIPT, "show:", 1),
     ("RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR", SEED_OBJECT_TRANSCRIPT, "cr", 0),
@@ -296,6 +303,9 @@ METHOD_ENTRY_VALUES = {
 METHOD_ENTRY_COUNT = len(METHOD_ENTRY_VALUES) + 1
 KERNEL_METHOD_IMPLEMENTATION_COMPILED = "compiled"
 KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE = "primitive"
+KERNEL_CLASS_HEADER_PATTERN = re.compile(
+    r"^RecorzKernelClass:\s*#(?P<class_name>[A-Za-z_]\w*)\s+instanceVariableNames:\s*'(?P<instance_variables>[^']*)'$"
+)
 PRIMITIVE_KERNEL_METHOD_ENTRY_NAMES = {
     "RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR",
     "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE",
@@ -389,6 +399,19 @@ def split_kernel_method_chunks(source_text: str) -> list[str]:
     return chunks
 
 
+def parse_kernel_class_header(header_source: str, relative_path: str) -> KernelClassHeader:
+    normalized_header = " ".join(line.strip() for line in header_source.splitlines() if line.strip())
+    match = KERNEL_CLASS_HEADER_PATTERN.fullmatch(normalized_header)
+
+    if match is None:
+        raise LoweringError(f"kernel MVP class file {relative_path} has an invalid class header")
+    instance_variables = tuple(name for name in match.group("instance_variables").split() if name)
+    return KernelClassHeader(
+        class_name=match.group("class_name"),
+        instance_variables=instance_variables,
+    )
+
+
 def parse_kernel_method_chunk(
     class_name: str,
     instance_variables: list[str],
@@ -411,36 +434,39 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
         for entry_name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS
     }
     manifest_data = json.loads(KERNEL_MVP_MANIFEST_PATH.read_text(encoding="utf-8"))
-    class_specs = manifest_data.get("classes")
+    file_specs = manifest_data.get("files")
     method_sources: dict[str, KernelMethodSource] = {}
+    seen_class_names: set[str] = set()
 
-    if not isinstance(class_specs, dict):
-        raise LoweringError("kernel MVP manifest is missing a classes table")
-    for class_name, class_spec in class_specs.items():
-        expected_class_kind = KERNEL_CLASS_NAME_TO_OBJECT_KIND.get(class_name)
-        if not isinstance(class_name, str) or not isinstance(class_spec, dict):
-            raise LoweringError("kernel MVP manifest class entries are invalid")
-        if expected_class_kind is None:
-            raise LoweringError(f"kernel MVP manifest references unknown class {class_name}")
-        instance_variables = class_spec.get("instance_variables")
-        relative_path = class_spec.get("file")
+    if not isinstance(file_specs, dict):
+        raise LoweringError("kernel MVP manifest is missing a files table")
+    for relative_path, class_spec in file_specs.items():
+        if not isinstance(relative_path, str) or not isinstance(class_spec, dict):
+            raise LoweringError("kernel MVP manifest file entries are invalid")
         entry_names = class_spec.get("entries")
-        if not isinstance(instance_variables, list) or not all(isinstance(name, str) for name in instance_variables):
-            raise LoweringError(f"kernel MVP manifest instance variables are invalid for class {class_name}")
-        if not isinstance(relative_path, str):
-            raise LoweringError(f"kernel MVP manifest file path is invalid for class {class_name}")
         if not isinstance(entry_names, list) or not all(isinstance(entry_name, str) for entry_name in entry_names):
-            raise LoweringError(f"kernel MVP manifest entries are invalid for class {class_name}")
+            raise LoweringError(f"kernel MVP manifest entries are invalid for file {relative_path}")
         method_path = KERNEL_MVP_ROOT / relative_path
         if not method_path.is_file():
             raise LoweringError(f"kernel MVP method source is missing: {method_path}")
         chunk_sources = split_kernel_method_chunks(method_path.read_text(encoding="utf-8"))
+        if not chunk_sources:
+            raise LoweringError(f"kernel MVP class file {relative_path} is empty")
+        class_header = parse_kernel_class_header(chunk_sources[0], relative_path)
+        class_name = class_header.class_name
+        instance_variables = list(class_header.instance_variables)
+        expected_class_kind = KERNEL_CLASS_NAME_TO_OBJECT_KIND.get(class_name)
+        if expected_class_kind is None:
+            raise LoweringError(f"kernel MVP class file {relative_path} declares unknown class {class_name}")
+        if class_name in seen_class_names:
+            raise LoweringError(f"kernel MVP class {class_name} is declared more than once")
+        seen_class_names.add(class_name)
         chunk_definitions: dict[tuple[str, int], tuple[str, str]] = {}
 
-        for chunk_source in chunk_sources:
+        for chunk_source in chunk_sources[1:]:
             selector, argument_count, implementation_kind = parse_kernel_method_chunk(
                 class_name,
-                list(instance_variables),
+                instance_variables,
                 chunk_source,
             )
             signature = (selector, argument_count)
@@ -479,7 +505,7 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
                 )
             method_sources[entry_name] = KernelMethodSource(
                 class_name=class_name,
-                instance_variables=tuple(instance_variables),
+                instance_variables=class_header.instance_variables,
                 relative_path=relative_path,
                 selector=selector,
                 implementation_kind=implementation_kind,

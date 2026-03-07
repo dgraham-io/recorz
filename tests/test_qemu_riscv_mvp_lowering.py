@@ -290,6 +290,22 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
 
+    def test_parses_kernel_class_header(self) -> None:
+        self.assertEqual(
+            mvp.parse_kernel_class_header(
+                "RecorzKernelClass: #Form instanceVariableNames: 'bits'",
+                "Form.rz",
+            ),
+            mvp.KernelClassHeader("Form", ("bits",)),
+        )
+        self.assertEqual(
+            mvp.parse_kernel_class_header(
+                "RecorzKernelClass: #Display instanceVariableNames: ''",
+                "Display.rz",
+            ),
+            mvp.KernelClassHeader("Display", ()),
+        )
+
     def test_parses_primitive_kernel_method_chunk(self) -> None:
         self.assertEqual(
             mvp.parse_kernel_method_chunk(

@@ -1,3 +1,5 @@
+RecorzKernelClass: #Transcript instanceVariableNames: ''
+!
 show: text
     Display defaultForm writeString: text.
     ^self

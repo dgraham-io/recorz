@@ -1,3 +1,5 @@
+RecorzKernelClass: #Display instanceVariableNames: ''
+!
 defaultForm
     ^Display defaultForm
 !

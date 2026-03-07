@@ -1,2 +1,4 @@
+RecorzKernelClass: #FormFactory instanceVariableNames: ''
+!
 fromBits: bits
     <primitive>

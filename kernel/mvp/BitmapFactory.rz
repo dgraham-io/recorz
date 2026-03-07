@@ -1,2 +1,4 @@
+RecorzKernelClass: #BitmapFactory instanceVariableNames: ''
+!
 monoWidth: width height: height
     <primitive>

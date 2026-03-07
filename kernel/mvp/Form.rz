@@ -1,3 +1,5 @@
+RecorzKernelClass: #Form instanceVariableNames: 'bits'
+!
 clear
     <primitive>
 !

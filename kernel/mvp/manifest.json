@@ -1,16 +1,12 @@
 {
-  "classes": {
-    "Transcript": {
-      "instance_variables": [],
-      "file": "Transcript.rz",
+  "files": {
+    "Transcript.rz": {
       "entries": [
         "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW",
         "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR"
       ]
     },
-    "Display": {
-      "instance_variables": [],
-      "file": "Display.rz",
+    "Display.rz": {
       "entries": [
         "RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM",
         "RECORZ_MVP_METHOD_ENTRY_DISPLAY_CLEAR",
@@ -18,17 +14,13 @@
         "RECORZ_MVP_METHOD_ENTRY_DISPLAY_NEWLINE"
       ]
     },
-    "Bitmap": {
-      "instance_variables": ["width", "height", "storageKind", "storageId"],
-      "file": "Bitmap.rz",
+    "Bitmap.rz": {
       "entries": [
         "RECORZ_MVP_METHOD_ENTRY_BITMAP_WIDTH",
         "RECORZ_MVP_METHOD_ENTRY_BITMAP_HEIGHT"
       ]
     },
-    "Form": {
-      "instance_variables": ["bits"],
-      "file": "Form.rz",
+    "Form.rz": {
       "entries": [
         "RECORZ_MVP_METHOD_ENTRY_FORM_CLEAR",
         "RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING",
@@ -38,9 +30,7 @@
         "RECORZ_MVP_METHOD_ENTRY_FORM_HEIGHT"
       ]
     },
-    "BitBlt": {
-      "instance_variables": [],
-      "file": "BitBlt.rz",
+    "BitBlt.rz": {
       "entries": [
         "RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR",
         "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE",
@@ -48,30 +38,22 @@
         "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR"
       ]
     },
-    "Glyphs": {
-      "instance_variables": [],
-      "file": "Glyphs.rz",
+    "Glyphs.rz": {
       "entries": [
         "RECORZ_MVP_METHOD_ENTRY_GLYPHS_AT"
       ]
     },
-    "FormFactory": {
-      "instance_variables": [],
-      "file": "FormFactory.rz",
+    "FormFactory.rz": {
       "entries": [
         "RECORZ_MVP_METHOD_ENTRY_FORM_FACTORY_FROM_BITS"
       ]
     },
-    "BitmapFactory": {
-      "instance_variables": [],
-      "file": "BitmapFactory.rz",
+    "BitmapFactory.rz": {
       "entries": [
         "RECORZ_MVP_METHOD_ENTRY_BITMAP_FACTORY_MONO_WIDTH_HEIGHT"
       ]
     },
-    "Class": {
-      "instance_variables": ["superclass", "instanceKind", "methodStart", "methodCount"],
-      "file": "Class.rz",
+    "Class.rz": {
       "entries": [
         "RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND"
       ]

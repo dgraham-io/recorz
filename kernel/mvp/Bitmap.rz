@@ -1,3 +1,5 @@
+RecorzKernelClass: #Bitmap instanceVariableNames: 'width height storageKind storageId'
+!
 width
     ^width
 !
