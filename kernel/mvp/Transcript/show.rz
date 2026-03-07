@@ -1,0 +1,3 @@
+show: text
+    Display defaultForm writeString: text.
+    ^self

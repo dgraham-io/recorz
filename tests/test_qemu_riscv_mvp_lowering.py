@@ -231,6 +231,20 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
 
+    def test_loads_kernel_methods_from_manifest_files(self) -> None:
+        sources = mvp.load_kernel_method_sources()
+        transcript_show = sources["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW"]
+        form_width = sources["RECORZ_MVP_METHOD_ENTRY_FORM_WIDTH"]
+
+        self.assertEqual(transcript_show.class_name, "Transcript")
+        self.assertEqual(transcript_show.instance_variables, ())
+        self.assertEqual(transcript_show.relative_path, "Transcript/show.rz")
+        self.assertIn("Display defaultForm writeString: text.", transcript_show.source_text)
+        self.assertEqual(form_width.class_name, "Form")
+        self.assertEqual(form_width.instance_variables, ("bits",))
+        self.assertEqual(form_width.relative_path, "Form/width.rz")
+        self.assertEqual(form_width.source_text, "width\n    ^bits width")
+
     def test_builds_seed_manifest_with_expected_header(self) -> None:
         manifest = mvp.build_seed_manifest()
         (

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import struct
 import sys
 from dataclasses import dataclass
@@ -11,6 +12,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+KERNEL_MVP_ROOT = ROOT / "kernel" / "mvp"
+KERNEL_MVP_MANIFEST_PATH = KERNEL_MVP_ROOT / "manifest.json"
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
@@ -227,6 +230,14 @@ class SeedObject:
     fields: list[tuple[int, int]]
 
 
+@dataclass(frozen=True)
+class KernelMethodSource:
+    class_name: str
+    instance_variables: tuple[str, ...]
+    relative_path: str
+    source_text: str
+
+
 METHOD_ENTRY_DEFINITIONS: list[tuple[str, int, str, int]] = [
     ("RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW", SEED_OBJECT_TRANSCRIPT, "show:", 1),
     ("RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR", SEED_OBJECT_TRANSCRIPT, "cr", 0),
@@ -310,35 +321,6 @@ INTERPRETED_METHOD_PROGRAM_BY_ENTRY_NAME = {
         ("return_top", 0, 0),
     ],
 }
-COMPILED_METHOD_SOURCE_BY_ENTRY_NAME = {
-    "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW": ("Transcript", [], "show: text Display defaultForm writeString: text. ^self"),
-    "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR": ("Transcript", [], "cr Display defaultForm newline. ^self"),
-    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_CLEAR": ("Display", [], "clear Display defaultForm clear. ^self"),
-    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_WRITE_STRING": (
-        "Display",
-        [],
-        "writeString: text Display defaultForm writeString: text. ^self",
-    ),
-    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_NEWLINE": ("Display", [], "newline Display defaultForm newline. ^self"),
-    "RECORZ_MVP_METHOD_ENTRY_BITMAP_WIDTH": (
-        "Bitmap",
-        ["width", "height", "storageKind", "storageId"],
-        "width ^width",
-    ),
-    "RECORZ_MVP_METHOD_ENTRY_BITMAP_HEIGHT": (
-        "Bitmap",
-        ["width", "height", "storageKind", "storageId"],
-        "height ^height",
-    ),
-    "RECORZ_MVP_METHOD_ENTRY_FORM_BITS": ("Form", ["bits"], "bits ^bits"),
-    "RECORZ_MVP_METHOD_ENTRY_FORM_WIDTH": ("Form", ["bits"], "width ^bits width"),
-    "RECORZ_MVP_METHOD_ENTRY_FORM_HEIGHT": ("Form", ["bits"], "height ^bits height"),
-    "RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND": (
-        "Class",
-        ["superclass", "instanceKind", "methodStart", "methodCount"],
-        "instanceKind ^instanceKind",
-    ),
-}
 BUILTIN_METHODS_BY_KIND: dict[int, list[tuple[str, int, str]]] = {
     kind: [] for kind in range(SEED_OBJECT_TRANSCRIPT, SEED_OBJECT_COMPILED_METHOD + 1)
 }
@@ -360,6 +342,40 @@ def encode_compiled_method_instruction(opcode_name: str, operand_a: int = 0, ope
         | ((operand_a & 0xFF) << 8)
         | ((operand_b & 0xFFFF) << 16)
     )
+
+
+def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
+    manifest_data = json.loads(KERNEL_MVP_MANIFEST_PATH.read_text(encoding="utf-8"))
+    class_specs = manifest_data.get("classes")
+    method_sources: dict[str, KernelMethodSource] = {}
+
+    if not isinstance(class_specs, dict):
+        raise LoweringError("kernel MVP manifest is missing a classes table")
+    for class_name, class_spec in class_specs.items():
+        if not isinstance(class_name, str) or not isinstance(class_spec, dict):
+            raise LoweringError("kernel MVP manifest class entries are invalid")
+        instance_variables = class_spec.get("instance_variables")
+        methods = class_spec.get("methods")
+        if not isinstance(instance_variables, list) or not all(isinstance(name, str) for name in instance_variables):
+            raise LoweringError(f"kernel MVP manifest instance variables are invalid for class {class_name}")
+        if not isinstance(methods, dict):
+            raise LoweringError(f"kernel MVP manifest methods table is invalid for class {class_name}")
+        for entry_name, relative_path in methods.items():
+            method_path = KERNEL_MVP_ROOT / relative_path
+
+            if not isinstance(entry_name, str) or not isinstance(relative_path, str):
+                raise LoweringError(f"kernel MVP manifest method entries are invalid for class {class_name}")
+            if entry_name in method_sources:
+                raise LoweringError(f"kernel MVP manifest duplicates method entry {entry_name}")
+            if not method_path.is_file():
+                raise LoweringError(f"kernel MVP method source is missing: {method_path}")
+            method_sources[entry_name] = KernelMethodSource(
+                class_name=class_name,
+                instance_variables=tuple(instance_variables),
+                relative_path=relative_path,
+                source_text=method_path.read_text(encoding="utf-8").strip(),
+            )
+    return method_sources
 
 
 def compile_kernel_method_program(class_name: str, instance_variables: list[str], source: str) -> list[int]:
@@ -466,9 +482,10 @@ def compile_kernel_method_program(class_name: str, instance_variables: list[str]
     return lowered
 
 
+COMPILED_METHOD_SOURCE_BY_ENTRY_NAME = load_kernel_method_sources()
 COMPILED_METHOD_PROGRAM_BY_ENTRY_NAME = {
-    entry_name: compile_kernel_method_program(class_name, list(instance_variables), source)
-    for entry_name, (class_name, instance_variables, source) in COMPILED_METHOD_SOURCE_BY_ENTRY_NAME.items()
+    entry_name: compile_kernel_method_program(source.class_name, list(source.instance_variables), source.source_text)
+    for entry_name, source in COMPILED_METHOD_SOURCE_BY_ENTRY_NAME.items()
 }
 
 
