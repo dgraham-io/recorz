@@ -471,3 +471,9 @@
 - Kept `FIXED_BOOT_GRAPH_SPEC` as the stable underlying declaration, but made the boot object family maps, flattened object order, fixed count, and export maps flow through the top-level boot image model.
 - Extended the focused lowering regressions to lock that those fixed boot views are now derived from `BOOT_IMAGE_SPEC.fixed_boot_graph_spec` while keeping the generated seed image unchanged.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Thread Seed Assembly Through Boot Image Context
+- Added `BootImageSeedBuildContext` so the seed-manifest assembly path has one boot-image-shaped context carrying the fixed object count, glyph bitmap specs, dynamic section/build-step views, and export maps it needs.
+- Threaded that context through fixed boot materialization, dynamic seed section validation/build, binding generation, seed encoding, and final seed-manifest assembly so those helpers stop reaching into adjacent globals directly.
+- Extended the focused lowering regressions to lock the new `BOOT_IMAGE_SEED_BUILD_CONTEXT` and its derived dynamic section/build-step views while keeping the generated seed image unchanged.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

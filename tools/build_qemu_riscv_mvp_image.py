@@ -375,6 +375,17 @@ class BootImageSpec:
     dynamic_seed_section_specs: tuple[DynamicSeedSectionSpec, ...]
 
 
+@dataclass(frozen=True)
+class BootImageSeedBuildContext:
+    boot_image_spec: BootImageSpec
+    fixed_boot_object_count: int
+    glyph_bitmap_boot_specs: tuple[BootObjectSpec, ...]
+    dynamic_seed_object_section_specs: tuple[DynamicSeedObjectSectionSpec, ...]
+    dynamic_seed_build_step_specs: tuple[DynamicSeedBuildStepSpec, ...]
+    global_name_to_boot_object_name: dict[str, str]
+    seed_root_name_to_boot_object_name: dict[str, str]
+
+
 @dataclass
 class DynamicSeedBuildState:
     seed_layout: dict[str, SeedLayoutSection]
@@ -1322,8 +1333,11 @@ def build_seed_layout(base_object_index: int, class_kind_order: list[int]) -> di
 def validate_dynamic_seed_section_counts(
     seed_layout: dict[str, SeedLayoutSection],
     dynamic_sections: DynamicSeedSections,
+    dynamic_seed_object_section_specs: tuple[DynamicSeedObjectSectionSpec, ...] | None = None,
 ) -> None:
-    for section_spec in DYNAMIC_SEED_OBJECT_SECTION_SPECS:
+    if dynamic_seed_object_section_specs is None:
+        dynamic_seed_object_section_specs = DYNAMIC_SEED_OBJECT_SECTION_SPECS
+    for section_spec in dynamic_seed_object_section_specs:
         seed_objects = dynamic_sections.seed_objects_for_layout_section(section_spec.layout_section_name)
         if len(seed_objects) != seed_layout[section_spec.layout_section_name].count:
             raise AssertionError(
@@ -1523,6 +1537,27 @@ def build_boot_image_spec(
     )
 
 
+def build_boot_image_seed_build_context(
+    boot_image_spec: BootImageSpec,
+    dynamic_seed_object_section_specs: list[DynamicSeedObjectSectionSpec],
+    dynamic_seed_build_step_specs: list[DynamicSeedBuildStepSpec],
+    global_name_to_boot_object_name: dict[str, str],
+    seed_root_name_to_boot_object_name: dict[str, str],
+) -> BootImageSeedBuildContext:
+    glyph_bitmap_boot_specs = build_boot_object_family_spec_map(boot_image_spec.fixed_boot_graph_spec)[
+        "glyph_bitmaps"
+    ].object_specs
+    return BootImageSeedBuildContext(
+        boot_image_spec=boot_image_spec,
+        fixed_boot_object_count=len(flatten_boot_object_specs(boot_image_spec.fixed_boot_graph_spec)),
+        glyph_bitmap_boot_specs=glyph_bitmap_boot_specs,
+        dynamic_seed_object_section_specs=tuple(dynamic_seed_object_section_specs),
+        dynamic_seed_build_step_specs=tuple(dynamic_seed_build_step_specs),
+        global_name_to_boot_object_name=global_name_to_boot_object_name,
+        seed_root_name_to_boot_object_name=seed_root_name_to_boot_object_name,
+    )
+
+
 BOOT_IMAGE_SPEC = build_boot_image_spec(FIXED_BOOT_GRAPH_SPEC, DYNAMIC_SEED_SECTION_SPECS)
 BOOT_OBJECT_FAMILY_SPECS = list(BOOT_IMAGE_SPEC.fixed_boot_graph_spec.family_specs)
 BOOT_OBJECT_FAMILY_SPECS_BY_NAME = build_boot_object_family_spec_map(BOOT_IMAGE_SPEC.fixed_boot_graph_spec)
@@ -1540,6 +1575,13 @@ SEED_LAYOUT_SECTION_SPECS = build_seed_layout_section_specs(BOOT_IMAGE_SPEC.dyna
 SEED_LAYOUT_SECTION_NAMES = [section_spec.name for section_spec in SEED_LAYOUT_SECTION_SPECS]
 DYNAMIC_SEED_OBJECT_SECTION_SPECS = build_dynamic_seed_object_section_specs(BOOT_IMAGE_SPEC.dynamic_seed_section_specs)
 DYNAMIC_SEED_BUILD_STEP_SPECS = build_dynamic_seed_build_step_specs(BOOT_IMAGE_SPEC.dynamic_seed_section_specs)
+BOOT_IMAGE_SEED_BUILD_CONTEXT = build_boot_image_seed_build_context(
+    BOOT_IMAGE_SPEC,
+    DYNAMIC_SEED_OBJECT_SECTION_SPECS,
+    DYNAMIC_SEED_BUILD_STEP_SPECS,
+    GLOBAL_NAME_TO_BOOT_OBJECT_NAME,
+    SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME,
+)
 
 
 def build_selector_seed_objects(
@@ -1671,12 +1713,14 @@ def add_named_seed_object(
     return object_index
 
 
-def build_fixed_boot_seed_objects() -> tuple[list[SeedObject], dict[str, int], list[int]]:
+def build_fixed_boot_seed_objects(
+    build_context: BootImageSeedBuildContext = BOOT_IMAGE_SEED_BUILD_CONTEXT,
+) -> tuple[list[SeedObject], dict[str, int], list[int]]:
     seed_objects: list[SeedObject] = []
     seed_object_indices_by_name: dict[str, int] = {}
     glyph_object_indices: list[int] = []
 
-    for family_spec in BOOT_IMAGE_SPEC.fixed_boot_graph_spec.family_specs:
+    for family_spec in build_context.boot_image_spec.fixed_boot_graph_spec.family_specs:
         for spec in family_spec.object_specs:
             object_index = add_named_seed_object(
                 seed_objects,
@@ -1688,22 +1732,27 @@ def build_fixed_boot_seed_objects() -> tuple[list[SeedObject], dict[str, int], l
             if family_spec.collect_object_indices:
                 glyph_object_indices.append(object_index)
 
-    if len(seed_objects) != BOOT_OBJECT_FIXED_COUNT:
+    if len(seed_objects) != build_context.fixed_boot_object_count:
         raise AssertionError("boot object count does not match declared boot object families")
-    if len(glyph_object_indices) != len(GLYPH_BITMAP_BOOT_SPECS):
+    if len(glyph_object_indices) != len(build_context.glyph_bitmap_boot_specs):
         raise AssertionError("glyph object indices do not match declared glyph bitmap specs")
 
     return seed_objects, seed_object_indices_by_name, glyph_object_indices
 
 
-def validate_dynamic_seed_build_step_specs() -> None:
-    declared_section_names = {section_spec.layout_section_name for section_spec in DYNAMIC_SEED_OBJECT_SECTION_SPECS}
+def validate_dynamic_seed_build_step_specs(
+    build_context: BootImageSeedBuildContext = BOOT_IMAGE_SEED_BUILD_CONTEXT,
+) -> None:
+    declared_section_names = {
+        section_spec.layout_section_name
+        for section_spec in build_context.dynamic_seed_object_section_specs
+    }
     produced_section_names: set[str] = set()
     produced_state_field_names: set[str] = set()
     valid_state_field_names = set(DynamicSeedBuildState.__annotations__)
     available_state_field_names = set(INITIAL_DYNAMIC_SEED_STATE_FIELDS)
 
-    for build_step_spec in DYNAMIC_SEED_BUILD_STEP_SPECS:
+    for build_step_spec in build_context.dynamic_seed_build_step_specs:
         if build_step_spec.layout_section_name not in declared_section_names:
             raise AssertionError(
                 f"dynamic seed build step declares unknown section {build_step_spec.layout_section_name!r}"
@@ -1794,9 +1843,12 @@ def apply_dynamic_seed_build_step_result(
     return build_step_result.seed_objects
 
 
-def build_dynamic_seed_sections(seed_objects: list[SeedObject]) -> DynamicSeedSections:
-    validate_dynamic_seed_build_step_specs()
-    seed_layout = build_seed_layout(BOOT_OBJECT_FIXED_COUNT, CLASS_DESCRIPTOR_KIND_ORDER)
+def build_dynamic_seed_sections(
+    seed_objects: list[SeedObject],
+    build_context: BootImageSeedBuildContext = BOOT_IMAGE_SEED_BUILD_CONTEXT,
+) -> DynamicSeedSections:
+    validate_dynamic_seed_build_step_specs(build_context)
+    seed_layout = build_seed_layout(build_context.fixed_boot_object_count, CLASS_DESCRIPTOR_KIND_ORDER)
     class_class_index = seed_layout["class_descriptors"].start_index
     class_kind_order = CLASS_DESCRIPTOR_KIND_ORDER
     class_indices = build_class_index_map(class_kind_order, class_class_index)
@@ -1818,7 +1870,7 @@ def build_dynamic_seed_sections(seed_objects: list[SeedObject]) -> DynamicSeedSe
     for seed_object in seed_objects:
         seed_object.class_index = class_indices[seed_object.object_kind]
 
-    for build_step_spec in DYNAMIC_SEED_BUILD_STEP_SPECS:
+    for build_step_spec in build_context.dynamic_seed_build_step_specs:
         missing_required_sections = [
             section_name
             for section_name in build_step_spec.required_layout_sections
@@ -1855,20 +1907,23 @@ def build_dynamic_seed_sections(seed_objects: list[SeedObject]) -> DynamicSeedSe
     return dynamic_sections
 
 
-def build_seed_bindings(seed_object_indices_by_name: dict[str, int]) -> SeedBindings:
+def build_seed_bindings(
+    seed_object_indices_by_name: dict[str, int],
+    build_context: BootImageSeedBuildContext = BOOT_IMAGE_SEED_BUILD_CONTEXT,
+) -> SeedBindings:
     return SeedBindings(
         global_bindings=build_named_object_bindings(
             [name for name, _constant_name in GLOBAL_SPECS],
             GLOBAL_IDS,
             GLOBAL_VALUES,
-            GLOBAL_NAME_TO_BOOT_OBJECT_NAME,
+            build_context.global_name_to_boot_object_name,
             seed_object_indices_by_name,
         ),
         root_bindings=build_named_object_bindings(
             [name for name, _constant_name in SEED_ROOT_SPECS],
             SEED_ROOT_IDS,
             SEED_ROOT_VALUES,
-            SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME,
+            build_context.seed_root_name_to_boot_object_name,
             seed_object_indices_by_name,
         ),
     )
@@ -1878,6 +1933,7 @@ def encode_seed_manifest(
     seed_objects: list[SeedObject],
     bindings: SeedBindings,
     glyph_object_indices: list[int],
+    build_context: BootImageSeedBuildContext = BOOT_IMAGE_SEED_BUILD_CONTEXT,
 ) -> bytes:
     manifest = bytearray(
         struct.pack(
@@ -1887,7 +1943,7 @@ def encode_seed_manifest(
             len(seed_objects),
             len(bindings.global_bindings),
             len(bindings.root_bindings),
-            len(GLYPH_BITMAP_BOOT_SPECS),
+            len(build_context.glyph_bitmap_boot_specs),
             0,
         )
     )
@@ -1912,13 +1968,14 @@ def encode_seed_manifest(
 
 
 def build_seed_manifest() -> bytes:
-    seed_objects, seed_object_indices_by_name, glyph_object_indices = build_fixed_boot_seed_objects()
-    dynamic_sections = build_dynamic_seed_sections(seed_objects)
+    build_context = BOOT_IMAGE_SEED_BUILD_CONTEXT
+    seed_objects, seed_object_indices_by_name, glyph_object_indices = build_fixed_boot_seed_objects(build_context)
+    dynamic_sections = build_dynamic_seed_sections(seed_objects, build_context)
 
-    for section_spec in DYNAMIC_SEED_OBJECT_SECTION_SPECS:
+    for section_spec in build_context.dynamic_seed_object_section_specs:
         seed_objects.extend(dynamic_sections.seed_objects_for_layout_section(section_spec.layout_section_name))
-    bindings = build_seed_bindings(seed_object_indices_by_name)
-    return encode_seed_manifest(seed_objects, bindings, glyph_object_indices)
+    bindings = build_seed_bindings(seed_object_indices_by_name, build_context)
+    return encode_seed_manifest(seed_objects, bindings, glyph_object_indices, build_context)
 
 
 def build_entry_manifest() -> bytes:
