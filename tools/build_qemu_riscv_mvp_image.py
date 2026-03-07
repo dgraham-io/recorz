@@ -342,6 +342,7 @@ class DynamicSeedObjectSectionSpec:
 class DynamicSeedBuildStepSpec:
     layout_section_name: str
     builder: Callable[[DynamicSeedBuildState], list[SeedObject]]
+    required_layout_sections: tuple[str, ...] = ()
 
 
 @dataclass
@@ -1379,9 +1380,13 @@ def build_class_seed_section(
 DYNAMIC_SEED_BUILD_STEP_SPECS = [
     DynamicSeedBuildStepSpec("selectors", build_selector_seed_section),
     DynamicSeedBuildStepSpec("compiled_methods", build_compiled_method_seed_section),
-    DynamicSeedBuildStepSpec("method_entries", build_method_entry_seed_section),
-    DynamicSeedBuildStepSpec("method_descriptors", build_method_descriptor_seed_section),
-    DynamicSeedBuildStepSpec("class_descriptors", build_class_seed_section),
+    DynamicSeedBuildStepSpec("method_entries", build_method_entry_seed_section, ("compiled_methods",)),
+    DynamicSeedBuildStepSpec(
+        "method_descriptors",
+        build_method_descriptor_seed_section,
+        ("selectors", "method_entries"),
+    ),
+    DynamicSeedBuildStepSpec("class_descriptors", build_class_seed_section, ("method_descriptors",)),
 ]
 
 
@@ -1539,7 +1544,44 @@ def build_fixed_boot_seed_objects() -> tuple[list[SeedObject], dict[str, int], l
     return seed_objects, seed_object_indices_by_name, glyph_object_indices
 
 
+def validate_dynamic_seed_build_step_specs() -> None:
+    declared_section_names = {section_spec.layout_section_name for section_spec in DYNAMIC_SEED_OBJECT_SECTION_SPECS}
+    produced_section_names: set[str] = set()
+
+    for build_step_spec in DYNAMIC_SEED_BUILD_STEP_SPECS:
+        if build_step_spec.layout_section_name not in declared_section_names:
+            raise AssertionError(
+                f"dynamic seed build step declares unknown section {build_step_spec.layout_section_name!r}"
+            )
+        if build_step_spec.layout_section_name in produced_section_names:
+            raise AssertionError(
+                f"dynamic seed build steps declare duplicate section {build_step_spec.layout_section_name!r}"
+            )
+        missing_required_sections = [
+            section_name
+            for section_name in build_step_spec.required_layout_sections
+            if section_name not in produced_section_names
+        ]
+        if missing_required_sections:
+            raise AssertionError(
+                f"dynamic seed build step {build_step_spec.layout_section_name!r} requires undeclared prior sections "
+                + ", ".join(repr(section_name) for section_name in missing_required_sections)
+            )
+        produced_section_names.add(build_step_spec.layout_section_name)
+
+    if produced_section_names != declared_section_names:
+        missing_section_names = sorted(declared_section_names - produced_section_names)
+        extra_section_names = sorted(produced_section_names - declared_section_names)
+        details: list[str] = []
+        if missing_section_names:
+            details.append("missing " + ", ".join(repr(section_name) for section_name in missing_section_names))
+        if extra_section_names:
+            details.append("extra " + ", ".join(repr(section_name) for section_name in extra_section_names))
+        raise AssertionError("dynamic seed build step coverage does not match declared object sections: " + "; ".join(details))
+
+
 def build_dynamic_seed_sections(seed_objects: list[SeedObject]) -> DynamicSeedSections:
+    validate_dynamic_seed_build_step_specs()
     seed_layout = build_seed_layout(BOOT_OBJECT_FIXED_COUNT, CLASS_DESCRIPTOR_KIND_ORDER)
     class_class_index = seed_layout["class_descriptors"].start_index
     class_kind_order = CLASS_DESCRIPTOR_KIND_ORDER
@@ -1556,12 +1598,24 @@ def build_dynamic_seed_sections(seed_objects: list[SeedObject]) -> DynamicSeedSe
         method_count_by_kind={},
     )
     dynamic_section_results: dict[str, list[SeedObject]] = {}
+    built_layout_sections: set[str] = set()
 
     for seed_object in seed_objects:
         seed_object.class_index = class_indices[seed_object.object_kind]
 
     for build_step_spec in DYNAMIC_SEED_BUILD_STEP_SPECS:
+        missing_required_sections = [
+            section_name
+            for section_name in build_step_spec.required_layout_sections
+            if section_name not in built_layout_sections
+        ]
+        if missing_required_sections:
+            raise AssertionError(
+                f"dynamic seed build step {build_step_spec.layout_section_name!r} is running before required sections "
+                + ", ".join(repr(section_name) for section_name in missing_required_sections)
+            )
         dynamic_section_results[build_step_spec.layout_section_name] = build_step_spec.builder(build_state)
+        built_layout_sections.add(build_step_spec.layout_section_name)
     dynamic_sections = DynamicSeedSections(
         seed_layout=seed_layout,
         class_indices=build_state.class_indices,

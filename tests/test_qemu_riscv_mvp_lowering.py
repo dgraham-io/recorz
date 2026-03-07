@@ -749,9 +749,21 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             [
                 mvp.DynamicSeedBuildStepSpec("selectors", mvp.build_selector_seed_section),
                 mvp.DynamicSeedBuildStepSpec("compiled_methods", mvp.build_compiled_method_seed_section),
-                mvp.DynamicSeedBuildStepSpec("method_entries", mvp.build_method_entry_seed_section),
-                mvp.DynamicSeedBuildStepSpec("method_descriptors", mvp.build_method_descriptor_seed_section),
-                mvp.DynamicSeedBuildStepSpec("class_descriptors", mvp.build_class_seed_section),
+                mvp.DynamicSeedBuildStepSpec(
+                    "method_entries",
+                    mvp.build_method_entry_seed_section,
+                    ("compiled_methods",),
+                ),
+                mvp.DynamicSeedBuildStepSpec(
+                    "method_descriptors",
+                    mvp.build_method_descriptor_seed_section,
+                    ("selectors", "method_entries"),
+                ),
+                mvp.DynamicSeedBuildStepSpec(
+                    "class_descriptors",
+                    mvp.build_class_seed_section,
+                    ("method_descriptors",),
+                ),
             ],
         )
         self.assertEqual(
@@ -762,6 +774,16 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "method_entries",
                 "method_descriptors",
                 "class_descriptors",
+            ],
+        )
+        self.assertEqual(
+            [spec.required_layout_sections for spec in mvp.DYNAMIC_SEED_BUILD_STEP_SPECS],
+            [
+                (),
+                (),
+                ("compiled_methods",),
+                ("selectors", "method_entries"),
+                ("method_descriptors",),
             ],
         )
         self.assertEqual(
@@ -784,6 +806,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "method_descriptors",
             ],
         )
+        self.assertIsNone(mvp.validate_dynamic_seed_build_step_specs())
         layout = mvp.build_seed_layout(140, mvp.CLASS_DESCRIPTOR_KIND_ORDER)
         self.assertEqual(layout["class_descriptors"], mvp.SeedLayoutSection(140, 17))
         self.assertEqual(layout["selectors"], mvp.SeedLayoutSection(157, 17))

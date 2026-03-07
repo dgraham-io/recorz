@@ -429,3 +429,9 @@
 - Collapsed `DynamicSeedSections` onto a section-keyed object map with a small `seed_objects_for_layout_section()` helper, while keeping convenience accessors for the existing class/selector/method section tests.
 - Extended the focused lowering regressions to lock the new section-keyed structure, the build-step section order, and the unchanged seed manifest assembly path.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Declare Dynamic Seed Build Dependencies
+- Added explicit `required_layout_sections` metadata to the dynamic seed build-step specs so the staged builder now declares which prior sections each step depends on instead of relying on sequence alone.
+- Added validation for both the declared build-step coverage and the runtime build order, catching duplicate, missing, or out-of-order dynamic seed section dependencies before the seed manifest is assembled.
+- Extended the focused lowering regressions to lock the new dependency tuples and the validation path without changing the generated seed image or target VM behavior.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
