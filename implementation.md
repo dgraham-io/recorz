@@ -525,3 +525,9 @@
 - Declared the fixed singleton/root objects alongside their owning classes in `kernel/mvp/*.rz`, while keeping the live fixed boot graph builder unchanged in this step so the new declaration path could land independently.
 - Updated the method-source loader to skip boot object declaration chunks and extended the focused lowering regressions to lock parsed boot object declarations sourced from `.rz` files.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Derive Fixed Boot Objects From Source Declarations
+- Replaced the Python-authored before/after fixed boot object spec tuples with a source-derived path: `FIXED_BOOT_GRAPH_SPEC` now materializes those singleton/root families from parsed `RecorzKernelBootObject:` declarations while leaving the glyph bitmap family on the existing generated path for now.
+- Added explicit builder validation for per-family contiguous `order:` ranges and extended the focused lowering regressions to lock that the active before/after boot object specs are derived from `KERNEL_BOOT_OBJECT_DECLARATIONS_BY_NAME`.
+- Kept the generated image shape unchanged while moving the live fixed singleton/root object graph and export semantics onto kernel-owned declarations.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

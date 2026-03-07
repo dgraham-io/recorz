@@ -681,11 +681,25 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
+            tuple(mvp.BOOT_OBJECT_SPECS_BEFORE_GLYPHS),
+            mvp.build_boot_object_specs_from_declarations(
+                mvp.KERNEL_BOOT_OBJECT_DECLARATIONS_BY_NAME,
+                "before_glyphs",
+            ),
+        )
+        self.assertEqual(
             [spec.name for spec in mvp.BOOT_OBJECT_SPECS_AFTER_GLYPHS],
             [
                 "TranscriptMetrics",
                 "TranscriptBehavior",
             ],
+        )
+        self.assertEqual(
+            tuple(mvp.BOOT_OBJECT_SPECS_AFTER_GLYPHS),
+            mvp.build_boot_object_specs_from_declarations(
+                mvp.KERNEL_BOOT_OBJECT_DECLARATIONS_BY_NAME,
+                "after_glyphs",
+            ),
         )
         self.assertEqual(
             mvp.materialize_boot_object_fields(

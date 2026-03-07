@@ -496,64 +496,52 @@ def build_glyph_bitmap_boot_specs() -> list[BootObjectSpec]:
         for glyph_index in range(GLYPH_BITMAP_CODE_COUNT)
     ]
 
-
-FIXED_BOOT_GRAPH_SPEC = FixedBootGraphSpec(
-    (
-        BootObjectFamilySpec(
-            "before_glyphs",
-            (
-                BootObjectSpec("Transcript", "Transcript", (), global_exports=("Transcript",)),
-                BootObjectSpec("Display", "Display", (), global_exports=("Display",)),
-                BootObjectSpec("BitBlt", "BitBlt", (), global_exports=("BitBlt",)),
-                BootObjectSpec("Glyphs", "Glyphs", (), global_exports=("Glyphs",)),
-                BootObjectSpec("FormFactory", "FormFactory", (), global_exports=("Form",)),
-                BootObjectSpec("BitmapFactory", "BitmapFactory", (), global_exports=("Bitmap",)),
-                BootObjectSpec(
-                    "TranscriptLayout",
-                    "TextLayout",
-                    build_small_integer_boot_field_specs(TRANSCRIPT_LAYOUT_FIELD_VALUES),
-                    root_exports=("transcript_layout",),
-                ),
-                BootObjectSpec(
-                    "TranscriptStyle",
-                    "TextStyle",
-                    build_small_integer_boot_field_specs(TRANSCRIPT_STYLE_FIELD_VALUES),
-                    root_exports=("transcript_style",),
-                ),
-                BootObjectSpec(
-                    "FramebufferBitmap",
-                    "Bitmap",
-                    build_small_integer_boot_field_specs(FRAMEBUFFER_BITMAP_FIELD_VALUES),
-                    root_exports=("framebuffer_bitmap",),
-                ),
-                BootObjectSpec(
-                    "DefaultForm",
-                    "Form",
-                    DEFAULT_FORM_BOOT_FIELD_SPECS,
-                    root_exports=("default_form",),
-                ),
-            ),
+def build_boot_object_specs_from_declarations(
+    boot_object_declarations_by_name: dict[str, KernelBootObjectDeclaration],
+    family_name: str,
+) -> tuple[BootObjectSpec, ...]:
+    family_declarations = sorted(
+        (
+            declaration
+            for declaration in boot_object_declarations_by_name.values()
+            if declaration.family_name == family_name
         ),
-        BootObjectFamilySpec("glyph_bitmaps", tuple(build_glyph_bitmap_boot_specs()), collect_object_indices=True),
-        BootObjectFamilySpec(
-            "after_glyphs",
-            (
-                BootObjectSpec(
-                    "TranscriptMetrics",
-                    "TextMetrics",
-                    build_small_integer_boot_field_specs(TRANSCRIPT_METRICS_FIELD_VALUES),
-                    root_exports=("transcript_metrics",),
-                ),
-                BootObjectSpec(
-                    "TranscriptBehavior",
-                    "TextBehavior",
-                    TRANSCRIPT_BEHAVIOR_BOOT_FIELD_SPECS,
-                    root_exports=("transcript_behavior",),
-                ),
-            ),
-        ),
+        key=lambda declaration: declaration.family_order,
     )
-)
+    expected_family_orders = list(range(len(family_declarations)))
+    actual_family_orders = [declaration.family_order for declaration in family_declarations]
+    if actual_family_orders != expected_family_orders:
+        raise LoweringError(
+            f"kernel MVP boot family {family_name!r} must declare a contiguous order range starting at 0"
+        )
+    return tuple(
+        BootObjectSpec(
+            declaration.name,
+            declaration.class_name,
+            declaration.field_specs,
+            declaration.global_exports,
+            declaration.root_exports,
+        )
+        for declaration in family_declarations
+    )
+
+
+def build_fixed_boot_graph_spec(
+    boot_object_declarations_by_name: dict[str, KernelBootObjectDeclaration],
+) -> FixedBootGraphSpec:
+    return FixedBootGraphSpec(
+        (
+            BootObjectFamilySpec(
+                "before_glyphs",
+                build_boot_object_specs_from_declarations(boot_object_declarations_by_name, "before_glyphs"),
+            ),
+            BootObjectFamilySpec("glyph_bitmaps", tuple(build_glyph_bitmap_boot_specs()), collect_object_indices=True),
+            BootObjectFamilySpec(
+                "after_glyphs",
+                build_boot_object_specs_from_declarations(boot_object_declarations_by_name, "after_glyphs"),
+            ),
+        )
+    )
 
 
 def build_boot_object_family_spec_map(fixed_boot_graph_spec: FixedBootGraphSpec) -> dict[str, BootObjectFamilySpec]:
@@ -847,6 +835,7 @@ def load_kernel_boot_object_declarations() -> dict[str, KernelBootObjectDeclarat
 
 
 KERNEL_BOOT_OBJECT_DECLARATIONS_BY_NAME = load_kernel_boot_object_declarations()
+FIXED_BOOT_GRAPH_SPEC = build_fixed_boot_graph_spec(KERNEL_BOOT_OBJECT_DECLARATIONS_BY_NAME)
 
 
 def upper_snake_name(name: str) -> str:
