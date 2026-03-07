@@ -100,11 +100,11 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_SELECTOR_SHOW,
         1U,
         RECORZ_MVP_OBJECT_TRANSCRIPT,
-        RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
+        RECORZ_MVP_METHOD_IMPLEMENTATION_ROOT_SEND,
         0U,
-        0U,
-        0U,
-        0U,
+        RECORZ_MVP_SELECTOR_WRITE_STRING,
+        RECORZ_MVP_SEED_ROOT_DEFAULT_FORM,
+        RECORZ_MVP_METHOD_RETURN_RECEIVER,
     },
     [RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR] = {
         RECORZ_MVP_SELECTOR_CR,
@@ -140,11 +140,11 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_SELECTOR_WRITE_STRING,
         1U,
         RECORZ_MVP_OBJECT_DISPLAY,
-        RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
+        RECORZ_MVP_METHOD_IMPLEMENTATION_ROOT_SEND,
         0U,
-        0U,
-        0U,
-        0U,
+        RECORZ_MVP_SELECTOR_WRITE_STRING,
+        RECORZ_MVP_SEED_ROOT_DEFAULT_FORM,
+        RECORZ_MVP_METHOD_RETURN_RECEIVER,
     },
     [RECORZ_MVP_METHOD_ENTRY_DISPLAY_NEWLINE] = {
         RECORZ_MVP_SELECTOR_NEWLINE,
@@ -1501,10 +1501,6 @@ static struct recorz_mvp_heap_object *mutable_bitmap_for_form(const struct recor
     return bitmap;
 }
 
-static const struct recorz_mvp_heap_object *default_form_object(void) {
-    return (const struct recorz_mvp_heap_object *)heap_object(default_form_handle);
-}
-
 static void reset_text_cursor(void) {
     cursor_x = text_left_margin();
     cursor_y = text_top_margin();
@@ -1916,18 +1912,6 @@ typedef void (*recorz_mvp_method_entry_handler)(
     const char *text
 );
 
-static void execute_entry_transcript_show(
-    const struct recorz_mvp_heap_object *object,
-    struct recorz_mvp_value receiver,
-    const struct recorz_mvp_value arguments[],
-    const char *text
-) {
-    (void)object;
-    (void)arguments;
-    form_write_string(default_form_object(), text);
-    push(receiver);
-}
-
 static void execute_entry_display_default_form(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -1939,18 +1923,6 @@ static void execute_entry_display_default_form(
     (void)arguments;
     (void)text;
     push(form_value());
-}
-
-static void execute_entry_display_write_string(
-    const struct recorz_mvp_heap_object *object,
-    struct recorz_mvp_value receiver,
-    const struct recorz_mvp_value arguments[],
-    const char *text
-) {
-    (void)object;
-    (void)arguments;
-    form_write_string(default_form_object(), text);
-    push(receiver);
 }
 
 static void execute_entry_bitblt_fill_form_color(
@@ -2148,9 +2120,7 @@ static void execute_entry_form_newline(
 }
 
 static const recorz_mvp_method_entry_handler method_entry_handlers[RECORZ_MVP_METHOD_ENTRY_COUNT] = {
-    [RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW] = execute_entry_transcript_show,
     [RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM] = execute_entry_display_default_form,
-    [RECORZ_MVP_METHOD_ENTRY_DISPLAY_WRITE_STRING] = execute_entry_display_write_string,
     [RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR] = execute_entry_bitblt_fill_form_color,
     [RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE] = execute_entry_bitblt_copy_bitmap_to_form_x_y_scale,
     [RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR] =
@@ -2196,14 +2166,16 @@ static void execute_field_send_method(
 
 static void execute_root_send_method(
     struct recorz_mvp_value receiver,
-    const struct recorz_mvp_heap_object *root_send_method
+    const struct recorz_mvp_heap_object *root_send_method,
+    uint16_t argument_count,
+    const struct recorz_mvp_value arguments[]
 ) {
     struct recorz_mvp_value root_receiver = seed_root_value(root_send_method_root_id(root_send_method));
     uint8_t selector = (uint8_t)root_send_method_selector(root_send_method);
     uint32_t return_mode = root_send_method_return_mode(root_send_method);
 
-    remember_send_context(selector, 0U, root_receiver, 0);
-    perform_send(root_receiver, selector, 0U, 0, 0);
+    remember_send_context(selector, argument_count, root_receiver, arguments);
+    perform_send(root_receiver, selector, argument_count, arguments, 0);
     if (return_mode == RECORZ_MVP_METHOD_RETURN_RESULT) {
         return;
     }
@@ -2268,7 +2240,7 @@ static void dispatch_heap_object_send(
             machine_panic("root-send method entry is missing an implementation object");
         }
         implementation_object = heap_object_for_value(implementation_value);
-        execute_root_send_method(receiver, implementation_object);
+        execute_root_send_method(receiver, implementation_object, argument_count, arguments);
         return;
     }
     if (entry_spec->implementation_kind != RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE) {

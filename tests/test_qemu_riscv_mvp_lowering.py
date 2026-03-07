@@ -298,14 +298,14 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         first_method_entry_header = struct.unpack_from(
             mvp.SEED_OBJECT_HEADER_FORMAT,
             manifest,
-            struct.calcsize(mvp.SEED_HEADER_FORMAT) + (185 * object_size),
+            struct.calcsize(mvp.SEED_HEADER_FORMAT) + (187 * object_size),
         )
         first_method_entry_fields = [
             struct.unpack_from(
                 mvp.SEED_FIELD_FORMAT,
                 manifest,
                 struct.calcsize(mvp.SEED_HEADER_FORMAT)
-                + (185 * object_size)
+                + (187 * object_size)
                 + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
                 + (field_index * struct.calcsize(mvp.SEED_FIELD_FORMAT)),
             )
@@ -314,14 +314,14 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         first_method_header = struct.unpack_from(
             mvp.SEED_OBJECT_HEADER_FORMAT,
             manifest,
-            struct.calcsize(mvp.SEED_HEADER_FORMAT) + (207 * object_size),
+            struct.calcsize(mvp.SEED_HEADER_FORMAT) + (209 * object_size),
         )
         first_method_fields = [
             struct.unpack_from(
                 mvp.SEED_FIELD_FORMAT,
                 manifest,
                 struct.calcsize(mvp.SEED_HEADER_FORMAT)
-                + (207 * object_size)
+                + (209 * object_size)
                 + struct.calcsize(mvp.SEED_OBJECT_HEADER_FORMAT)
                 + (field_index * struct.calcsize(mvp.SEED_FIELD_FORMAT)),
             )
@@ -337,7 +337,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(struct.calcsize(mvp.SEED_HEADER_FORMAT), 16)
         self.assertEqual(magic, mvp.SEED_MAGIC)
         self.assertEqual(version, mvp.SEED_VERSION)
-        self.assertEqual(object_count, 229)
+        self.assertEqual(object_count, 231)
         self.assertEqual(global_binding_count, 6)
         self.assertEqual(root_binding_count, 6)
         self.assertEqual(glyph_code_count, 128)
@@ -380,7 +380,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             first_method_entry_fields,
             [
                 (mvp.SEED_FIELD_SMALL_INTEGER, mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW"]),
-                (mvp.SEED_FIELD_NIL, 0),
+                (mvp.SEED_FIELD_OBJECT_INDEX, 185),
             ],
         )
         self.assertEqual(first_method_header, (mvp.SEED_OBJECT_METHOD_DESCRIPTOR, 4, 153))
@@ -392,7 +392,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 (mvp.SEED_FIELD_SMALL_INTEGER, mvp.SEED_OBJECT_CLASS),
                 (
                     mvp.SEED_FIELD_OBJECT_INDEX,
-                    185 + (mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND"] - 1),
+                    187 + (mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND"] - 1),
                 ),
             ],
         )
