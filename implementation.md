@@ -400,3 +400,9 @@
 - Changed the boot-object export-map builder and fixed boot object count to use that flat ordered view instead of separate nested family-only traversal and count arithmetic.
 - Extended the focused lowering regressions to lock the new flat ordered view, the name map, and the unchanged family-derived aliases without changing the generated seed image or target VM behavior.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Derive Dynamic Seed Layout From Section Specs
+- Added a small `SeedLayoutSectionSpec` layer so the builder now declares dynamic seed section order and count-source metadata in one place instead of keeping a standalone section-name list plus inline count wiring.
+- Updated `build_seed_layout()` to derive section counts from the named count sources declared in those section specs without changing the generated seed layout or target VM behavior.
+- Extended the focused lowering regressions to lock both the new section-spec layer and the unchanged derived section layout.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

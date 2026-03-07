@@ -326,6 +326,12 @@ class SeedLayoutSection:
     count: int
 
 
+@dataclass(frozen=True)
+class SeedLayoutSectionSpec:
+    name: str
+    count_source: str
+
+
 @dataclass
 class DynamicSeedSections:
     seed_layout: dict[str, SeedLayoutSection]
@@ -376,13 +382,14 @@ KERNEL_CLASS_NAME_TO_OBJECT_KIND = {
     spec.class_name: constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, spec.class_name)
     for spec in KERNEL_SOURCE_CLASS_SPECS
 }
-SEED_LAYOUT_SECTION_NAMES = [
-    "class_descriptors",
-    "selectors",
-    "compiled_methods",
-    "method_entries",
-    "method_descriptors",
+SEED_LAYOUT_SECTION_SPECS = [
+    SeedLayoutSectionSpec("class_descriptors", "class_kind_order"),
+    SeedLayoutSectionSpec("selectors", "selector_value_order"),
+    SeedLayoutSectionSpec("compiled_methods", "compiled_method_entry_order"),
+    SeedLayoutSectionSpec("method_entries", "method_entry_order"),
+    SeedLayoutSectionSpec("method_descriptors", "builtin_method_definitions"),
 ]
+SEED_LAYOUT_SECTION_NAMES = [section_spec.name for section_spec in SEED_LAYOUT_SECTION_SPECS]
 GLYPH_BITMAP_NAME_PREFIX = "GlyphBitmap"
 GLYPH_BITMAP_WIDTH = 5
 GLYPH_BITMAP_HEIGHT = 7
@@ -1230,19 +1237,19 @@ def build_class_index_map(class_kind_order: list[int], class_class_index: int) -
 
 
 def build_seed_layout(base_object_index: int, class_kind_order: list[int]) -> dict[str, SeedLayoutSection]:
-    section_counts = {
-        "class_descriptors": len(class_kind_order),
-        "selectors": len(SELECTOR_VALUE_ORDER),
-        "compiled_methods": len(COMPILED_METHOD_ENTRY_ORDER),
-        "method_entries": len(METHOD_ENTRY_ORDER),
-        "method_descriptors": sum(len(BUILTIN_METHODS_BY_KIND.get(class_kind, [])) for class_kind in class_kind_order),
+    section_count_sources = {
+        "class_kind_order": len(class_kind_order),
+        "selector_value_order": len(SELECTOR_VALUE_ORDER),
+        "compiled_method_entry_order": len(COMPILED_METHOD_ENTRY_ORDER),
+        "method_entry_order": len(METHOD_ENTRY_ORDER),
+        "builtin_method_definitions": sum(len(BUILTIN_METHODS_BY_KIND.get(class_kind, [])) for class_kind in class_kind_order),
     }
     layout: dict[str, SeedLayoutSection] = {}
     next_index = base_object_index
 
-    for section_name in SEED_LAYOUT_SECTION_NAMES:
-        count = section_counts[section_name]
-        layout[section_name] = SeedLayoutSection(next_index, count)
+    for section_spec in SEED_LAYOUT_SECTION_SPECS:
+        count = section_count_sources[section_spec.count_source]
+        layout[section_spec.name] = SeedLayoutSection(next_index, count)
         next_index += count
 
     return layout
