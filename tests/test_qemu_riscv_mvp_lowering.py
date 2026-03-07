@@ -455,6 +455,28 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ("fillForm:color:", 2, mvp.KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE, "bitbltFillFormColor"),
         )
 
+    def test_loads_runtime_format_constants_from_spec(self) -> None:
+        self.assertEqual(mvp.RUNTIME_SPEC_PATH.name, "runtime_spec.json")
+        self.assertEqual(mvp.RUNTIME_SPEC["program"]["magic"], "RCZP")
+        self.assertEqual(mvp.RUNTIME_SPEC["image"]["profile"], "RV64MVP1")
+        self.assertEqual(mvp.RUNTIME_SPEC["seed"]["version"], 16)
+        self.assertEqual(
+            mvp.OPCODE_VALUES,
+            mvp.build_constant_value_map_from_explicit_specs(mvp.OPCODE_SPEC),
+        )
+        self.assertEqual(
+            mvp.LITERAL_VALUES,
+            mvp.build_constant_value_map_from_explicit_specs(mvp.LITERAL_KIND_SPEC),
+        )
+        self.assertEqual(
+            mvp.SEED_FIELD_KIND_DEFINITIONS,
+            mvp.build_named_constant_maps_from_explicit_specs(mvp.SEED_FIELD_KIND_SPEC)[2],
+        )
+        self.assertEqual(
+            mvp.COMPILED_METHOD_OPCODE_VALUES,
+            mvp.build_named_value_map_from_explicit_specs(mvp.COMPILED_METHOD_OPCODE_SPEC),
+        )
+
     def test_derives_kernel_method_entry_names(self) -> None:
         self.assertEqual(
             mvp.kernel_method_entry_name("Transcript", "show:"),

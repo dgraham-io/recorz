@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import struct
 import sys
@@ -14,11 +15,16 @@ from typing import Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 KERNEL_MVP_ROOT = ROOT / "kernel" / "mvp"
+RUNTIME_SPEC_PATH = ROOT / "platform" / "qemu-riscv64" / "runtime_spec.json"
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
 from recorz.compiler import compile_do_it, compile_method  # noqa: E402
 from recorz.model import BindingRef, SendSite, SymbolAtom  # noqa: E402
+
+
+def load_runtime_spec() -> dict[str, object]:
+    return json.loads(RUNTIME_SPEC_PATH.read_text(encoding="utf-8"))
 
 
 def build_named_constant_maps(
@@ -41,84 +47,134 @@ def build_named_constant_maps(
     return ids, values, definitions
 
 
+def build_named_constant_maps_from_explicit_specs(
+    specs: list[dict[str, object]],
+) -> tuple[dict[str, str], dict[str, int], list[tuple[str, int]]]:
+    ids: dict[str, str] = {}
+    values: dict[str, int] = {}
+    definitions: list[tuple[str, int]] = []
+
+    for spec in specs:
+        name = str(spec["name"])
+        constant_name = str(spec["constant"])
+        value = int(spec["value"])
+        if name in ids:
+            raise AssertionError(f"duplicate named constant spec {name!r}")
+        if constant_name in values:
+            raise AssertionError(f"duplicate constant name {constant_name!r}")
+        if any(existing_value == value for existing_value in values.values()):
+            raise AssertionError(f"duplicate constant value {value!r}")
+        ids[name] = constant_name
+        values[constant_name] = value
+        definitions.append((constant_name, value))
+    return ids, values, definitions
+
+
+def build_constant_value_map_from_explicit_specs(specs: list[dict[str, object]]) -> dict[str, int]:
+    values: dict[str, int] = {}
+    for spec in specs:
+        constant_name = str(spec["constant"])
+        value = int(spec["value"])
+        if constant_name in values:
+            raise AssertionError(f"duplicate constant name {constant_name!r}")
+        values[constant_name] = value
+    return values
+
+
+def build_constant_definitions_from_explicit_specs(specs: list[dict[str, object]]) -> list[tuple[str, int]]:
+    return [
+        (str(spec["constant"]), int(spec["value"]))
+        for spec in specs
+    ]
+
+
+def build_named_value_map_from_explicit_specs(specs: list[dict[str, object]]) -> dict[str, int]:
+    values: dict[str, int] = {}
+    for spec in specs:
+        name = str(spec["name"])
+        value = int(spec["value"])
+        if name in values:
+            raise AssertionError(f"duplicate constant name {name!r}")
+        values[name] = value
+    return values
+
+
 def constant_value(ids: dict[str, str], values: dict[str, int], name: str) -> int:
     return values[ids[name]]
 
 
-OP_PUSH_GLOBAL = "RECORZ_MVP_OP_PUSH_GLOBAL"
-OP_PUSH_LITERAL = "RECORZ_MVP_OP_PUSH_LITERAL"
-OP_PUSH_LEXICAL = "RECORZ_MVP_OP_PUSH_LEXICAL"
-OP_STORE_LEXICAL = "RECORZ_MVP_OP_STORE_LEXICAL"
-OP_SEND = "RECORZ_MVP_OP_SEND"
-OP_DUP = "RECORZ_MVP_OP_DUP"
-OP_POP = "RECORZ_MVP_OP_POP"
-OP_RETURN = "RECORZ_MVP_OP_RETURN"
-OP_PUSH_NIL = "RECORZ_MVP_OP_PUSH_NIL"
+RUNTIME_SPEC = load_runtime_spec()
+PROGRAM_RUNTIME_SPEC = dict(RUNTIME_SPEC["program"])
+IMAGE_RUNTIME_SPEC = dict(RUNTIME_SPEC["image"])
+SEED_RUNTIME_SPEC = dict(RUNTIME_SPEC["seed"])
+COMPILED_METHOD_RUNTIME_SPEC = dict(RUNTIME_SPEC["compiled_method"])
 
-LITERAL_STRING = "RECORZ_MVP_LITERAL_STRING"
-LITERAL_SMALL_INTEGER = "RECORZ_MVP_LITERAL_SMALL_INTEGER"
+OPCODE_SPEC = list(RUNTIME_SPEC["opcodes"])
+LITERAL_KIND_SPEC = list(RUNTIME_SPEC["literal_kinds"])
+SEED_FIELD_KIND_SPEC = list(SEED_RUNTIME_SPEC["field_kinds"])
+COMPILED_METHOD_OPCODE_SPEC = list(COMPILED_METHOD_RUNTIME_SPEC["opcodes"])
 
-OPCODE_VALUES = {
-    OP_PUSH_GLOBAL: 1,
-    OP_PUSH_LITERAL: 2,
-    OP_SEND: 3,
-    OP_DUP: 4,
-    OP_POP: 5,
-    OP_RETURN: 6,
-    OP_PUSH_NIL: 7,
-    OP_PUSH_LEXICAL: 8,
-    OP_STORE_LEXICAL: 9,
-}
-LITERAL_VALUES = {
-    LITERAL_STRING: 1,
-    LITERAL_SMALL_INTEGER: 2,
-}
+OPCODE_CONSTANT_NAMES = {str(spec["name"]): str(spec["constant"]) for spec in OPCODE_SPEC}
+LITERAL_KIND_CONSTANT_NAMES = {str(spec["name"]): str(spec["constant"]) for spec in LITERAL_KIND_SPEC}
 
-PROGRAM_MAGIC = b"RCZP"
-PROGRAM_VERSION = 1
-PROGRAM_HEADER_FORMAT = "<4sHHHH"
-PROGRAM_INSTRUCTION_FORMAT = "<BBH"
-PROGRAM_LITERAL_HEADER_FORMAT = "<BBHi"
+OP_PUSH_GLOBAL = OPCODE_CONSTANT_NAMES["push_global"]
+OP_PUSH_LITERAL = OPCODE_CONSTANT_NAMES["push_literal"]
+OP_PUSH_LEXICAL = OPCODE_CONSTANT_NAMES["push_lexical"]
+OP_STORE_LEXICAL = OPCODE_CONSTANT_NAMES["store_lexical"]
+OP_SEND = OPCODE_CONSTANT_NAMES["send"]
+OP_DUP = OPCODE_CONSTANT_NAMES["dup"]
+OP_POP = OPCODE_CONSTANT_NAMES["pop"]
+OP_RETURN = OPCODE_CONSTANT_NAMES["return"]
+OP_PUSH_NIL = OPCODE_CONSTANT_NAMES["push_nil"]
 
-IMAGE_MAGIC = b"RCZI"
-IMAGE_VERSION = 1
-IMAGE_HEADER_FORMAT = "<4sHHII8s"
-IMAGE_SECTION_FORMAT = "<HHII"
-IMAGE_SECTION_PROGRAM = 1
-IMAGE_SECTION_SEED = 2
-IMAGE_SECTION_ENTRY = 3
-IMAGE_FEATURE_FNV1A32 = 1
-IMAGE_PROFILE = b"RV64MVP1"
-IMAGE_ENTRY_MAGIC = b"RCZE"
-IMAGE_ENTRY_VERSION = 1
-IMAGE_ENTRY_FORMAT = "<4sHHHHHH"
-IMAGE_ENTRY_KIND_DOIT = 1
+LITERAL_STRING = LITERAL_KIND_CONSTANT_NAMES["string"]
+LITERAL_SMALL_INTEGER = LITERAL_KIND_CONSTANT_NAMES["small_integer"]
 
-SEED_MAGIC = b"RCZS"
-SEED_VERSION = 16
-SEED_HEADER_FORMAT = "<4sHHHHHH"
-SEED_BINDING_FORMAT = "<HH"
-SEED_OBJECT_HEADER_FORMAT = "<BBH"
-SEED_FIELD_FORMAT = "<Bi"
-SEED_INVALID_OBJECT_INDEX = 0xFFFF
-COMPILED_METHOD_MAX_INSTRUCTIONS = 4
+OPCODE_VALUES = build_constant_value_map_from_explicit_specs(OPCODE_SPEC)
+OPCODE_DEFINITIONS = build_constant_definitions_from_explicit_specs(OPCODE_SPEC)
+LITERAL_VALUES = build_constant_value_map_from_explicit_specs(LITERAL_KIND_SPEC)
+LITERAL_KIND_DEFINITIONS = build_constant_definitions_from_explicit_specs(LITERAL_KIND_SPEC)
 
-SEED_FIELD_KIND_SPECS = [
-    ("nil", "RECORZ_MVP_SEED_FIELD_NIL"),
-    ("small_integer", "RECORZ_MVP_SEED_FIELD_SMALL_INTEGER"),
-    ("object_index", "RECORZ_MVP_SEED_FIELD_OBJECT_INDEX"),
-]
-SEED_FIELD_KIND_IDS, SEED_FIELD_KIND_VALUES, SEED_FIELD_KIND_DEFINITIONS = build_named_constant_maps(
-    SEED_FIELD_KIND_SPECS,
-    start=0,
+PROGRAM_MAGIC = str(PROGRAM_RUNTIME_SPEC["magic"]).encode("ascii")
+PROGRAM_VERSION = int(PROGRAM_RUNTIME_SPEC["version"])
+PROGRAM_HEADER_FORMAT = str(PROGRAM_RUNTIME_SPEC["header_format"])
+PROGRAM_INSTRUCTION_FORMAT = str(PROGRAM_RUNTIME_SPEC["instruction_format"])
+PROGRAM_LITERAL_HEADER_FORMAT = str(PROGRAM_RUNTIME_SPEC["literal_header_format"])
+
+IMAGE_MAGIC = str(IMAGE_RUNTIME_SPEC["magic"]).encode("ascii")
+IMAGE_VERSION = int(IMAGE_RUNTIME_SPEC["version"])
+IMAGE_HEADER_FORMAT = str(IMAGE_RUNTIME_SPEC["header_format"])
+IMAGE_SECTION_FORMAT = str(IMAGE_RUNTIME_SPEC["section_format"])
+IMAGE_SECTION_PROGRAM = int(IMAGE_RUNTIME_SPEC["sections"]["program"])
+IMAGE_SECTION_SEED = int(IMAGE_RUNTIME_SPEC["sections"]["seed"])
+IMAGE_SECTION_ENTRY = int(IMAGE_RUNTIME_SPEC["sections"]["entry"])
+IMAGE_FEATURE_FNV1A32 = int(IMAGE_RUNTIME_SPEC["features"]["fnv1a32"])
+IMAGE_PROFILE = str(IMAGE_RUNTIME_SPEC["profile"]).encode("ascii")
+IMAGE_ENTRY_MAGIC = str(IMAGE_RUNTIME_SPEC["entry"]["magic"]).encode("ascii")
+IMAGE_ENTRY_VERSION = int(IMAGE_RUNTIME_SPEC["entry"]["version"])
+IMAGE_ENTRY_FORMAT = str(IMAGE_RUNTIME_SPEC["entry"]["format"])
+IMAGE_ENTRY_KIND_DOIT = int(IMAGE_RUNTIME_SPEC["entry"]["kinds"]["doit"])
+
+SEED_MAGIC = str(SEED_RUNTIME_SPEC["magic"]).encode("ascii")
+SEED_VERSION = int(SEED_RUNTIME_SPEC["version"])
+SEED_HEADER_FORMAT = str(SEED_RUNTIME_SPEC["header_format"])
+SEED_BINDING_FORMAT = str(SEED_RUNTIME_SPEC["binding_format"])
+SEED_OBJECT_HEADER_FORMAT = str(SEED_RUNTIME_SPEC["object_header_format"])
+SEED_FIELD_FORMAT = str(SEED_RUNTIME_SPEC["field_format"])
+SEED_INVALID_OBJECT_INDEX = int(SEED_RUNTIME_SPEC["invalid_object_index"])
+COMPILED_METHOD_MAX_INSTRUCTIONS = int(COMPILED_METHOD_RUNTIME_SPEC["max_instructions"])
+
+SEED_FIELD_KIND_IDS, SEED_FIELD_KIND_VALUES, SEED_FIELD_KIND_DEFINITIONS = (
+    build_named_constant_maps_from_explicit_specs(SEED_FIELD_KIND_SPEC)
 )
+SEED_FIELD_KIND_SPECS = [
+    (str(spec["name"]), str(spec["constant"]))
+    for spec in SEED_FIELD_KIND_SPEC
+]
 
 SEED_FIELD_NIL = constant_value(SEED_FIELD_KIND_IDS, SEED_FIELD_KIND_VALUES, "nil")
 SEED_FIELD_SMALL_INTEGER = constant_value(SEED_FIELD_KIND_IDS, SEED_FIELD_KIND_VALUES, "small_integer")
 SEED_FIELD_OBJECT_INDEX = constant_value(SEED_FIELD_KIND_IDS, SEED_FIELD_KIND_VALUES, "object_index")
-
-OPCODE_DEFINITIONS = list(OPCODE_VALUES.items())
-LITERAL_KIND_DEFINITIONS = list(LITERAL_VALUES.items())
 
 FIELD_SPEC_SMALL_INTEGER = "small_integer"
 FIELD_SPEC_OBJECT_REF = "object_ref"
@@ -490,22 +546,14 @@ KERNEL_BOOT_OBJECT_ATTRIBUTE_PATTERN = re.compile(
     r"^(?P<attribute_name>fields|globalExports|rootExports):\s*'(?P<attribute_value>[^']*)'$"
 )
 KERNEL_PRIMITIVE_DECLARATION_PATTERN = re.compile(r"^<primitive:\s*#(?P<binding>[A-Za-z_]\w*)>$")
-COMPILED_METHOD_OP_PUSH_GLOBAL = 1
-COMPILED_METHOD_OP_PUSH_ROOT = 2
-COMPILED_METHOD_OP_PUSH_ARGUMENT = 3
-COMPILED_METHOD_OP_PUSH_FIELD = 4
-COMPILED_METHOD_OP_SEND = 5
-COMPILED_METHOD_OP_RETURN_TOP = 6
-COMPILED_METHOD_OP_RETURN_RECEIVER = 7
-COMPILED_METHOD_OPCODE_VALUES = {
-    "push_global": COMPILED_METHOD_OP_PUSH_GLOBAL,
-    "push_root": COMPILED_METHOD_OP_PUSH_ROOT,
-    "push_argument": COMPILED_METHOD_OP_PUSH_ARGUMENT,
-    "push_field": COMPILED_METHOD_OP_PUSH_FIELD,
-    "send": COMPILED_METHOD_OP_SEND,
-    "return_top": COMPILED_METHOD_OP_RETURN_TOP,
-    "return_receiver": COMPILED_METHOD_OP_RETURN_RECEIVER,
-}
+COMPILED_METHOD_OPCODE_VALUES = build_named_value_map_from_explicit_specs(COMPILED_METHOD_OPCODE_SPEC)
+COMPILED_METHOD_OP_PUSH_GLOBAL = COMPILED_METHOD_OPCODE_VALUES["push_global"]
+COMPILED_METHOD_OP_PUSH_ROOT = COMPILED_METHOD_OPCODE_VALUES["push_root"]
+COMPILED_METHOD_OP_PUSH_ARGUMENT = COMPILED_METHOD_OPCODE_VALUES["push_argument"]
+COMPILED_METHOD_OP_PUSH_FIELD = COMPILED_METHOD_OPCODE_VALUES["push_field"]
+COMPILED_METHOD_OP_SEND = COMPILED_METHOD_OPCODE_VALUES["send"]
+COMPILED_METHOD_OP_RETURN_TOP = COMPILED_METHOD_OPCODE_VALUES["return_top"]
+COMPILED_METHOD_OP_RETURN_RECEIVER = COMPILED_METHOD_OPCODE_VALUES["return_receiver"]
 
 
 def encode_compiled_method_instruction(opcode_name: str, operand_a: int = 0, operand_b: int = 0) -> int:

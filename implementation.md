@@ -585,3 +585,9 @@
 - Simplified the host-side image inspector so method-entry validation now recognizes only the two live implementation cases: primitive-backed entries and compiled-method entries.
 - Kept the boot image summary unchanged, with the dead method-shape object counts still reporting as zero through compatibility paths while removing stale semantic truth from the builder and inspector.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Externalize Runtime Format Constants
+- Added `/Users/david/repos/recorz/platform/qemu-riscv64/runtime_spec.json` as the repo-owned source of truth for the live MVP program/image/seed format constants, do-it opcodes, literal kinds, seed field kinds, and compiled-method opcode set.
+- Updated the builder to load that runtime spec and derive the active opcode/literal/format/seed compatibility constants from it instead of authoring those values directly in Python.
+- Extended the focused lowering regressions to lock that the live builder constants now derive from `runtime_spec.json`, not from builder-side Python literals.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
