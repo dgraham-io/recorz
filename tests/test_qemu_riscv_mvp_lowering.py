@@ -512,6 +512,49 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
 
+    def test_declares_boot_object_specs_and_materializes_fields(self) -> None:
+        self.assertEqual(
+            [spec.name for spec in mvp.BOOT_OBJECT_SPECS_BEFORE_GLYPHS],
+            [
+                "Transcript",
+                "Display",
+                "BitBlt",
+                "Glyphs",
+                "FormFactory",
+                "BitmapFactory",
+                "TranscriptLayout",
+                "TranscriptStyle",
+                "FramebufferBitmap",
+                "DefaultForm",
+            ],
+        )
+        self.assertEqual(
+            [spec.name for spec in mvp.BOOT_OBJECT_SPECS_AFTER_GLYPHS],
+            [
+                "TranscriptMetrics",
+                "TranscriptBehavior",
+            ],
+        )
+        self.assertEqual(
+            mvp.materialize_boot_object_fields(
+                mvp.BOOT_OBJECT_SPECS_BEFORE_GLYPHS[-1].field_specs,
+                {"FramebufferBitmap": 8},
+                [],
+            ),
+            [(mvp.SEED_FIELD_OBJECT_INDEX, 8)],
+        )
+        self.assertEqual(
+            mvp.materialize_boot_object_fields(
+                mvp.BOOT_OBJECT_SPECS_AFTER_GLYPHS[-1].field_specs,
+                {"TranscriptBehavior": 139},
+                [100 + glyph_index for glyph_index in range(128)],
+            ),
+            [
+                (mvp.SEED_FIELD_OBJECT_INDEX, 132),
+                (mvp.SEED_FIELD_SMALL_INTEGER, 1),
+            ],
+        )
+
     def test_renders_generated_runtime_bindings_header(self) -> None:
         header = mvp.render_generated_runtime_bindings_header()
 

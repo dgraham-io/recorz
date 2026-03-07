@@ -277,6 +277,9 @@ SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME = {
     "transcript_style": "TranscriptStyle",
     "transcript_metrics": "TranscriptMetrics",
 }
+FIELD_SPEC_SMALL_INTEGER = "small_integer"
+FIELD_SPEC_OBJECT_REF = "object_ref"
+FIELD_SPEC_GLYPH_REF = "glyph_ref"
 
 
 class LoweringError(RuntimeError):
@@ -329,6 +332,13 @@ class KernelClassHeader:
     instance_variables: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class BootObjectSpec:
+    name: str
+    object_kind_name: str
+    field_specs: tuple[tuple[str, object], ...]
+
+
 KERNEL_CLASS_BOOT_ORDER = [
     "Transcript",
     "Display",
@@ -339,6 +349,67 @@ KERNEL_CLASS_BOOT_ORDER = [
     "Bitmap",
     "Form",
     "Class",
+]
+BOOT_OBJECT_SPECS_BEFORE_GLYPHS = [
+    BootObjectSpec("Transcript", "Transcript", ()),
+    BootObjectSpec("Display", "Display", ()),
+    BootObjectSpec("BitBlt", "BitBlt", ()),
+    BootObjectSpec("Glyphs", "Glyphs", ()),
+    BootObjectSpec("FormFactory", "FormFactory", ()),
+    BootObjectSpec("BitmapFactory", "BitmapFactory", ()),
+    BootObjectSpec(
+        "TranscriptLayout",
+        "TextLayout",
+        (
+            (FIELD_SPEC_SMALL_INTEGER, 24),
+            (FIELD_SPEC_SMALL_INTEGER, 24),
+            (FIELD_SPEC_SMALL_INTEGER, 4),
+            (FIELD_SPEC_SMALL_INTEGER, 2),
+        ),
+    ),
+    BootObjectSpec(
+        "TranscriptStyle",
+        "TextStyle",
+        (
+            (FIELD_SPEC_SMALL_INTEGER, 0x00486020),
+            (FIELD_SPEC_SMALL_INTEGER, 0x00F2F2F2),
+        ),
+    ),
+    BootObjectSpec(
+        "FramebufferBitmap",
+        "Bitmap",
+        (
+            (FIELD_SPEC_SMALL_INTEGER, 640),
+            (FIELD_SPEC_SMALL_INTEGER, 480),
+            (FIELD_SPEC_SMALL_INTEGER, BITMAP_STORAGE_FRAMEBUFFER),
+            (FIELD_SPEC_SMALL_INTEGER, 0),
+        ),
+    ),
+    BootObjectSpec(
+        "DefaultForm",
+        "Form",
+        (
+            (FIELD_SPEC_OBJECT_REF, "FramebufferBitmap"),
+        ),
+    ),
+]
+BOOT_OBJECT_SPECS_AFTER_GLYPHS = [
+    BootObjectSpec(
+        "TranscriptMetrics",
+        "TextMetrics",
+        (
+            (FIELD_SPEC_SMALL_INTEGER, 6),
+            (FIELD_SPEC_SMALL_INTEGER, 8),
+        ),
+    ),
+    BootObjectSpec(
+        "TranscriptBehavior",
+        "TextBehavior",
+        (
+            (FIELD_SPEC_GLYPH_REF, GLYPH_FALLBACK_CODE),
+            (FIELD_SPEC_SMALL_INTEGER, 1),
+        ),
+    ),
 ]
 KERNEL_METHOD_IMPLEMENTATION_COMPILED = "compiled"
 KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE = "primitive"
@@ -986,6 +1057,27 @@ def build_named_object_bindings(
     return bindings
 
 
+def materialize_boot_object_fields(
+    field_specs: tuple[tuple[str, object], ...],
+    object_indices_by_name: dict[str, int],
+    glyph_object_indices: list[int],
+) -> list[tuple[int, int]]:
+    fields: list[tuple[int, int]] = []
+
+    for field_kind, field_value in field_specs:
+        if field_kind == FIELD_SPEC_SMALL_INTEGER:
+            fields.append((SEED_FIELD_SMALL_INTEGER, int(field_value)))
+            continue
+        if field_kind == FIELD_SPEC_OBJECT_REF:
+            fields.append((SEED_FIELD_OBJECT_INDEX, object_indices_by_name[str(field_value)]))
+            continue
+        if field_kind == FIELD_SPEC_GLYPH_REF:
+            fields.append((SEED_FIELD_OBJECT_INDEX, glyph_object_indices[int(field_value)]))
+            continue
+        raise AssertionError(f"unknown boot object field spec kind {field_kind!r}")
+    return fields
+
+
 def build_seed_manifest() -> bytes:
     seed_objects: list[SeedObject] = []
     seed_object_indices_by_name: dict[str, int] = {}
@@ -999,48 +1091,13 @@ def build_seed_manifest() -> bytes:
         seed_objects.append(SeedObject(object_kind, SEED_INVALID_OBJECT_INDEX, fields))
         return object_index
 
-    add_seed_object("Transcript", SEED_OBJECT_TRANSCRIPT, [])
-    add_seed_object("Display", SEED_OBJECT_DISPLAY, [])
-    add_seed_object("BitBlt", SEED_OBJECT_BITBLT, [])
-    add_seed_object("Glyphs", SEED_OBJECT_GLYPHS, [])
-    add_seed_object("FormFactory", SEED_OBJECT_FORM_FACTORY, [])
-    add_seed_object("BitmapFactory", SEED_OBJECT_BITMAP_FACTORY, [])
-    add_seed_object(
-        "TranscriptLayout",
-        SEED_OBJECT_TEXT_LAYOUT,
-        [
-            (SEED_FIELD_SMALL_INTEGER, 24),
-            (SEED_FIELD_SMALL_INTEGER, 24),
-            (SEED_FIELD_SMALL_INTEGER, 4),
-            (SEED_FIELD_SMALL_INTEGER, 2),
-        ],
-    )
-    add_seed_object(
-        "TranscriptStyle",
-        SEED_OBJECT_TEXT_STYLE,
-        [
-            (SEED_FIELD_SMALL_INTEGER, 0x00486020),
-            (SEED_FIELD_SMALL_INTEGER, 0x00F2F2F2),
-        ],
-    )
-    framebuffer_bitmap_index = add_seed_object(
-        "FramebufferBitmap",
-        SEED_OBJECT_BITMAP,
-        [
-            (SEED_FIELD_SMALL_INTEGER, 640),
-            (SEED_FIELD_SMALL_INTEGER, 480),
-            (SEED_FIELD_SMALL_INTEGER, BITMAP_STORAGE_FRAMEBUFFER),
-            (SEED_FIELD_SMALL_INTEGER, 0),
-        ],
-    )
-    add_seed_object(
-        "DefaultForm",
-        SEED_OBJECT_FORM,
-        [
-            (SEED_FIELD_OBJECT_INDEX, framebuffer_bitmap_index),
-        ],
-    )
     glyph_object_indices: list[int] = []
+    for spec in BOOT_OBJECT_SPECS_BEFORE_GLYPHS:
+        add_seed_object(
+            spec.name,
+            constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, spec.object_kind_name),
+            materialize_boot_object_fields(spec.field_specs, seed_object_indices_by_name, glyph_object_indices),
+        )
     for glyph_index in range(128):
         glyph_object_indices.append(
             add_seed_object(
@@ -1054,22 +1111,12 @@ def build_seed_manifest() -> bytes:
                 ],
             )
         )
-    add_seed_object(
-        "TranscriptMetrics",
-        SEED_OBJECT_TEXT_METRICS,
-        [
-            (SEED_FIELD_SMALL_INTEGER, 6),
-            (SEED_FIELD_SMALL_INTEGER, 8),
-        ],
-    )
-    add_seed_object(
-        "TranscriptBehavior",
-        SEED_OBJECT_TEXT_BEHAVIOR,
-        [
-            (SEED_FIELD_OBJECT_INDEX, glyph_object_indices[GLYPH_FALLBACK_CODE]),
-            (SEED_FIELD_SMALL_INTEGER, 1),
-        ],
-    )
+    for spec in BOOT_OBJECT_SPECS_AFTER_GLYPHS:
+        add_seed_object(
+            spec.name,
+            constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, spec.object_kind_name),
+            materialize_boot_object_fields(spec.field_specs, seed_object_indices_by_name, glyph_object_indices),
+        )
 
     class_class_index = len(seed_objects)
     class_kinds_in_order = [
