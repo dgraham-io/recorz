@@ -108,6 +108,7 @@ PROGRAM_RUNTIME_SPEC = dict(RUNTIME_SPEC["program"])
 IMAGE_RUNTIME_SPEC = dict(RUNTIME_SPEC["image"])
 SEED_RUNTIME_SPEC = dict(RUNTIME_SPEC["seed"])
 COMPILED_METHOD_RUNTIME_SPEC = dict(RUNTIME_SPEC["compiled_method"])
+METHOD_UPDATE_RUNTIME_SPEC = dict(RUNTIME_SPEC["method_update"])
 METHOD_IMPLEMENTATION_RUNTIME_SPEC = list(RUNTIME_SPEC["method_implementations"])
 
 OPCODE_SPEC = list(RUNTIME_SPEC["opcodes"])
@@ -164,6 +165,10 @@ SEED_OBJECT_HEADER_FORMAT = str(SEED_RUNTIME_SPEC["object_header_format"])
 SEED_FIELD_FORMAT = str(SEED_RUNTIME_SPEC["field_format"])
 SEED_INVALID_OBJECT_INDEX = int(SEED_RUNTIME_SPEC["invalid_object_index"])
 COMPILED_METHOD_MAX_INSTRUCTIONS = int(COMPILED_METHOD_RUNTIME_SPEC["max_instructions"])
+METHOD_UPDATE_MAGIC = str(METHOD_UPDATE_RUNTIME_SPEC["magic"]).encode("ascii")
+METHOD_UPDATE_VERSION = int(METHOD_UPDATE_RUNTIME_SPEC["version"])
+METHOD_UPDATE_HEADER_FORMAT = str(METHOD_UPDATE_RUNTIME_SPEC["header_format"])
+METHOD_UPDATE_FW_CFG_NAME = str(METHOD_UPDATE_RUNTIME_SPEC["fw_cfg_name"])
 
 SEED_FIELD_KIND_IDS, SEED_FIELD_KIND_VALUES, SEED_FIELD_KIND_DEFINITIONS = (
     build_named_constant_maps_from_explicit_specs(SEED_FIELD_KIND_SPEC)
@@ -1431,6 +1436,39 @@ def compile_kernel_method_program(class_name: str, instance_variables: list[str]
     return lowered
 
 
+def build_method_update_manifest(class_name: str, source: str) -> bytes:
+    class_header = KERNEL_CLASS_HEADERS_BY_NAME.get(class_name)
+    if class_header is None:
+        raise LoweringError(f"kernel MVP method update references unknown class {class_name!r}")
+
+    selector, argument_count, implementation_kind, _primitive_binding = parse_kernel_method_chunk(
+        class_name,
+        list(class_header.instance_variables),
+        source,
+    )
+    if implementation_kind != KERNEL_METHOD_IMPLEMENTATION_COMPILED:
+        raise LoweringError("kernel MVP method update must lower to a compiled method")
+    if selector not in KERNEL_SELECTOR_DECLARATIONS_BY_SELECTOR:
+        raise LoweringError(f"kernel MVP method update references undeclared selector {selector!r}")
+
+    instructions = compile_kernel_method_program(class_name, list(class_header.instance_variables), source)
+    manifest = bytearray(
+        struct.pack(
+            METHOD_UPDATE_HEADER_FORMAT,
+            METHOD_UPDATE_MAGIC,
+            METHOD_UPDATE_VERSION,
+            KERNEL_CLASS_NAME_TO_OBJECT_KIND[class_name],
+            SELECTOR_VALUES[SELECTOR_IDS[selector]],
+            argument_count,
+            len(instructions),
+            0,
+        )
+    )
+    for instruction in instructions:
+        manifest.extend(struct.pack("<I", instruction))
+    return bytes(manifest)
+
+
 KERNEL_METHOD_SOURCE_BY_ENTRY_NAME = load_kernel_method_sources()
 
 
@@ -1546,6 +1584,10 @@ def render_generated_runtime_bindings_header() -> str:
     append_macro_definition(lines, "RECORZ_MVP_SEED_BINDING_SIZE", f"{struct.calcsize(SEED_BINDING_FORMAT)}U")
     append_macro_definition(lines, "RECORZ_MVP_SEED_INVALID_OBJECT_INDEX", f"{SEED_INVALID_OBJECT_INDEX}U")
     append_macro_definition(lines, "RECORZ_MVP_COMPILED_METHOD_MAX_INSTRUCTIONS", f"{COMPILED_METHOD_MAX_INSTRUCTIONS}U")
+    append_magic_byte_definitions(lines, "RECORZ_MVP_METHOD_UPDATE_MAGIC", METHOD_UPDATE_MAGIC)
+    append_macro_definition(lines, "RECORZ_MVP_METHOD_UPDATE_VERSION", f"{METHOD_UPDATE_VERSION}U")
+    append_macro_definition(lines, "RECORZ_MVP_METHOD_UPDATE_HEADER_SIZE", f"{struct.calcsize(METHOD_UPDATE_HEADER_FORMAT)}U")
+    append_macro_definition(lines, "RECORZ_MVP_METHOD_UPDATE_FW_CFG_NAME", f"\"{METHOD_UPDATE_FW_CFG_NAME}\"")
     lines.append("")
     append_enum_definition(lines, "recorz_mvp_compiled_method_opcode", COMPILED_METHOD_OPCODE_DEFINITIONS)
     append_enum_definition(lines, "recorz_mvp_method_implementation", METHOD_IMPLEMENTATION_DEFINITIONS)

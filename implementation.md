@@ -616,3 +616,9 @@
 - Kept the program section wrapper intact for now, but made it feed that same activation engine instead of a bespoke bytecode loop, which removes the remaining runtime split between do-it execution and kernel method execution.
 - Updated the runtime spec/header generation and focused lowering regressions to lock the unified opcode numbering and the absence of the old split execution path.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Add Method Update Payload Builder
+- Added a shared `method_update` wire format to `platform/qemu-riscv64/runtime_spec.json` for the smallest live-install path: replacing one existing compiled method without rebuilding the whole boot image.
+- Extended `tools/build_qemu_riscv_mvp_image.py` and the generated runtime header so both host and target can share that payload contract, including magic, version, header size, and the `fw_cfg` file name used to transport updates into QEMU.
+- Added `tools/build_qemu_riscv_method_update.py` plus focused lowering tests so a single method chunk can now be compiled into a validated method-update payload, while rejecting primitive-backed updates for this first narrow slice.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

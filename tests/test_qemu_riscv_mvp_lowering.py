@@ -1471,6 +1471,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertIn("#define RECORZ_MVP_SEED_VERSION 16U", header)
         self.assertIn("#define RECORZ_MVP_SEED_INVALID_OBJECT_INDEX 65535U", header)
         self.assertIn("#define RECORZ_MVP_COMPILED_METHOD_MAX_INSTRUCTIONS 4U", header)
+        self.assertIn("#define RECORZ_MVP_METHOD_UPDATE_MAGIC_0 'R'", header)
+        self.assertIn("#define RECORZ_MVP_METHOD_UPDATE_VERSION 1U", header)
+        self.assertIn("#define RECORZ_MVP_METHOD_UPDATE_HEADER_SIZE 16U", header)
+        self.assertIn('#define RECORZ_MVP_METHOD_UPDATE_FW_CFG_NAME "opt/recorz-method-update"', header)
         self.assertIn("enum recorz_mvp_compiled_method_opcode {", header)
         self.assertIn("RECORZ_MVP_COMPILED_METHOD_OP_PUSH_LITERAL = 2,", header)
         self.assertIn("RECORZ_MVP_COMPILED_METHOD_OP_RETURN_RECEIVER = 13,", header)
@@ -1514,6 +1518,30 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             "[RECORZ_MVP_PRIMITIVE_FORM_NEWLINE] = execute_entry_form_newline,",
             header,
         )
+
+    def test_builds_compiled_method_update_manifest(self) -> None:
+        manifest = mvp.build_method_update_manifest("Transcript", "cr\n    ^self")
+        header_size = struct.calcsize(mvp.METHOD_UPDATE_HEADER_FORMAT)
+        magic, version, class_kind, selector, argument_count, instruction_count, reserved = struct.unpack(
+            mvp.METHOD_UPDATE_HEADER_FORMAT,
+            manifest[:header_size],
+        )
+
+        self.assertEqual(magic, mvp.METHOD_UPDATE_MAGIC)
+        self.assertEqual(version, mvp.METHOD_UPDATE_VERSION)
+        self.assertEqual(class_kind, mvp.SEED_OBJECT_TRANSCRIPT)
+        self.assertEqual(selector, mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_CR"])
+        self.assertEqual(argument_count, 0)
+        self.assertEqual(instruction_count, 1)
+        self.assertEqual(reserved, 0)
+        self.assertEqual(
+            struct.unpack("<I", manifest[header_size:header_size + 4]),
+            (mvp.encode_compiled_method_instruction("return_receiver"),),
+        )
+
+    def test_rejects_primitive_method_update_manifest(self) -> None:
+        with self.assertRaises(mvp.LoweringError):
+            mvp.build_method_update_manifest("Form", "clear\n    <primitive: #formClear>")
 
     def test_builds_seed_manifest_with_expected_header(self) -> None:
         manifest = mvp.build_seed_manifest()

@@ -204,6 +204,12 @@
       }
     ]
   },
+  "method_update": {
+    "magic": "RCZU",
+    "version": 1,
+    "header_format": "<4sHHHHHH",
+    "fw_cfg_name": "opt/recorz-method-update"
+  },
   "method_implementations": [
     {
       "name": "primitive",
