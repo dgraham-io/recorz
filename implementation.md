@@ -316,3 +316,9 @@
 - Removed the most obvious fixed index assumptions in the seed builder, including the default form/framebuffer bitmap links and the transcript fallback glyph reference, while preserving the existing seed layout and object ordering.
 - Added a focused regression covering the boot-object binding maps and the helper that derives global/root bindings from named boot objects.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Declare Fixed Boot Object Specs
+- Replaced the remaining inline fixed boot-object construction block in `build_seed_manifest()` with declarative boot object specs plus a small field-materialization helper.
+- Kept glyph bitmap generation separate, but now derive the fixed pre-glyph and post-glyph boot objects from one named spec layer instead of a long inline sequence of `add_seed_object(...)` calls.
+- Added a focused regression covering the declared boot object spec lists and the helper that materializes object and glyph references into seed fields.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
