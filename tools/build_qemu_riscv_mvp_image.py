@@ -312,29 +312,16 @@ class KernelClassHeader:
     instance_variables: tuple[str, ...]
 
 
-METHOD_ENTRY_ORDER = [
-    "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW",
-    "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR",
-    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM",
-    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_CLEAR",
-    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_WRITE_STRING",
-    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_NEWLINE",
-    "RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR",
-    "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE",
-    "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR",
-    "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR",
-    "RECORZ_MVP_METHOD_ENTRY_GLYPHS_AT",
-    "RECORZ_MVP_METHOD_ENTRY_FORM_FACTORY_FROM_BITS",
-    "RECORZ_MVP_METHOD_ENTRY_BITMAP_FACTORY_MONO_WIDTH_HEIGHT",
-    "RECORZ_MVP_METHOD_ENTRY_BITMAP_WIDTH",
-    "RECORZ_MVP_METHOD_ENTRY_BITMAP_HEIGHT",
-    "RECORZ_MVP_METHOD_ENTRY_FORM_CLEAR",
-    "RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING",
-    "RECORZ_MVP_METHOD_ENTRY_FORM_NEWLINE",
-    "RECORZ_MVP_METHOD_ENTRY_FORM_BITS",
-    "RECORZ_MVP_METHOD_ENTRY_FORM_WIDTH",
-    "RECORZ_MVP_METHOD_ENTRY_FORM_HEIGHT",
-    "RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND",
+KERNEL_CLASS_BOOT_ORDER = [
+    "Transcript",
+    "Display",
+    "BitBlt",
+    "Glyphs",
+    "FormFactory",
+    "BitmapFactory",
+    "Bitmap",
+    "Form",
+    "Class",
 ]
 KERNEL_METHOD_IMPLEMENTATION_COMPILED = "compiled"
 KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE = "primitive"
@@ -513,8 +500,9 @@ def parse_kernel_method_chunk(
 
 
 def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
-    discovered_method_sources: dict[str, KernelMethodSource] = {}
+    discovered_method_sources_by_class: dict[str, list[KernelMethodSource]] = {}
     seen_class_names: set[str] = set()
+    discovered_entry_names: set[str] = set()
 
     for method_path in sorted(KERNEL_MVP_ROOT.glob("*.rz")):
         relative_path = method_path.name
@@ -530,6 +518,7 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
         if class_name in seen_class_names:
             raise LoweringError(f"kernel MVP class {class_name} is declared more than once")
         seen_class_names.add(class_name)
+        discovered_method_sources_by_class[class_name] = []
         chunk_signatures: set[tuple[str, int]] = set()
 
         for chunk_source in chunk_sources[1:]:
@@ -545,39 +534,42 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
                 )
             chunk_signatures.add(signature)
             entry_name = kernel_method_entry_name(class_name, selector)
-            if entry_name in discovered_method_sources:
+            if entry_name in discovered_entry_names:
                 raise LoweringError(
                     f"kernel MVP class file {relative_path} duplicates built-in entry {entry_name}"
                 )
-            discovered_method_sources[entry_name] = KernelMethodSource(
-                entry_name=entry_name,
-                class_name=class_name,
-                instance_variables=class_header.instance_variables,
-                relative_path=relative_path,
-                selector=selector,
-                argument_count=argument_count,
-                implementation_kind=implementation_kind,
-                primitive_binding=primitive_binding,
-                source_text=chunk_source,
+            discovered_entry_names.add(entry_name)
+            discovered_method_sources_by_class[class_name].append(
+                KernelMethodSource(
+                    entry_name=entry_name,
+                    class_name=class_name,
+                    instance_variables=class_header.instance_variables,
+                    relative_path=relative_path,
+                    selector=selector,
+                    argument_count=argument_count,
+                    implementation_kind=implementation_kind,
+                    primitive_binding=primitive_binding,
+                    source_text=chunk_source,
+                )
             )
-    expected_entry_names = set(METHOD_ENTRY_ORDER)
-    discovered_entry_names = set(discovered_method_sources)
-    if discovered_entry_names != expected_entry_names:
-        missing_entries = sorted(expected_entry_names - discovered_entry_names)
-        extra_entries = sorted(discovered_entry_names - expected_entry_names)
+    expected_class_names = set(KERNEL_CLASS_BOOT_ORDER)
+    if seen_class_names != expected_class_names:
+        missing_classes = sorted(expected_class_names - seen_class_names)
+        extra_classes = sorted(seen_class_names - expected_class_names)
         details: list[str] = []
-        if missing_entries:
-            details.append(f"missing {', '.join(missing_entries)}")
-        if extra_entries:
-            details.append(f"unexpected {', '.join(extra_entries)}")
+        if missing_classes:
+            details.append(f"missing classes {', '.join(missing_classes)}")
+        if extra_classes:
+            details.append(f"unexpected classes {', '.join(extra_classes)}")
         raise LoweringError(
-            "kernel MVP source tree does not match the expected built-in method entries"
+            "kernel MVP source tree does not match the expected boot class set"
             + (f": {'; '.join(details)}" if details else "")
         )
-    return {
-        entry_name: discovered_method_sources[entry_name]
-        for entry_name in METHOD_ENTRY_ORDER
-    }
+    ordered_method_sources: dict[str, KernelMethodSource] = {}
+    for class_name in KERNEL_CLASS_BOOT_ORDER:
+        for method_source in discovered_method_sources_by_class[class_name]:
+            ordered_method_sources[method_source.entry_name] = method_source
+    return ordered_method_sources
 
 
 def compile_kernel_method_program(class_name: str, instance_variables: list[str], source: str) -> list[int]:
@@ -685,6 +677,7 @@ def compile_kernel_method_program(class_name: str, instance_variables: list[str]
 
 
 KERNEL_METHOD_SOURCE_BY_ENTRY_NAME = load_kernel_method_sources()
+METHOD_ENTRY_ORDER = list(KERNEL_METHOD_SOURCE_BY_ENTRY_NAME)
 METHOD_ENTRY_DEFINITIONS: list[tuple[str, int, str, int]] = [
     (
         entry_name,

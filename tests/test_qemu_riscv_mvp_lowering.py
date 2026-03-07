@@ -430,6 +430,42 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.SEED_ROOT_VALUES["RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS"], 6)
         self.assertEqual(mvp.SEED_ROOT_DEFINITIONS[0], ("RECORZ_MVP_SEED_ROOT_DEFAULT_FORM", 1))
 
+    def test_derives_method_entry_order_from_boot_class_order_and_source_chunks(self) -> None:
+        self.assertEqual(
+            mvp.KERNEL_CLASS_BOOT_ORDER,
+            [
+                "Transcript",
+                "Display",
+                "BitBlt",
+                "Glyphs",
+                "FormFactory",
+                "BitmapFactory",
+                "Bitmap",
+                "Form",
+                "Class",
+            ],
+        )
+        self.assertEqual(
+            mvp.METHOD_ENTRY_ORDER[:6],
+            [
+                "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW",
+                "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR",
+                "RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM",
+                "RECORZ_MVP_METHOD_ENTRY_DISPLAY_CLEAR",
+                "RECORZ_MVP_METHOD_ENTRY_DISPLAY_WRITE_STRING",
+                "RECORZ_MVP_METHOD_ENTRY_DISPLAY_NEWLINE",
+            ],
+        )
+        self.assertEqual(
+            mvp.METHOD_ENTRY_ORDER[-4:],
+            [
+                "RECORZ_MVP_METHOD_ENTRY_FORM_BITS",
+                "RECORZ_MVP_METHOD_ENTRY_FORM_WIDTH",
+                "RECORZ_MVP_METHOD_ENTRY_FORM_HEIGHT",
+                "RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND",
+            ],
+        )
+
     def test_renders_generated_runtime_bindings_header(self) -> None:
         header = mvp.render_generated_runtime_bindings_header()
 
