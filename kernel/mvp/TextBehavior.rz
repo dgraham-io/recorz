@@ -1,0 +1,1 @@
+RecorzKernelClass: #TextBehavior descriptorOrder: 12 instanceVariableNames: 'fallbackGlyph clearOnOverflow'

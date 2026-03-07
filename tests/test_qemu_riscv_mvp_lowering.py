@@ -338,6 +338,13 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ),
             mvp.KernelClassHeader("Display", 2, 1, ()),
         )
+        self.assertEqual(
+            mvp.parse_kernel_class_header(
+                "RecorzKernelClass: #CompiledMethod descriptorOrder: 16 instanceVariableNames: 'word0 word1 word2 word3'",
+                "CompiledMethod.rz",
+            ),
+            mvp.KernelClassHeader("CompiledMethod", 16, None, ("word0", "word1", "word2", "word3")),
+        )
 
     def test_parses_primitive_kernel_method_chunk(self) -> None:
         self.assertEqual(
@@ -414,11 +421,25 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.SEED_FIELD_KIND_DEFINITIONS[2], ("RECORZ_MVP_SEED_FIELD_OBJECT_INDEX", 2))
         self.assertEqual(mvp.OBJECT_KIND_SPECS[0], ("Transcript", "RECORZ_MVP_OBJECT_TRANSCRIPT"))
         self.assertEqual(mvp.OBJECT_KIND_SPECS[-1], ("CompiledMethod", "RECORZ_MVP_OBJECT_COMPILED_METHOD"))
-        self.assertEqual(mvp.KERNEL_CLASS_SPECS[0], "Class")
-        self.assertEqual(mvp.KERNEL_CLASS_SPECS[-1], "CompiledMethod")
-        self.assertEqual(mvp.KERNEL_CLASS_HEADERS_BY_NAME["Class"], mvp.KernelClassHeader("Class", 0, 8, ("superclass", "instanceKind", "methodStart", "methodCount")))
+        self.assertEqual(
+            mvp.KERNEL_CLASS_HEADERS_IN_DESCRIPTOR_ORDER[0],
+            mvp.KernelClassHeader("Class", 0, 8, ("superclass", "instanceKind", "methodStart", "methodCount")),
+        )
+        self.assertEqual(
+            mvp.KERNEL_CLASS_HEADERS_IN_DESCRIPTOR_ORDER[-1],
+            mvp.KernelClassHeader("CompiledMethod", 16, None, ("word0", "word1", "word2", "word3")),
+        )
+        self.assertEqual(
+            mvp.KERNEL_CLASS_HEADERS_BY_NAME["Class"],
+            mvp.KernelClassHeader("Class", 0, 8, ("superclass", "instanceKind", "methodStart", "methodCount")),
+        )
         self.assertEqual(mvp.KERNEL_CLASS_HEADERS_BY_NAME["Form"], mvp.KernelClassHeader("Form", 10, 7, ("bits",)))
+        self.assertEqual(
+            mvp.KERNEL_CLASS_HEADERS_BY_NAME["TextLayout"],
+            mvp.KernelClassHeader("TextLayout", 7, None, ("left", "top", "scale", "lineSpacing")),
+        )
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["BitBlt"], mvp.SEED_OBJECT_BITBLT)
+        self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["CompiledMethod"], mvp.SEED_OBJECT_COMPILED_METHOD)
         self.assertEqual(mvp.OBJECT_KIND_DEFINITIONS[-1], ("RECORZ_MVP_OBJECT_COMPILED_METHOD", 22))
         self.assertEqual(
             mvp.SEED_ROOT_SPECS,
@@ -762,7 +783,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            mvp.KERNEL_CLASS_SPECS,
+            [header.class_name for header in mvp.KERNEL_CLASS_HEADERS_IN_DESCRIPTOR_ORDER],
             mvp.CLASS_DESCRIPTOR_KIND_NAMES,
         )
         self.assertEqual(

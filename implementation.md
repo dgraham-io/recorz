@@ -513,3 +513,9 @@
 - Updated the builder to parse those header fields into `KernelClassHeader`, derive the active source class boot order from parsed headers, and keep the full class descriptor name list as a separate explicit compatibility list for now.
 - Extended the focused lowering regressions to lock the richer header parsing and the fact that the active source class boot order now comes from parsed `.rz` headers.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Declare Support Classes In Kernel Source Tree
+- Added header-only `.rz` class declarations for the remaining support/kernel-internal classes (`TextLayout`, `TextStyle`, `TextMetrics`, `TextBehavior`, `MethodDescriptor`, `MethodEntry`, `Selector`, and `CompiledMethod`) so the full kernel class universe now lives under `kernel/mvp/`.
+- Replaced the Python-side full class list with parsed class headers, derived `CLASS_DESCRIPTOR_KIND_NAMES` from `descriptorOrder`, and continued deriving the source boot subset from `sourceBootOrder`, making the class descriptor order and source class set both source-owned.
+- Updated the method-source loader to accept header-only support classes in the kernel source tree and extended the focused lowering regressions to lock the full descriptor-order header set.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

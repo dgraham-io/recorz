@@ -448,31 +448,6 @@ class SeedBindings:
     global_bindings: list[tuple[int, int]]
     root_bindings: list[tuple[int, int]]
 
-
-KERNEL_CLASS_SPECS = [
-    "Class",
-    "Transcript",
-    "Display",
-    "BitBlt",
-    "Glyphs",
-    "FormFactory",
-    "BitmapFactory",
-    "TextLayout",
-    "TextStyle",
-    "Bitmap",
-    "Form",
-    "TextMetrics",
-    "TextBehavior",
-    "MethodDescriptor",
-    "MethodEntry",
-    "Selector",
-    "CompiledMethod",
-]
-CLASS_DESCRIPTOR_KIND_NAMES = list(KERNEL_CLASS_SPECS)
-CLASS_DESCRIPTOR_KIND_ORDER = [
-    constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, kind_name)
-    for kind_name in CLASS_DESCRIPTOR_KIND_NAMES
-]
 GLYPH_BITMAP_NAME_PREFIX = "GlyphBitmap"
 GLYPH_BITMAP_WIDTH = 5
 GLYPH_BITMAP_HEIGHT = 7
@@ -705,7 +680,7 @@ def parse_kernel_class_header(header_source: str, relative_path: str) -> KernelC
     )
 
 
-def load_kernel_source_class_headers() -> tuple[dict[str, KernelClassHeader], list[KernelClassHeader]]:
+def load_kernel_class_headers() -> dict[str, KernelClassHeader]:
     class_headers_by_name: dict[str, KernelClassHeader] = {}
 
     for method_path in sorted(KERNEL_MVP_ROOT.glob("*.rz")):
@@ -715,33 +690,47 @@ def load_kernel_source_class_headers() -> tuple[dict[str, KernelClassHeader], li
         class_header = parse_kernel_class_header(chunk_sources[0], method_path.name)
         if class_header.class_name in class_headers_by_name:
             raise LoweringError(f"kernel MVP class {class_header.class_name} is declared more than once")
-        if class_header.source_boot_order is None:
-            raise LoweringError(
-                f"kernel MVP source class file {method_path.name} must declare sourceBootOrder"
-            )
         class_headers_by_name[class_header.class_name] = class_header
 
-    source_class_headers = sorted(
+    descriptor_headers = sorted(
         class_headers_by_name.values(),
-        key=lambda class_header: class_header.source_boot_order if class_header.source_boot_order is not None else -1,
+        key=lambda class_header: class_header.descriptor_order,
     )
-    expected_boot_orders = list(range(len(source_class_headers)))
-    actual_boot_orders = [class_header.source_boot_order for class_header in source_class_headers]
-    if actual_boot_orders != expected_boot_orders:
+    expected_descriptor_orders = list(range(len(descriptor_headers)))
+    actual_descriptor_orders = [class_header.descriptor_order for class_header in descriptor_headers]
+    if actual_descriptor_orders != expected_descriptor_orders:
         raise LoweringError(
-            "kernel MVP source class headers must declare a contiguous sourceBootOrder range starting at 0"
+            "kernel MVP class headers must declare a contiguous descriptorOrder range starting at 0"
         )
-    descriptor_orders = [class_header.descriptor_order for class_header in source_class_headers]
-    if len(set(descriptor_orders)) != len(descriptor_orders):
-        raise LoweringError("kernel MVP source class headers must declare unique descriptorOrder values")
-    return class_headers_by_name, source_class_headers
+    return class_headers_by_name
 
 
-KERNEL_CLASS_HEADERS_BY_NAME, KERNEL_SOURCE_CLASS_HEADERS = load_kernel_source_class_headers()
+KERNEL_CLASS_HEADERS_BY_NAME = load_kernel_class_headers()
+KERNEL_CLASS_HEADERS_IN_DESCRIPTOR_ORDER = sorted(
+    KERNEL_CLASS_HEADERS_BY_NAME.values(),
+    key=lambda class_header: class_header.descriptor_order,
+)
+KERNEL_SOURCE_CLASS_HEADERS = sorted(
+    (
+        class_header
+        for class_header in KERNEL_CLASS_HEADERS_BY_NAME.values()
+        if class_header.source_boot_order is not None
+    ),
+    key=lambda class_header: class_header.source_boot_order if class_header.source_boot_order is not None else -1,
+)
+expected_source_boot_orders = list(range(len(KERNEL_SOURCE_CLASS_HEADERS)))
+actual_source_boot_orders = [class_header.source_boot_order for class_header in KERNEL_SOURCE_CLASS_HEADERS]
+if actual_source_boot_orders != expected_source_boot_orders:
+    raise LoweringError("kernel MVP source class headers must declare a contiguous sourceBootOrder range starting at 0")
+CLASS_DESCRIPTOR_KIND_NAMES = [class_header.class_name for class_header in KERNEL_CLASS_HEADERS_IN_DESCRIPTOR_ORDER]
+CLASS_DESCRIPTOR_KIND_ORDER = [
+    constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, kind_name)
+    for kind_name in CLASS_DESCRIPTOR_KIND_NAMES
+]
 KERNEL_CLASS_BOOT_ORDER = [class_header.class_name for class_header in KERNEL_SOURCE_CLASS_HEADERS]
 KERNEL_CLASS_NAME_TO_OBJECT_KIND = {
     class_name: constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, class_name)
-    for class_name in KERNEL_CLASS_BOOT_ORDER
+    for class_name in KERNEL_CLASS_HEADERS_BY_NAME
 }
 
 
@@ -883,7 +872,7 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
                     source_text=chunk_source,
                 )
             )
-    expected_class_names = set(KERNEL_CLASS_BOOT_ORDER)
+    expected_class_names = set(KERNEL_CLASS_HEADERS_BY_NAME)
     if seen_class_names != expected_class_names:
         missing_classes = sorted(expected_class_names - seen_class_names)
         extra_classes = sorted(seen_class_names - expected_class_names)
