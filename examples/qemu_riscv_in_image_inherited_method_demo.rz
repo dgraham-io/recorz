@@ -1,0 +1,15 @@
+| childClass child |
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #Parent superclass: #Object instanceVariableNames: ''''
+!
+cr
+    Display newline.
+    ^self'.
+childClass := KernelInstaller fileInClassChunks: 'RecorzKernelClass: #Child superclass: #Parent instanceVariableNames: ''''
+!
+value
+    ^self'.
+child := childClass new.
+Transcript show: 'AAA'.
+child cr.
+Transcript show: 'BBB'.

@@ -715,3 +715,9 @@
 - Switched the default `EXAMPLE` assignment in the QEMU Makefile to `?=` so command-line example selection remains explicit and conventional.
 - Added `tests/test_qemu_riscv_makefile.py` to lock the regression: it runs `make inspect-image` twice against the same build directory, first with the framebuffer demo and then with the stateful-class demo, and asserts that the generated image checksum and program manifest change without a clean build in between.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 EXAMPLE=/Users/david/repos/recorz/examples/qemu_riscv_in_image_stateful_class_demo.rz inspect-image`.
+
+## 2026-03-07 - Add Superclass-Aware Method Lookup
+- Extended `platform/qemu-riscv64/vm.c` so method lookup now walks the `Class>>superclass` chain instead of only scanning the receiver class’s local method range, which is the first real runtime step toward Smalltalk-shaped inheritance for live classes.
+- Added `examples/qemu_riscv_in_image_inherited_method_demo.rz`, which files in `Parent`, files in `Child superclass: #Parent`, instantiates `Child`, and proves that a method defined only on `Parent` is still understood by the `Child` instance.
+- Added integration coverage in `tests/test_qemu_riscv_method_update_integration.py` to lock that inherited-method path at the QEMU framebuffer level.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 EXAMPLE=/Users/david/repos/recorz/examples/qemu_riscv_in_image_inherited_method_demo.rz screenshot`.

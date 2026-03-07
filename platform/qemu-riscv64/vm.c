@@ -1213,22 +1213,36 @@ static const struct recorz_mvp_heap_object *class_method_start_object(const stru
     return heap_object_for_value(method_start);
 }
 
+static const struct recorz_mvp_heap_object *class_superclass_object_or_null(
+    const struct recorz_mvp_heap_object *class_object
+) {
+    struct recorz_mvp_value superclass_value = heap_get_field(class_object, CLASS_FIELD_SUPERCLASS);
+
+    if (superclass_value.kind == RECORZ_MVP_VALUE_NIL) {
+        return 0;
+    }
+    if (superclass_value.kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("class superclass is not a class object");
+    }
+    {
+        const struct recorz_mvp_heap_object *superclass_object = heap_object_for_value(superclass_value);
+
+        if (superclass_object->kind != RECORZ_MVP_OBJECT_CLASS) {
+            machine_panic("class superclass is not a class object");
+        }
+        return superclass_object;
+    }
+}
+
 static const struct recorz_mvp_heap_object *lookup_builtin_method_descriptor(
     const struct recorz_mvp_heap_object *class_object,
     uint8_t selector,
     uint16_t argument_count
 ) {
-    const struct recorz_mvp_heap_object *method_object = class_method_start_object(class_object);
     const struct recorz_mvp_heap_object *selector_object;
-    uint32_t method_count = class_method_count(class_object);
-    uint32_t method_index;
+    const struct recorz_mvp_heap_object *lookup_class = class_object;
+    uint32_t lookup_depth = 0U;
 
-    if (method_count == 0U) {
-        return 0;
-    }
-    if (method_object == 0) {
-        machine_panic("class with methods is missing a method start");
-    }
     if (selector == 0U || selector > MAX_SELECTOR_ID) {
         machine_panic("selector id is out of range");
     }
@@ -1236,19 +1250,36 @@ static const struct recorz_mvp_heap_object *lookup_builtin_method_descriptor(
         return 0;
     }
     selector_object = (const struct recorz_mvp_heap_object *)heap_object(selector_handles_by_id[selector]);
-    for (method_index = 0U; method_index < method_count; ++method_index) {
-        const struct recorz_mvp_heap_object *candidate =
-            (const struct recorz_mvp_heap_object *)heap_object((uint16_t)(method_object - heap + 1U + method_index));
 
-        if (candidate->kind != RECORZ_MVP_OBJECT_METHOD_DESCRIPTOR) {
-            machine_panic("class method range contains a non-method descriptor");
+    while (lookup_class != 0) {
+        const struct recorz_mvp_heap_object *method_object = class_method_start_object(lookup_class);
+        uint32_t method_count = class_method_count(lookup_class);
+        uint32_t method_index;
+
+        if (lookup_depth++ >= HEAP_LIMIT) {
+            machine_panic("class superclass chain is invalid");
         }
-        if (method_descriptor_selector_object(candidate) == selector_object) {
-            if (method_descriptor_argument_count(candidate) != argument_count) {
-                machine_panic("selector argument count does not match method descriptor");
+        if (method_count != 0U) {
+            if (method_object == 0) {
+                machine_panic("class with methods is missing a method start");
             }
-            return candidate;
+            for (method_index = 0U; method_index < method_count; ++method_index) {
+                const struct recorz_mvp_heap_object *candidate = (const struct recorz_mvp_heap_object *)heap_object(
+                    (uint16_t)(heap_handle_for_object(method_object) + method_index)
+                );
+
+                if (candidate->kind != RECORZ_MVP_OBJECT_METHOD_DESCRIPTOR) {
+                    machine_panic("class method range contains a non-method descriptor");
+                }
+                if (method_descriptor_selector_object(candidate) == selector_object) {
+                    if (method_descriptor_argument_count(candidate) != argument_count) {
+                        machine_panic("selector argument count does not match method descriptor");
+                    }
+                    return candidate;
+                }
+            }
         }
+        lookup_class = class_superclass_object_or_null(lookup_class);
     }
     return 0;
 }
