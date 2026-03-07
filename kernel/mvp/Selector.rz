@@ -57,3 +57,7 @@ RecorzKernelSelector: #fileInClassChunks: order: 26
 RecorzKernelSelector: #new order: 27
 !
 RecorzKernelSelector: #classNamed: order: 28
+!
+RecorzKernelSelector: #value order: 29
+!
+RecorzKernelSelector: #setValue: order: 30

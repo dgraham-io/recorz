@@ -7,6 +7,7 @@
 #define RECORZ_MVP_PROGRAM_INSTRUCTION_LIMIT 512U
 #define RECORZ_MVP_PROGRAM_LITERAL_LIMIT 128U
 #define RECORZ_MVP_PROGRAM_OBJECT_FIELD_LIMIT 4U
+#define RECORZ_MVP_PROGRAM_MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SET_VALUE
 
 static struct recorz_mvp_instruction loaded_instructions[RECORZ_MVP_PROGRAM_INSTRUCTION_LIMIT];
 static struct recorz_mvp_literal loaded_literals[RECORZ_MVP_PROGRAM_LITERAL_LIMIT];
@@ -51,7 +52,7 @@ static void validate_instruction(
             return;
         case RECORZ_MVP_OP_SEND:
             if (instruction->operand_a < RECORZ_MVP_SELECTOR_SHOW ||
-                instruction->operand_a > RECORZ_MVP_SELECTOR_CLASS_NAMED) {
+                instruction->operand_a > RECORZ_MVP_PROGRAM_MAX_SELECTOR_ID) {
                 machine_panic("program manifest selector operand is out of range");
             }
             return;

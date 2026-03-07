@@ -41,6 +41,7 @@ COMPILED_METHOD_PROGRAM_BY_ENTRY_ID = {
     mvp.METHOD_ENTRY_VALUES[name]: list(program)
     for name, program in mvp.COMPILED_METHOD_PROGRAM_BY_ENTRY_NAME.items()
 }
+MAX_SELECTOR_VALUE = max(mvp.SELECTOR_VALUES.values())
 
 
 class ImageInspectionError(RuntimeError):
@@ -144,8 +145,7 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
             if (
                 selector_id_field[0] != mvp.SEED_FIELD_SMALL_INTEGER
                 or selector_id_field[1] < mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SHOW"]
-                or selector_id_field[1]
-                > mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_CLASS_NAMED"]
+                or selector_id_field[1] > MAX_SELECTOR_VALUE
             ):
                 raise ImageInspectionError("seed manifest selector object id field is invalid")
             if int(selector_id_field[1]) in selector_ids:
@@ -246,8 +246,7 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
                 if (
                     selector_id_field[0] != mvp.SEED_FIELD_SMALL_INTEGER
                     or selector_id_field[1] < mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SHOW"]
-                    or selector_id_field[1]
-                    > mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_CLASS_NAMED"]
+                    or selector_id_field[1] > MAX_SELECTOR_VALUE
                 ):
                     raise ImageInspectionError("seed manifest selector object id field is invalid")
                 if argument_count_field[0] != mvp.SEED_FIELD_SMALL_INTEGER or argument_count_field[1] < 0:

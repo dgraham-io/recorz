@@ -1534,7 +1534,7 @@ for entry_name, source in KERNEL_METHOD_SOURCE_BY_ENTRY_NAME.items():
     if source.primitive_binding not in PRIMITIVE_BINDING_VALUES:
         PRIMITIVE_BINDING_VALUES[source.primitive_binding] = len(PRIMITIVE_BINDING_VALUES) + 1
     PRIMITIVE_BINDING_BY_ENTRY_NAME[entry_name] = PRIMITIVE_BINDING_VALUES[source.primitive_binding]
-SELECTOR_VALUE_ORDER = sorted({METHOD_ENTRY_SPECS[METHOD_ENTRY_VALUES[name]][1] for name in METHOD_ENTRY_ORDER})
+SELECTOR_VALUE_ORDER = [value for _constant_name, value in SELECTOR_DEFINITIONS]
 COMPILED_METHOD_ENTRY_ORDER = [
     entry_name for entry_name in METHOD_ENTRY_ORDER if entry_name in COMPILED_METHOD_PROGRAM_BY_ENTRY_NAME
 ]

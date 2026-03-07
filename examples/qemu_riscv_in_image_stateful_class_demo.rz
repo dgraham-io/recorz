@@ -1,0 +1,17 @@
+| helperClass helper current |
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #Helper superclass: #Object instanceVariableNames: ''value''
+!
+value
+    ^value
+!
+setValue: text
+    value := text.
+    ^self'.
+helperClass := KernelInstaller classNamed: 'Helper'.
+helper := helperClass new.
+helper setValue: 'STATEFUL'.
+current := helper value.
+Transcript show: 'SET'.
+Transcript cr.
+Transcript show: current.

@@ -18,6 +18,7 @@ IN_IMAGE_CLASS_FILE_IN_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-in-image-class-
 IN_IMAGE_CLASS_CREATE_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-in-image-class-create-test"
 IN_IMAGE_INSTANCE_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-in-image-instance-test"
 IN_IMAGE_NAMED_CLASS_INSTANCE_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-in-image-named-class-instance-test"
+IN_IMAGE_STATEFUL_CLASS_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-in-image-stateful-class-test"
 PPM_PATH = BUILD_DIR / "recorz-qemu-riscv64-mvp.ppm"
 QEMU_LOG_PATH = BUILD_DIR / "qemu.log"
 UPDATE_TOOL_PATH = ROOT / "tools" / "build_qemu_riscv_method_update.py"
@@ -34,6 +35,7 @@ IN_IMAGE_CLASS_FILE_IN_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_clas
 IN_IMAGE_CLASS_CREATE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_class_create_demo.rz"
 IN_IMAGE_INSTANCE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_instance_demo.rz"
 IN_IMAGE_NAMED_CLASS_INSTANCE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_named_class_instance_demo.rz"
+IN_IMAGE_STATEFUL_CLASS_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_stateful_class_demo.rz"
 
 
 def _read_ppm(path: Path) -> tuple[int, int, bytes]:
@@ -403,6 +405,25 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
         self.assertGreater(line_1[foreground], 300)
         self.assertGreater(line_2[foreground], 300)
         self.assertGreater(line_3[foreground], 300)
+
+    def test_in_image_class_instances_hold_named_state(self) -> None:
+        foreground = (72, 96, 32)
+
+        updated_log, width, height, updated_data = self.render_demo(
+            build_dir=IN_IMAGE_STATEFUL_CLASS_BUILD_DIR,
+            example_path=IN_IMAGE_STATEFUL_CLASS_DEMO_PATH,
+            update_payload=None,
+        )
+
+        self.assertEqual((width, height), (640, 480))
+        self.assertIn("recorz qemu-riscv64 mvp: created class Helper", updated_log)
+        self.assertIn("recorz qemu-riscv64 mvp: rendered", updated_log)
+
+        line_1 = _region_histogram(updated_data, width, 24, 24, 220, 56)
+        line_2 = _region_histogram(updated_data, width, 24, 58, 260, 90)
+        self.assertGreater(line_1[foreground], 150)
+        self.assertGreater(line_2[foreground], 300)
+        self.assertGreater(line_2[foreground], line_1[foreground] + 150)
 
 
 if __name__ == "__main__":
