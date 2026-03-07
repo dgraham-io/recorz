@@ -352,6 +352,17 @@ class SeedLayoutSection:
     count: int
 
 
+@dataclass
+class DynamicSeedSections:
+    seed_layout: dict[str, SeedLayoutSection]
+    class_indices: dict[int, int]
+    class_seed_objects: list[SeedObject]
+    selector_seed_objects: list[SeedObject]
+    compiled_method_seed_objects: list[SeedObject]
+    method_entry_seed_objects: list[SeedObject]
+    method_seed_objects: list[SeedObject]
+
+
 KERNEL_CLASS_BOOT_ORDER = [
     "Transcript",
     "Display",
@@ -1362,9 +1373,7 @@ def build_fixed_boot_seed_objects() -> tuple[list[SeedObject], dict[str, int], l
     return seed_objects, seed_object_indices_by_name, glyph_object_indices
 
 
-def build_seed_manifest() -> bytes:
-    seed_objects, seed_object_indices_by_name, glyph_object_indices = build_fixed_boot_seed_objects()
-
+def build_dynamic_seed_sections(seed_objects: list[SeedObject]) -> DynamicSeedSections:
     seed_layout = build_seed_layout(BOOT_OBJECT_FIXED_COUNT, CLASS_DESCRIPTOR_KIND_ORDER)
     class_class_index = seed_layout["class_descriptors"].start_index
     class_kind_order = CLASS_DESCRIPTOR_KIND_ORDER
@@ -1393,7 +1402,6 @@ def build_seed_manifest() -> bytes:
         method_entry_indices,
         seed_layout["method_descriptors"].start_index,
     )
-
     class_indices, class_seed_objects = build_class_seed_objects(
         class_kind_order,
         class_class_index,
@@ -1411,11 +1419,26 @@ def build_seed_manifest() -> bytes:
     if len(method_seed_objects) != seed_layout["method_descriptors"].count:
         raise AssertionError("method descriptor seed object count does not match declared seed layout")
 
-    seed_objects.extend(class_seed_objects)
-    seed_objects.extend(selector_seed_objects)
-    seed_objects.extend(compiled_method_seed_objects)
-    seed_objects.extend(method_entry_seed_objects)
-    seed_objects.extend(method_seed_objects)
+    return DynamicSeedSections(
+        seed_layout=seed_layout,
+        class_indices=class_indices,
+        class_seed_objects=class_seed_objects,
+        selector_seed_objects=selector_seed_objects,
+        compiled_method_seed_objects=compiled_method_seed_objects,
+        method_entry_seed_objects=method_entry_seed_objects,
+        method_seed_objects=method_seed_objects,
+    )
+
+
+def build_seed_manifest() -> bytes:
+    seed_objects, seed_object_indices_by_name, glyph_object_indices = build_fixed_boot_seed_objects()
+    dynamic_sections = build_dynamic_seed_sections(seed_objects)
+
+    seed_objects.extend(dynamic_sections.class_seed_objects)
+    seed_objects.extend(dynamic_sections.selector_seed_objects)
+    seed_objects.extend(dynamic_sections.compiled_method_seed_objects)
+    seed_objects.extend(dynamic_sections.method_entry_seed_objects)
+    seed_objects.extend(dynamic_sections.method_seed_objects)
 
     global_bindings = build_named_object_bindings(
         [name for name, _constant_name in GLOBAL_SPECS],

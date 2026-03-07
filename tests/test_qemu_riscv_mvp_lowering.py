@@ -683,6 +683,29 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(layout["method_entries"], mvp.SeedLayoutSection(186, 22))
         self.assertEqual(layout["method_descriptors"], mvp.SeedLayoutSection(208, 22))
 
+    def test_builds_dynamic_seed_sections_from_fixed_boot_graph(self) -> None:
+        seed_objects, _seed_object_indices_by_name, _glyph_object_indices = mvp.build_fixed_boot_seed_objects()
+        dynamic_sections = mvp.build_dynamic_seed_sections(seed_objects)
+
+        self.assertEqual(dynamic_sections.seed_layout["class_descriptors"], mvp.SeedLayoutSection(140, 17))
+        self.assertEqual(dynamic_sections.class_indices[mvp.SEED_OBJECT_TRANSCRIPT], 141)
+        self.assertEqual(dynamic_sections.class_indices[mvp.SEED_OBJECT_COMPILED_METHOD], 156)
+        self.assertEqual(seed_objects[0].class_index, 141)
+        self.assertEqual(len(dynamic_sections.class_seed_objects), 17)
+        self.assertEqual(len(dynamic_sections.selector_seed_objects), 17)
+        self.assertEqual(len(dynamic_sections.compiled_method_seed_objects), 12)
+        self.assertEqual(len(dynamic_sections.method_entry_seed_objects), 22)
+        self.assertEqual(len(dynamic_sections.method_seed_objects), 22)
+        self.assertEqual(
+            dynamic_sections.class_seed_objects[0].fields,
+            [
+                (mvp.SEED_FIELD_NIL, 0),
+                (mvp.SEED_FIELD_SMALL_INTEGER, mvp.SEED_OBJECT_CLASS),
+                (mvp.SEED_FIELD_OBJECT_INDEX, 208),
+                (mvp.SEED_FIELD_SMALL_INTEGER, 1),
+            ],
+        )
+
     def test_declares_method_seed_orders_and_materializes_method_seed_objects(self) -> None:
         self.assertEqual(
             mvp.SELECTOR_VALUE_ORDER,

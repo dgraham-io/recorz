@@ -358,3 +358,9 @@
 - Kept the boot object family assertions in the extracted helper, preserving the same fixed boot object count and glyph index collection behavior while simplifying `build_seed_manifest()`.
 - Added a focused regression covering the extracted fixed boot seed objects, named object indices, and glyph bitmap object range.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Extract Dynamic Seed Section Builder
+- Pulled class, selector, compiled-method, method-entry, and method-descriptor section assembly out of `build_seed_manifest()` into `build_dynamic_seed_sections()` and a small `DynamicSeedSections` carrier.
+- Kept the same seed layout and count assertions inside the extracted helper, so `build_seed_manifest()` now mostly orchestrates fixed boot objects, dynamic sections, and final bindings.
+- Added a focused regression covering the extracted dynamic seed sections, including fixed-object class links, dynamic section counts, and the first class descriptor layout.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
