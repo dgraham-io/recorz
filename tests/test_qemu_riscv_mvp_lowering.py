@@ -555,6 +555,56 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
 
+    def test_declares_class_descriptor_order_and_materializes_class_seed_objects(self) -> None:
+        self.assertEqual(
+            mvp.CLASS_DESCRIPTOR_KIND_NAMES,
+            [
+                "Class",
+                "Transcript",
+                "Display",
+                "BitBlt",
+                "Glyphs",
+                "FormFactory",
+                "BitmapFactory",
+                "TextLayout",
+                "TextStyle",
+                "Bitmap",
+                "Form",
+                "TextMetrics",
+                "TextBehavior",
+                "MethodDescriptor",
+                "MethodEntry",
+                "Selector",
+                "CompiledMethod",
+            ],
+        )
+        self.assertEqual(
+            mvp.CLASS_DESCRIPTOR_KIND_ORDER[:4],
+            [
+                mvp.SEED_OBJECT_CLASS,
+                mvp.SEED_OBJECT_TRANSCRIPT,
+                mvp.SEED_OBJECT_DISPLAY,
+                mvp.SEED_OBJECT_BITBLT,
+            ],
+        )
+        class_indices, class_seed_objects = mvp.build_class_seed_objects(
+            mvp.CLASS_DESCRIPTOR_KIND_ORDER,
+            140,
+            {mvp.SEED_OBJECT_TRANSCRIPT: 208},
+            {mvp.SEED_OBJECT_TRANSCRIPT: 2},
+        )
+        self.assertEqual(class_indices[mvp.SEED_OBJECT_TRANSCRIPT], 141)
+        self.assertEqual(class_indices[mvp.SEED_OBJECT_COMPILED_METHOD], 156)
+        self.assertEqual(
+            class_seed_objects[1].fields,
+            [
+                (mvp.SEED_FIELD_NIL, 0),
+                (mvp.SEED_FIELD_SMALL_INTEGER, mvp.SEED_OBJECT_TRANSCRIPT),
+                (mvp.SEED_FIELD_OBJECT_INDEX, 208),
+                (mvp.SEED_FIELD_SMALL_INTEGER, 2),
+            ],
+        )
+
     def test_renders_generated_runtime_bindings_header(self) -> None:
         header = mvp.render_generated_runtime_bindings_header()
 

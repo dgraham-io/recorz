@@ -350,6 +350,29 @@ KERNEL_CLASS_BOOT_ORDER = [
     "Form",
     "Class",
 ]
+CLASS_DESCRIPTOR_KIND_NAMES = [
+    "Class",
+    "Transcript",
+    "Display",
+    "BitBlt",
+    "Glyphs",
+    "FormFactory",
+    "BitmapFactory",
+    "TextLayout",
+    "TextStyle",
+    "Bitmap",
+    "Form",
+    "TextMetrics",
+    "TextBehavior",
+    "MethodDescriptor",
+    "MethodEntry",
+    "Selector",
+    "CompiledMethod",
+]
+CLASS_DESCRIPTOR_KIND_ORDER = [
+    constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, kind_name)
+    for kind_name in CLASS_DESCRIPTOR_KIND_NAMES
+]
 BOOT_OBJECT_SPECS_BEFORE_GLYPHS = [
     BootObjectSpec("Transcript", "Transcript", ()),
     BootObjectSpec("Display", "Display", ()),
@@ -1078,6 +1101,40 @@ def materialize_boot_object_fields(
     return fields
 
 
+def build_class_seed_objects(
+    class_kind_order: list[int],
+    class_class_index: int,
+    method_start_by_kind: dict[int, int],
+    method_count_by_kind: dict[int, int],
+) -> tuple[dict[int, int], list[SeedObject]]:
+    class_indices = build_class_index_map(class_kind_order, class_class_index)
+    class_seed_objects = [
+        SeedObject(
+            SEED_OBJECT_CLASS,
+            class_class_index,
+            [
+                (SEED_FIELD_NIL, 0),
+                (SEED_FIELD_SMALL_INTEGER, class_kind),
+                (
+                    SEED_FIELD_OBJECT_INDEX if class_kind in method_start_by_kind else SEED_FIELD_NIL,
+                    method_start_by_kind.get(class_kind, 0),
+                ),
+                (SEED_FIELD_SMALL_INTEGER, method_count_by_kind.get(class_kind, 0)),
+            ],
+        )
+        for class_kind in class_kind_order
+    ]
+    return class_indices, class_seed_objects
+
+
+def build_class_index_map(class_kind_order: list[int], class_class_index: int) -> dict[int, int]:
+    class_indices = {
+        class_kind: class_class_index + offset
+        for offset, class_kind in enumerate(class_kind_order[1:], start=1)
+    }
+    return class_indices
+
+
 def build_seed_manifest() -> bytes:
     seed_objects: list[SeedObject] = []
     seed_object_indices_by_name: dict[str, int] = {}
@@ -1119,34 +1176,13 @@ def build_seed_manifest() -> bytes:
         )
 
     class_class_index = len(seed_objects)
-    class_kinds_in_order = [
-        SEED_OBJECT_CLASS,
-        SEED_OBJECT_TRANSCRIPT,
-        SEED_OBJECT_DISPLAY,
-        SEED_OBJECT_BITBLT,
-        SEED_OBJECT_GLYPHS,
-        SEED_OBJECT_FORM_FACTORY,
-        SEED_OBJECT_BITMAP_FACTORY,
-        SEED_OBJECT_TEXT_LAYOUT,
-        SEED_OBJECT_TEXT_STYLE,
-        SEED_OBJECT_BITMAP,
-        SEED_OBJECT_FORM,
-        SEED_OBJECT_TEXT_METRICS,
-        SEED_OBJECT_TEXT_BEHAVIOR,
-        SEED_OBJECT_METHOD_DESCRIPTOR,
-        SEED_OBJECT_METHOD_ENTRY,
-        SEED_OBJECT_SELECTOR,
-        SEED_OBJECT_COMPILED_METHOD,
-    ]
-    class_indices = {
-        class_kind: class_class_index + offset
-        for offset, class_kind in enumerate(class_kinds_in_order[1:], start=1)
-    }
+    class_kind_order = CLASS_DESCRIPTOR_KIND_ORDER
+    class_indices = build_class_index_map(class_kind_order, class_class_index)
 
     for seed_object in seed_objects:
         seed_object.class_index = class_indices[seed_object.object_kind]
 
-    selector_start_index = class_class_index + len(class_kinds_in_order)
+    selector_start_index = class_class_index + len(class_kind_order)
     method_start_by_kind: dict[int, int] = {}
     method_count_by_kind: dict[int, int] = {}
     selector_indices_by_value: dict[int, int] = {}
@@ -1209,7 +1245,7 @@ def build_seed_manifest() -> bytes:
 
     method_start_index = method_entry_start_index + len(method_entry_seed_objects)
 
-    for class_kind in class_kinds_in_order:
+    for class_kind in class_kind_order:
         method_definitions = BUILTIN_METHODS_BY_KIND.get(class_kind, [])
         method_count_by_kind[class_kind] = len(method_definitions)
         if method_definitions:
@@ -1228,22 +1264,12 @@ def build_seed_manifest() -> bytes:
                 )
             )
 
-    class_seed_objects = [
-        SeedObject(
-            SEED_OBJECT_CLASS,
-            class_class_index,
-            [
-                (SEED_FIELD_NIL, 0),
-                (SEED_FIELD_SMALL_INTEGER, class_kind),
-                (
-                    SEED_FIELD_OBJECT_INDEX if class_kind in method_start_by_kind else SEED_FIELD_NIL,
-                    method_start_by_kind.get(class_kind, 0),
-                ),
-                (SEED_FIELD_SMALL_INTEGER, method_count_by_kind.get(class_kind, 0)),
-            ],
-        )
-        for class_kind in class_kinds_in_order
-    ]
+    class_indices, class_seed_objects = build_class_seed_objects(
+        class_kind_order,
+        class_class_index,
+        method_start_by_kind,
+        method_count_by_kind,
+    )
 
     seed_objects.extend(class_seed_objects)
     seed_objects.extend(selector_seed_objects)

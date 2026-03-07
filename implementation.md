@@ -322,3 +322,9 @@
 - Kept glyph bitmap generation separate, but now derive the fixed pre-glyph and post-glyph boot objects from one named spec layer instead of a long inline sequence of `add_seed_object(...)` calls.
 - Added a focused regression covering the declared boot object spec lists and the helper that materializes object and glyph references into seed fields.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Declare Class Descriptor Order And Builder Helper
+- Moved the class descriptor ordering in `build_seed_manifest()` onto an explicit `CLASS_DESCRIPTOR_KIND_NAMES` spec and derived the numeric kind order from the shared object-kind metadata.
+- Added small builder helpers for the class index map and class seed object materialization, replacing the remaining inline class-order loop while preserving the existing class descriptor layout.
+- Added a focused regression covering the declared class descriptor order and the helper that materializes class seed objects and class indices.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
