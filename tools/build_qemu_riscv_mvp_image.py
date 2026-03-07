@@ -336,13 +336,12 @@ class SeedLayoutSectionSpec:
 @dataclass(frozen=True)
 class DynamicSeedObjectSectionSpec:
     layout_section_name: str
-    result_attribute: str
 
 
 @dataclass(frozen=True)
 class DynamicSeedBuildStepSpec:
+    layout_section_name: str
     builder: Callable[[DynamicSeedBuildState], list[SeedObject]]
-    result_attribute: str
 
 
 @dataclass
@@ -362,11 +361,30 @@ class DynamicSeedBuildState:
 class DynamicSeedSections:
     seed_layout: dict[str, SeedLayoutSection]
     class_indices: dict[int, int]
-    class_seed_objects: list[SeedObject]
-    selector_seed_objects: list[SeedObject]
-    compiled_method_seed_objects: list[SeedObject]
-    method_entry_seed_objects: list[SeedObject]
-    method_seed_objects: list[SeedObject]
+    object_sections: dict[str, list[SeedObject]]
+
+    def seed_objects_for_layout_section(self, layout_section_name: str) -> list[SeedObject]:
+        return self.object_sections[layout_section_name]
+
+    @property
+    def class_seed_objects(self) -> list[SeedObject]:
+        return self.seed_objects_for_layout_section("class_descriptors")
+
+    @property
+    def selector_seed_objects(self) -> list[SeedObject]:
+        return self.seed_objects_for_layout_section("selectors")
+
+    @property
+    def compiled_method_seed_objects(self) -> list[SeedObject]:
+        return self.seed_objects_for_layout_section("compiled_methods")
+
+    @property
+    def method_entry_seed_objects(self) -> list[SeedObject]:
+        return self.seed_objects_for_layout_section("method_entries")
+
+    @property
+    def method_seed_objects(self) -> list[SeedObject]:
+        return self.seed_objects_for_layout_section("method_descriptors")
 
 
 @dataclass
@@ -417,11 +435,11 @@ SEED_LAYOUT_SECTION_SPECS = [
 ]
 SEED_LAYOUT_SECTION_NAMES = [section_spec.name for section_spec in SEED_LAYOUT_SECTION_SPECS]
 DYNAMIC_SEED_OBJECT_SECTION_SPECS = [
-    DynamicSeedObjectSectionSpec("class_descriptors", "class_seed_objects"),
-    DynamicSeedObjectSectionSpec("selectors", "selector_seed_objects"),
-    DynamicSeedObjectSectionSpec("compiled_methods", "compiled_method_seed_objects"),
-    DynamicSeedObjectSectionSpec("method_entries", "method_entry_seed_objects"),
-    DynamicSeedObjectSectionSpec("method_descriptors", "method_seed_objects"),
+    DynamicSeedObjectSectionSpec("class_descriptors"),
+    DynamicSeedObjectSectionSpec("selectors"),
+    DynamicSeedObjectSectionSpec("compiled_methods"),
+    DynamicSeedObjectSectionSpec("method_entries"),
+    DynamicSeedObjectSectionSpec("method_descriptors"),
 ]
 GLYPH_BITMAP_NAME_PREFIX = "GlyphBitmap"
 GLYPH_BITMAP_WIDTH = 5
@@ -1293,7 +1311,7 @@ def validate_dynamic_seed_section_counts(
     dynamic_sections: DynamicSeedSections,
 ) -> None:
     for section_spec in DYNAMIC_SEED_OBJECT_SECTION_SPECS:
-        seed_objects = getattr(dynamic_sections, section_spec.result_attribute)
+        seed_objects = dynamic_sections.seed_objects_for_layout_section(section_spec.layout_section_name)
         if len(seed_objects) != seed_layout[section_spec.layout_section_name].count:
             raise AssertionError(
                 f"{section_spec.layout_section_name} seed object count does not match declared seed layout"
@@ -1359,11 +1377,11 @@ def build_class_seed_section(
 
 
 DYNAMIC_SEED_BUILD_STEP_SPECS = [
-    DynamicSeedBuildStepSpec(build_selector_seed_section, "selector_seed_objects"),
-    DynamicSeedBuildStepSpec(build_compiled_method_seed_section, "compiled_method_seed_objects"),
-    DynamicSeedBuildStepSpec(build_method_entry_seed_section, "method_entry_seed_objects"),
-    DynamicSeedBuildStepSpec(build_method_descriptor_seed_section, "method_seed_objects"),
-    DynamicSeedBuildStepSpec(build_class_seed_section, "class_seed_objects"),
+    DynamicSeedBuildStepSpec("selectors", build_selector_seed_section),
+    DynamicSeedBuildStepSpec("compiled_methods", build_compiled_method_seed_section),
+    DynamicSeedBuildStepSpec("method_entries", build_method_entry_seed_section),
+    DynamicSeedBuildStepSpec("method_descriptors", build_method_descriptor_seed_section),
+    DynamicSeedBuildStepSpec("class_descriptors", build_class_seed_section),
 ]
 
 
@@ -1543,15 +1561,11 @@ def build_dynamic_seed_sections(seed_objects: list[SeedObject]) -> DynamicSeedSe
         seed_object.class_index = class_indices[seed_object.object_kind]
 
     for build_step_spec in DYNAMIC_SEED_BUILD_STEP_SPECS:
-        dynamic_section_results[build_step_spec.result_attribute] = build_step_spec.builder(build_state)
+        dynamic_section_results[build_step_spec.layout_section_name] = build_step_spec.builder(build_state)
     dynamic_sections = DynamicSeedSections(
         seed_layout=seed_layout,
         class_indices=build_state.class_indices,
-        class_seed_objects=dynamic_section_results["class_seed_objects"],
-        selector_seed_objects=dynamic_section_results["selector_seed_objects"],
-        compiled_method_seed_objects=dynamic_section_results["compiled_method_seed_objects"],
-        method_entry_seed_objects=dynamic_section_results["method_entry_seed_objects"],
-        method_seed_objects=dynamic_section_results["method_seed_objects"],
+        object_sections=dynamic_section_results,
     )
     validate_dynamic_seed_section_counts(seed_layout, dynamic_sections)
     return dynamic_sections
@@ -1618,7 +1632,7 @@ def build_seed_manifest() -> bytes:
     dynamic_sections = build_dynamic_seed_sections(seed_objects)
 
     for section_spec in DYNAMIC_SEED_OBJECT_SECTION_SPECS:
-        seed_objects.extend(getattr(dynamic_sections, section_spec.result_attribute))
+        seed_objects.extend(dynamic_sections.seed_objects_for_layout_section(section_spec.layout_section_name))
     bindings = build_seed_bindings(seed_object_indices_by_name)
     return encode_seed_manifest(seed_objects, bindings, glyph_object_indices)
 

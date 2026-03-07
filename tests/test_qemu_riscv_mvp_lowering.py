@@ -737,21 +737,31 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(
             mvp.DYNAMIC_SEED_OBJECT_SECTION_SPECS,
             [
-                mvp.DynamicSeedObjectSectionSpec("class_descriptors", "class_seed_objects"),
-                mvp.DynamicSeedObjectSectionSpec("selectors", "selector_seed_objects"),
-                mvp.DynamicSeedObjectSectionSpec("compiled_methods", "compiled_method_seed_objects"),
-                mvp.DynamicSeedObjectSectionSpec("method_entries", "method_entry_seed_objects"),
-                mvp.DynamicSeedObjectSectionSpec("method_descriptors", "method_seed_objects"),
+                mvp.DynamicSeedObjectSectionSpec("class_descriptors"),
+                mvp.DynamicSeedObjectSectionSpec("selectors"),
+                mvp.DynamicSeedObjectSectionSpec("compiled_methods"),
+                mvp.DynamicSeedObjectSectionSpec("method_entries"),
+                mvp.DynamicSeedObjectSectionSpec("method_descriptors"),
             ],
         )
         self.assertEqual(
             mvp.DYNAMIC_SEED_BUILD_STEP_SPECS,
             [
-                mvp.DynamicSeedBuildStepSpec(mvp.build_selector_seed_section, "selector_seed_objects"),
-                mvp.DynamicSeedBuildStepSpec(mvp.build_compiled_method_seed_section, "compiled_method_seed_objects"),
-                mvp.DynamicSeedBuildStepSpec(mvp.build_method_entry_seed_section, "method_entry_seed_objects"),
-                mvp.DynamicSeedBuildStepSpec(mvp.build_method_descriptor_seed_section, "method_seed_objects"),
-                mvp.DynamicSeedBuildStepSpec(mvp.build_class_seed_section, "class_seed_objects"),
+                mvp.DynamicSeedBuildStepSpec("selectors", mvp.build_selector_seed_section),
+                mvp.DynamicSeedBuildStepSpec("compiled_methods", mvp.build_compiled_method_seed_section),
+                mvp.DynamicSeedBuildStepSpec("method_entries", mvp.build_method_entry_seed_section),
+                mvp.DynamicSeedBuildStepSpec("method_descriptors", mvp.build_method_descriptor_seed_section),
+                mvp.DynamicSeedBuildStepSpec("class_descriptors", mvp.build_class_seed_section),
+            ],
+        )
+        self.assertEqual(
+            [spec.layout_section_name for spec in mvp.DYNAMIC_SEED_BUILD_STEP_SPECS],
+            [
+                "selectors",
+                "compiled_methods",
+                "method_entries",
+                "method_descriptors",
+                "class_descriptors",
             ],
         )
         self.assertEqual(
@@ -789,6 +799,16 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(dynamic_sections.class_indices[mvp.SEED_OBJECT_TRANSCRIPT], 141)
         self.assertEqual(dynamic_sections.class_indices[mvp.SEED_OBJECT_COMPILED_METHOD], 156)
         self.assertEqual(seed_objects[0].class_index, 141)
+        self.assertEqual(
+            sorted(dynamic_sections.object_sections),
+            [
+                "class_descriptors",
+                "compiled_methods",
+                "method_descriptors",
+                "method_entries",
+                "selectors",
+            ],
+        )
         self.assertEqual(len(dynamic_sections.class_seed_objects), 17)
         self.assertEqual(len(dynamic_sections.selector_seed_objects), 17)
         self.assertEqual(len(dynamic_sections.compiled_method_seed_objects), 12)
@@ -811,7 +831,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         seed_objects, seed_object_indices_by_name, glyph_object_indices = mvp.build_fixed_boot_seed_objects()
         dynamic_sections = mvp.build_dynamic_seed_sections(seed_objects)
         for section_spec in mvp.DYNAMIC_SEED_OBJECT_SECTION_SPECS:
-            seed_objects.extend(getattr(dynamic_sections, section_spec.result_attribute))
+            seed_objects.extend(dynamic_sections.seed_objects_for_layout_section(section_spec.layout_section_name))
 
         bindings = mvp.build_seed_bindings(seed_object_indices_by_name)
         self.assertEqual(bindings.global_bindings[0], (mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_TRANSCRIPT"], 0))

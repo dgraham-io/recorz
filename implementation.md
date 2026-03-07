@@ -423,3 +423,9 @@
 - Replaced the string-based `globals()` dispatch inside the dynamic seed build-step specs with direct callable metadata, so the staged builder sequence is now explicit without another name-lookup indirection layer.
 - Kept the same dependency order and result attributes, but moved `DynamicSeedBuildStepSpec` onto direct builder callables and extended the focused regressions to lock both the callable sequence and the builder names.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Key Dynamic Seed Sections By Layout Name
+- Removed the remaining parallel `result_attribute` strings from the dynamic seed section specs and step specs, so both the build sequence and the final section assembly now key directly off declared layout section names.
+- Collapsed `DynamicSeedSections` onto a section-keyed object map with a small `seed_objects_for_layout_section()` helper, while keeping convenience accessors for the existing class/selector/method section tests.
+- Extended the focused lowering regressions to lock the new section-keyed structure, the build-step section order, and the unchanged seed manifest assembly path.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
