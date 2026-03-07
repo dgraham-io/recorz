@@ -212,9 +212,6 @@ KERNEL_CLASS_NAME_TO_OBJECT_KIND = {
     "TextBehavior": SEED_OBJECT_TEXT_BEHAVIOR,
     "Class": SEED_OBJECT_CLASS,
 }
-KERNEL_OBJECT_KIND_TO_CLASS_NAME = {
-    object_kind: class_name for class_name, object_kind in KERNEL_CLASS_NAME_TO_OBJECT_KIND.items()
-}
 
 
 class LoweringError(RuntimeError):
@@ -250,10 +247,12 @@ class SeedObject:
 
 @dataclass(frozen=True)
 class KernelMethodSource:
+    entry_name: str
     class_name: str
     instance_variables: tuple[str, ...]
     relative_path: str
     selector: str
+    argument_count: int
     implementation_kind: str
     primitive_binding: str | None
     source_text: str
@@ -265,66 +264,36 @@ class KernelClassHeader:
     instance_variables: tuple[str, ...]
 
 
-METHOD_ENTRY_DEFINITIONS: list[tuple[str, int, str, int]] = [
-    ("RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW", SEED_OBJECT_TRANSCRIPT, "show:", 1),
-    ("RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR", SEED_OBJECT_TRANSCRIPT, "cr", 0),
-    ("RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM", SEED_OBJECT_DISPLAY, "defaultForm", 0),
-    ("RECORZ_MVP_METHOD_ENTRY_DISPLAY_CLEAR", SEED_OBJECT_DISPLAY, "clear", 0),
-    ("RECORZ_MVP_METHOD_ENTRY_DISPLAY_WRITE_STRING", SEED_OBJECT_DISPLAY, "writeString:", 1),
-    ("RECORZ_MVP_METHOD_ENTRY_DISPLAY_NEWLINE", SEED_OBJECT_DISPLAY, "newline", 0),
-    ("RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR", SEED_OBJECT_BITBLT, "fillForm:color:", 2),
-    ("RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE", SEED_OBJECT_BITBLT, "copyBitmap:toForm:x:y:scale:", 5),
-    (
-        "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR",
-        SEED_OBJECT_BITBLT,
-        "copyBitmap:toForm:x:y:scale:color:",
-        6,
-    ),
-    (
-        "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR",
-        SEED_OBJECT_BITBLT,
-        "copyBitmap:sourceX:sourceY:width:height:toForm:x:y:scale:color:",
-        10,
-    ),
-    ("RECORZ_MVP_METHOD_ENTRY_GLYPHS_AT", SEED_OBJECT_GLYPHS, "at:", 1),
-    ("RECORZ_MVP_METHOD_ENTRY_FORM_FACTORY_FROM_BITS", SEED_OBJECT_FORM_FACTORY, "fromBits:", 1),
-    ("RECORZ_MVP_METHOD_ENTRY_BITMAP_FACTORY_MONO_WIDTH_HEIGHT", SEED_OBJECT_BITMAP_FACTORY, "monoWidth:height:", 2),
-    ("RECORZ_MVP_METHOD_ENTRY_BITMAP_WIDTH", SEED_OBJECT_BITMAP, "width", 0),
-    ("RECORZ_MVP_METHOD_ENTRY_BITMAP_HEIGHT", SEED_OBJECT_BITMAP, "height", 0),
-    ("RECORZ_MVP_METHOD_ENTRY_FORM_CLEAR", SEED_OBJECT_FORM, "clear", 0),
-    ("RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING", SEED_OBJECT_FORM, "writeString:", 1),
-    ("RECORZ_MVP_METHOD_ENTRY_FORM_NEWLINE", SEED_OBJECT_FORM, "newline", 0),
-    ("RECORZ_MVP_METHOD_ENTRY_FORM_BITS", SEED_OBJECT_FORM, "bits", 0),
-    ("RECORZ_MVP_METHOD_ENTRY_FORM_WIDTH", SEED_OBJECT_FORM, "width", 0),
-    ("RECORZ_MVP_METHOD_ENTRY_FORM_HEIGHT", SEED_OBJECT_FORM, "height", 0),
-    ("RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND", SEED_OBJECT_CLASS, "instanceKind", 0),
+METHOD_ENTRY_ORDER = [
+    "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW",
+    "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR",
+    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM",
+    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_CLEAR",
+    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_WRITE_STRING",
+    "RECORZ_MVP_METHOD_ENTRY_DISPLAY_NEWLINE",
+    "RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR",
+    "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE",
+    "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR",
+    "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR",
+    "RECORZ_MVP_METHOD_ENTRY_GLYPHS_AT",
+    "RECORZ_MVP_METHOD_ENTRY_FORM_FACTORY_FROM_BITS",
+    "RECORZ_MVP_METHOD_ENTRY_BITMAP_FACTORY_MONO_WIDTH_HEIGHT",
+    "RECORZ_MVP_METHOD_ENTRY_BITMAP_WIDTH",
+    "RECORZ_MVP_METHOD_ENTRY_BITMAP_HEIGHT",
+    "RECORZ_MVP_METHOD_ENTRY_FORM_CLEAR",
+    "RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING",
+    "RECORZ_MVP_METHOD_ENTRY_FORM_NEWLINE",
+    "RECORZ_MVP_METHOD_ENTRY_FORM_BITS",
+    "RECORZ_MVP_METHOD_ENTRY_FORM_WIDTH",
+    "RECORZ_MVP_METHOD_ENTRY_FORM_HEIGHT",
+    "RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND",
 ]
-METHOD_ENTRY_VALUES = {
-    name: index + 1 for index, (name, _owner_kind, _selector, _argument_count) in enumerate(METHOD_ENTRY_DEFINITIONS)
-}
-METHOD_ENTRY_COUNT = len(METHOD_ENTRY_VALUES) + 1
 KERNEL_METHOD_IMPLEMENTATION_COMPILED = "compiled"
 KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE = "primitive"
 KERNEL_CLASS_HEADER_PATTERN = re.compile(
     r"^RecorzKernelClass:\s*#(?P<class_name>[A-Za-z_]\w*)\s+instanceVariableNames:\s*'(?P<instance_variables>[^']*)'$"
 )
 KERNEL_PRIMITIVE_DECLARATION_PATTERN = re.compile(r"^<primitive:\s*#(?P<binding>[A-Za-z_]\w*)>$")
-PRIMITIVE_KERNEL_METHOD_BINDING_BY_ENTRY_NAME = {
-    "RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR": "bitbltFillFormColor",
-    "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE": "bitbltCopyBitmapToFormXYScale",
-    "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR": "bitbltCopyBitmapToFormXYScaleColor",
-    "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR": "bitbltCopyBitmapRegionToFormXYScaleColor",
-    "RECORZ_MVP_METHOD_ENTRY_GLYPHS_AT": "glyphsAt",
-    "RECORZ_MVP_METHOD_ENTRY_FORM_FACTORY_FROM_BITS": "formFactoryFromBits",
-    "RECORZ_MVP_METHOD_ENTRY_BITMAP_FACTORY_MONO_WIDTH_HEIGHT": "bitmapFactoryMonoWidthHeight",
-    "RECORZ_MVP_METHOD_ENTRY_FORM_CLEAR": "formClear",
-    "RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING": "formWriteString",
-    "RECORZ_MVP_METHOD_ENTRY_FORM_NEWLINE": "formNewline",
-}
-METHOD_ENTRY_SPECS = {
-    METHOD_ENTRY_VALUES[name]: (owner_kind, SELECTOR_VALUES[SELECTOR_IDS[selector]], argument_count)
-    for name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS
-}
 ACCESSOR_METHOD_FIELD_BY_ENTRY_NAME: dict[str, int] = {}
 FIELD_SEND_METHOD_SPEC_BY_ENTRY_NAME: dict[str, tuple[int, str]] = {}
 METHOD_RETURN_RESULT = 1
@@ -361,11 +330,6 @@ INTERPRETED_METHOD_OPCODE_VALUES = {
     "return_receiver": INTERPRETED_METHOD_OP_RETURN_RECEIVER,
 }
 INTERPRETED_METHOD_PROGRAM_BY_ENTRY_NAME: dict[str, list[tuple[str, int | str, int]]] = {}
-BUILTIN_METHODS_BY_KIND: dict[int, list[tuple[str, int, str]]] = {
-    kind: [] for kind in range(SEED_OBJECT_TRANSCRIPT, SEED_OBJECT_COMPILED_METHOD + 1)
-}
-for entry_name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS:
-    BUILTIN_METHODS_BY_KIND[owner_kind].append((selector, argument_count, entry_name))
 
 
 def encode_interpreted_instruction(opcode_name: str, operand_a: int = 0, operand_b: int = 0) -> int:
@@ -415,6 +379,29 @@ def parse_kernel_class_header(header_source: str, relative_path: str) -> KernelC
     )
 
 
+def upper_snake_name(name: str) -> str:
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).upper()
+
+
+def kernel_class_entry_stem(class_name: str) -> str:
+    if class_name == "BitBlt":
+        return "BITBLT"
+    return upper_snake_name(class_name)
+
+
+def kernel_selector_entry_stem(selector: str) -> str:
+    keyword_parts = [part for part in selector.split(":") if part]
+    if keyword_parts:
+        return "_".join(upper_snake_name(part) for part in keyword_parts)
+    if re.fullmatch(r"[A-Za-z_]\w*", selector):
+        return upper_snake_name(selector)
+    raise LoweringError(f"kernel MVP selector {selector!r} cannot be converted into a method entry name")
+
+
+def kernel_method_entry_name(class_name: str, selector: str) -> str:
+    return f"RECORZ_MVP_METHOD_ENTRY_{kernel_class_entry_stem(class_name)}_{kernel_selector_entry_stem(selector)}"
+
+
 def parse_kernel_method_chunk(
     class_name: str,
     instance_variables: list[str],
@@ -442,13 +429,8 @@ def parse_kernel_method_chunk(
 
 
 def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
-    method_sources: dict[str, KernelMethodSource] = {}
+    discovered_method_sources: dict[str, KernelMethodSource] = {}
     seen_class_names: set[str] = set()
-    class_sources_by_kind: dict[int, tuple[KernelClassHeader, str, dict[tuple[str, int], tuple[str, str | None, str]]]] = {}
-    expected_signatures_by_kind: dict[int, set[tuple[str, int]]] = {}
-
-    for _entry_name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS:
-        expected_signatures_by_kind.setdefault(owner_kind, set()).add((selector, argument_count))
 
     for method_path in sorted(KERNEL_MVP_ROOT.glob("*.rz")):
         relative_path = method_path.name
@@ -464,7 +446,7 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
         if class_name in seen_class_names:
             raise LoweringError(f"kernel MVP class {class_name} is declared more than once")
         seen_class_names.add(class_name)
-        chunk_definitions: dict[tuple[str, int], tuple[str, str | None, str]] = {}
+        chunk_signatures: set[tuple[str, int]] = set()
 
         for chunk_source in chunk_sources[1:]:
             selector, argument_count, implementation_kind, primitive_binding = parse_kernel_method_chunk(
@@ -473,66 +455,45 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
                 chunk_source,
             )
             signature = (selector, argument_count)
-
-            if signature in chunk_definitions:
+            if signature in chunk_signatures:
                 raise LoweringError(
                     f"kernel MVP class file {relative_path} duplicates method {selector}/{argument_count}"
                 )
-            chunk_definitions[signature] = (implementation_kind, primitive_binding, chunk_source)
-        expected_signatures = expected_signatures_by_kind.get(expected_class_kind)
-        if expected_signatures is None:
-            raise LoweringError(f"kernel MVP class file {relative_path} declares unsupported class {class_name}")
-        if set(chunk_definitions) != expected_signatures:
-            raise LoweringError(
-                f"kernel MVP class file {relative_path} does not match the expected built-in method signatures"
+            chunk_signatures.add(signature)
+            entry_name = kernel_method_entry_name(class_name, selector)
+            if entry_name in discovered_method_sources:
+                raise LoweringError(
+                    f"kernel MVP class file {relative_path} duplicates built-in entry {entry_name}"
+                )
+            discovered_method_sources[entry_name] = KernelMethodSource(
+                entry_name=entry_name,
+                class_name=class_name,
+                instance_variables=class_header.instance_variables,
+                relative_path=relative_path,
+                selector=selector,
+                argument_count=argument_count,
+                implementation_kind=implementation_kind,
+                primitive_binding=primitive_binding,
+                source_text=chunk_source,
             )
-        if expected_class_kind in class_sources_by_kind:
-            raise LoweringError(f"kernel MVP object kind {expected_class_kind} is declared more than once")
-        class_sources_by_kind[expected_class_kind] = (class_header, relative_path, chunk_definitions)
-
-    for entry_name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS:
-        class_source = class_sources_by_kind.get(owner_kind)
-        if class_source is None:
-            owner_class_name = KERNEL_OBJECT_KIND_TO_CLASS_NAME.get(owner_kind, f"<object kind {owner_kind}>")
-            raise LoweringError(
-                f"kernel MVP source tree is missing class {owner_class_name} for entry {entry_name}"
-            )
-        class_header, relative_path, chunk_definitions = class_source
-        chunk_definition = chunk_definitions.get((selector, argument_count))
-        if chunk_definition is None:
-            raise LoweringError(
-                f"kernel MVP class file {relative_path} is missing method {selector}/{argument_count} for entry {entry_name}"
-            )
-        expected_primitive_binding = PRIMITIVE_KERNEL_METHOD_BINDING_BY_ENTRY_NAME.get(entry_name)
-        expected_implementation_kind = (
-            KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE
-            if expected_primitive_binding is not None
-            else KERNEL_METHOD_IMPLEMENTATION_COMPILED
+    expected_entry_names = set(METHOD_ENTRY_ORDER)
+    discovered_entry_names = set(discovered_method_sources)
+    if discovered_entry_names != expected_entry_names:
+        missing_entries = sorted(expected_entry_names - discovered_entry_names)
+        extra_entries = sorted(discovered_entry_names - expected_entry_names)
+        details: list[str] = []
+        if missing_entries:
+            details.append(f"missing {', '.join(missing_entries)}")
+        if extra_entries:
+            details.append(f"unexpected {', '.join(extra_entries)}")
+        raise LoweringError(
+            "kernel MVP source tree does not match the expected built-in method entries"
+            + (f": {'; '.join(details)}" if details else "")
         )
-        implementation_kind, primitive_binding, chunk_source = chunk_definition
-        if implementation_kind != expected_implementation_kind:
-            raise LoweringError(
-                f"kernel MVP method {class_header.class_name}>>{selector} in {relative_path} is declared as "
-                f"{implementation_kind} but entry {entry_name} expects {expected_implementation_kind}"
-            )
-        if primitive_binding != expected_primitive_binding:
-            raise LoweringError(
-                f"kernel MVP method {class_header.class_name}>>{selector} in {relative_path} declares primitive "
-                f"{primitive_binding!r} but entry {entry_name} expects {expected_primitive_binding!r}"
-            )
-        method_sources[entry_name] = KernelMethodSource(
-            class_name=class_header.class_name,
-            instance_variables=class_header.instance_variables,
-            relative_path=relative_path,
-            selector=selector,
-            implementation_kind=implementation_kind,
-            primitive_binding=primitive_binding,
-            source_text=chunk_source,
-        )
-
-    if len(class_sources_by_kind) != len(expected_signatures_by_kind):
-        raise LoweringError("kernel MVP source tree is missing one or more built-in classes")
-    return method_sources
+    return {
+        entry_name: discovered_method_sources[entry_name]
+        for entry_name in METHOD_ENTRY_ORDER
+    }
 
 
 def compile_kernel_method_program(class_name: str, instance_variables: list[str], source: str) -> list[int]:
@@ -639,10 +600,33 @@ def compile_kernel_method_program(class_name: str, instance_variables: list[str]
     return lowered
 
 
-COMPILED_METHOD_SOURCE_BY_ENTRY_NAME = load_kernel_method_sources()
+KERNEL_METHOD_SOURCE_BY_ENTRY_NAME = load_kernel_method_sources()
+METHOD_ENTRY_DEFINITIONS: list[tuple[str, int, str, int]] = [
+    (
+        entry_name,
+        KERNEL_CLASS_NAME_TO_OBJECT_KIND[source.class_name],
+        source.selector,
+        source.argument_count,
+    )
+    for entry_name, source in KERNEL_METHOD_SOURCE_BY_ENTRY_NAME.items()
+]
+METHOD_ENTRY_VALUES = {
+    name: index + 1 for index, (name, _owner_kind, _selector, _argument_count) in enumerate(METHOD_ENTRY_DEFINITIONS)
+}
+METHOD_ENTRY_COUNT = len(METHOD_ENTRY_VALUES) + 1
+METHOD_ENTRY_SPECS = {
+    METHOD_ENTRY_VALUES[name]: (owner_kind, SELECTOR_VALUES[SELECTOR_IDS[selector]], argument_count)
+    for name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS
+}
+BUILTIN_METHODS_BY_KIND = {
+    kind: [] for kind in range(SEED_OBJECT_TRANSCRIPT, SEED_OBJECT_COMPILED_METHOD + 1)
+}
+for entry_name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS:
+    BUILTIN_METHODS_BY_KIND[owner_kind].append((selector, argument_count, entry_name))
+
 COMPILED_METHOD_PROGRAM_BY_ENTRY_NAME = {
     entry_name: compile_kernel_method_program(source.class_name, list(source.instance_variables), source.source_text)
-    for entry_name, source in COMPILED_METHOD_SOURCE_BY_ENTRY_NAME.items()
+    for entry_name, source in KERNEL_METHOD_SOURCE_BY_ENTRY_NAME.items()
     if source.implementation_kind == KERNEL_METHOD_IMPLEMENTATION_COMPILED
 }
 

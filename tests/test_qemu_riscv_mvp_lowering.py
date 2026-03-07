@@ -266,23 +266,29 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             },
         )
         self.assertEqual(transcript_show.class_name, "Transcript")
+        self.assertEqual(transcript_show.entry_name, "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW")
         self.assertEqual(transcript_show.instance_variables, ())
         self.assertEqual(transcript_show.relative_path, "Transcript.rz")
         self.assertEqual(transcript_show.selector, "show:")
+        self.assertEqual(transcript_show.argument_count, 1)
         self.assertEqual(transcript_show.implementation_kind, mvp.KERNEL_METHOD_IMPLEMENTATION_COMPILED)
         self.assertIsNone(transcript_show.primitive_binding)
         self.assertIn("Display defaultForm writeString: text.", transcript_show.source_text)
         self.assertEqual(display_default_form.class_name, "Display")
+        self.assertEqual(display_default_form.entry_name, "RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM")
         self.assertEqual(display_default_form.instance_variables, ())
         self.assertEqual(display_default_form.relative_path, "Display.rz")
         self.assertEqual(display_default_form.selector, "defaultForm")
+        self.assertEqual(display_default_form.argument_count, 0)
         self.assertEqual(display_default_form.implementation_kind, mvp.KERNEL_METHOD_IMPLEMENTATION_COMPILED)
         self.assertIsNone(display_default_form.primitive_binding)
         self.assertEqual(display_default_form.source_text, "defaultForm\n    ^Display defaultForm")
         self.assertEqual(bitblt_fill_form_color.class_name, "BitBlt")
+        self.assertEqual(bitblt_fill_form_color.entry_name, "RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR")
         self.assertEqual(bitblt_fill_form_color.instance_variables, ())
         self.assertEqual(bitblt_fill_form_color.relative_path, "BitBlt.rz")
         self.assertEqual(bitblt_fill_form_color.selector, "fillForm:color:")
+        self.assertEqual(bitblt_fill_form_color.argument_count, 2)
         self.assertEqual(bitblt_fill_form_color.implementation_kind, mvp.KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE)
         self.assertEqual(bitblt_fill_form_color.primitive_binding, "bitbltFillFormColor")
         self.assertEqual(
@@ -290,14 +296,18 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             "fillForm: form color: color\n    <primitive: #bitbltFillFormColor>",
         )
         self.assertEqual(form_width.class_name, "Form")
+        self.assertEqual(form_width.entry_name, "RECORZ_MVP_METHOD_ENTRY_FORM_WIDTH")
         self.assertEqual(form_width.instance_variables, ("bits",))
         self.assertEqual(form_width.relative_path, "Form.rz")
         self.assertEqual(form_width.selector, "width")
+        self.assertEqual(form_width.argument_count, 0)
         self.assertEqual(form_width.implementation_kind, mvp.KERNEL_METHOD_IMPLEMENTATION_COMPILED)
         self.assertIsNone(form_width.primitive_binding)
         self.assertEqual(form_width.source_text, "width\n    ^bits width")
         self.assertEqual(form_newline.class_name, "Form")
+        self.assertEqual(form_newline.entry_name, "RECORZ_MVP_METHOD_ENTRY_FORM_NEWLINE")
         self.assertEqual(form_newline.selector, "newline")
+        self.assertEqual(form_newline.argument_count, 0)
         self.assertEqual(form_newline.implementation_kind, mvp.KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE)
         self.assertEqual(form_newline.primitive_binding, "formNewline")
         self.assertEqual(form_newline.source_text, "newline\n    <primitive: #formNewline>")
@@ -337,6 +347,24 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "fillForm: form color: color\n    <primitive: #bitbltFillFormColor>",
             ),
             ("fillForm:color:", 2, mvp.KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE, "bitbltFillFormColor"),
+        )
+
+    def test_derives_kernel_method_entry_names(self) -> None:
+        self.assertEqual(
+            mvp.kernel_method_entry_name("Transcript", "show:"),
+            "RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW",
+        )
+        self.assertEqual(
+            mvp.kernel_method_entry_name("Display", "defaultForm"),
+            "RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM",
+        )
+        self.assertEqual(
+            mvp.kernel_method_entry_name("BitBlt", "copyBitmap:toForm:x:y:scale:"),
+            "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE",
+        )
+        self.assertEqual(
+            mvp.kernel_method_entry_name("FormFactory", "fromBits:"),
+            "RECORZ_MVP_METHOD_ENTRY_FORM_FACTORY_FROM_BITS",
         )
 
     def test_builds_seed_manifest_with_expected_header(self) -> None:
