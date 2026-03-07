@@ -310,3 +310,9 @@
 - Kept the generated method-entry ids and target image layout stable by matching the existing source order, while moving more ordering truth into the kernel source tree itself.
 - Added a focused regression that asserts the boot class order and the resulting derived method-entry order seen by the generated header and seed builder.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Derive Seed Bindings From Named Boot Objects
+- Reworked `build_seed_manifest()` so the initial boot object graph is assembled with named objects, then derived the global and root binding tables from those names instead of hand-written numeric index lists.
+- Removed the most obvious fixed index assumptions in the seed builder, including the default form/framebuffer bitmap links and the transcript fallback glyph reference, while preserving the existing seed layout and object ordering.
+- Added a focused regression covering the boot-object binding maps and the helper that derives global/root bindings from named boot objects.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

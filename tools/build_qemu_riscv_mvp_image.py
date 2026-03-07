@@ -241,6 +241,7 @@ LITERAL_KIND_DEFINITIONS = list(LITERAL_VALUES.items())
 
 BITMAP_STORAGE_FRAMEBUFFER = 1
 BITMAP_STORAGE_GLYPH_MONO = 2
+GLYPH_FALLBACK_CODE = 32
 
 KERNEL_CLASS_NAME_TO_OBJECT_KIND = {
     class_name: constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, class_name)
@@ -259,6 +260,22 @@ KERNEL_CLASS_NAME_TO_OBJECT_KIND = {
         "TextBehavior",
         "Class",
     )
+}
+GLOBAL_NAME_TO_BOOT_OBJECT_NAME = {
+    "Transcript": "Transcript",
+    "Display": "Display",
+    "BitBlt": "BitBlt",
+    "Glyphs": "Glyphs",
+    "Form": "FormFactory",
+    "Bitmap": "BitmapFactory",
+}
+SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME = {
+    "default_form": "DefaultForm",
+    "framebuffer_bitmap": "FramebufferBitmap",
+    "transcript_behavior": "TranscriptBehavior",
+    "transcript_layout": "TranscriptLayout",
+    "transcript_style": "TranscriptStyle",
+    "transcript_metrics": "TranscriptMetrics",
 }
 
 
@@ -954,55 +971,81 @@ def build_program_manifest(program: Program) -> bytes:
     return bytes(manifest)
 
 
+def build_named_object_bindings(
+    names: list[str],
+    ids: dict[str, str],
+    values: dict[str, int],
+    object_names_by_name: dict[str, str],
+    object_indices_by_name: dict[str, int],
+) -> list[tuple[int, int]]:
+    bindings: list[tuple[int, int]] = []
+
+    for name in names:
+        object_name = object_names_by_name[name]
+        bindings.append((constant_value(ids, values, name), object_indices_by_name[object_name]))
+    return bindings
+
+
 def build_seed_manifest() -> bytes:
-    seed_objects: list[SeedObject] = [
-        SeedObject(SEED_OBJECT_TRANSCRIPT, SEED_INVALID_OBJECT_INDEX, []),
-        SeedObject(SEED_OBJECT_DISPLAY, SEED_INVALID_OBJECT_INDEX, []),
-        SeedObject(SEED_OBJECT_BITBLT, SEED_INVALID_OBJECT_INDEX, []),
-        SeedObject(SEED_OBJECT_GLYPHS, SEED_INVALID_OBJECT_INDEX, []),
-        SeedObject(SEED_OBJECT_FORM_FACTORY, SEED_INVALID_OBJECT_INDEX, []),
-        SeedObject(SEED_OBJECT_BITMAP_FACTORY, SEED_INVALID_OBJECT_INDEX, []),
-        SeedObject(
-            SEED_OBJECT_TEXT_LAYOUT,
-            SEED_INVALID_OBJECT_INDEX,
-            [
-                (SEED_FIELD_SMALL_INTEGER, 24),
-                (SEED_FIELD_SMALL_INTEGER, 24),
-                (SEED_FIELD_SMALL_INTEGER, 4),
-                (SEED_FIELD_SMALL_INTEGER, 2),
-            ],
-        ),
-        SeedObject(
-            SEED_OBJECT_TEXT_STYLE,
-            SEED_INVALID_OBJECT_INDEX,
-            [
-                (SEED_FIELD_SMALL_INTEGER, 0x00486020),
-                (SEED_FIELD_SMALL_INTEGER, 0x00F2F2F2),
-            ],
-        ),
-        SeedObject(
-            SEED_OBJECT_BITMAP,
-            SEED_INVALID_OBJECT_INDEX,
-            [
-                (SEED_FIELD_SMALL_INTEGER, 640),
-                (SEED_FIELD_SMALL_INTEGER, 480),
-                (SEED_FIELD_SMALL_INTEGER, BITMAP_STORAGE_FRAMEBUFFER),
-                (SEED_FIELD_SMALL_INTEGER, 0),
-            ],
-        ),
-        SeedObject(
-            SEED_OBJECT_FORM,
-            SEED_INVALID_OBJECT_INDEX,
-            [
-                (SEED_FIELD_OBJECT_INDEX, 8),
-            ],
-        ),
-    ]
+    seed_objects: list[SeedObject] = []
+    seed_object_indices_by_name: dict[str, int] = {}
+
+    def add_seed_object(name: str, object_kind: int, fields: list[tuple[int, int]]) -> int:
+        object_index = len(seed_objects)
+
+        if name in seed_object_indices_by_name:
+            raise AssertionError(f"duplicate seed object name {name!r}")
+        seed_object_indices_by_name[name] = object_index
+        seed_objects.append(SeedObject(object_kind, SEED_INVALID_OBJECT_INDEX, fields))
+        return object_index
+
+    add_seed_object("Transcript", SEED_OBJECT_TRANSCRIPT, [])
+    add_seed_object("Display", SEED_OBJECT_DISPLAY, [])
+    add_seed_object("BitBlt", SEED_OBJECT_BITBLT, [])
+    add_seed_object("Glyphs", SEED_OBJECT_GLYPHS, [])
+    add_seed_object("FormFactory", SEED_OBJECT_FORM_FACTORY, [])
+    add_seed_object("BitmapFactory", SEED_OBJECT_BITMAP_FACTORY, [])
+    add_seed_object(
+        "TranscriptLayout",
+        SEED_OBJECT_TEXT_LAYOUT,
+        [
+            (SEED_FIELD_SMALL_INTEGER, 24),
+            (SEED_FIELD_SMALL_INTEGER, 24),
+            (SEED_FIELD_SMALL_INTEGER, 4),
+            (SEED_FIELD_SMALL_INTEGER, 2),
+        ],
+    )
+    add_seed_object(
+        "TranscriptStyle",
+        SEED_OBJECT_TEXT_STYLE,
+        [
+            (SEED_FIELD_SMALL_INTEGER, 0x00486020),
+            (SEED_FIELD_SMALL_INTEGER, 0x00F2F2F2),
+        ],
+    )
+    framebuffer_bitmap_index = add_seed_object(
+        "FramebufferBitmap",
+        SEED_OBJECT_BITMAP,
+        [
+            (SEED_FIELD_SMALL_INTEGER, 640),
+            (SEED_FIELD_SMALL_INTEGER, 480),
+            (SEED_FIELD_SMALL_INTEGER, BITMAP_STORAGE_FRAMEBUFFER),
+            (SEED_FIELD_SMALL_INTEGER, 0),
+        ],
+    )
+    add_seed_object(
+        "DefaultForm",
+        SEED_OBJECT_FORM,
+        [
+            (SEED_FIELD_OBJECT_INDEX, framebuffer_bitmap_index),
+        ],
+    )
+    glyph_object_indices: list[int] = []
     for glyph_index in range(128):
-        seed_objects.append(
-            SeedObject(
+        glyph_object_indices.append(
+            add_seed_object(
+                f"GlyphBitmap{glyph_index}",
                 SEED_OBJECT_BITMAP,
-                SEED_INVALID_OBJECT_INDEX,
                 [
                     (SEED_FIELD_SMALL_INTEGER, 5),
                     (SEED_FIELD_SMALL_INTEGER, 7),
@@ -1011,28 +1054,22 @@ def build_seed_manifest() -> bytes:
                 ],
             )
         )
-    seed_objects.append(
-        SeedObject(
-            SEED_OBJECT_TEXT_METRICS,
-            SEED_INVALID_OBJECT_INDEX,
-            [
-                (SEED_FIELD_SMALL_INTEGER, 6),
-                (SEED_FIELD_SMALL_INTEGER, 8),
-            ],
-        )
+    add_seed_object(
+        "TranscriptMetrics",
+        SEED_OBJECT_TEXT_METRICS,
+        [
+            (SEED_FIELD_SMALL_INTEGER, 6),
+            (SEED_FIELD_SMALL_INTEGER, 8),
+        ],
     )
-    text_metrics_index = len(seed_objects) - 1
-    seed_objects.append(
-        SeedObject(
-            SEED_OBJECT_TEXT_BEHAVIOR,
-            SEED_INVALID_OBJECT_INDEX,
-            [
-                (SEED_FIELD_OBJECT_INDEX, 10 + 32),
-                (SEED_FIELD_SMALL_INTEGER, 1),
-            ],
-        )
+    add_seed_object(
+        "TranscriptBehavior",
+        SEED_OBJECT_TEXT_BEHAVIOR,
+        [
+            (SEED_FIELD_OBJECT_INDEX, glyph_object_indices[GLYPH_FALLBACK_CODE]),
+            (SEED_FIELD_SMALL_INTEGER, 1),
+        ],
     )
-    text_behavior_index = len(seed_objects) - 1
 
     class_class_index = len(seed_objects)
     class_kinds_in_order = [
@@ -1167,23 +1204,20 @@ def build_seed_manifest() -> bytes:
     seed_objects.extend(method_entry_seed_objects)
     seed_objects.extend(method_seed_objects)
 
-    global_bindings = [
-        (GLOBAL_VALUES["RECORZ_MVP_GLOBAL_TRANSCRIPT"], 0),
-        (GLOBAL_VALUES["RECORZ_MVP_GLOBAL_DISPLAY"], 1),
-        (GLOBAL_VALUES["RECORZ_MVP_GLOBAL_BITBLT"], 2),
-        (GLOBAL_VALUES["RECORZ_MVP_GLOBAL_GLYPHS"], 3),
-        (GLOBAL_VALUES["RECORZ_MVP_GLOBAL_FORM"], 4),
-        (GLOBAL_VALUES["RECORZ_MVP_GLOBAL_BITMAP"], 5),
-    ]
-    root_bindings = [
-        (SEED_ROOT_DEFAULT_FORM, 9),
-        (SEED_ROOT_FRAMEBUFFER_BITMAP, 8),
-        (SEED_ROOT_TRANSCRIPT_BEHAVIOR, text_behavior_index),
-        (SEED_ROOT_TRANSCRIPT_LAYOUT, 6),
-        (SEED_ROOT_TRANSCRIPT_STYLE, 7),
-        (SEED_ROOT_TRANSCRIPT_METRICS, text_metrics_index),
-    ]
-    glyph_object_indices = [10 + glyph_index for glyph_index in range(128)]
+    global_bindings = build_named_object_bindings(
+        [name for name, _constant_name in GLOBAL_SPECS],
+        GLOBAL_IDS,
+        GLOBAL_VALUES,
+        GLOBAL_NAME_TO_BOOT_OBJECT_NAME,
+        seed_object_indices_by_name,
+    )
+    root_bindings = build_named_object_bindings(
+        [name for name, _constant_name in SEED_ROOT_SPECS],
+        SEED_ROOT_IDS,
+        SEED_ROOT_VALUES,
+        SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME,
+        seed_object_indices_by_name,
+    )
 
     manifest = bytearray(
         struct.pack(

@@ -466,6 +466,52 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
 
+    def test_derives_seed_bindings_from_boot_object_names(self) -> None:
+        self.assertEqual(
+            mvp.GLOBAL_NAME_TO_BOOT_OBJECT_NAME,
+            {
+                "Transcript": "Transcript",
+                "Display": "Display",
+                "BitBlt": "BitBlt",
+                "Glyphs": "Glyphs",
+                "Form": "FormFactory",
+                "Bitmap": "BitmapFactory",
+            },
+        )
+        self.assertEqual(
+            mvp.SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME,
+            {
+                "default_form": "DefaultForm",
+                "framebuffer_bitmap": "FramebufferBitmap",
+                "transcript_behavior": "TranscriptBehavior",
+                "transcript_layout": "TranscriptLayout",
+                "transcript_style": "TranscriptStyle",
+                "transcript_metrics": "TranscriptMetrics",
+            },
+        )
+        self.assertEqual(mvp.GLYPH_FALLBACK_CODE, 32)
+        self.assertEqual(
+            mvp.build_named_object_bindings(
+                ["Transcript", "Bitmap"],
+                mvp.GLOBAL_IDS,
+                mvp.GLOBAL_VALUES,
+                mvp.GLOBAL_NAME_TO_BOOT_OBJECT_NAME,
+                {
+                    "Transcript": 0,
+                    "Display": 1,
+                    "BitBlt": 2,
+                    "Glyphs": 3,
+                    "FormFactory": 4,
+                    "BitmapFactory": 5,
+                    "DefaultForm": 9,
+                },
+            ),
+            [
+                (mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_TRANSCRIPT"], 0),
+                (mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_BITMAP"], 5),
+            ],
+        )
+
     def test_renders_generated_runtime_bindings_header(self) -> None:
         header = mvp.render_generated_runtime_bindings_header()
 
