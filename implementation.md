@@ -272,3 +272,9 @@
 - Reused the source-derived kernel metadata in `build_qemu_riscv_mvp_image.py` to render that header, added a tiny wrapper tool to emit it, and updated the QEMU Makefile so `vm.c` rebuilds after the generated header changes.
 - Removed the hand-maintained primitive-binding enum from `vm.h`, switched `vm.c` to include the generated header directly, and added a focused test for the generated header text.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-06 - Generate Method Entry Constants From Kernel Metadata
+- Extended the generated QEMU runtime header so it now carries both method-entry constants and primitive-binding constants derived from the source-built kernel metadata.
+- Removed the hand-maintained method-entry enum from `vm.h`, renamed the generator script/header to match their broader role, and kept `vm.c` consuming the generated constants directly.
+- Updated the focused header-generation test to assert both the source-derived method-entry enum and the primitive-binding enum in one generated runtime header.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

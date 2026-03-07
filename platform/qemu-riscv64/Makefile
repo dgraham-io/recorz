@@ -10,10 +10,10 @@ LDFLAGS := -T $(CURDIR)/linker.ld
 
 EXAMPLE := $(ROOT)/examples/qemu_riscv_fb_demo.rz
 IMAGE_SCRIPT := $(ROOT)/tools/build_qemu_riscv_mvp_image.py
-GENERATED_BINDINGS_SCRIPT := $(ROOT)/tools/generate_qemu_riscv_mvp_bindings_header.py
+GENERATED_BINDINGS_SCRIPT := $(ROOT)/tools/generate_qemu_riscv_mvp_runtime_bindings_header.py
 KERNEL_MVP_SOURCES := $(wildcard $(ROOT)/kernel/mvp/*.rz)
 GENERATED_IMAGE := $(BUILD_DIR)/demo_image.bin
-GENERATED_BINDINGS_HEADER := $(BUILD_DIR)/recorz_mvp_generated_primitive_bindings.h
+GENERATED_BINDINGS_HEADER := $(BUILD_DIR)/recorz_mvp_generated_runtime_bindings.h
 GENERATED_IMAGE_ASM := $(BUILD_DIR)/demo_image_blob.S
 GENERATED_IMAGE_OBJECT := $(BUILD_DIR)/demo_image_blob.o
 ELF := $(BUILD_DIR)/recorz-qemu-riscv64-mvp.elf

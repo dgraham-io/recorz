@@ -644,14 +644,24 @@ for entry_name, source in KERNEL_METHOD_SOURCE_BY_ENTRY_NAME.items():
     PRIMITIVE_BINDING_BY_ENTRY_NAME[entry_name] = PRIMITIVE_BINDING_VALUES[source.primitive_binding]
 
 
-def render_generated_primitive_bindings_header() -> str:
+def render_generated_runtime_bindings_header() -> str:
     lines = [
-        "/* Auto-generated from kernel MVP primitive declarations. */",
-        "#ifndef RECORZ_QEMU_RISCV64_GENERATED_PRIMITIVE_BINDINGS_H",
-        "#define RECORZ_QEMU_RISCV64_GENERATED_PRIMITIVE_BINDINGS_H",
+        "/* Auto-generated from kernel MVP method and primitive declarations. */",
+        "#ifndef RECORZ_QEMU_RISCV64_GENERATED_RUNTIME_BINDINGS_H",
+        "#define RECORZ_QEMU_RISCV64_GENERATED_RUNTIME_BINDINGS_H",
         "",
-        "enum recorz_mvp_primitive_binding {",
+        "enum recorz_mvp_method_entry {",
     ]
+    for entry_name in METHOD_ENTRY_ORDER:
+        lines.append(f"    {entry_name} = {METHOD_ENTRY_VALUES[entry_name]},")
+    lines.append(f"    RECORZ_MVP_METHOD_ENTRY_COUNT = {len(METHOD_ENTRY_ORDER) + 1},")
+    lines.extend(
+        [
+            "};",
+            "",
+            "enum recorz_mvp_primitive_binding {",
+        ]
+    )
     for binding_name, binding_id in sorted(PRIMITIVE_BINDING_VALUES.items(), key=lambda item: item[1]):
         lines.append(f"    {kernel_primitive_binding_constant_name(binding_name)} = {binding_id},")
     lines.append(f"    RECORZ_MVP_PRIMITIVE_COUNT = {len(PRIMITIVE_BINDING_VALUES) + 1},")
@@ -660,6 +670,11 @@ def render_generated_primitive_bindings_header() -> str:
     lines.append("#endif")
     lines.append("")
     return "\n".join(lines)
+
+
+def render_generated_primitive_bindings_header() -> str:
+    # Compatibility shim for the prior helper name.
+    return render_generated_runtime_bindings_header()
 
 
 class Lowerer:

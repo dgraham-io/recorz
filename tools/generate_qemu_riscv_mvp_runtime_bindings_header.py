@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Emit generated primitive binding definitions for the QEMU RISC-V MVP target."""
+"""Emit generated runtime binding definitions for the QEMU RISC-V MVP target."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    args.output.write_text(mvp.render_generated_primitive_bindings_header(), encoding="utf-8")
+    args.output.write_text(mvp.render_generated_runtime_bindings_header(), encoding="utf-8")
 
 
 if __name__ == "__main__":
