@@ -76,6 +76,7 @@ enum recorz_mvp_object_kind {
     RECORZ_MVP_OBJECT_METHOD_ENTRY = 15,
     RECORZ_MVP_OBJECT_SELECTOR = 16,
     RECORZ_MVP_OBJECT_ACCESSOR_METHOD = 17,
+    RECORZ_MVP_OBJECT_FIELD_SEND_METHOD = 18,
 };
 
 enum recorz_mvp_method_entry {

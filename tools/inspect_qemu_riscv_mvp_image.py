@@ -33,6 +33,14 @@ ROOT_NAMES = {
     mvp.SEED_ROOT_TRANSCRIPT_STYLE: "transcript_style",
     mvp.SEED_ROOT_TRANSCRIPT_METRICS: "transcript_metrics",
 }
+ACCESSOR_METHOD_FIELD_BY_ENTRY_ID = {
+    mvp.METHOD_ENTRY_VALUES[name]: field_index
+    for name, field_index in mvp.ACCESSOR_METHOD_FIELD_BY_ENTRY_NAME.items()
+}
+FIELD_SEND_METHOD_SPEC_BY_ENTRY_ID = {
+    mvp.METHOD_ENTRY_VALUES[name]: (field_index, mvp.SELECTOR_VALUES[mvp.SELECTOR_IDS[selector]])
+    for name, (field_index, selector) in mvp.FIELD_SEND_METHOD_SPEC_BY_ENTRY_NAME.items()
+}
 
 
 class ImageInspectionError(RuntimeError):
@@ -98,6 +106,7 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
     method_entry_object_count = 0
     selector_object_count = 0
     accessor_method_object_count = 0
+    field_send_method_object_count = 0
     selector_ids: set[int] = set()
     method_entry_ids: set[int] = set()
     for _ in range(object_count):
@@ -135,6 +144,8 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
             selector_object_count += 1
         if object_kind == mvp.SEED_OBJECT_ACCESSOR_METHOD:
             accessor_method_object_count += 1
+        if object_kind == mvp.SEED_OBJECT_FIELD_SEND_METHOD:
+            field_send_method_object_count += 1
         objects.append(
             {
                 "object_kind": object_kind,
@@ -256,19 +267,12 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
                     or entry_spec[2] != argument_count_field[1]
                 ):
                     raise ImageInspectionError("seed manifest method descriptor entry metadata does not match selector")
-                accessor_expected = None
-                if entry_id_field[1] == mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_BITMAP_WIDTH"]:
-                    accessor_expected = 0
-                elif entry_id_field[1] == mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_BITMAP_HEIGHT"]:
-                    accessor_expected = 1
-                elif entry_id_field[1] == mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_FORM_BITS"]:
-                    accessor_expected = 0
-                elif entry_id_field[1] == mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND"]:
-                    accessor_expected = 1
-                if accessor_expected is None:
+                accessor_expected = ACCESSOR_METHOD_FIELD_BY_ENTRY_ID.get(int(entry_id_field[1]))
+                field_send_expected = FIELD_SEND_METHOD_SPEC_BY_ENTRY_ID.get(int(entry_id_field[1]))
+                if accessor_expected is None and field_send_expected is None:
                     if implementation_field[0] != mvp.SEED_FIELD_NIL:
                         raise ImageInspectionError("primitive method entry unexpectedly has an implementation object")
-                else:
+                elif accessor_expected is not None:
                     if implementation_field[0] != mvp.SEED_FIELD_OBJECT_INDEX:
                         raise ImageInspectionError("accessor method entry is missing an implementation object")
                     implementation_index = int(implementation_field[1])
@@ -282,6 +286,40 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
                     accessor_field = implementation_summary["fields"][0]
                     if accessor_field[0] != mvp.SEED_FIELD_SMALL_INTEGER or accessor_field[1] != accessor_expected:
                         raise ImageInspectionError("accessor method entry field index is invalid")
+                else:
+                    if implementation_field[0] != mvp.SEED_FIELD_OBJECT_INDEX:
+                        raise ImageInspectionError("field-send method entry is missing an implementation object")
+                    implementation_index = int(implementation_field[1])
+                    if implementation_index < 0 or implementation_index >= object_count:
+                        raise ImageInspectionError("field-send method entry implementation is out of range")
+                    implementation_summary = objects[implementation_index]
+                    if implementation_summary["object_kind"] != mvp.SEED_OBJECT_FIELD_SEND_METHOD:
+                        raise ImageInspectionError("field-send method entry implementation is invalid")
+                    if int(implementation_summary["field_count"]) <= mvp.FIELD_SEND_METHOD_FIELD_SELECTOR:
+                        raise ImageInspectionError("field-send method object is missing required fields")
+                    field_index_field = implementation_summary["fields"][mvp.FIELD_SEND_METHOD_FIELD_FIELD_INDEX]
+                    selector_object_field = implementation_summary["fields"][mvp.FIELD_SEND_METHOD_FIELD_SELECTOR]
+                    if (
+                        field_index_field[0] != mvp.SEED_FIELD_SMALL_INTEGER
+                        or field_index_field[1] != field_send_expected[0]
+                    ):
+                        raise ImageInspectionError("field-send method entry field index is invalid")
+                    if selector_object_field[0] != mvp.SEED_FIELD_OBJECT_INDEX:
+                        raise ImageInspectionError("field-send method selector field is invalid")
+                    selector_object_index = int(selector_object_field[1])
+                    if selector_object_index < 0 or selector_object_index >= object_count:
+                        raise ImageInspectionError("field-send method selector field is invalid")
+                    selector_object_summary = objects[selector_object_index]
+                    if selector_object_summary["object_kind"] != mvp.SEED_OBJECT_SELECTOR:
+                        raise ImageInspectionError("field-send method selector field is invalid")
+                    if int(selector_object_summary["field_count"]) <= 0:
+                        raise ImageInspectionError("seed manifest selector object is missing required fields")
+                    delegated_selector_field = selector_object_summary["fields"][0]
+                    if (
+                        delegated_selector_field[0] != mvp.SEED_FIELD_SMALL_INTEGER
+                        or delegated_selector_field[1] != field_send_expected[1]
+                    ):
+                        raise ImageInspectionError("field-send method selector does not match entry")
                 method_entry_ids.add(int(entry_id_field[1]))
             declared_method_count += method_count
 
@@ -328,6 +366,7 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
         "method_entry_object_count": method_entry_object_count,
         "selector_object_count": selector_object_count,
         "accessor_method_object_count": accessor_method_object_count,
+        "field_send_method_object_count": field_send_method_object_count,
         "declared_method_count": declared_method_count,
         "method_entry_count": len(method_entry_ids),
         "global_binding_count": global_binding_count,
@@ -456,6 +495,7 @@ def render_summary(summary: dict[str, object]) -> str:
         f"methods={seed['declared_method_count']} method_descriptors={seed['method_descriptor_count']} "
         f"selector_objects={seed['selector_object_count']} "
         f"accessor_method_objects={seed['accessor_method_object_count']} "
+        f"field_send_method_objects={seed['field_send_method_object_count']} "
         f"method_entry_objects={seed['method_entry_object_count']} "
         f"method_entries={seed['method_entry_count']} "
         f"globals={seed['global_binding_count']} roots={seed['root_binding_count']} "
