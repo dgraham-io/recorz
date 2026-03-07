@@ -706,6 +706,22 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
 
+    def test_builds_seed_bindings_and_encodes_seed_manifest(self) -> None:
+        seed_objects, seed_object_indices_by_name, glyph_object_indices = mvp.build_fixed_boot_seed_objects()
+        dynamic_sections = mvp.build_dynamic_seed_sections(seed_objects)
+        seed_objects.extend(dynamic_sections.class_seed_objects)
+        seed_objects.extend(dynamic_sections.selector_seed_objects)
+        seed_objects.extend(dynamic_sections.compiled_method_seed_objects)
+        seed_objects.extend(dynamic_sections.method_entry_seed_objects)
+        seed_objects.extend(dynamic_sections.method_seed_objects)
+
+        bindings = mvp.build_seed_bindings(seed_object_indices_by_name)
+        self.assertEqual(bindings.global_bindings[0], (mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_TRANSCRIPT"], 0))
+        self.assertEqual(bindings.root_bindings[0], (mvp.SEED_ROOT_VALUES["RECORZ_MVP_SEED_ROOT_DEFAULT_FORM"], 9))
+
+        manifest = mvp.encode_seed_manifest(seed_objects, bindings, glyph_object_indices)
+        self.assertEqual(struct.unpack_from(mvp.SEED_HEADER_FORMAT, manifest, 0), (mvp.SEED_MAGIC, mvp.SEED_VERSION, 230, 6, 6, 128, 0))
+
     def test_declares_method_seed_orders_and_materializes_method_seed_objects(self) -> None:
         self.assertEqual(
             mvp.SELECTOR_VALUE_ORDER,

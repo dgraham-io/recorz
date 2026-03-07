@@ -364,3 +364,9 @@
 - Kept the same seed layout and count assertions inside the extracted helper, so `build_seed_manifest()` now mostly orchestrates fixed boot objects, dynamic sections, and final bindings.
 - Added a focused regression covering the extracted dynamic seed sections, including fixed-object class links, dynamic section counts, and the first class descriptor layout.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Extract Seed Binding And Encoding Stages
+- Pulled global/root binding derivation into `build_seed_bindings()` and final byte encoding into `encode_seed_manifest()`, leaving `build_seed_manifest()` as a simple orchestration over fixed boot objects, dynamic sections, bindings, and manifest encoding.
+- Added a small `SeedBindings` carrier so the final manifest stage takes an explicit binding payload rather than separate parallel lists.
+- Added a focused regression covering the extracted binding builder and manifest encoder, including the first global/root bindings and the encoded seed header tuple.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

@@ -363,6 +363,12 @@ class DynamicSeedSections:
     method_seed_objects: list[SeedObject]
 
 
+@dataclass
+class SeedBindings:
+    global_bindings: list[tuple[int, int]]
+    root_bindings: list[tuple[int, int]]
+
+
 KERNEL_CLASS_BOOT_ORDER = [
     "Transcript",
     "Display",
@@ -1430,39 +1436,38 @@ def build_dynamic_seed_sections(seed_objects: list[SeedObject]) -> DynamicSeedSe
     )
 
 
-def build_seed_manifest() -> bytes:
-    seed_objects, seed_object_indices_by_name, glyph_object_indices = build_fixed_boot_seed_objects()
-    dynamic_sections = build_dynamic_seed_sections(seed_objects)
-
-    seed_objects.extend(dynamic_sections.class_seed_objects)
-    seed_objects.extend(dynamic_sections.selector_seed_objects)
-    seed_objects.extend(dynamic_sections.compiled_method_seed_objects)
-    seed_objects.extend(dynamic_sections.method_entry_seed_objects)
-    seed_objects.extend(dynamic_sections.method_seed_objects)
-
-    global_bindings = build_named_object_bindings(
-        [name for name, _constant_name in GLOBAL_SPECS],
-        GLOBAL_IDS,
-        GLOBAL_VALUES,
-        GLOBAL_NAME_TO_BOOT_OBJECT_NAME,
-        seed_object_indices_by_name,
-    )
-    root_bindings = build_named_object_bindings(
-        [name for name, _constant_name in SEED_ROOT_SPECS],
-        SEED_ROOT_IDS,
-        SEED_ROOT_VALUES,
-        SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME,
-        seed_object_indices_by_name,
+def build_seed_bindings(seed_object_indices_by_name: dict[str, int]) -> SeedBindings:
+    return SeedBindings(
+        global_bindings=build_named_object_bindings(
+            [name for name, _constant_name in GLOBAL_SPECS],
+            GLOBAL_IDS,
+            GLOBAL_VALUES,
+            GLOBAL_NAME_TO_BOOT_OBJECT_NAME,
+            seed_object_indices_by_name,
+        ),
+        root_bindings=build_named_object_bindings(
+            [name for name, _constant_name in SEED_ROOT_SPECS],
+            SEED_ROOT_IDS,
+            SEED_ROOT_VALUES,
+            SEED_ROOT_NAME_TO_BOOT_OBJECT_NAME,
+            seed_object_indices_by_name,
+        ),
     )
 
+
+def encode_seed_manifest(
+    seed_objects: list[SeedObject],
+    bindings: SeedBindings,
+    glyph_object_indices: list[int],
+) -> bytes:
     manifest = bytearray(
         struct.pack(
             SEED_HEADER_FORMAT,
             SEED_MAGIC,
             SEED_VERSION,
             len(seed_objects),
-            len(global_bindings),
-            len(root_bindings),
+            len(bindings.global_bindings),
+            len(bindings.root_bindings),
             len(GLYPH_BITMAP_BOOT_SPECS),
             0,
         )
@@ -1478,13 +1483,26 @@ def build_seed_manifest() -> bytes:
         )
         for field_kind, field_value in seed_object.fields + [(SEED_FIELD_NIL, 0)] * (4 - len(seed_object.fields)):
             manifest.extend(struct.pack(SEED_FIELD_FORMAT, field_kind, field_value))
-    for binding_id, object_index in global_bindings:
+    for binding_id, object_index in bindings.global_bindings:
         manifest.extend(struct.pack(SEED_BINDING_FORMAT, binding_id, object_index))
-    for binding_id, object_index in root_bindings:
+    for binding_id, object_index in bindings.root_bindings:
         manifest.extend(struct.pack(SEED_BINDING_FORMAT, binding_id, object_index))
     for object_index in glyph_object_indices:
         manifest.extend(struct.pack("<H", object_index))
     return bytes(manifest)
+
+
+def build_seed_manifest() -> bytes:
+    seed_objects, seed_object_indices_by_name, glyph_object_indices = build_fixed_boot_seed_objects()
+    dynamic_sections = build_dynamic_seed_sections(seed_objects)
+
+    seed_objects.extend(dynamic_sections.class_seed_objects)
+    seed_objects.extend(dynamic_sections.selector_seed_objects)
+    seed_objects.extend(dynamic_sections.compiled_method_seed_objects)
+    seed_objects.extend(dynamic_sections.method_entry_seed_objects)
+    seed_objects.extend(dynamic_sections.method_seed_objects)
+    bindings = build_seed_bindings(seed_object_indices_by_name)
+    return encode_seed_manifest(seed_objects, bindings, glyph_object_indices)
 
 
 def build_entry_manifest() -> bytes:
