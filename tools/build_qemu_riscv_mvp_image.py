@@ -252,6 +252,7 @@ class KernelMethodSource:
     instance_variables: tuple[str, ...]
     relative_path: str
     selector: str
+    implementation_kind: str
     source_text: str
 
 
@@ -293,6 +294,20 @@ METHOD_ENTRY_VALUES = {
     name: index + 1 for index, (name, _owner_kind, _selector, _argument_count) in enumerate(METHOD_ENTRY_DEFINITIONS)
 }
 METHOD_ENTRY_COUNT = len(METHOD_ENTRY_VALUES) + 1
+KERNEL_METHOD_IMPLEMENTATION_COMPILED = "compiled"
+KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE = "primitive"
+PRIMITIVE_KERNEL_METHOD_ENTRY_NAMES = {
+    "RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR",
+    "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE",
+    "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR",
+    "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR",
+    "RECORZ_MVP_METHOD_ENTRY_GLYPHS_AT",
+    "RECORZ_MVP_METHOD_ENTRY_FORM_FACTORY_FROM_BITS",
+    "RECORZ_MVP_METHOD_ENTRY_BITMAP_FACTORY_MONO_WIDTH_HEIGHT",
+    "RECORZ_MVP_METHOD_ENTRY_FORM_CLEAR",
+    "RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING",
+    "RECORZ_MVP_METHOD_ENTRY_FORM_NEWLINE",
+}
 METHOD_ENTRY_SPECS = {
     METHOD_ENTRY_VALUES[name]: (owner_kind, SELECTOR_VALUES[SELECTOR_IDS[selector]], argument_count)
     for name, owner_kind, selector, argument_count in METHOD_ENTRY_DEFINITIONS
@@ -374,6 +389,22 @@ def split_kernel_method_chunks(source_text: str) -> list[str]:
     return chunks
 
 
+def parse_kernel_method_chunk(
+    class_name: str,
+    instance_variables: list[str],
+    chunk_source: str,
+) -> tuple[str, int, str]:
+    lines = chunk_source.splitlines()
+    if not lines:
+        raise LoweringError(f"kernel MVP class {class_name} contains an empty method chunk")
+    trimmed_body = [line.strip() for line in lines[1:] if line.strip()]
+    if trimmed_body == ["<primitive>"]:
+        signature_probe = compile_method(f"{lines[0]}\n    ^self", class_name, list(instance_variables))
+        return (signature_probe.selector, len(signature_probe.arg_names), KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE)
+    compiled = compile_method(chunk_source, class_name, list(instance_variables))
+    return (compiled.selector, len(compiled.arg_names), KERNEL_METHOD_IMPLEMENTATION_COMPILED)
+
+
 def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
     entry_definitions = {
         entry_name: (owner_kind, selector, argument_count)
@@ -404,17 +435,21 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
         if not method_path.is_file():
             raise LoweringError(f"kernel MVP method source is missing: {method_path}")
         chunk_sources = split_kernel_method_chunks(method_path.read_text(encoding="utf-8"))
-        compiled_chunks: dict[tuple[str, int], str] = {}
+        chunk_definitions: dict[tuple[str, int], tuple[str, str]] = {}
 
         for chunk_source in chunk_sources:
-            compiled = compile_method(chunk_source, class_name, list(instance_variables))
-            signature = (compiled.selector, len(compiled.arg_names))
+            selector, argument_count, implementation_kind = parse_kernel_method_chunk(
+                class_name,
+                list(instance_variables),
+                chunk_source,
+            )
+            signature = (selector, argument_count)
 
-            if signature in compiled_chunks:
+            if signature in chunk_definitions:
                 raise LoweringError(
-                    f"kernel MVP class file {relative_path} duplicates method {compiled.selector}/{len(compiled.arg_names)}"
+                    f"kernel MVP class file {relative_path} duplicates method {selector}/{argument_count}"
                 )
-            compiled_chunks[signature] = chunk_source
+            chunk_definitions[signature] = (implementation_kind, chunk_source)
         for entry_name in entry_names:
             owner_kind, selector, argument_count = entry_definitions.get(entry_name, (None, None, None))
 
@@ -426,19 +461,31 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
                 )
             if entry_name in method_sources:
                 raise LoweringError(f"kernel MVP manifest duplicates method entry {entry_name}")
-            chunk_source = compiled_chunks.get((selector, argument_count))
-            if chunk_source is None:
+            chunk_definition = chunk_definitions.get((selector, argument_count))
+            if chunk_definition is None:
                 raise LoweringError(
                     f"kernel MVP class file {relative_path} is missing method {selector}/{argument_count} for entry {entry_name}"
+                )
+            expected_implementation_kind = (
+                KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE
+                if entry_name in PRIMITIVE_KERNEL_METHOD_ENTRY_NAMES
+                else KERNEL_METHOD_IMPLEMENTATION_COMPILED
+            )
+            implementation_kind, chunk_source = chunk_definition
+            if implementation_kind != expected_implementation_kind:
+                raise LoweringError(
+                    f"kernel MVP method {class_name}>>{selector} in {relative_path} is declared as "
+                    f"{implementation_kind} but entry {entry_name} expects {expected_implementation_kind}"
                 )
             method_sources[entry_name] = KernelMethodSource(
                 class_name=class_name,
                 instance_variables=tuple(instance_variables),
                 relative_path=relative_path,
                 selector=selector,
+                implementation_kind=implementation_kind,
                 source_text=chunk_source,
             )
-        if len(compiled_chunks) != len(entry_names):
+        if len(chunk_definitions) != len(entry_names):
             raise LoweringError(
                 f"kernel MVP class file {relative_path} contains method chunks that are not declared in the manifest"
             )
@@ -553,6 +600,7 @@ COMPILED_METHOD_SOURCE_BY_ENTRY_NAME = load_kernel_method_sources()
 COMPILED_METHOD_PROGRAM_BY_ENTRY_NAME = {
     entry_name: compile_kernel_method_program(source.class_name, list(source.instance_variables), source.source_text)
     for entry_name, source in COMPILED_METHOD_SOURCE_BY_ENTRY_NAME.items()
+    if source.implementation_kind == KERNEL_METHOD_IMPLEMENTATION_COMPILED
 }
 
 

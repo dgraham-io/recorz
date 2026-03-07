@@ -30,9 +30,43 @@
       "instance_variables": ["bits"],
       "file": "Form.rz",
       "entries": [
+        "RECORZ_MVP_METHOD_ENTRY_FORM_CLEAR",
+        "RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING",
+        "RECORZ_MVP_METHOD_ENTRY_FORM_NEWLINE",
         "RECORZ_MVP_METHOD_ENTRY_FORM_BITS",
         "RECORZ_MVP_METHOD_ENTRY_FORM_WIDTH",
         "RECORZ_MVP_METHOD_ENTRY_FORM_HEIGHT"
+      ]
+    },
+    "BitBlt": {
+      "instance_variables": [],
+      "file": "BitBlt.rz",
+      "entries": [
+        "RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR",
+        "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE",
+        "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR",
+        "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR"
+      ]
+    },
+    "Glyphs": {
+      "instance_variables": [],
+      "file": "Glyphs.rz",
+      "entries": [
+        "RECORZ_MVP_METHOD_ENTRY_GLYPHS_AT"
+      ]
+    },
+    "FormFactory": {
+      "instance_variables": [],
+      "file": "FormFactory.rz",
+      "entries": [
+        "RECORZ_MVP_METHOD_ENTRY_FORM_FACTORY_FROM_BITS"
+      ]
+    },
+    "BitmapFactory": {
+      "instance_variables": [],
+      "file": "BitmapFactory.rz",
+      "entries": [
+        "RECORZ_MVP_METHOD_ENTRY_BITMAP_FACTORY_MONO_WIDTH_HEIGHT"
       ]
     },
     "Class": {

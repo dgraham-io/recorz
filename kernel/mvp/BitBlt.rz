@@ -1,0 +1,11 @@
+fillForm: form color: color
+    <primitive>
+!
+copyBitmap: bitmap toForm: form x: x y: y scale: scale
+    <primitive>
+!
+copyBitmap: bitmap toForm: form x: x y: y scale: scale color: color
+    <primitive>
+!
+copyBitmap: bitmap sourceX: sourceX sourceY: sourceY width: width height: height toForm: form x: x y: y scale: scale color: color
+    <primitive>

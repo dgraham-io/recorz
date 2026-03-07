@@ -10,6 +10,7 @@ LDFLAGS := -T $(CURDIR)/linker.ld
 
 EXAMPLE := $(ROOT)/examples/qemu_riscv_fb_demo.rz
 IMAGE_SCRIPT := $(ROOT)/tools/build_qemu_riscv_mvp_image.py
+KERNEL_MVP_SOURCES := $(ROOT)/kernel/mvp/manifest.json $(wildcard $(ROOT)/kernel/mvp/*.rz)
 GENERATED_IMAGE := $(BUILD_DIR)/demo_image.bin
 GENERATED_IMAGE_ASM := $(BUILD_DIR)/demo_image_blob.S
 GENERATED_IMAGE_OBJECT := $(BUILD_DIR)/demo_image_blob.o
@@ -30,7 +31,7 @@ all: $(ELF)
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-$(GENERATED_IMAGE): $(IMAGE_SCRIPT) $(EXAMPLE) $(ROOT)/src/recorz/parser.py $(ROOT)/src/recorz/ast.py $(ROOT)/src/recorz/compiler.py $(ROOT)/src/recorz/model.py | $(BUILD_DIR)
+$(GENERATED_IMAGE): $(IMAGE_SCRIPT) $(EXAMPLE) $(KERNEL_MVP_SOURCES) $(ROOT)/src/recorz/parser.py $(ROOT)/src/recorz/ast.py $(ROOT)/src/recorz/compiler.py $(ROOT)/src/recorz/model.py | $(BUILD_DIR)
 	PYTHONPATH=$(ROOT)/src $(PYTHON) $(IMAGE_SCRIPT) $(EXAMPLE) $(GENERATED_IMAGE)
 
 $(BUILD_DIR)/%.o: $(CURDIR)/%.c $(CURDIR)/*.h | $(BUILD_DIR)
