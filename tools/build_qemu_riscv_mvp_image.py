@@ -387,17 +387,34 @@ GLYPH_BITMAP_NAME_PREFIX = "GlyphBitmap"
 GLYPH_BITMAP_WIDTH = 5
 GLYPH_BITMAP_HEIGHT = 7
 GLYPH_BITMAP_CODE_COUNT = 128
+GLYPH_BITMAP_BASE_FIELD_VALUES = (
+    GLYPH_BITMAP_WIDTH,
+    GLYPH_BITMAP_HEIGHT,
+    BITMAP_STORAGE_GLYPH_MONO,
+)
+TRANSCRIPT_LAYOUT_FIELD_VALUES = (24, 24, 4, 2)
+TRANSCRIPT_STYLE_FIELD_VALUES = (0x00486020, 0x00F2F2F2)
+FRAMEBUFFER_BITMAP_FIELD_VALUES = (640, 480, BITMAP_STORAGE_FRAMEBUFFER, 0)
+TRANSCRIPT_METRICS_FIELD_VALUES = (6, 8)
+DEFAULT_FORM_BOOT_FIELD_SPECS = (
+    (FIELD_SPEC_OBJECT_REF, "FramebufferBitmap"),
+)
+TRANSCRIPT_BEHAVIOR_BOOT_FIELD_SPECS = (
+    (FIELD_SPEC_GLYPH_REF, GLYPH_FALLBACK_CODE),
+    (FIELD_SPEC_SMALL_INTEGER, 1),
+)
+
+
+def build_small_integer_boot_field_specs(field_values: tuple[int, ...]) -> tuple[tuple[str, int], ...]:
+    return tuple((FIELD_SPEC_SMALL_INTEGER, field_value) for field_value in field_values)
+
+
 def build_glyph_bitmap_boot_specs() -> list[BootObjectSpec]:
     return [
         BootObjectSpec(
             f"{GLYPH_BITMAP_NAME_PREFIX}{glyph_index}",
             "Bitmap",
-            (
-                (FIELD_SPEC_SMALL_INTEGER, GLYPH_BITMAP_WIDTH),
-                (FIELD_SPEC_SMALL_INTEGER, GLYPH_BITMAP_HEIGHT),
-                (FIELD_SPEC_SMALL_INTEGER, BITMAP_STORAGE_GLYPH_MONO),
-                (FIELD_SPEC_SMALL_INTEGER, glyph_index),
-            ),
+            build_small_integer_boot_field_specs(GLYPH_BITMAP_BASE_FIELD_VALUES + (glyph_index,)),
         )
         for glyph_index in range(GLYPH_BITMAP_CODE_COUNT)
     ]
@@ -416,40 +433,25 @@ BOOT_OBJECT_FAMILY_SPECS = [
             BootObjectSpec(
                 "TranscriptLayout",
                 "TextLayout",
-                (
-                    (FIELD_SPEC_SMALL_INTEGER, 24),
-                    (FIELD_SPEC_SMALL_INTEGER, 24),
-                    (FIELD_SPEC_SMALL_INTEGER, 4),
-                    (FIELD_SPEC_SMALL_INTEGER, 2),
-                ),
+                build_small_integer_boot_field_specs(TRANSCRIPT_LAYOUT_FIELD_VALUES),
                 root_exports=("transcript_layout",),
             ),
             BootObjectSpec(
                 "TranscriptStyle",
                 "TextStyle",
-                (
-                    (FIELD_SPEC_SMALL_INTEGER, 0x00486020),
-                    (FIELD_SPEC_SMALL_INTEGER, 0x00F2F2F2),
-                ),
+                build_small_integer_boot_field_specs(TRANSCRIPT_STYLE_FIELD_VALUES),
                 root_exports=("transcript_style",),
             ),
             BootObjectSpec(
                 "FramebufferBitmap",
                 "Bitmap",
-                (
-                    (FIELD_SPEC_SMALL_INTEGER, 640),
-                    (FIELD_SPEC_SMALL_INTEGER, 480),
-                    (FIELD_SPEC_SMALL_INTEGER, BITMAP_STORAGE_FRAMEBUFFER),
-                    (FIELD_SPEC_SMALL_INTEGER, 0),
-                ),
+                build_small_integer_boot_field_specs(FRAMEBUFFER_BITMAP_FIELD_VALUES),
                 root_exports=("framebuffer_bitmap",),
             ),
             BootObjectSpec(
                 "DefaultForm",
                 "Form",
-                (
-                    (FIELD_SPEC_OBJECT_REF, "FramebufferBitmap"),
-                ),
+                DEFAULT_FORM_BOOT_FIELD_SPECS,
                 root_exports=("default_form",),
             ),
         ),
@@ -461,19 +463,13 @@ BOOT_OBJECT_FAMILY_SPECS = [
             BootObjectSpec(
                 "TranscriptMetrics",
                 "TextMetrics",
-                (
-                    (FIELD_SPEC_SMALL_INTEGER, 6),
-                    (FIELD_SPEC_SMALL_INTEGER, 8),
-                ),
+                build_small_integer_boot_field_specs(TRANSCRIPT_METRICS_FIELD_VALUES),
                 root_exports=("transcript_metrics",),
             ),
             BootObjectSpec(
                 "TranscriptBehavior",
                 "TextBehavior",
-                (
-                    (FIELD_SPEC_GLYPH_REF, GLYPH_FALLBACK_CODE),
-                    (FIELD_SPEC_SMALL_INTEGER, 1),
-                ),
+                TRANSCRIPT_BEHAVIOR_BOOT_FIELD_SPECS,
                 root_exports=("transcript_behavior",),
             ),
         ),

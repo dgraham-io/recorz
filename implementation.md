@@ -388,3 +388,9 @@
 - Added `BOOT_OBJECT_FAMILY_SPECS_BY_NAME` and derived the existing before/after/glyph family views from that map instead of keeping separate top-level boot-object lists in parallel.
 - Extended the focused lowering regressions to lock both the named family map and the derived family views without changing the generated seed image or target VM behavior.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Derive Fixed Boot Payload Fields From Named Specs
+- Replaced the remaining raw inline field tuples for the fixed text/framebuffer boot objects with named payload value specs and a small `build_small_integer_boot_field_specs()` helper.
+- Derived the transcript layout, style, framebuffer bitmap, transcript metrics, and glyph bitmap field tuples from those named payload specs, while keeping object refs and glyph refs explicit where they matter semantically.
+- Extended the focused lowering regressions to lock the new named payload specs and the helper-driven field materialization without changing the generated seed image or target VM behavior.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
