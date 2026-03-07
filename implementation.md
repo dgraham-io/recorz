@@ -477,3 +477,9 @@
 - Threaded that context through fixed boot materialization, dynamic seed section validation/build, binding generation, seed encoding, and final seed-manifest assembly so those helpers stop reaching into adjacent globals directly.
 - Extended the focused lowering regressions to lock the new `BOOT_IMAGE_SEED_BUILD_CONTEXT` and its derived dynamic section/build-step views while keeping the generated seed image unchanged.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Move Seed Layout Inputs Into Build Context
+- Added `class_kind_order` and `seed_layout_section_specs` to `BootImageSeedBuildContext`, so the remaining seed layout inputs now travel with the boot-image-shaped context instead of being read from adjacent globals during dynamic section assembly.
+- Updated `build_seed_layout()` and `build_dynamic_seed_sections()` to consume those context-owned values while preserving the existing derived `CLASS_DESCRIPTOR_KIND_ORDER` and `SEED_LAYOUT_SECTION_SPECS` views for compatibility and focused tests.
+- Extended the focused lowering regressions to lock the new context-owned class order and seed layout spec alongside the existing boot image context coverage.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

@@ -378,8 +378,10 @@ class BootImageSpec:
 @dataclass(frozen=True)
 class BootImageSeedBuildContext:
     boot_image_spec: BootImageSpec
+    class_kind_order: tuple[int, ...]
     fixed_boot_object_count: int
     glyph_bitmap_boot_specs: tuple[BootObjectSpec, ...]
+    seed_layout_section_specs: tuple[SeedLayoutSectionSpec, ...]
     dynamic_seed_object_section_specs: tuple[DynamicSeedObjectSectionSpec, ...]
     dynamic_seed_build_step_specs: tuple[DynamicSeedBuildStepSpec, ...]
     global_name_to_boot_object_name: dict[str, str]
@@ -1311,7 +1313,13 @@ def build_class_index_map(class_kind_order: list[int], class_class_index: int) -
     return class_indices
 
 
-def build_seed_layout(base_object_index: int, class_kind_order: list[int]) -> dict[str, SeedLayoutSection]:
+def build_seed_layout(
+    base_object_index: int,
+    class_kind_order: list[int] | tuple[int, ...],
+    seed_layout_section_specs: list[SeedLayoutSectionSpec] | tuple[SeedLayoutSectionSpec, ...] | None = None,
+) -> dict[str, SeedLayoutSection]:
+    if seed_layout_section_specs is None:
+        seed_layout_section_specs = SEED_LAYOUT_SECTION_SPECS
     section_count_sources = {
         "class_kind_order": len(class_kind_order),
         "selector_value_order": len(SELECTOR_VALUE_ORDER),
@@ -1322,7 +1330,7 @@ def build_seed_layout(base_object_index: int, class_kind_order: list[int]) -> di
     layout: dict[str, SeedLayoutSection] = {}
     next_index = base_object_index
 
-    for section_spec in SEED_LAYOUT_SECTION_SPECS:
+    for section_spec in seed_layout_section_specs:
         count = section_count_sources[section_spec.count_source]
         layout[section_spec.name] = SeedLayoutSection(next_index, count)
         next_index += count
@@ -1539,6 +1547,8 @@ def build_boot_image_spec(
 
 def build_boot_image_seed_build_context(
     boot_image_spec: BootImageSpec,
+    class_kind_order: list[int],
+    seed_layout_section_specs: list[SeedLayoutSectionSpec],
     dynamic_seed_object_section_specs: list[DynamicSeedObjectSectionSpec],
     dynamic_seed_build_step_specs: list[DynamicSeedBuildStepSpec],
     global_name_to_boot_object_name: dict[str, str],
@@ -1549,8 +1559,10 @@ def build_boot_image_seed_build_context(
     ].object_specs
     return BootImageSeedBuildContext(
         boot_image_spec=boot_image_spec,
+        class_kind_order=tuple(class_kind_order),
         fixed_boot_object_count=len(flatten_boot_object_specs(boot_image_spec.fixed_boot_graph_spec)),
         glyph_bitmap_boot_specs=glyph_bitmap_boot_specs,
+        seed_layout_section_specs=tuple(seed_layout_section_specs),
         dynamic_seed_object_section_specs=tuple(dynamic_seed_object_section_specs),
         dynamic_seed_build_step_specs=tuple(dynamic_seed_build_step_specs),
         global_name_to_boot_object_name=global_name_to_boot_object_name,
@@ -1577,6 +1589,8 @@ DYNAMIC_SEED_OBJECT_SECTION_SPECS = build_dynamic_seed_object_section_specs(BOOT
 DYNAMIC_SEED_BUILD_STEP_SPECS = build_dynamic_seed_build_step_specs(BOOT_IMAGE_SPEC.dynamic_seed_section_specs)
 BOOT_IMAGE_SEED_BUILD_CONTEXT = build_boot_image_seed_build_context(
     BOOT_IMAGE_SPEC,
+    CLASS_DESCRIPTOR_KIND_ORDER,
+    SEED_LAYOUT_SECTION_SPECS,
     DYNAMIC_SEED_OBJECT_SECTION_SPECS,
     DYNAMIC_SEED_BUILD_STEP_SPECS,
     GLOBAL_NAME_TO_BOOT_OBJECT_NAME,
@@ -1848,9 +1862,13 @@ def build_dynamic_seed_sections(
     build_context: BootImageSeedBuildContext = BOOT_IMAGE_SEED_BUILD_CONTEXT,
 ) -> DynamicSeedSections:
     validate_dynamic_seed_build_step_specs(build_context)
-    seed_layout = build_seed_layout(build_context.fixed_boot_object_count, CLASS_DESCRIPTOR_KIND_ORDER)
+    seed_layout = build_seed_layout(
+        build_context.fixed_boot_object_count,
+        build_context.class_kind_order,
+        build_context.seed_layout_section_specs,
+    )
     class_class_index = seed_layout["class_descriptors"].start_index
-    class_kind_order = CLASS_DESCRIPTOR_KIND_ORDER
+    class_kind_order = list(build_context.class_kind_order)
     class_indices = build_class_index_map(class_kind_order, class_class_index)
     build_state = DynamicSeedBuildState(
         seed_layout=seed_layout,

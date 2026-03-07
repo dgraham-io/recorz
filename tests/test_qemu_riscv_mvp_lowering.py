@@ -621,6 +621,14 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertIs(mvp.BOOT_IMAGE_SPEC.fixed_boot_graph_spec, mvp.FIXED_BOOT_GRAPH_SPEC)
         self.assertEqual(mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.boot_image_spec, mvp.BOOT_IMAGE_SPEC)
         self.assertEqual(
+            mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.class_kind_order,
+            tuple(mvp.CLASS_DESCRIPTOR_KIND_ORDER),
+        )
+        self.assertEqual(
+            mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.seed_layout_section_specs,
+            tuple(mvp.SEED_LAYOUT_SECTION_SPECS),
+        )
+        self.assertEqual(
             mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.dynamic_seed_object_section_specs,
             tuple(mvp.DYNAMIC_SEED_OBJECT_SECTION_SPECS),
         )
