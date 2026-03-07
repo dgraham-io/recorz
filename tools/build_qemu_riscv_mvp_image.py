@@ -402,6 +402,10 @@ def kernel_method_entry_name(class_name: str, selector: str) -> str:
     return f"RECORZ_MVP_METHOD_ENTRY_{kernel_class_entry_stem(class_name)}_{kernel_selector_entry_stem(selector)}"
 
 
+def kernel_primitive_binding_constant_name(binding_name: str) -> str:
+    return f"RECORZ_MVP_PRIMITIVE_{upper_snake_name(binding_name)}"
+
+
 def parse_kernel_method_chunk(
     class_name: str,
     instance_variables: list[str],
@@ -638,6 +642,24 @@ for entry_name, source in KERNEL_METHOD_SOURCE_BY_ENTRY_NAME.items():
     if source.primitive_binding not in PRIMITIVE_BINDING_VALUES:
         PRIMITIVE_BINDING_VALUES[source.primitive_binding] = len(PRIMITIVE_BINDING_VALUES) + 1
     PRIMITIVE_BINDING_BY_ENTRY_NAME[entry_name] = PRIMITIVE_BINDING_VALUES[source.primitive_binding]
+
+
+def render_generated_primitive_bindings_header() -> str:
+    lines = [
+        "/* Auto-generated from kernel MVP primitive declarations. */",
+        "#ifndef RECORZ_QEMU_RISCV64_GENERATED_PRIMITIVE_BINDINGS_H",
+        "#define RECORZ_QEMU_RISCV64_GENERATED_PRIMITIVE_BINDINGS_H",
+        "",
+        "enum recorz_mvp_primitive_binding {",
+    ]
+    for binding_name, binding_id in sorted(PRIMITIVE_BINDING_VALUES.items(), key=lambda item: item[1]):
+        lines.append(f"    {kernel_primitive_binding_constant_name(binding_name)} = {binding_id},")
+    lines.append(f"    RECORZ_MVP_PRIMITIVE_COUNT = {len(PRIMITIVE_BINDING_VALUES) + 1},")
+    lines.append("};")
+    lines.append("")
+    lines.append("#endif")
+    lines.append("")
+    return "\n".join(lines)
 
 
 class Lowerer:

@@ -380,6 +380,15 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             mvp.PRIMITIVE_BINDING_VALUES["formNewline"],
         )
 
+    def test_renders_generated_primitive_bindings_header(self) -> None:
+        header = mvp.render_generated_primitive_bindings_header()
+
+        self.assertIn("#ifndef RECORZ_QEMU_RISCV64_GENERATED_PRIMITIVE_BINDINGS_H", header)
+        self.assertIn("enum recorz_mvp_primitive_binding {", header)
+        self.assertIn("RECORZ_MVP_PRIMITIVE_BITBLT_FILL_FORM_COLOR = 1,", header)
+        self.assertIn("RECORZ_MVP_PRIMITIVE_FORM_NEWLINE = 10,", header)
+        self.assertIn("RECORZ_MVP_PRIMITIVE_COUNT = 11,", header)
+
     def test_builds_seed_manifest_with_expected_header(self) -> None:
         manifest = mvp.build_seed_manifest()
         (

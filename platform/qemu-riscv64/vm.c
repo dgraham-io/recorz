@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 
+#include "recorz_mvp_generated_primitive_bindings.h"
 #include "display.h"
 #include "machine.h"
 
@@ -197,7 +198,7 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         10U,
         RECORZ_MVP_OBJECT_BITBLT,
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
-        RECORZ_MVP_PRIMITIVE_BITBLT_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR,
+        RECORZ_MVP_PRIMITIVE_BITBLT_COPY_BITMAP_REGION_TO_FORM_X_Y_SCALE_COLOR,
         0U,
         0U,
         0U,
@@ -2120,7 +2121,7 @@ static const recorz_mvp_method_entry_handler primitive_binding_handlers[RECORZ_M
     [RECORZ_MVP_PRIMITIVE_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE] = execute_entry_bitblt_copy_bitmap_to_form_x_y_scale,
     [RECORZ_MVP_PRIMITIVE_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR] =
         execute_entry_bitblt_copy_bitmap_to_form_x_y_scale_color,
-    [RECORZ_MVP_PRIMITIVE_BITBLT_COPY_BITMAP_SOURCE_X_SOURCE_Y_WIDTH_HEIGHT_TO_FORM_X_Y_SCALE_COLOR] =
+    [RECORZ_MVP_PRIMITIVE_BITBLT_COPY_BITMAP_REGION_TO_FORM_X_Y_SCALE_COLOR] =
         execute_entry_bitblt_copy_bitmap_source_x_source_y_width_height_to_form_x_y_scale_color,
     [RECORZ_MVP_PRIMITIVE_GLYPHS_AT] = execute_entry_glyphs_at,
     [RECORZ_MVP_PRIMITIVE_FORM_FACTORY_FROM_BITS] = execute_entry_form_factory_from_bits,
