@@ -392,6 +392,16 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertIn("RECORZ_MVP_PRIMITIVE_BITBLT_FILL_FORM_COLOR = 1,", header)
         self.assertIn("RECORZ_MVP_PRIMITIVE_FORM_NEWLINE = 10,", header)
         self.assertIn("RECORZ_MVP_PRIMITIVE_COUNT = 11,", header)
+        self.assertIn("#define RECORZ_MVP_GENERATED_PRIMITIVE_BINDING_HANDLERS \\", header)
+        self.assertIn(
+            "[RECORZ_MVP_PRIMITIVE_BITBLT_COPY_BITMAP_REGION_TO_FORM_X_Y_SCALE_COLOR] = "
+            "execute_entry_bitblt_copy_bitmap_region_to_form_x_y_scale_color,",
+            header,
+        )
+        self.assertIn(
+            "[RECORZ_MVP_PRIMITIVE_FORM_NEWLINE] = execute_entry_form_newline,",
+            header,
+        )
 
     def test_builds_seed_manifest_with_expected_header(self) -> None:
         manifest = mvp.build_seed_manifest()

@@ -1790,7 +1790,7 @@ static void execute_entry_bitblt_copy_bitmap_to_form_x_y_scale_color(
     push(arguments[1]);
 }
 
-static void execute_entry_bitblt_copy_bitmap_source_x_source_y_width_height_to_form_x_y_scale_color(
+static void execute_entry_bitblt_copy_bitmap_region_to_form_x_y_scale_color(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
     const struct recorz_mvp_value arguments[],
@@ -1900,18 +1900,7 @@ static void execute_entry_form_newline(
 }
 
 static const recorz_mvp_method_entry_handler primitive_binding_handlers[RECORZ_MVP_PRIMITIVE_COUNT] = {
-    [RECORZ_MVP_PRIMITIVE_BITBLT_FILL_FORM_COLOR] = execute_entry_bitblt_fill_form_color,
-    [RECORZ_MVP_PRIMITIVE_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE] = execute_entry_bitblt_copy_bitmap_to_form_x_y_scale,
-    [RECORZ_MVP_PRIMITIVE_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR] =
-        execute_entry_bitblt_copy_bitmap_to_form_x_y_scale_color,
-    [RECORZ_MVP_PRIMITIVE_BITBLT_COPY_BITMAP_REGION_TO_FORM_X_Y_SCALE_COLOR] =
-        execute_entry_bitblt_copy_bitmap_source_x_source_y_width_height_to_form_x_y_scale_color,
-    [RECORZ_MVP_PRIMITIVE_GLYPHS_AT] = execute_entry_glyphs_at,
-    [RECORZ_MVP_PRIMITIVE_FORM_FACTORY_FROM_BITS] = execute_entry_form_factory_from_bits,
-    [RECORZ_MVP_PRIMITIVE_BITMAP_FACTORY_MONO_WIDTH_HEIGHT] = execute_entry_bitmap_factory_mono_width_height,
-    [RECORZ_MVP_PRIMITIVE_FORM_CLEAR] = execute_entry_form_clear,
-    [RECORZ_MVP_PRIMITIVE_FORM_WRITE_STRING] = execute_entry_form_write_string,
-    [RECORZ_MVP_PRIMITIVE_FORM_NEWLINE] = execute_entry_form_newline,
+    RECORZ_MVP_GENERATED_PRIMITIVE_BINDING_HANDLERS
 };
 
 static void perform_send(

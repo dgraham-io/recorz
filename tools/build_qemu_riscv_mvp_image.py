@@ -383,6 +383,10 @@ def upper_snake_name(name: str) -> str:
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).upper()
 
 
+def lower_snake_name(name: str) -> str:
+    return upper_snake_name(name).lower()
+
+
 def kernel_class_entry_stem(class_name: str) -> str:
     if class_name == "BitBlt":
         return "BITBLT"
@@ -408,6 +412,10 @@ def kernel_method_entry_name(class_name: str, selector: str) -> str:
 
 def kernel_primitive_binding_constant_name(binding_name: str) -> str:
     return f"RECORZ_MVP_PRIMITIVE_{upper_snake_name(binding_name)}"
+
+
+def kernel_primitive_handler_name(binding_name: str) -> str:
+    return f"execute_entry_{lower_snake_name(binding_name)}"
 
 
 def kernel_method_implementation_constant_name(implementation_kind: str) -> str:
@@ -699,6 +707,21 @@ def render_generated_runtime_bindings_header() -> str:
             f"{primitive_binding_constant}, 0U, 0U, 0U }},"
         )
         if index != len(method_entries) - 1:
+            line += " \\"
+        lines.append(line)
+    lines.extend(
+        [
+            "",
+            "#define RECORZ_MVP_GENERATED_PRIMITIVE_BINDING_HANDLERS \\",
+        ]
+    )
+    primitive_bindings = sorted(PRIMITIVE_BINDING_VALUES.items(), key=lambda item: item[1])
+    for index, (binding_name, _binding_id) in enumerate(primitive_bindings):
+        line = (
+            f"    [{kernel_primitive_binding_constant_name(binding_name)}] = "
+            f"{kernel_primitive_handler_name(binding_name)},"
+        )
+        if index != len(primitive_bindings) - 1:
             line += " \\"
         lines.append(line)
     lines.extend(
