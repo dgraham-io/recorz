@@ -1,0 +1,17 @@
+Display clear.
+Display writeString: 'AAA'.
+KernelInstaller
+    fileInMethodChunks: 'RecorzKernelClass: #Display
+!
+clear
+    Display newline.
+    ^self
+!
+cr
+    Display newline.
+    ^self'
+    onClass: Display class.
+Display clear.
+Display writeString: 'BBB'.
+Display cr.
+Display writeString: 'CCC'.

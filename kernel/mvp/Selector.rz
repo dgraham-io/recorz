@@ -49,3 +49,5 @@ RecorzKernelSelector: #compiledMethodWord0:word1:word2:word3:instructionCount: o
 RecorzKernelSelector: #installCompiledMethod:onClass:selectorId:argumentCount: order: 23
 !
 RecorzKernelSelector: #installMethodSource:onClass: order: 24
+!
+RecorzKernelSelector: #fileInMethodChunks:onClass: order: 25

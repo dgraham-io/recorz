@@ -648,3 +648,10 @@
 - Added `examples/qemu_riscv_in_image_source_install_demo.rz` plus an end-to-end QEMU integration test that proves the running image can compile and install `Display>>cr` from source text and immediately render the changed behavior.
 - Updated `platform/qemu-riscv64/program.c`, `platform/qemu-riscv64/vm.c`, `tools/inspect_qemu_riscv_mvp_image.py`, and the focused image/lowering tests so the expanded selector/method-entry universe for the new installer remains consistent across host and target, including the target-side selector-range validation paths.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Add Tiny In-Image Chunk File-In Path
+- Extended `kernel/mvp/KernelInstaller.rz` and `kernel/mvp/Selector.rz` with `fileInMethodChunks:onClass:` so the running image can consume a small `!`-separated chunk stream for one class, rather than only installing one isolated method source string at a time.
+- Added chunk splitting and multi-method installation to `platform/qemu-riscv64/vm.c` on top of the existing tiny source compiler: the new path skips a leading `RecorzKernelClass:` chunk, compiles each remaining method chunk in the current MVP subset, and reuses the same append/replace installer path already used by the raw-word and single-method source installers.
+- Added `examples/qemu_riscv_in_image_chunk_file_in_demo.rz` plus a QEMU integration test that proves the running image can file in two `Display` methods in one chunk stream and immediately use both of them to render three visible lines without any host update payload.
+- Updated `platform/qemu-riscv64/program.c`, `platform/qemu-riscv64/vm.c`, `tools/inspect_qemu_riscv_mvp_image.py`, and the focused image/lowering tests so the expanded selector/method-entry/primitive counts for the chunk installer remain consistent across host and target.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

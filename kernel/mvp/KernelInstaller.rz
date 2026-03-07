@@ -11,3 +11,6 @@ installCompiledMethod: compiledMethod onClass: class selectorId: selectorId argu
 !
 installMethodSource: source onClass: class
     <primitive: #kernelInstallerInstallMethodSourceOnClass>
+!
+fileInMethodChunks: source onClass: class
+    <primitive: #kernelInstallerFileInMethodChunksOnClass>
