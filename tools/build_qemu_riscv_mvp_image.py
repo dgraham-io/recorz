@@ -332,6 +332,12 @@ class SeedLayoutSectionSpec:
     count_source: str
 
 
+@dataclass(frozen=True)
+class DynamicSeedObjectSectionSpec:
+    layout_section_name: str
+    result_attribute: str
+
+
 @dataclass
 class DynamicSeedSections:
     seed_layout: dict[str, SeedLayoutSection]
@@ -390,6 +396,13 @@ SEED_LAYOUT_SECTION_SPECS = [
     SeedLayoutSectionSpec("method_descriptors", "builtin_method_definitions"),
 ]
 SEED_LAYOUT_SECTION_NAMES = [section_spec.name for section_spec in SEED_LAYOUT_SECTION_SPECS]
+DYNAMIC_SEED_OBJECT_SECTION_SPECS = [
+    DynamicSeedObjectSectionSpec("class_descriptors", "class_seed_objects"),
+    DynamicSeedObjectSectionSpec("selectors", "selector_seed_objects"),
+    DynamicSeedObjectSectionSpec("compiled_methods", "compiled_method_seed_objects"),
+    DynamicSeedObjectSectionSpec("method_entries", "method_entry_seed_objects"),
+    DynamicSeedObjectSectionSpec("method_descriptors", "method_seed_objects"),
+]
 GLYPH_BITMAP_NAME_PREFIX = "GlyphBitmap"
 GLYPH_BITMAP_WIDTH = 5
 GLYPH_BITMAP_HEIGHT = 7
@@ -1255,6 +1268,18 @@ def build_seed_layout(base_object_index: int, class_kind_order: list[int]) -> di
     return layout
 
 
+def validate_dynamic_seed_section_counts(
+    seed_layout: dict[str, SeedLayoutSection],
+    dynamic_sections: DynamicSeedSections,
+) -> None:
+    for section_spec in DYNAMIC_SEED_OBJECT_SECTION_SPECS:
+        seed_objects = getattr(dynamic_sections, section_spec.result_attribute)
+        if len(seed_objects) != seed_layout[section_spec.layout_section_name].count:
+            raise AssertionError(
+                f"{section_spec.layout_section_name} seed object count does not match declared seed layout"
+            )
+
+
 def build_selector_seed_objects(
     selector_start_index: int,
     selector_class_index: int,
@@ -1444,18 +1469,7 @@ def build_dynamic_seed_sections(seed_objects: list[SeedObject]) -> DynamicSeedSe
         method_start_by_kind,
         method_count_by_kind,
     )
-    if len(class_seed_objects) != seed_layout["class_descriptors"].count:
-        raise AssertionError("class seed object count does not match declared seed layout")
-    if len(selector_seed_objects) != seed_layout["selectors"].count:
-        raise AssertionError("selector seed object count does not match declared seed layout")
-    if len(compiled_method_seed_objects) != seed_layout["compiled_methods"].count:
-        raise AssertionError("compiled method seed object count does not match declared seed layout")
-    if len(method_entry_seed_objects) != seed_layout["method_entries"].count:
-        raise AssertionError("method entry seed object count does not match declared seed layout")
-    if len(method_seed_objects) != seed_layout["method_descriptors"].count:
-        raise AssertionError("method descriptor seed object count does not match declared seed layout")
-
-    return DynamicSeedSections(
+    dynamic_sections = DynamicSeedSections(
         seed_layout=seed_layout,
         class_indices=class_indices,
         class_seed_objects=class_seed_objects,
@@ -1464,6 +1478,8 @@ def build_dynamic_seed_sections(seed_objects: list[SeedObject]) -> DynamicSeedSe
         method_entry_seed_objects=method_entry_seed_objects,
         method_seed_objects=method_seed_objects,
     )
+    validate_dynamic_seed_section_counts(seed_layout, dynamic_sections)
+    return dynamic_sections
 
 
 def build_seed_bindings(seed_object_indices_by_name: dict[str, int]) -> SeedBindings:
@@ -1526,11 +1542,8 @@ def build_seed_manifest() -> bytes:
     seed_objects, seed_object_indices_by_name, glyph_object_indices = build_fixed_boot_seed_objects()
     dynamic_sections = build_dynamic_seed_sections(seed_objects)
 
-    seed_objects.extend(dynamic_sections.class_seed_objects)
-    seed_objects.extend(dynamic_sections.selector_seed_objects)
-    seed_objects.extend(dynamic_sections.compiled_method_seed_objects)
-    seed_objects.extend(dynamic_sections.method_entry_seed_objects)
-    seed_objects.extend(dynamic_sections.method_seed_objects)
+    for section_spec in DYNAMIC_SEED_OBJECT_SECTION_SPECS:
+        seed_objects.extend(getattr(dynamic_sections, section_spec.result_attribute))
     bindings = build_seed_bindings(seed_object_indices_by_name)
     return encode_seed_manifest(seed_objects, bindings, glyph_object_indices)
 

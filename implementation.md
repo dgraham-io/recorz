@@ -406,3 +406,9 @@
 - Updated `build_seed_layout()` to derive section counts from the named count sources declared in those section specs without changing the generated seed layout or target VM behavior.
 - Extended the focused lowering regressions to lock both the new section-spec layer and the unchanged derived section layout.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Derive Dynamic Object Section Sequence From Specs
+- Added a small `DynamicSeedObjectSectionSpec` layer so the builder now declares the object-bearing dynamic section sequence in one place instead of repeating the same section names in validation and final manifest assembly.
+- Updated `build_dynamic_seed_sections()` and `build_seed_manifest()` to use that section sequence for dynamic section count validation and final seed-object extension order without changing the generated seed image or target VM behavior.
+- Extended the focused lowering regressions to lock the new dynamic object section spec list and the helper-driven validation/assembly path.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

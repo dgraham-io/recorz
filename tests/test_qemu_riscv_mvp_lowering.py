@@ -735,6 +735,16 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
+            mvp.DYNAMIC_SEED_OBJECT_SECTION_SPECS,
+            [
+                mvp.DynamicSeedObjectSectionSpec("class_descriptors", "class_seed_objects"),
+                mvp.DynamicSeedObjectSectionSpec("selectors", "selector_seed_objects"),
+                mvp.DynamicSeedObjectSectionSpec("compiled_methods", "compiled_method_seed_objects"),
+                mvp.DynamicSeedObjectSectionSpec("method_entries", "method_entry_seed_objects"),
+                mvp.DynamicSeedObjectSectionSpec("method_descriptors", "method_seed_objects"),
+            ],
+        )
+        self.assertEqual(
             mvp.SEED_LAYOUT_SECTION_NAMES,
             [
                 "class_descriptors",
@@ -773,15 +783,15 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 (mvp.SEED_FIELD_SMALL_INTEGER, 1),
             ],
         )
+        self.assertIsNone(
+            mvp.validate_dynamic_seed_section_counts(dynamic_sections.seed_layout, dynamic_sections)
+        )
 
     def test_builds_seed_bindings_and_encodes_seed_manifest(self) -> None:
         seed_objects, seed_object_indices_by_name, glyph_object_indices = mvp.build_fixed_boot_seed_objects()
         dynamic_sections = mvp.build_dynamic_seed_sections(seed_objects)
-        seed_objects.extend(dynamic_sections.class_seed_objects)
-        seed_objects.extend(dynamic_sections.selector_seed_objects)
-        seed_objects.extend(dynamic_sections.compiled_method_seed_objects)
-        seed_objects.extend(dynamic_sections.method_entry_seed_objects)
-        seed_objects.extend(dynamic_sections.method_seed_objects)
+        for section_spec in mvp.DYNAMIC_SEED_OBJECT_SECTION_SPECS:
+            seed_objects.extend(getattr(dynamic_sections, section_spec.result_attribute))
 
         bindings = mvp.build_seed_bindings(seed_object_indices_by_name)
         self.assertEqual(bindings.global_bindings[0], (mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_TRANSCRIPT"], 0))
