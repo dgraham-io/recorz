@@ -44,6 +44,9 @@
 #define ACCESSOR_METHOD_FIELD_FIELD_INDEX 0U
 #define FIELD_SEND_METHOD_FIELD_FIELD_INDEX 0U
 #define FIELD_SEND_METHOD_FIELD_SELECTOR 1U
+#define ROOT_SEND_METHOD_FIELD_ROOT_ID 0U
+#define ROOT_SEND_METHOD_FIELD_SELECTOR 1U
+#define ROOT_SEND_METHOD_FIELD_RETURN_MODE 2U
 
 #define BITMAP_STORAGE_FRAMEBUFFER 1U
 #define BITMAP_STORAGE_GLYPH_MONO 2U
@@ -76,12 +79,20 @@ struct recorz_mvp_method_entry_spec {
     uint8_t implementation_kind;
     uint8_t implementation_field_index;
     uint8_t implementation_selector;
+    uint8_t implementation_root_id;
+    uint8_t implementation_return_mode;
 };
 
 enum recorz_mvp_method_implementation_kind {
     RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE = 1,
     RECORZ_MVP_METHOD_IMPLEMENTATION_ACCESSOR = 2,
     RECORZ_MVP_METHOD_IMPLEMENTATION_FIELD_SEND = 3,
+    RECORZ_MVP_METHOD_IMPLEMENTATION_ROOT_SEND = 4,
+};
+
+enum recorz_mvp_method_return_mode {
+    RECORZ_MVP_METHOD_RETURN_RESULT = 1,
+    RECORZ_MVP_METHOD_RETURN_RECEIVER = 2,
 };
 
 static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_METHOD_ENTRY_COUNT] = {
@@ -92,14 +103,18 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
         0U,
         0U,
+        0U,
+        0U,
     },
     [RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR] = {
         RECORZ_MVP_SELECTOR_CR,
         0U,
         RECORZ_MVP_OBJECT_TRANSCRIPT,
-        RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
+        RECORZ_MVP_METHOD_IMPLEMENTATION_ROOT_SEND,
         0U,
-        0U,
+        RECORZ_MVP_SELECTOR_NEWLINE,
+        RECORZ_MVP_SEED_ROOT_DEFAULT_FORM,
+        RECORZ_MVP_METHOD_RETURN_RECEIVER,
     },
     [RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM] = {
         RECORZ_MVP_SELECTOR_DEFAULT_FORM,
@@ -108,14 +123,18 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
         0U,
         0U,
+        0U,
+        0U,
     },
     [RECORZ_MVP_METHOD_ENTRY_DISPLAY_CLEAR] = {
         RECORZ_MVP_SELECTOR_CLEAR,
         0U,
         RECORZ_MVP_OBJECT_DISPLAY,
-        RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
+        RECORZ_MVP_METHOD_IMPLEMENTATION_ROOT_SEND,
         0U,
-        0U,
+        RECORZ_MVP_SELECTOR_CLEAR,
+        RECORZ_MVP_SEED_ROOT_DEFAULT_FORM,
+        RECORZ_MVP_METHOD_RETURN_RECEIVER,
     },
     [RECORZ_MVP_METHOD_ENTRY_DISPLAY_WRITE_STRING] = {
         RECORZ_MVP_SELECTOR_WRITE_STRING,
@@ -124,20 +143,26 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
         0U,
         0U,
+        0U,
+        0U,
     },
     [RECORZ_MVP_METHOD_ENTRY_DISPLAY_NEWLINE] = {
         RECORZ_MVP_SELECTOR_NEWLINE,
         0U,
         RECORZ_MVP_OBJECT_DISPLAY,
-        RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
+        RECORZ_MVP_METHOD_IMPLEMENTATION_ROOT_SEND,
         0U,
-        0U,
+        RECORZ_MVP_SELECTOR_NEWLINE,
+        RECORZ_MVP_SEED_ROOT_DEFAULT_FORM,
+        RECORZ_MVP_METHOD_RETURN_RECEIVER,
     },
     [RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR] = {
         RECORZ_MVP_SELECTOR_FILL_FORM_COLOR,
         2U,
         RECORZ_MVP_OBJECT_BITBLT,
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
+        0U,
+        0U,
         0U,
         0U,
     },
@@ -148,12 +173,16 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
         0U,
         0U,
+        0U,
+        0U,
     },
     [RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR] = {
         RECORZ_MVP_SELECTOR_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR,
         6U,
         RECORZ_MVP_OBJECT_BITBLT,
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
+        0U,
+        0U,
         0U,
         0U,
     },
@@ -164,12 +193,16 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
         0U,
         0U,
+        0U,
+        0U,
     },
     [RECORZ_MVP_METHOD_ENTRY_GLYPHS_AT] = {
         RECORZ_MVP_SELECTOR_AT,
         1U,
         RECORZ_MVP_OBJECT_GLYPHS,
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
+        0U,
+        0U,
         0U,
         0U,
     },
@@ -180,12 +213,16 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
         0U,
         0U,
+        0U,
+        0U,
     },
     [RECORZ_MVP_METHOD_ENTRY_BITMAP_FACTORY_MONO_WIDTH_HEIGHT] = {
         RECORZ_MVP_SELECTOR_MONO_WIDTH_HEIGHT,
         2U,
         RECORZ_MVP_OBJECT_BITMAP_FACTORY,
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
+        0U,
+        0U,
         0U,
         0U,
     },
@@ -196,6 +233,8 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_METHOD_IMPLEMENTATION_ACCESSOR,
         BITMAP_FIELD_WIDTH,
         0U,
+        0U,
+        0U,
     },
     [RECORZ_MVP_METHOD_ENTRY_BITMAP_HEIGHT] = {
         RECORZ_MVP_SELECTOR_HEIGHT,
@@ -204,12 +243,16 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_METHOD_IMPLEMENTATION_ACCESSOR,
         BITMAP_FIELD_HEIGHT,
         0U,
+        0U,
+        0U,
     },
     [RECORZ_MVP_METHOD_ENTRY_FORM_CLEAR] = {
         RECORZ_MVP_SELECTOR_CLEAR,
         0U,
         RECORZ_MVP_OBJECT_FORM,
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
+        0U,
+        0U,
         0U,
         0U,
     },
@@ -220,12 +263,16 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
         0U,
         0U,
+        0U,
+        0U,
     },
     [RECORZ_MVP_METHOD_ENTRY_FORM_NEWLINE] = {
         RECORZ_MVP_SELECTOR_NEWLINE,
         0U,
         RECORZ_MVP_OBJECT_FORM,
         RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE,
+        0U,
+        0U,
         0U,
         0U,
     },
@@ -236,6 +283,8 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_METHOD_IMPLEMENTATION_ACCESSOR,
         FORM_FIELD_BITS,
         0U,
+        0U,
+        0U,
     },
     [RECORZ_MVP_METHOD_ENTRY_FORM_WIDTH] = {
         RECORZ_MVP_SELECTOR_WIDTH,
@@ -244,6 +293,8 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_METHOD_IMPLEMENTATION_FIELD_SEND,
         FORM_FIELD_BITS,
         RECORZ_MVP_SELECTOR_WIDTH,
+        0U,
+        0U,
     },
     [RECORZ_MVP_METHOD_ENTRY_FORM_HEIGHT] = {
         RECORZ_MVP_SELECTOR_HEIGHT,
@@ -252,6 +303,8 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_METHOD_IMPLEMENTATION_FIELD_SEND,
         FORM_FIELD_BITS,
         RECORZ_MVP_SELECTOR_HEIGHT,
+        0U,
+        0U,
     },
     [RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND] = {
         RECORZ_MVP_SELECTOR_INSTANCE_KIND,
@@ -259,6 +312,8 @@ static const struct recorz_mvp_method_entry_spec method_entry_specs[RECORZ_MVP_M
         RECORZ_MVP_OBJECT_CLASS,
         RECORZ_MVP_METHOD_IMPLEMENTATION_ACCESSOR,
         CLASS_FIELD_INSTANCE_KIND,
+        0U,
+        0U,
         0U,
     },
 };
@@ -299,7 +354,7 @@ static struct recorz_mvp_value stack[STACK_LIMIT];
 static struct recorz_mvp_heap_object heap[HEAP_LIMIT];
 static uint32_t stack_size = 0U;
 static uint16_t heap_size = 0U;
-static uint16_t class_handles_by_kind[RECORZ_MVP_OBJECT_FIELD_SEND_METHOD + 1U];
+static uint16_t class_handles_by_kind[RECORZ_MVP_OBJECT_ROOT_SEND_METHOD + 1U];
 static uint16_t selector_handles_by_id[RECORZ_MVP_SELECTOR_INSTANCE_KIND + 1U];
 static uint16_t global_handles[RECORZ_MVP_GLOBAL_BITMAP + 1U];
 static uint16_t default_form_handle = 0U;
@@ -505,6 +560,8 @@ static const char *object_kind_name(uint8_t kind) {
             return "AccessorMethod";
         case RECORZ_MVP_OBJECT_FIELD_SEND_METHOD:
             return "FieldSendMethod";
+        case RECORZ_MVP_OBJECT_ROOT_SEND_METHOD:
+            return "RootSendMethod";
     }
     return "UnknownObject";
 }
@@ -635,6 +692,25 @@ static struct recorz_mvp_value form_value(void) {
     return object_value(default_form_handle);
 }
 
+static struct recorz_mvp_value seed_root_value(uint32_t root_id) {
+    switch (root_id) {
+        case RECORZ_MVP_SEED_ROOT_DEFAULT_FORM:
+            return object_value(default_form_handle);
+        case RECORZ_MVP_SEED_ROOT_FRAMEBUFFER_BITMAP:
+            return object_value(framebuffer_bitmap_handle);
+        case RECORZ_MVP_SEED_ROOT_TRANSCRIPT_BEHAVIOR:
+            return object_value(transcript_behavior_handle);
+        case RECORZ_MVP_SEED_ROOT_TRANSCRIPT_LAYOUT:
+            return object_value(transcript_layout_handle);
+        case RECORZ_MVP_SEED_ROOT_TRANSCRIPT_STYLE:
+            return object_value(transcript_style_handle);
+        case RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS:
+            return object_value(transcript_metrics_handle);
+    }
+    machine_panic("unknown seed root in method body");
+    return nil_value();
+}
+
 static struct recorz_mvp_value string_value(const char *text) {
     return (struct recorz_mvp_value){RECORZ_MVP_VALUE_STRING, 0, text};
 }
@@ -699,7 +775,7 @@ static uint16_t heap_allocate(uint8_t kind) {
 static uint16_t heap_allocate_seeded_class(uint8_t kind) {
     uint16_t handle = heap_allocate(kind);
 
-    if (kind <= RECORZ_MVP_OBJECT_FIELD_SEND_METHOD && class_handles_by_kind[kind] != 0U) {
+    if (kind <= RECORZ_MVP_OBJECT_ROOT_SEND_METHOD && class_handles_by_kind[kind] != 0U) {
         heap_set_class(handle, class_handles_by_kind[kind]);
     }
     return handle;
@@ -893,6 +969,45 @@ static uint32_t field_send_method_selector(const struct recorz_mvp_heap_object *
     return selector_object_selector_id(field_send_method_selector_object(field_send_object));
 }
 
+static uint32_t root_send_method_root_id(const struct recorz_mvp_heap_object *root_send_object) {
+    if (root_send_object->kind != RECORZ_MVP_OBJECT_ROOT_SEND_METHOD) {
+        machine_panic("method entry implementation is not a root-send method");
+    }
+    return small_integer_u32(
+        heap_get_field(root_send_object, ROOT_SEND_METHOD_FIELD_ROOT_ID),
+        "root-send method root id is not a small integer"
+    );
+}
+
+static const struct recorz_mvp_heap_object *root_send_method_selector_object(
+    const struct recorz_mvp_heap_object *root_send_object
+) {
+    struct recorz_mvp_value selector_value;
+
+    if (root_send_object->kind != RECORZ_MVP_OBJECT_ROOT_SEND_METHOD) {
+        machine_panic("method entry implementation is not a root-send method");
+    }
+    selector_value = heap_get_field(root_send_object, ROOT_SEND_METHOD_FIELD_SELECTOR);
+    if (selector_value.kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("root-send method selector is not a selector object");
+    }
+    return heap_object_for_value(selector_value);
+}
+
+static uint32_t root_send_method_selector(const struct recorz_mvp_heap_object *root_send_object) {
+    return selector_object_selector_id(root_send_method_selector_object(root_send_object));
+}
+
+static uint32_t root_send_method_return_mode(const struct recorz_mvp_heap_object *root_send_object) {
+    if (root_send_object->kind != RECORZ_MVP_OBJECT_ROOT_SEND_METHOD) {
+        machine_panic("method entry implementation is not a root-send method");
+    }
+    return small_integer_u32(
+        heap_get_field(root_send_object, ROOT_SEND_METHOD_FIELD_RETURN_MODE),
+        "root-send method return mode is not a small integer"
+    );
+}
+
 static uint32_t class_method_count(const struct recorz_mvp_heap_object *class_object) {
     return small_integer_u32(
         heap_get_field(class_object, CLASS_FIELD_METHOD_COUNT),
@@ -1079,17 +1194,32 @@ static void validate_class_method_table(
             }
             continue;
         }
-        if (entry_spec->implementation_kind != RECORZ_MVP_METHOD_IMPLEMENTATION_FIELD_SEND) {
+        if (entry_spec->implementation_kind == RECORZ_MVP_METHOD_IMPLEMENTATION_FIELD_SEND) {
+            if (implementation_object->kind != RECORZ_MVP_OBJECT_FIELD_SEND_METHOD) {
+                machine_panic("field-send method entry implementation is not a field-send method");
+            }
+            if (field_send_method_field_index(implementation_object) != entry_spec->implementation_field_index) {
+                machine_panic("field-send method entry field index does not match entry");
+            }
+            if (field_send_method_selector(implementation_object) != entry_spec->implementation_selector) {
+                machine_panic("field-send method entry selector does not match entry");
+            }
+            continue;
+        }
+        if (entry_spec->implementation_kind != RECORZ_MVP_METHOD_IMPLEMENTATION_ROOT_SEND) {
             machine_panic("method entry implementation kind is unknown");
         }
-        if (implementation_object->kind != RECORZ_MVP_OBJECT_FIELD_SEND_METHOD) {
-            machine_panic("field-send method entry implementation is not a field-send method");
+        if (implementation_object->kind != RECORZ_MVP_OBJECT_ROOT_SEND_METHOD) {
+            machine_panic("root-send method entry implementation is not a root-send method");
         }
-        if (field_send_method_field_index(implementation_object) != entry_spec->implementation_field_index) {
-            machine_panic("field-send method entry field index does not match entry");
+        if (root_send_method_root_id(implementation_object) != entry_spec->implementation_root_id) {
+            machine_panic("root-send method root id does not match entry");
         }
-        if (field_send_method_selector(implementation_object) != entry_spec->implementation_selector) {
-            machine_panic("field-send method entry selector does not match entry");
+        if (root_send_method_selector(implementation_object) != entry_spec->implementation_selector) {
+            machine_panic("root-send method selector does not match entry");
+        }
+        if (root_send_method_return_mode(implementation_object) != entry_spec->implementation_return_mode) {
+            machine_panic("root-send method return mode does not match entry");
         }
     }
 }
@@ -1123,13 +1253,13 @@ static void initialize_class_handle_cache(const struct recorz_mvp_seed *seed) {
     uint16_t seed_index;
     uint16_t kind;
 
-    for (kind = 0U; kind <= RECORZ_MVP_OBJECT_FIELD_SEND_METHOD; ++kind) {
+    for (kind = 0U; kind <= RECORZ_MVP_OBJECT_ROOT_SEND_METHOD; ++kind) {
         class_handles_by_kind[kind] = 0U;
     }
     for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
         const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(seeded_handles[seed_index]);
 
-        if (object->kind > RECORZ_MVP_OBJECT_FIELD_SEND_METHOD || object->class_handle == 0U) {
+        if (object->kind > RECORZ_MVP_OBJECT_ROOT_SEND_METHOD || object->class_handle == 0U) {
             continue;
         }
         if (class_handles_by_kind[object->kind] == 0U) {
@@ -1798,19 +1928,6 @@ static void execute_entry_transcript_show(
     push(receiver);
 }
 
-static void execute_entry_transcript_cr(
-    const struct recorz_mvp_heap_object *object,
-    struct recorz_mvp_value receiver,
-    const struct recorz_mvp_value arguments[],
-    const char *text
-) {
-    (void)object;
-    (void)arguments;
-    (void)text;
-    form_newline(default_form_object());
-    push(receiver);
-}
-
 static void execute_entry_display_default_form(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -1824,19 +1941,6 @@ static void execute_entry_display_default_form(
     push(form_value());
 }
 
-static void execute_entry_display_clear(
-    const struct recorz_mvp_heap_object *object,
-    struct recorz_mvp_value receiver,
-    const struct recorz_mvp_value arguments[],
-    const char *text
-) {
-    (void)object;
-    (void)arguments;
-    (void)text;
-    form_clear(default_form_object());
-    push(receiver);
-}
-
 static void execute_entry_display_write_string(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -1846,19 +1950,6 @@ static void execute_entry_display_write_string(
     (void)object;
     (void)arguments;
     form_write_string(default_form_object(), text);
-    push(receiver);
-}
-
-static void execute_entry_display_newline(
-    const struct recorz_mvp_heap_object *object,
-    struct recorz_mvp_value receiver,
-    const struct recorz_mvp_value arguments[],
-    const char *text
-) {
-    (void)object;
-    (void)arguments;
-    (void)text;
-    form_newline(default_form_object());
     push(receiver);
 }
 
@@ -2058,11 +2149,8 @@ static void execute_entry_form_newline(
 
 static const recorz_mvp_method_entry_handler method_entry_handlers[RECORZ_MVP_METHOD_ENTRY_COUNT] = {
     [RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW] = execute_entry_transcript_show,
-    [RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_CR] = execute_entry_transcript_cr,
     [RECORZ_MVP_METHOD_ENTRY_DISPLAY_DEFAULT_FORM] = execute_entry_display_default_form,
-    [RECORZ_MVP_METHOD_ENTRY_DISPLAY_CLEAR] = execute_entry_display_clear,
     [RECORZ_MVP_METHOD_ENTRY_DISPLAY_WRITE_STRING] = execute_entry_display_write_string,
-    [RECORZ_MVP_METHOD_ENTRY_DISPLAY_NEWLINE] = execute_entry_display_newline,
     [RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR] = execute_entry_bitblt_fill_form_color,
     [RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE] = execute_entry_bitblt_copy_bitmap_to_form_x_y_scale,
     [RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE_COLOR] =
@@ -2104,6 +2192,26 @@ static void execute_field_send_method(
 
     remember_send_context(selector, 0U, field_receiver, 0);
     perform_send(field_receiver, selector, 0U, 0, 0);
+}
+
+static void execute_root_send_method(
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_heap_object *root_send_method
+) {
+    struct recorz_mvp_value root_receiver = seed_root_value(root_send_method_root_id(root_send_method));
+    uint8_t selector = (uint8_t)root_send_method_selector(root_send_method);
+    uint32_t return_mode = root_send_method_return_mode(root_send_method);
+
+    remember_send_context(selector, 0U, root_receiver, 0);
+    perform_send(root_receiver, selector, 0U, 0, 0);
+    if (return_mode == RECORZ_MVP_METHOD_RETURN_RESULT) {
+        return;
+    }
+    if (return_mode != RECORZ_MVP_METHOD_RETURN_RECEIVER) {
+        machine_panic("root-send method return mode is unknown");
+    }
+    (void)pop_value();
+    push(receiver);
 }
 
 static void dispatch_heap_object_send(
@@ -2153,6 +2261,14 @@ static void dispatch_heap_object_send(
         }
         implementation_object = heap_object_for_value(implementation_value);
         execute_field_send_method(object, implementation_object);
+        return;
+    }
+    if (entry_spec->implementation_kind == RECORZ_MVP_METHOD_IMPLEMENTATION_ROOT_SEND) {
+        if (implementation_value.kind != RECORZ_MVP_VALUE_OBJECT) {
+            machine_panic("root-send method entry is missing an implementation object");
+        }
+        implementation_object = heap_object_for_value(implementation_value);
+        execute_root_send_method(receiver, implementation_object);
         return;
     }
     if (entry_spec->implementation_kind != RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE) {
