@@ -296,13 +296,9 @@ class KernelMethodSource:
 @dataclass(frozen=True)
 class KernelClassHeader:
     class_name: str
+    descriptor_order: int
+    source_boot_order: int | None
     instance_variables: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class KernelClassSpec:
-    class_name: str
-    source_boot_order: int | None = None
 
 
 @dataclass(frozen=True)
@@ -454,38 +450,29 @@ class SeedBindings:
 
 
 KERNEL_CLASS_SPECS = [
-    KernelClassSpec("Class", source_boot_order=8),
-    KernelClassSpec("Transcript", source_boot_order=0),
-    KernelClassSpec("Display", source_boot_order=1),
-    KernelClassSpec("BitBlt", source_boot_order=2),
-    KernelClassSpec("Glyphs", source_boot_order=3),
-    KernelClassSpec("FormFactory", source_boot_order=4),
-    KernelClassSpec("BitmapFactory", source_boot_order=5),
-    KernelClassSpec("TextLayout"),
-    KernelClassSpec("TextStyle"),
-    KernelClassSpec("Bitmap", source_boot_order=6),
-    KernelClassSpec("Form", source_boot_order=7),
-    KernelClassSpec("TextMetrics"),
-    KernelClassSpec("TextBehavior"),
-    KernelClassSpec("MethodDescriptor"),
-    KernelClassSpec("MethodEntry"),
-    KernelClassSpec("Selector"),
-    KernelClassSpec("CompiledMethod"),
+    "Class",
+    "Transcript",
+    "Display",
+    "BitBlt",
+    "Glyphs",
+    "FormFactory",
+    "BitmapFactory",
+    "TextLayout",
+    "TextStyle",
+    "Bitmap",
+    "Form",
+    "TextMetrics",
+    "TextBehavior",
+    "MethodDescriptor",
+    "MethodEntry",
+    "Selector",
+    "CompiledMethod",
 ]
-KERNEL_SOURCE_CLASS_SPECS = sorted(
-    (spec for spec in KERNEL_CLASS_SPECS if spec.source_boot_order is not None),
-    key=lambda spec: spec.source_boot_order,
-)
-KERNEL_CLASS_BOOT_ORDER = [spec.class_name for spec in KERNEL_SOURCE_CLASS_SPECS]
-CLASS_DESCRIPTOR_KIND_NAMES = [spec.class_name for spec in KERNEL_CLASS_SPECS]
+CLASS_DESCRIPTOR_KIND_NAMES = list(KERNEL_CLASS_SPECS)
 CLASS_DESCRIPTOR_KIND_ORDER = [
     constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, kind_name)
     for kind_name in CLASS_DESCRIPTOR_KIND_NAMES
 ]
-KERNEL_CLASS_NAME_TO_OBJECT_KIND = {
-    spec.class_name: constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, spec.class_name)
-    for spec in KERNEL_SOURCE_CLASS_SPECS
-}
 GLYPH_BITMAP_NAME_PREFIX = "GlyphBitmap"
 GLYPH_BITMAP_WIDTH = 5
 GLYPH_BITMAP_HEIGHT = 7
@@ -627,7 +614,8 @@ def build_boot_object_export_map(
 KERNEL_METHOD_IMPLEMENTATION_COMPILED = "compiled"
 KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE = "primitive"
 KERNEL_CLASS_HEADER_PATTERN = re.compile(
-    r"^RecorzKernelClass:\s*#(?P<class_name>[A-Za-z_]\w*)\s+instanceVariableNames:\s*'(?P<instance_variables>[^']*)'$"
+    r"^RecorzKernelClass:\s*#(?P<class_name>[A-Za-z_]\w*)\s+descriptorOrder:\s*(?P<descriptor_order>\d+)"
+    r"(?:\s+sourceBootOrder:\s*(?P<source_boot_order>\d+))?\s+instanceVariableNames:\s*'(?P<instance_variables>[^']*)'$"
 )
 KERNEL_PRIMITIVE_DECLARATION_PATTERN = re.compile(r"^<primitive:\s*#(?P<binding>[A-Za-z_]\w*)>$")
 ACCESSOR_METHOD_FIELD_BY_ENTRY_NAME: dict[str, int] = {}
@@ -711,8 +699,50 @@ def parse_kernel_class_header(header_source: str, relative_path: str) -> KernelC
     instance_variables = tuple(name for name in match.group("instance_variables").split() if name)
     return KernelClassHeader(
         class_name=match.group("class_name"),
+        descriptor_order=int(match.group("descriptor_order")),
+        source_boot_order=int(match.group("source_boot_order")) if match.group("source_boot_order") is not None else None,
         instance_variables=instance_variables,
     )
+
+
+def load_kernel_source_class_headers() -> tuple[dict[str, KernelClassHeader], list[KernelClassHeader]]:
+    class_headers_by_name: dict[str, KernelClassHeader] = {}
+
+    for method_path in sorted(KERNEL_MVP_ROOT.glob("*.rz")):
+        chunk_sources = split_kernel_method_chunks(method_path.read_text(encoding="utf-8"))
+        if not chunk_sources:
+            raise LoweringError(f"kernel MVP class file {method_path.name} is empty")
+        class_header = parse_kernel_class_header(chunk_sources[0], method_path.name)
+        if class_header.class_name in class_headers_by_name:
+            raise LoweringError(f"kernel MVP class {class_header.class_name} is declared more than once")
+        if class_header.source_boot_order is None:
+            raise LoweringError(
+                f"kernel MVP source class file {method_path.name} must declare sourceBootOrder"
+            )
+        class_headers_by_name[class_header.class_name] = class_header
+
+    source_class_headers = sorted(
+        class_headers_by_name.values(),
+        key=lambda class_header: class_header.source_boot_order if class_header.source_boot_order is not None else -1,
+    )
+    expected_boot_orders = list(range(len(source_class_headers)))
+    actual_boot_orders = [class_header.source_boot_order for class_header in source_class_headers]
+    if actual_boot_orders != expected_boot_orders:
+        raise LoweringError(
+            "kernel MVP source class headers must declare a contiguous sourceBootOrder range starting at 0"
+        )
+    descriptor_orders = [class_header.descriptor_order for class_header in source_class_headers]
+    if len(set(descriptor_orders)) != len(descriptor_orders):
+        raise LoweringError("kernel MVP source class headers must declare unique descriptorOrder values")
+    return class_headers_by_name, source_class_headers
+
+
+KERNEL_CLASS_HEADERS_BY_NAME, KERNEL_SOURCE_CLASS_HEADERS = load_kernel_source_class_headers()
+KERNEL_CLASS_BOOT_ORDER = [class_header.class_name for class_header in KERNEL_SOURCE_CLASS_HEADERS]
+KERNEL_CLASS_NAME_TO_OBJECT_KIND = {
+    class_name: constant_value(OBJECT_KIND_IDS, OBJECT_KIND_VALUES, class_name)
+    for class_name in KERNEL_CLASS_BOOT_ORDER
+}
 
 
 def upper_snake_name(name: str) -> str:

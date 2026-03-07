@@ -1,4 +1,4 @@
-RecorzKernelClass: #Glyphs instanceVariableNames: ''
+RecorzKernelClass: #Glyphs descriptorOrder: 4 sourceBootOrder: 3 instanceVariableNames: ''
 !
 at: codePoint
     <primitive: #glyphsAt>

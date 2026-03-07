@@ -1,4 +1,4 @@
-RecorzKernelClass: #FormFactory instanceVariableNames: ''
+RecorzKernelClass: #FormFactory descriptorOrder: 5 sourceBootOrder: 4 instanceVariableNames: ''
 !
 fromBits: bits
     <primitive: #formFactoryFromBits>

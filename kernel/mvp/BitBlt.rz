@@ -1,4 +1,4 @@
-RecorzKernelClass: #BitBlt instanceVariableNames: ''
+RecorzKernelClass: #BitBlt descriptorOrder: 3 sourceBootOrder: 2 instanceVariableNames: ''
 !
 fillForm: form color: color
     <primitive: #bitbltFillFormColor>

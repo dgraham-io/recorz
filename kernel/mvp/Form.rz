@@ -1,4 +1,4 @@
-RecorzKernelClass: #Form instanceVariableNames: 'bits'
+RecorzKernelClass: #Form descriptorOrder: 10 sourceBootOrder: 7 instanceVariableNames: 'bits'
 !
 clear
     <primitive: #formClear>

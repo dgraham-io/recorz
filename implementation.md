@@ -507,3 +507,9 @@
 - Updated the dynamic seed validation and execution paths to consume that context-owned initial state field set, while keeping `INITIAL_DYNAMIC_SEED_STATE_FIELDS` as a derived compatibility alias for focused tests and readability.
 - Extended the focused lowering regressions to lock the fact that the active initial dynamic state contract now lives on `BOOT_IMAGE_SEED_BUILD_CONTEXT`.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Move Source Class Boot Order Into .rz Headers
+- Extended the `RecorzKernelClass:` header syntax so kernel source classes now declare `descriptorOrder:` and `sourceBootOrder:` in their `.rz` files instead of keeping source boot order only in Python-side class specs.
+- Updated the builder to parse those header fields into `KernelClassHeader`, derive the active source class boot order from parsed headers, and keep the full class descriptor name list as a separate explicit compatibility list for now.
+- Extended the focused lowering regressions to lock the richer header parsing and the fact that the active source class boot order now comes from parsed `.rz` headers.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
