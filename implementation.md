@@ -489,3 +489,9 @@
 - Updated the dynamic build-step contracts to declare those ordering values as required initial state for the relevant sections, and switched `build_dynamic_seed_sections()` to pass the context-owned ordering inputs into both seed layout computation and per-section materialization.
 - Extended the focused lowering regressions to lock the new context-owned ordering tuples and the stronger dynamic build-step dependency declarations alongside the existing boot image context coverage.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
+## 2026-03-07 - Move Ordering Into Boot Image Spec
+- Added `BootImageOrderingSpec` and made `BootImageSpec` own the class, selector, compiled-method, and method-entry ordering tuples instead of treating them as adjacent standalone policy inputs.
+- Updated the boot image seed build context to derive its ordering fields from `boot_image_spec.ordering_spec`, so the context builder no longer takes those ordering inputs separately.
+- Extended the focused lowering regressions to lock the new boot-image-owned ordering declaration and the fact that the active build context now reads those tuples from `BOOT_IMAGE_SPEC`.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.

@@ -619,10 +619,11 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertIs(mvp.BOOT_IMAGE_SPEC.fixed_boot_graph_spec, mvp.FIXED_BOOT_GRAPH_SPEC)
+        self.assertIs(mvp.BOOT_IMAGE_SPEC.ordering_spec, mvp.BOOT_IMAGE_ORDERING_SPEC)
         self.assertEqual(mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.boot_image_spec, mvp.BOOT_IMAGE_SPEC)
         self.assertEqual(
             mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.class_kind_order,
-            tuple(mvp.CLASS_DESCRIPTOR_KIND_ORDER),
+            mvp.BOOT_IMAGE_SPEC.ordering_spec.class_kind_order,
         )
         self.assertEqual(
             mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.seed_layout_section_specs,
@@ -630,15 +631,15 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertEqual(
             mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.selector_value_order,
-            tuple(mvp.SELECTOR_VALUE_ORDER),
+            mvp.BOOT_IMAGE_SPEC.ordering_spec.selector_value_order,
         )
         self.assertEqual(
             mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.compiled_method_entry_order,
-            tuple(mvp.COMPILED_METHOD_ENTRY_ORDER),
+            mvp.BOOT_IMAGE_SPEC.ordering_spec.compiled_method_entry_order,
         )
         self.assertEqual(
             mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.method_entry_order,
-            tuple(mvp.METHOD_ENTRY_ORDER),
+            mvp.BOOT_IMAGE_SPEC.ordering_spec.method_entry_order,
         )
         self.assertEqual(
             mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.dynamic_seed_object_section_specs,
@@ -770,7 +771,17 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             mvp.BOOT_IMAGE_SPEC,
             mvp.BootImageSpec(
                 fixed_boot_graph_spec=mvp.FIXED_BOOT_GRAPH_SPEC,
+                ordering_spec=mvp.BOOT_IMAGE_ORDERING_SPEC,
                 dynamic_seed_section_specs=tuple(mvp.DYNAMIC_SEED_SECTION_SPECS),
+            ),
+        )
+        self.assertEqual(
+            mvp.BOOT_IMAGE_ORDERING_SPEC,
+            mvp.BootImageOrderingSpec(
+                class_kind_order=tuple(mvp.CLASS_DESCRIPTOR_KIND_ORDER),
+                selector_value_order=tuple(mvp.SELECTOR_VALUE_ORDER),
+                compiled_method_entry_order=tuple(mvp.COMPILED_METHOD_ENTRY_ORDER),
+                method_entry_order=tuple(mvp.METHOD_ENTRY_ORDER),
             ),
         )
         self.assertEqual(

@@ -370,8 +370,17 @@ class DynamicSeedSectionSpec:
 
 
 @dataclass(frozen=True)
+class BootImageOrderingSpec:
+    class_kind_order: tuple[int, ...]
+    selector_value_order: tuple[int, ...]
+    compiled_method_entry_order: tuple[str, ...]
+    method_entry_order: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class BootImageSpec:
     fixed_boot_graph_spec: FixedBootGraphSpec
+    ordering_spec: BootImageOrderingSpec
     dynamic_seed_section_specs: tuple[DynamicSeedSectionSpec, ...]
 
 
@@ -1558,20 +1567,18 @@ def build_dynamic_seed_build_step_specs(
 
 def build_boot_image_spec(
     fixed_boot_graph_spec: FixedBootGraphSpec,
+    ordering_spec: BootImageOrderingSpec,
     dynamic_seed_section_specs: list[DynamicSeedSectionSpec],
 ) -> BootImageSpec:
     return BootImageSpec(
         fixed_boot_graph_spec=fixed_boot_graph_spec,
+        ordering_spec=ordering_spec,
         dynamic_seed_section_specs=tuple(dynamic_seed_section_specs),
     )
 
 
 def build_boot_image_seed_build_context(
     boot_image_spec: BootImageSpec,
-    class_kind_order: list[int],
-    selector_value_order: list[int],
-    compiled_method_entry_order: list[str],
-    method_entry_order: list[str],
     seed_layout_section_specs: list[SeedLayoutSectionSpec],
     dynamic_seed_object_section_specs: list[DynamicSeedObjectSectionSpec],
     dynamic_seed_build_step_specs: list[DynamicSeedBuildStepSpec],
@@ -1583,10 +1590,10 @@ def build_boot_image_seed_build_context(
     ].object_specs
     return BootImageSeedBuildContext(
         boot_image_spec=boot_image_spec,
-        class_kind_order=tuple(class_kind_order),
-        selector_value_order=tuple(selector_value_order),
-        compiled_method_entry_order=tuple(compiled_method_entry_order),
-        method_entry_order=tuple(method_entry_order),
+        class_kind_order=boot_image_spec.ordering_spec.class_kind_order,
+        selector_value_order=boot_image_spec.ordering_spec.selector_value_order,
+        compiled_method_entry_order=boot_image_spec.ordering_spec.compiled_method_entry_order,
+        method_entry_order=boot_image_spec.ordering_spec.method_entry_order,
         fixed_boot_object_count=len(flatten_boot_object_specs(boot_image_spec.fixed_boot_graph_spec)),
         glyph_bitmap_boot_specs=glyph_bitmap_boot_specs,
         seed_layout_section_specs=tuple(seed_layout_section_specs),
@@ -1597,7 +1604,13 @@ def build_boot_image_seed_build_context(
     )
 
 
-BOOT_IMAGE_SPEC = build_boot_image_spec(FIXED_BOOT_GRAPH_SPEC, DYNAMIC_SEED_SECTION_SPECS)
+BOOT_IMAGE_ORDERING_SPEC = BootImageOrderingSpec(
+    class_kind_order=tuple(CLASS_DESCRIPTOR_KIND_ORDER),
+    selector_value_order=tuple(SELECTOR_VALUE_ORDER),
+    compiled_method_entry_order=tuple(COMPILED_METHOD_ENTRY_ORDER),
+    method_entry_order=tuple(METHOD_ENTRY_ORDER),
+)
+BOOT_IMAGE_SPEC = build_boot_image_spec(FIXED_BOOT_GRAPH_SPEC, BOOT_IMAGE_ORDERING_SPEC, DYNAMIC_SEED_SECTION_SPECS)
 BOOT_OBJECT_FAMILY_SPECS = list(BOOT_IMAGE_SPEC.fixed_boot_graph_spec.family_specs)
 BOOT_OBJECT_FAMILY_SPECS_BY_NAME = build_boot_object_family_spec_map(BOOT_IMAGE_SPEC.fixed_boot_graph_spec)
 BOOT_OBJECT_FAMILY_NAMES = [family_spec.name for family_spec in BOOT_IMAGE_SPEC.fixed_boot_graph_spec.family_specs]
@@ -1616,10 +1629,6 @@ DYNAMIC_SEED_OBJECT_SECTION_SPECS = build_dynamic_seed_object_section_specs(BOOT
 DYNAMIC_SEED_BUILD_STEP_SPECS = build_dynamic_seed_build_step_specs(BOOT_IMAGE_SPEC.dynamic_seed_section_specs)
 BOOT_IMAGE_SEED_BUILD_CONTEXT = build_boot_image_seed_build_context(
     BOOT_IMAGE_SPEC,
-    CLASS_DESCRIPTOR_KIND_ORDER,
-    SELECTOR_VALUE_ORDER,
-    COMPILED_METHOD_ENTRY_ORDER,
-    METHOD_ENTRY_ORDER,
     SEED_LAYOUT_SECTION_SPECS,
     DYNAMIC_SEED_OBJECT_SECTION_SPECS,
     DYNAMIC_SEED_BUILD_STEP_SPECS,
