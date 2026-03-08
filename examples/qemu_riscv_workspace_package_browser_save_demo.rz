@@ -1,4 +1,4 @@
-Workspace fileIn: 'RecorzKernelPackage: ''Tools''
+Workspace fileIn: 'RecorzKernelPackage: ''Tools'' comment: ''Shared utilities''
 !
 RecorzKernelClass: #PackageAlpha superclass: #Object package: ''Tools'' instanceVariableNames: ''''
 !

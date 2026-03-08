@@ -1,5 +1,5 @@
 Display clear.
-Workspace fileIn: 'RecorzKernelPackage: ''Tools''
+Workspace fileIn: 'RecorzKernelPackage: ''Tools'' comment: ''Shared utilities''
 !
 RecorzKernelClass: #PackageEcho superclass: #Object comment: ''Package export demo'' instanceVariableNames: ''value''
 !

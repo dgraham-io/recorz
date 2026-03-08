@@ -18,10 +18,12 @@
 #define METHOD_SOURCE_LINE_LIMIT 192U
 #define METHOD_SOURCE_NAME_LIMIT 64U
 #define CLASS_COMMENT_LIMIT 128U
+#define PACKAGE_COMMENT_LIMIT CLASS_COMMENT_LIMIT
 #define METHOD_SOURCE_CHUNK_LIMIT 512U
 #define WORKSPACE_SOURCE_INSTRUCTION_LIMIT 64U
 #define WORKSPACE_SOURCE_LITERAL_LIMIT 16U
 #define DYNAMIC_CLASS_LIMIT 16U
+#define PACKAGE_LIMIT DYNAMIC_CLASS_LIMIT
 #define DYNAMIC_CLASS_IVAR_LIMIT OBJECT_FIELD_LIMIT
 #define NAMED_OBJECT_LIMIT 16U
 #define LIVE_METHOD_SOURCE_LIMIT 64U
@@ -33,12 +35,13 @@
 #define SNAPSHOT_MAGIC_1 'C'
 #define SNAPSHOT_MAGIC_2 'Z'
 #define SNAPSHOT_MAGIC_3 'T'
-#define SNAPSHOT_VERSION 3U
-#define SNAPSHOT_HEADER_SIZE 36U
+#define SNAPSHOT_VERSION 4U
+#define SNAPSHOT_HEADER_SIZE 38U
 #define SNAPSHOT_VALUE_SIZE 8U
 #define SNAPSHOT_OBJECT_SIZE (4U + (OBJECT_FIELD_LIMIT * SNAPSHOT_VALUE_SIZE))
 #define SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE \
     (8U + (2U * METHOD_SOURCE_NAME_LIMIT) + CLASS_COMMENT_LIMIT + (DYNAMIC_CLASS_IVAR_LIMIT * METHOD_SOURCE_NAME_LIMIT))
+#define SNAPSHOT_PACKAGE_RECORD_SIZE (METHOD_SOURCE_NAME_LIMIT + PACKAGE_COMMENT_LIMIT)
 #define SNAPSHOT_NAMED_OBJECT_RECORD_SIZE (2U + METHOD_SOURCE_NAME_LIMIT)
 #define SNAPSHOT_LIVE_METHOD_SOURCE_RECORD_SIZE \
     (4U + METHOD_SOURCE_NAME_LIMIT + METHOD_SOURCE_CHUNK_LIMIT)
@@ -145,6 +148,11 @@ struct recorz_mvp_dynamic_class_definition {
     char instance_variable_names[DYNAMIC_CLASS_IVAR_LIMIT][METHOD_SOURCE_NAME_LIMIT];
 };
 
+struct recorz_mvp_live_package_definition {
+    char package_name[METHOD_SOURCE_NAME_LIMIT];
+    char package_comment[PACKAGE_COMMENT_LIMIT];
+};
+
 struct recorz_mvp_workspace_source_program {
     struct recorz_mvp_instruction instructions[WORKSPACE_SOURCE_INSTRUCTION_LIMIT];
     struct recorz_mvp_literal literals[WORKSPACE_SOURCE_LITERAL_LIMIT];
@@ -212,12 +220,14 @@ static uint16_t class_descriptor_handles_by_kind[MAX_OBJECT_KIND + 1U];
 static uint16_t selector_handles_by_id[MAX_SELECTOR_ID + 1U];
 static uint16_t global_handles[MAX_GLOBAL_ID + 1U];
 static struct recorz_mvp_dynamic_class_definition dynamic_classes[DYNAMIC_CLASS_LIMIT];
+static struct recorz_mvp_live_package_definition live_packages[PACKAGE_LIMIT];
 static struct recorz_mvp_named_object_binding named_objects[NAMED_OBJECT_LIMIT];
 static struct recorz_mvp_live_method_source live_method_sources[LIVE_METHOD_SOURCE_LIMIT];
 static uint16_t default_form_handle = 0U;
 static uint16_t framebuffer_bitmap_handle = 0U;
 static uint16_t next_dynamic_method_entry_execution_id = RECORZ_MVP_METHOD_ENTRY_COUNT;
 static uint16_t dynamic_class_count = 0U;
+static uint16_t package_count = 0U;
 static uint16_t glyph_bitmap_handles[128];
 static uint16_t glyph_fallback_handle = 0U;
 static uint16_t transcript_layout_handle = 0U;
@@ -306,6 +316,7 @@ static void file_in_class_chunks_source(const char *source);
 static void file_in_chunk_stream_source(const char *source);
 static const char *file_out_class_source_by_name(const char *class_name);
 static const char *file_out_package_source_by_name(const char *package_name);
+static int compare_source_names(const char *left, const char *right);
 static const char *runtime_string_allocate_copy(const char *text);
 static void append_text_checked(
     char buffer[],
@@ -812,6 +823,11 @@ static void source_copy_identifier(char destination[], uint32_t destination_size
     destination[index] = '\0';
 }
 
+static void initialize_live_package_definition(struct recorz_mvp_live_package_definition *definition) {
+    definition->package_name[0] = '\0';
+    definition->package_comment[0] = '\0';
+}
+
 static const char *source_skip_decimal_digits(const char *cursor) {
     if (*cursor < '0' || *cursor > '9') {
         return 0;
@@ -1007,24 +1023,45 @@ static void source_parse_protocol_name_from_chunk(
     }
 }
 
-static void source_parse_package_name_from_chunk(
+static void source_parse_package_definition_from_chunk(
     const char *chunk,
-    char package_name[],
-    uint32_t package_name_size
+    struct recorz_mvp_live_package_definition *definition,
+    uint8_t *has_comment_out
 ) {
     const char *cursor = chunk;
+    char keyword[METHOD_SOURCE_NAME_LIMIT];
 
+    initialize_live_package_definition(definition);
+    *has_comment_out = 0U;
     if (!source_starts_with(cursor, "RecorzKernelPackage:")) {
         machine_panic("KernelInstaller package chunk is missing a RecorzKernelPackage header");
     }
     cursor += (sizeof("RecorzKernelPackage:") - 1U);
-    cursor = source_copy_single_quoted_text(cursor, package_name, package_name_size);
+    cursor = source_copy_single_quoted_text(cursor, definition->package_name, sizeof(definition->package_name));
     if (cursor == 0) {
         machine_panic("KernelInstaller package chunk name is invalid");
     }
     cursor = source_skip_horizontal_space(cursor);
-    if (*cursor != '\0') {
-        machine_panic("KernelInstaller package chunk has unexpected trailing text");
+    while (*cursor != '\0') {
+        cursor = source_parse_identifier(cursor, keyword, sizeof(keyword));
+        if (cursor == 0 || *cursor != ':') {
+            machine_panic("KernelInstaller package chunk has an invalid keyword");
+        }
+        ++cursor;
+        if (source_names_equal(keyword, "comment")) {
+            cursor = source_copy_single_quoted_text(
+                cursor,
+                definition->package_comment,
+                sizeof(definition->package_comment)
+            );
+            if (cursor == 0) {
+                machine_panic("KernelInstaller package chunk comment is invalid");
+            }
+            *has_comment_out = 1U;
+        } else {
+            machine_panic("KernelInstaller package chunk header uses an unsupported keyword");
+        }
+        cursor = source_skip_horizontal_space(cursor);
     }
 }
 
@@ -1443,6 +1480,45 @@ static struct recorz_mvp_dynamic_class_definition *mutable_dynamic_class_definit
 
 static const struct recorz_mvp_dynamic_class_definition *dynamic_class_definition_for_handle(uint16_t class_handle) {
     return (const struct recorz_mvp_dynamic_class_definition *)mutable_dynamic_class_definition_for_handle(class_handle);
+}
+
+static const struct recorz_mvp_live_package_definition *package_definition_for_name(const char *package_name) {
+    uint16_t package_index;
+
+    for (package_index = 0U; package_index < package_count; ++package_index) {
+        if (source_names_equal(package_name, live_packages[package_index].package_name)) {
+            return &live_packages[package_index];
+        }
+    }
+    return 0;
+}
+
+static struct recorz_mvp_live_package_definition *mutable_package_definition_for_name(const char *package_name) {
+    return (struct recorz_mvp_live_package_definition *)package_definition_for_name(package_name);
+}
+
+static void remember_package_definition(
+    const char *package_name,
+    const char *package_comment,
+    uint8_t has_comment
+) {
+    struct recorz_mvp_live_package_definition *definition;
+
+    if (package_name == 0 || package_name[0] == '\0') {
+        return;
+    }
+    definition = mutable_package_definition_for_name(package_name);
+    if (definition == 0) {
+        if (package_count >= PACKAGE_LIMIT) {
+            machine_panic("package registry overflow");
+        }
+        definition = &live_packages[package_count++];
+        initialize_live_package_definition(definition);
+        source_copy_identifier(definition->package_name, sizeof(definition->package_name), package_name);
+    }
+    if (has_comment) {
+        source_copy_identifier(definition->package_comment, sizeof(definition->package_comment), package_comment);
+    }
 }
 
 static uint16_t named_object_handle_for_name(const char *name) {
@@ -2678,36 +2754,8 @@ static void workspace_render_class_browser(
     workspace_write_label_and_integer(form, "METHODS", class_method_count(class_object));
 }
 
-static uint8_t workspace_package_seen_earlier(
-    uint16_t dynamic_index,
-    const char *package_name
-) {
-    uint16_t previous_index;
-
-    for (previous_index = 0U; previous_index < dynamic_index; ++previous_index) {
-        if (dynamic_classes[previous_index].package_name[0] == '\0') {
-            continue;
-        }
-        if (source_names_equal(dynamic_classes[previous_index].package_name, package_name)) {
-            return 1U;
-        }
-    }
-    return 0U;
-}
-
 static uint32_t workspace_package_count(void) {
-    uint16_t dynamic_index;
-    uint32_t count = 0U;
-
-    for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
-        if (dynamic_classes[dynamic_index].package_name[0] == '\0') {
-            continue;
-        }
-        if (!workspace_package_seen_earlier(dynamic_index, dynamic_classes[dynamic_index].package_name)) {
-            ++count;
-        }
-    }
-    return count;
+    return package_count;
 }
 
 static uint32_t workspace_package_class_count(
@@ -2728,7 +2776,9 @@ static void workspace_render_package_list_browser(
     const struct recorz_mvp_heap_object *workspace_object
 ) {
     const struct recorz_mvp_heap_object *form = default_form_object();
-    uint16_t dynamic_index;
+    const struct recorz_mvp_live_package_definition *sorted_packages[PACKAGE_LIMIT];
+    uint16_t package_index;
+    uint16_t sorted_count = 0U;
 
     (void)workspace_object;
     form_clear(form);
@@ -2741,19 +2791,26 @@ static void workspace_render_package_list_browser(
         workspace_write_text_line(form, "NO PACKAGES");
         return;
     }
-    for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
+    for (package_index = 0U; package_index < package_count; ++package_index) {
+        uint16_t insert_index = sorted_count;
+
+        while (insert_index != 0U &&
+               compare_source_names(
+                   live_packages[package_index].package_name,
+                   sorted_packages[insert_index - 1U]->package_name) < 0) {
+            sorted_packages[insert_index] = sorted_packages[insert_index - 1U];
+            --insert_index;
+        }
+        sorted_packages[insert_index] = &live_packages[package_index];
+        ++sorted_count;
+    }
+    for (package_index = 0U; package_index < sorted_count; ++package_index) {
         char line[METHOD_SOURCE_LINE_LIMIT];
         uint32_t line_offset = 0U;
 
-        if (dynamic_classes[dynamic_index].package_name[0] == '\0') {
-            continue;
-        }
-        if (workspace_package_seen_earlier(dynamic_index, dynamic_classes[dynamic_index].package_name)) {
-            continue;
-        }
-        append_text_checked(line, sizeof(line), &line_offset, dynamic_classes[dynamic_index].package_name);
+        append_text_checked(line, sizeof(line), &line_offset, sorted_packages[package_index]->package_name);
         append_text_checked(line, sizeof(line), &line_offset, " :: ");
-        render_small_integer((int32_t)workspace_package_class_count(dynamic_classes[dynamic_index].package_name));
+        render_small_integer((int32_t)workspace_package_class_count(sorted_packages[package_index]->package_name));
         append_text_checked(line, sizeof(line), &line_offset, print_buffer);
         workspace_write_text_line(form, line);
     }
@@ -2764,12 +2821,16 @@ static void workspace_render_package_browser(
     const char *package_name
 ) {
     const struct recorz_mvp_heap_object *form = default_form_object();
+    const struct recorz_mvp_live_package_definition *package_definition = package_definition_for_name(package_name);
     uint16_t dynamic_index;
     uint32_t class_count = workspace_package_class_count(package_name);
 
     (void)workspace_object;
     form_clear(form);
     workspace_write_label_and_text(form, "PACKAGE", package_name);
+    if (package_definition != 0 && package_definition->package_comment[0] != '\0') {
+        workspace_write_label_and_text(form, "COMMENT", package_definition->package_comment);
+    }
     workspace_write_label_and_integer(form, "CLASSES", class_count);
     if (class_count == 0U) {
         workspace_write_text_line(form, "EMPTY PACKAGE");
@@ -3522,6 +3583,7 @@ static void initialize_runtime_caches(void) {
 static void reset_runtime_state(void) {
     uint16_t global_index;
     uint16_t dynamic_index;
+    uint16_t package_index;
     uint16_t named_index;
     uint16_t code_index;
 
@@ -3529,6 +3591,7 @@ static void reset_runtime_state(void) {
     mono_bitmap_count = 0U;
     next_dynamic_method_entry_execution_id = RECORZ_MVP_METHOD_ENTRY_COUNT;
     dynamic_class_count = 0U;
+    package_count = 0U;
     named_object_count = 0U;
     live_method_source_count = 0U;
     default_form_handle = 0U;
@@ -3560,6 +3623,10 @@ static void reset_runtime_state(void) {
         for (ivar_index = 0U; ivar_index < DYNAMIC_CLASS_IVAR_LIMIT; ++ivar_index) {
             dynamic_classes[dynamic_index].instance_variable_names[ivar_index][0] = '\0';
         }
+    }
+    for (package_index = 0U; package_index < PACKAGE_LIMIT; ++package_index) {
+        live_packages[package_index].package_name[0] = '\0';
+        live_packages[package_index].package_comment[0] = '\0';
     }
     for (named_index = 0U; named_index < NAMED_OBJECT_LIMIT; ++named_index) {
         named_objects[named_index].name[0] = '\0';
@@ -4332,6 +4399,7 @@ static uint32_t snapshot_total_size(uint32_t string_byte_count) {
            (RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS * 2U) +
            (128U * 2U) +
            ((uint32_t)dynamic_class_count * SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE) +
+           ((uint32_t)package_count * SNAPSHOT_PACKAGE_RECORD_SIZE) +
            ((uint32_t)named_object_count * SNAPSHOT_NAMED_OBJECT_RECORD_SIZE) +
            ((uint32_t)live_method_source_count * SNAPSHOT_LIVE_METHOD_SOURCE_RECORD_SIZE) +
            ((uint32_t)mono_bitmap_count * MONO_BITMAP_MAX_HEIGHT * 4U) +
@@ -4348,6 +4416,7 @@ static const char *kernel_memory_report_text(void) {
     append_memory_report_text(buffer, &offset, "MEMORY\n");
     append_memory_report_line(buffer, &offset, "HEAP", heap_size, HEAP_LIMIT);
     append_memory_report_line(buffer, &offset, "DCLS", dynamic_class_count, DYNAMIC_CLASS_LIMIT);
+    append_memory_report_line(buffer, &offset, "PKGS", package_count, PACKAGE_LIMIT);
     append_memory_report_line(buffer, &offset, "NOBJ", named_object_count, NAMED_OBJECT_LIMIT);
     append_memory_report_line(buffer, &offset, "MSRC", live_method_source_count, LIVE_METHOD_SOURCE_LIMIT);
     append_memory_report_line(
@@ -4452,6 +4521,7 @@ static void emit_live_snapshot(void) {
     uint32_t string_byte_count;
     uint16_t handle;
     uint16_t dynamic_index;
+    uint16_t package_index;
     uint16_t named_index;
     uint16_t live_method_index;
     uint32_t row;
@@ -4475,6 +4545,8 @@ static void emit_live_snapshot(void) {
     write_u16_le(snapshot_buffer + offset, heap_size);
     offset += 2U;
     write_u16_le(snapshot_buffer + offset, dynamic_class_count);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, package_count);
     offset += 2U;
     write_u16_le(snapshot_buffer + offset, named_object_count);
     offset += 2U;
@@ -4568,6 +4640,16 @@ static void emit_live_snapshot(void) {
             }
         }
     }
+    for (package_index = 0U; package_index < package_count; ++package_index) {
+        uint32_t name_index;
+
+        for (name_index = 0U; name_index < METHOD_SOURCE_NAME_LIMIT; ++name_index) {
+            snapshot_buffer[offset++] = (uint8_t)live_packages[package_index].package_name[name_index];
+        }
+        for (name_index = 0U; name_index < PACKAGE_COMMENT_LIMIT; ++name_index) {
+            snapshot_buffer[offset++] = (uint8_t)live_packages[package_index].package_comment[name_index];
+        }
+    }
     for (named_index = 0U; named_index < named_object_count; ++named_index) {
         uint32_t name_index;
 
@@ -4624,6 +4706,7 @@ static void emit_live_snapshot(void) {
 static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     uint16_t object_count;
     uint16_t dynamic_count;
+    uint16_t saved_package_count;
     uint16_t saved_named_object_count;
     uint16_t saved_live_method_source_count;
     uint16_t saved_mono_bitmap_count;
@@ -4653,21 +4736,25 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     }
     object_count = read_u16_le(blob + 6U);
     dynamic_count = read_u16_le(blob + 8U);
-    saved_named_object_count = read_u16_le(blob + 10U);
-    saved_mono_bitmap_count = read_u16_le(blob + 12U);
-    saved_next_dynamic_method_entry_execution_id = read_u16_le(blob + 14U);
-    string_byte_count = read_u32_le(blob + 16U);
-    saved_cursor_x = read_u16_le(blob + 20U);
-    saved_cursor_y = read_u16_le(blob + 22U);
-    saved_startup_hook_receiver_handle = read_u16_le(blob + 24U);
-    saved_startup_hook_selector_id = read_u16_le(blob + 26U);
-    saved_live_method_source_count = read_u16_le(blob + 28U);
-    expected_size = read_u32_le(blob + 32U);
+    saved_package_count = read_u16_le(blob + 10U);
+    saved_named_object_count = read_u16_le(blob + 12U);
+    saved_mono_bitmap_count = read_u16_le(blob + 14U);
+    saved_next_dynamic_method_entry_execution_id = read_u16_le(blob + 16U);
+    string_byte_count = read_u32_le(blob + 18U);
+    saved_cursor_x = read_u16_le(blob + 22U);
+    saved_cursor_y = read_u16_le(blob + 24U);
+    saved_startup_hook_receiver_handle = read_u16_le(blob + 26U);
+    saved_startup_hook_selector_id = read_u16_le(blob + 28U);
+    saved_live_method_source_count = read_u16_le(blob + 30U);
+    expected_size = read_u32_le(blob + 34U);
     if (object_count == 0U || object_count > HEAP_LIMIT) {
         machine_panic("snapshot object count exceeds heap capacity");
     }
     if (dynamic_count > DYNAMIC_CLASS_LIMIT) {
         machine_panic("snapshot dynamic class count exceeds capacity");
+    }
+    if (saved_package_count > PACKAGE_LIMIT) {
+        machine_panic("snapshot package count exceeds capacity");
     }
     if (saved_named_object_count > NAMED_OBJECT_LIMIT) {
         machine_panic("snapshot named object count exceeds capacity");
@@ -4690,6 +4777,7 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
                             (RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS * 2U) +
                             (128U * 2U) +
                             ((uint32_t)dynamic_count * SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE) +
+                            ((uint32_t)saved_package_count * SNAPSHOT_PACKAGE_RECORD_SIZE) +
                             ((uint32_t)saved_named_object_count * SNAPSHOT_NAMED_OBJECT_RECORD_SIZE) +
                             ((uint32_t)saved_live_method_source_count * SNAPSHOT_LIVE_METHOD_SOURCE_RECORD_SIZE) +
                             ((uint32_t)saved_mono_bitmap_count * MONO_BITMAP_MAX_HEIGHT * 4U);
@@ -4794,6 +4882,17 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
             for (name_index = 0U; name_index < METHOD_SOURCE_NAME_LIMIT; ++name_index) {
                 definition->instance_variable_names[ivar_index][name_index] = (char)blob[offset++];
             }
+        }
+    }
+    package_count = saved_package_count;
+    for (dynamic_index = 0U; dynamic_index < package_count; ++dynamic_index) {
+        uint32_t name_index;
+
+        for (name_index = 0U; name_index < METHOD_SOURCE_NAME_LIMIT; ++name_index) {
+            live_packages[dynamic_index].package_name[name_index] = (char)blob[offset++];
+        }
+        for (name_index = 0U; name_index < PACKAGE_COMMENT_LIMIT; ++name_index) {
+            live_packages[dynamic_index].package_comment[name_index] = (char)blob[offset++];
         }
     }
     named_object_count = saved_named_object_count;
@@ -5779,6 +5878,7 @@ static const struct recorz_mvp_heap_object *ensure_class_defined(
         class_handle,
         heap_handle_for_object(superclass_object)
     );
+    remember_package_definition(dynamic_definition->package_name, "", 0U);
     return (const struct recorz_mvp_heap_object *)heap_object(class_handle);
 }
 
@@ -6166,27 +6266,34 @@ static const char *file_out_class_source_by_name(const char *class_name) {
             &wrote_any_chunk
         );
     }
-    if (!wrote_any_chunk) {
-        machine_panic("KernelInstaller fileOutClassNamed: class has no live source methods");
-    }
     return runtime_string_allocate_copy(class_file_out_buffer);
 }
 
 static const char *file_out_package_source_by_name(const char *package_name) {
     static char package_file_out_buffer[8192];
+    const struct recorz_mvp_live_package_definition *package_definition;
     const struct recorz_mvp_dynamic_class_definition *sorted_definitions[DYNAMIC_CLASS_LIMIT];
     uint16_t sorted_count = 0U;
     uint16_t dynamic_index;
     uint32_t offset = 0U;
-    uint8_t wrote_any_chunk = 0U;
 
     if (package_name == 0 || package_name[0] == '\0') {
         machine_panic("KernelInstaller fileOutPackageNamed: package name is empty");
     }
+    package_definition = package_definition_for_name(package_name);
+    if (package_definition == 0) {
+        machine_panic("KernelInstaller fileOutPackageNamed: could not resolve package");
+    }
     package_file_out_buffer[0] = '\0';
     append_text_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, "RecorzKernelPackage: '");
     append_text_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, package_name);
-    append_text_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, "'\n!\n");
+    append_char_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, '\'');
+    if (package_definition->package_comment[0] != '\0') {
+        append_text_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, " comment: '");
+        append_text_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, package_definition->package_comment);
+        append_char_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, '\'');
+    }
+    append_text_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, "\n!\n");
     for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
         const struct recorz_mvp_dynamic_class_definition *definition = &dynamic_classes[dynamic_index];
         uint16_t insert_index;
@@ -6205,9 +6312,6 @@ static const char *file_out_package_source_by_name(const char *package_name) {
         sorted_definitions[insert_index] = definition;
         ++sorted_count;
     }
-    if (sorted_count == 0U) {
-        machine_panic("KernelInstaller fileOutPackageNamed: could not resolve package");
-    }
     for (dynamic_index = 0U; dynamic_index < sorted_count; ++dynamic_index) {
         const struct recorz_mvp_dynamic_class_definition *definition = sorted_definitions[dynamic_index];
         const char *class_source = file_out_class_source_by_name(definition->class_name);
@@ -6217,10 +6321,6 @@ static const char *file_out_package_source_by_name(const char *package_name) {
             package_file_out_buffer[offset - 1U] != '\n') {
             append_char_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, '\n');
         }
-        wrote_any_chunk = 1U;
-    }
-    if (!wrote_any_chunk) {
-        machine_panic("KernelInstaller fileOutPackageNamed: package has no live source classes");
     }
     return runtime_string_allocate_copy(package_file_out_buffer);
 }
@@ -6414,6 +6514,7 @@ static void file_in_chunk_stream_source(const char *source) {
     const struct recorz_mvp_heap_object *install_class_object = 0;
     char current_package[METHOD_SOURCE_NAME_LIMIT];
     char current_protocol[METHOD_SOURCE_NAME_LIMIT];
+    uint8_t package_chunk_count = 0U;
     uint8_t class_header_count = 0U;
     uint8_t do_it_chunk_count = 0U;
 
@@ -6424,8 +6525,14 @@ static void file_in_chunk_stream_source(const char *source) {
     current_protocol[0] = '\0';
     while (source_copy_next_chunk(&cursor, chunk, sizeof(chunk)) != 0U) {
         if (source_starts_with(chunk, "RecorzKernelPackage:")) {
-            source_parse_package_name_from_chunk(chunk, current_package, sizeof(current_package));
+            struct recorz_mvp_live_package_definition package_definition;
+            uint8_t has_comment;
+
+            source_parse_package_definition_from_chunk(chunk, &package_definition, &has_comment);
+            source_copy_identifier(current_package, sizeof(current_package), package_definition.package_name);
+            remember_package_definition(package_definition.package_name, package_definition.package_comment, has_comment);
             current_protocol[0] = '\0';
+            ++package_chunk_count;
             continue;
         }
         if (source_starts_with(chunk, "RecorzKernelClass:")) {
@@ -6475,8 +6582,8 @@ static void file_in_chunk_stream_source(const char *source) {
         }
         install_method_chunk_on_class(install_class_object, current_protocol, chunk);
     }
-    if (class_header_count == 0U && do_it_chunk_count == 0U) {
-        machine_panic("KernelInstaller file-in stream contains no class or do-it chunks");
+    if (class_header_count == 0U && do_it_chunk_count == 0U && package_chunk_count == 0U) {
+        machine_panic("KernelInstaller file-in stream contains no package, class, or do-it chunks");
     }
 }
 
@@ -6816,7 +6923,7 @@ static void execute_entry_workspace_browse_package_named(
     if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
         machine_panic("Workspace browsePackageNamed: expects a package name string");
     }
-    if (workspace_package_class_count(arguments[0].string) == 0U) {
+    if (package_definition_for_name(arguments[0].string) == 0) {
         machine_panic("Workspace browsePackageNamed: could not resolve package");
     }
     workspace_remember_view(object, WORKSPACE_VIEW_PACKAGE, arguments[0].string);
@@ -7324,7 +7431,7 @@ static void execute_entry_workspace_reopen(
             target_name_value.string[0] == '\0') {
             machine_panic("Workspace reopen is missing the remembered package target");
         }
-        if (workspace_package_class_count(target_name_value.string) == 0U) {
+        if (package_definition_for_name(target_name_value.string) == 0) {
             machine_panic("Workspace reopen could not resolve the remembered package");
         }
         workspace_render_package_browser(object, target_name_value.string);

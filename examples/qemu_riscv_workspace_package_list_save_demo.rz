@@ -1,8 +1,8 @@
-Workspace fileIn: 'RecorzKernelPackage: ''Tools''
+Workspace fileIn: 'RecorzKernelPackage: ''Tools'' comment: ''Shared utilities''
 !
 RecorzKernelClass: #PackageAlpha superclass: #Object package: ''Tools'' instanceVariableNames: ''''
 !
-RecorzKernelPackage: ''UI''
+RecorzKernelPackage: ''UI'' comment: ''Browser views''
 !
 RecorzKernelClass: #PackageBeta superclass: #Object package: ''UI'' instanceVariableNames: '''''.
 Workspace browsePackages.
