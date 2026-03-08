@@ -1,5 +1,12 @@
 # Implementation Log
 
+## 2026-03-07 - Add Workspace Class List Browser Mode
+- Expanded `kernel/mvp/Workspace.rz` so the source-declared `Workspace` singleton now carries persistent browser state (`currentViewKind currentTargetName`) and exposes `browseClasses` alongside the existing class-browser and file-in primitives.
+- Extended the source-declared selector and method-entry surface for the new browser mode in `kernel/mvp/Selector.rz`, then updated the lowering and image-inspector expectations in `tests/test_qemu_riscv_mvp_lowering.py` and `tests/test_qemu_riscv_image_inspector.py` for the resulting image growth (`objects=292`, `selectors=42`, `methods=38`).
+- Updated `platform/qemu-riscv64/vm.c` so `Workspace` now remembers either a class-list or class-browser view, restores that view in `Workspace>>reopen`, and renders class names in uppercase for the current framebuffer glyph set.
+- Added `examples/qemu_riscv_workspace_class_list_save_demo.rz` plus `tests/test_qemu_riscv_snapshot_integration.py` coverage proving that a saved snapshot can reboot directly into the persisted class-list browser state without a demo-specific top-level script.
+- Verified with `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_mvp_lowering tests.test_qemu_riscv_image_inspector -v`, `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_snapshot_integration.QemuRiscvSnapshotIntegrationTests.test_snapshot_can_reopen_workspace_class_list_state_without_demo_specific_program -v`, and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
 ## 2026-03-07 - Larger QEMU Framebuffer
 - Increased the seeded framebuffer form and target display defaults from `640x480` to `1280x1024` by updating the kernel boot object declaration in `kernel/mvp/Bitmap.rz` and the target display constants in `platform/qemu-riscv64/display.h`.
 - Updated the QEMU screenshot-oriented integration tests and lowering expectations so they assert the larger framebuffer dimensions while keeping the existing rendering behavior and boot flow unchanged.

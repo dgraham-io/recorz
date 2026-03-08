@@ -1,0 +1,7 @@
+Workspace fileIn: 'RecorzKernelClass: #BrowserDemo superclass: #Object instanceVariableNames: ''''
+!
+value
+    ^self'.
+Workspace browseClasses.
+KernelInstaller configureStartup: Workspace selectorNamed: 'reopen'.
+KernelInstaller saveSnapshot.

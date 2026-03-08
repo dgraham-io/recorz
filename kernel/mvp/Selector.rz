@@ -80,4 +80,6 @@ RecorzKernelSelector: #fileIn: order: 38
 !
 RecorzKernelSelector: #browseClassNamed: order: 39
 !
-RecorzKernelSelector: #reopen order: 40
+RecorzKernelSelector: #browseClasses order: 40
+!
+RecorzKernelSelector: #reopen order: 41
