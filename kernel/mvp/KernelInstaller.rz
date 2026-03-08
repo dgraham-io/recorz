@@ -20,3 +20,12 @@ fileInClassChunks: source
 !
 classNamed: className
     <primitive: #kernelInstallerClassNamed>
+!
+rememberObject: object named: name
+    <primitive: #kernelInstallerRememberObjectNamed>
+!
+objectNamed: name
+    <primitive: #kernelInstallerObjectNamed>
+!
+saveSnapshot
+    <primitive: #kernelInstallerSaveSnapshot>

@@ -19,6 +19,21 @@
 #define METHOD_SOURCE_CHUNK_LIMIT 512U
 #define DYNAMIC_CLASS_LIMIT 16U
 #define DYNAMIC_CLASS_IVAR_LIMIT OBJECT_FIELD_LIMIT
+#define NAMED_OBJECT_LIMIT 16U
+#define SNAPSHOT_STRING_LIMIT 8192U
+#define SNAPSHOT_BUFFER_LIMIT 65536U
+
+#define SNAPSHOT_MAGIC_0 'R'
+#define SNAPSHOT_MAGIC_1 'C'
+#define SNAPSHOT_MAGIC_2 'Z'
+#define SNAPSHOT_MAGIC_3 'T'
+#define SNAPSHOT_VERSION 1U
+#define SNAPSHOT_HEADER_SIZE 28U
+#define SNAPSHOT_VALUE_SIZE 8U
+#define SNAPSHOT_OBJECT_SIZE (4U + (OBJECT_FIELD_LIMIT * SNAPSHOT_VALUE_SIZE))
+#define SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE \
+    (8U + METHOD_SOURCE_NAME_LIMIT + (DYNAMIC_CLASS_IVAR_LIMIT * METHOD_SOURCE_NAME_LIMIT))
+#define SNAPSHOT_NAMED_OBJECT_RECORD_SIZE (2U + METHOD_SOURCE_NAME_LIMIT)
 
 #define FORM_FIELD_BITS RECORZ_MVP_FORM_FIELD_BITS
 #define BITMAP_FIELD_WIDTH RECORZ_MVP_BITMAP_FIELD_WIDTH
@@ -61,7 +76,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_OBJECT
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SET_DETAIL
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SAVE_SNAPSHOT
 
 enum recorz_mvp_value_kind {
     RECORZ_MVP_VALUE_NIL = 0,
@@ -97,6 +112,11 @@ struct recorz_mvp_dynamic_class_definition {
     char class_name[METHOD_SOURCE_NAME_LIMIT];
     uint8_t instance_variable_count;
     char instance_variable_names[DYNAMIC_CLASS_IVAR_LIMIT][METHOD_SOURCE_NAME_LIMIT];
+};
+
+struct recorz_mvp_named_object_binding {
+    char name[METHOD_SOURCE_NAME_LIMIT];
+    uint16_t object_handle;
 };
 
 enum recorz_mvp_method_return_mode {
@@ -145,6 +165,7 @@ static uint16_t class_descriptor_handles_by_kind[MAX_OBJECT_KIND + 1U];
 static uint16_t selector_handles_by_id[MAX_SELECTOR_ID + 1U];
 static uint16_t global_handles[RECORZ_MVP_GLOBAL_KERNEL_INSTALLER + 1U];
 static struct recorz_mvp_dynamic_class_definition dynamic_classes[DYNAMIC_CLASS_LIMIT];
+static struct recorz_mvp_named_object_binding named_objects[NAMED_OBJECT_LIMIT];
 static uint16_t default_form_handle = 0U;
 static uint16_t framebuffer_bitmap_handle = 0U;
 static uint16_t next_dynamic_method_entry_execution_id = RECORZ_MVP_METHOD_ENTRY_COUNT;
@@ -157,9 +178,12 @@ static uint16_t transcript_metrics_handle = 0U;
 static uint16_t transcript_behavior_handle = 0U;
 static uint32_t mono_bitmap_pool[MONO_BITMAP_LIMIT][MONO_BITMAP_MAX_HEIGHT];
 static uint16_t mono_bitmap_count = 0U;
+static uint16_t named_object_count = 0U;
 static uint32_t cursor_x = 0U;
 static uint32_t cursor_y = 0U;
 static char print_buffer[PRINT_BUFFER_SIZE];
+static char snapshot_string_pool[SNAPSHOT_STRING_LIMIT];
+static uint8_t snapshot_buffer[SNAPSHOT_BUFFER_LIMIT];
 
 static uint16_t seeded_handles[HEAP_LIMIT];
 static const char *panic_phase = "idle";
@@ -193,6 +217,10 @@ static const struct recorz_mvp_heap_object *lookup_class_by_name(const char *cla
 static const struct recorz_mvp_heap_object *ensure_class_defined(
     const struct recorz_mvp_live_class_definition *definition
 );
+static void initialize_runtime_caches(void);
+static void reset_runtime_state(void);
+static void load_snapshot_state(const uint8_t *blob, uint32_t size);
+static void emit_live_snapshot(void);
 
 static void panic_put_u32(uint32_t value) {
     char digits[10];
@@ -358,6 +386,12 @@ static const char *selector_name(uint8_t selector) {
             return "detail";
         case RECORZ_MVP_SELECTOR_SET_DETAIL:
             return "setDetail:";
+        case RECORZ_MVP_SELECTOR_REMEMBER_OBJECT_NAMED:
+            return "rememberObject:named:";
+        case RECORZ_MVP_SELECTOR_OBJECT_NAMED:
+            return "objectNamed:";
+        case RECORZ_MVP_SELECTOR_SAVE_SNAPSHOT:
+            return "saveSnapshot";
     }
     return "unknown";
 }
@@ -471,6 +505,18 @@ static uint32_t read_u32_le(const uint8_t *bytes) {
            ((uint32_t)bytes[1] << 8U) |
            ((uint32_t)bytes[2] << 16U) |
            ((uint32_t)bytes[3] << 24U);
+}
+
+static void write_u16_le(uint8_t *bytes, uint16_t value) {
+    bytes[0] = (uint8_t)(value & 0xFFU);
+    bytes[1] = (uint8_t)((value >> 8U) & 0xFFU);
+}
+
+static void write_u32_le(uint8_t *bytes, uint32_t value) {
+    bytes[0] = (uint8_t)(value & 0xFFU);
+    bytes[1] = (uint8_t)((value >> 8U) & 0xFFU);
+    bytes[2] = (uint8_t)((value >> 16U) & 0xFFU);
+    bytes[3] = (uint8_t)((value >> 24U) & 0xFFU);
 }
 
 static uint32_t encode_compiled_method_word(uint8_t opcode, uint8_t operand_a, uint16_t operand_b) {
@@ -845,6 +891,44 @@ static struct recorz_mvp_dynamic_class_definition *mutable_dynamic_class_definit
 
 static const struct recorz_mvp_dynamic_class_definition *dynamic_class_definition_for_handle(uint16_t class_handle) {
     return (const struct recorz_mvp_dynamic_class_definition *)mutable_dynamic_class_definition_for_handle(class_handle);
+}
+
+static uint16_t named_object_handle_for_name(const char *name) {
+    uint16_t named_index;
+
+    for (named_index = 0U; named_index < named_object_count; ++named_index) {
+        if (source_names_equal(name, named_objects[named_index].name)) {
+            return named_objects[named_index].object_handle;
+        }
+    }
+    return 0U;
+}
+
+static void remember_named_object_handle(uint16_t object_handle, const char *name) {
+    uint16_t named_index;
+
+    if (object_handle == 0U || object_handle > heap_size) {
+        machine_panic("named object handle is out of range");
+    }
+    if (name == 0 || *name == '\0') {
+        machine_panic("named object name is empty");
+    }
+    for (named_index = 0U; named_index < named_object_count; ++named_index) {
+        if (source_names_equal(name, named_objects[named_index].name)) {
+            named_objects[named_index].object_handle = object_handle;
+            return;
+        }
+    }
+    if (named_object_count >= NAMED_OBJECT_LIMIT) {
+        machine_panic("named object registry overflow");
+    }
+    source_copy_identifier(
+        named_objects[named_object_count].name,
+        sizeof(named_objects[named_object_count].name),
+        name
+    );
+    named_objects[named_object_count].object_handle = object_handle;
+    ++named_object_count;
 }
 
 static void vm_panic_hook(const char *message) {
@@ -1532,8 +1616,8 @@ static void validate_class_superclass(const struct recorz_mvp_heap_object *class
 }
 
 static void validate_class_method_table(
-    const struct recorz_mvp_seed *seed,
-    const struct recorz_mvp_heap_object *class_object
+    const struct recorz_mvp_heap_object *class_object,
+    uint8_t require_seeded_entry_ids
 ) {
     struct recorz_mvp_value method_start_value;
     uint32_t method_count;
@@ -1559,10 +1643,10 @@ static void validate_class_method_table(
         machine_panic("class method start is not a method descriptor");
     }
     start_handle = (uint16_t)method_start_value.integer;
-    if (start_handle == 0U || start_handle > seed->object_count) {
+    if (start_handle == 0U || start_handle > heap_size) {
         machine_panic("class method start is out of range");
     }
-    if ((uint32_t)start_handle + method_count - 1U > seed->object_count) {
+    if ((uint32_t)start_handle + method_count - 1U > heap_size) {
         machine_panic("class method range is out of range");
     }
     class_kind = class_instance_kind(class_object);
@@ -1600,7 +1684,10 @@ static void validate_class_method_table(
         if (primitive_kind != class_kind) {
             machine_panic("method descriptor primitive kind does not match class instance kind");
         }
-        if (entry == 0U || entry >= RECORZ_MVP_METHOD_ENTRY_COUNT) {
+        if (entry == 0U) {
+            machine_panic("method entry execution id is out of range");
+        }
+        if (require_seeded_entry_ids && entry >= RECORZ_MVP_METHOD_ENTRY_COUNT) {
             machine_panic("method entry execution id is out of range");
         }
         if (implementation_value.kind == RECORZ_MVP_VALUE_SMALL_INTEGER) {
@@ -1618,11 +1705,11 @@ static void validate_class_method_table(
     }
 }
 
-static void validate_seed_class_graph(const struct recorz_mvp_seed *seed) {
-    uint16_t seed_index;
+static void validate_heap_class_graph(uint16_t object_count, uint8_t require_seeded_entry_ids) {
+    uint16_t handle;
 
-    for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
-        const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(seeded_handles[seed_index]);
+    for (handle = 1U; handle <= object_count; ++handle) {
+        const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(handle);
         const struct recorz_mvp_heap_object *class_object = class_object_for_heap_object(object);
         const struct recorz_mvp_heap_object *metaclass_object = class_object_for_heap_object(class_object);
 
@@ -1634,25 +1721,25 @@ static void validate_seed_class_graph(const struct recorz_mvp_seed *seed) {
             machine_panic("seed object class instance kind does not match object kind");
         }
     }
-    for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
-        const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(seeded_handles[seed_index]);
+    for (handle = 1U; handle <= object_count; ++handle) {
+        const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(handle);
 
         if (object->kind == RECORZ_MVP_OBJECT_CLASS) {
-            validate_class_method_table(seed, object);
+            validate_class_method_table(object, require_seeded_entry_ids);
         }
     }
 }
 
-static void initialize_class_handle_cache(const struct recorz_mvp_seed *seed) {
-    uint16_t seed_index;
+static void initialize_class_handle_cache(void) {
+    uint16_t handle;
     uint16_t kind;
 
     for (kind = 0U; kind <= MAX_OBJECT_KIND; ++kind) {
         class_handles_by_kind[kind] = 0U;
         class_descriptor_handles_by_kind[kind] = 0U;
     }
-    for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
-        const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(seeded_handles[seed_index]);
+    for (handle = 1U; handle <= heap_size; ++handle) {
+        const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(handle);
 
         if (object->kind != RECORZ_MVP_OBJECT_CLASS) {
             continue;
@@ -1662,12 +1749,12 @@ static void initialize_class_handle_cache(const struct recorz_mvp_seed *seed) {
             continue;
         }
         if (class_descriptor_handles_by_kind[kind] == 0U) {
-            class_descriptor_handles_by_kind[kind] = seeded_handles[seed_index];
-            class_handles_by_kind[kind] = seeded_handles[seed_index];
+            class_descriptor_handles_by_kind[kind] = handle;
+            class_handles_by_kind[kind] = handle;
         }
     }
-    for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
-        const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(seeded_handles[seed_index]);
+    for (handle = 1U; handle <= heap_size; ++handle) {
+        const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(handle);
 
         if (object->kind > MAX_OBJECT_KIND || object->class_handle == 0U) {
             continue;
@@ -1678,15 +1765,15 @@ static void initialize_class_handle_cache(const struct recorz_mvp_seed *seed) {
     }
 }
 
-static void initialize_selector_handle_cache(const struct recorz_mvp_seed *seed) {
-    uint16_t seed_index;
+static void initialize_selector_handle_cache(void) {
+    uint16_t handle;
     uint16_t selector_id;
 
     for (selector_id = 0U; selector_id <= MAX_SELECTOR_ID; ++selector_id) {
         selector_handles_by_id[selector_id] = 0U;
     }
-    for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
-        const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(seeded_handles[seed_index]);
+    for (handle = 1U; handle <= heap_size; ++handle) {
+        const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(handle);
 
         if (object->kind != RECORZ_MVP_OBJECT_SELECTOR) {
             continue;
@@ -1695,7 +1782,56 @@ static void initialize_selector_handle_cache(const struct recorz_mvp_seed *seed)
         if (selector_handles_by_id[selector_id] != 0U) {
             machine_panic("seed contains duplicate selector objects");
         }
-        selector_handles_by_id[selector_id] = seeded_handles[seed_index];
+        selector_handles_by_id[selector_id] = handle;
+    }
+}
+
+static void initialize_runtime_caches(void) {
+    initialize_class_handle_cache();
+    initialize_selector_handle_cache();
+}
+
+static void reset_runtime_state(void) {
+    uint16_t global_index;
+    uint16_t dynamic_index;
+    uint16_t named_index;
+    uint16_t code_index;
+
+    heap_size = 0U;
+    mono_bitmap_count = 0U;
+    next_dynamic_method_entry_execution_id = RECORZ_MVP_METHOD_ENTRY_COUNT;
+    dynamic_class_count = 0U;
+    named_object_count = 0U;
+    default_form_handle = 0U;
+    framebuffer_bitmap_handle = 0U;
+    glyph_fallback_handle = 0U;
+    transcript_layout_handle = 0U;
+    transcript_style_handle = 0U;
+    transcript_metrics_handle = 0U;
+    transcript_behavior_handle = 0U;
+    cursor_x = 0U;
+    cursor_y = 0U;
+    snapshot_string_pool[0] = '\0';
+    for (global_index = 0U; global_index <= RECORZ_MVP_GLOBAL_KERNEL_INSTALLER; ++global_index) {
+        global_handles[global_index] = 0U;
+    }
+    for (dynamic_index = 0U; dynamic_index < DYNAMIC_CLASS_LIMIT; ++dynamic_index) {
+        uint8_t ivar_index;
+
+        dynamic_classes[dynamic_index].class_handle = 0U;
+        dynamic_classes[dynamic_index].superclass_handle = 0U;
+        dynamic_classes[dynamic_index].class_name[0] = '\0';
+        dynamic_classes[dynamic_index].instance_variable_count = 0U;
+        for (ivar_index = 0U; ivar_index < DYNAMIC_CLASS_IVAR_LIMIT; ++ivar_index) {
+            dynamic_classes[dynamic_index].instance_variable_names[ivar_index][0] = '\0';
+        }
+    }
+    for (named_index = 0U; named_index < NAMED_OBJECT_LIMIT; ++named_index) {
+        named_objects[named_index].name[0] = '\0';
+        named_objects[named_index].object_handle = 0U;
+    }
+    for (code_index = 0U; code_index < 128U; ++code_index) {
+        glyph_bitmap_handles[code_index] = 0U;
     }
 }
 
@@ -2206,27 +2342,12 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
     uint32_t code_index;
     uint16_t seed_index;
     uint16_t global_index;
-    uint16_t dynamic_index;
 
     if (seed->object_count > HEAP_LIMIT) {
         machine_panic("seed object count exceeds heap capacity");
     }
 
-    heap_size = 0U;
-    mono_bitmap_count = 0U;
-    next_dynamic_method_entry_execution_id = RECORZ_MVP_METHOD_ENTRY_COUNT;
-    dynamic_class_count = 0U;
-    for (dynamic_index = 0U; dynamic_index < DYNAMIC_CLASS_LIMIT; ++dynamic_index) {
-        uint8_t ivar_index;
-
-        dynamic_classes[dynamic_index].class_handle = 0U;
-        dynamic_classes[dynamic_index].superclass_handle = 0U;
-        dynamic_classes[dynamic_index].class_name[0] = '\0';
-        dynamic_classes[dynamic_index].instance_variable_count = 0U;
-        for (ivar_index = 0U; ivar_index < DYNAMIC_CLASS_IVAR_LIMIT; ++ivar_index) {
-            dynamic_classes[dynamic_index].instance_variable_names[ivar_index][0] = '\0';
-        }
-    }
+    reset_runtime_state();
     for (seed_index = 0U; seed_index < seed->object_count; ++seed_index) {
         seeded_handles[seed_index] = heap_allocate(seed->objects[seed_index].object_kind);
     }
@@ -2249,9 +2370,8 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
             );
         }
     }
-    validate_seed_class_graph(seed);
-    initialize_class_handle_cache(seed);
-    initialize_selector_handle_cache(seed);
+    validate_heap_class_graph(heap_size, 1U);
+    initialize_runtime_caches();
 
     for (global_index = 0U; global_index <= RECORZ_MVP_GLOBAL_KERNEL_INSTALLER; ++global_index) {
         global_handles[global_index] = 0U;
@@ -2295,6 +2415,470 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
         glyph_bitmap_handles[code_index] = seed_handle_at(seed, glyph_object_index);
     }
     reset_text_cursor();
+}
+
+static uint32_t text_length(const char *text) {
+    uint32_t length = 0U;
+
+    if (text == 0) {
+        return 0U;
+    }
+    while (text[length] != '\0') {
+        ++length;
+    }
+    return length;
+}
+
+static uint32_t snapshot_string_storage_size(struct recorz_mvp_value value) {
+    if (value.kind != RECORZ_MVP_VALUE_STRING || value.string == 0) {
+        return 0U;
+    }
+    return text_length(value.string) + 1U;
+}
+
+static uint32_t snapshot_total_size(uint32_t string_byte_count) {
+    return SNAPSHOT_HEADER_SIZE +
+           (heap_size * SNAPSHOT_OBJECT_SIZE) +
+           (RECORZ_MVP_GLOBAL_KERNEL_INSTALLER * 2U) +
+           (RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS * 2U) +
+           (128U * 2U) +
+           ((uint32_t)dynamic_class_count * SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE) +
+           ((uint32_t)named_object_count * SNAPSHOT_NAMED_OBJECT_RECORD_SIZE) +
+           ((uint32_t)mono_bitmap_count * MONO_BITMAP_MAX_HEIGHT * 4U) +
+           string_byte_count;
+}
+
+static void snapshot_encode_value(
+    uint8_t *slot,
+    struct recorz_mvp_value value,
+    uint8_t *string_section,
+    uint32_t string_section_size,
+    uint32_t *string_offset
+) {
+    uint32_t index;
+
+    slot[0] = value.kind;
+    slot[1] = 0U;
+    write_u16_le(slot + 2U, 0U);
+    write_u32_le(slot + 4U, (uint32_t)value.integer);
+    if (value.kind != RECORZ_MVP_VALUE_STRING) {
+        return;
+    }
+    if (value.string == 0) {
+        machine_panic("snapshot cannot encode a null string");
+    }
+    {
+        uint32_t length = text_length(value.string);
+
+        if (length > 65535U) {
+            machine_panic("snapshot string exceeds maximum encodable length");
+        }
+        if (*string_offset + length + 1U > string_section_size) {
+            machine_panic("snapshot string section overflow");
+        }
+        write_u16_le(slot + 2U, (uint16_t)length);
+        write_u32_le(slot + 4U, *string_offset);
+        for (index = 0U; index < length; ++index) {
+            string_section[*string_offset + index] = (uint8_t)value.string[index];
+        }
+        string_section[*string_offset + length] = 0U;
+        *string_offset += length + 1U;
+    }
+}
+
+static struct recorz_mvp_value snapshot_decode_value(
+    const uint8_t *slot,
+    uint32_t string_byte_count
+) {
+    uint8_t kind = slot[0];
+    uint16_t aux = read_u16_le(slot + 2U);
+    int32_t value = (int32_t)read_u32_le(slot + 4U);
+
+    switch (kind) {
+        case RECORZ_MVP_VALUE_NIL:
+            return nil_value();
+        case RECORZ_MVP_VALUE_OBJECT:
+            if (value <= 0 || (uint32_t)value > heap_size) {
+                machine_panic("snapshot object reference is out of range");
+            }
+            return object_value((uint16_t)value);
+        case RECORZ_MVP_VALUE_SMALL_INTEGER:
+            return small_integer_value(value);
+        case RECORZ_MVP_VALUE_STRING: {
+            uint32_t offset = (uint32_t)value;
+
+            if (offset + aux >= string_byte_count) {
+                machine_panic("snapshot string value is out of range");
+            }
+            if (snapshot_string_pool[offset + aux] != '\0') {
+                machine_panic("snapshot string value is not terminated");
+            }
+            return string_value(snapshot_string_pool + offset);
+        }
+    }
+    machine_panic("snapshot value kind is unknown");
+    return nil_value();
+}
+
+static void emit_snapshot_hex_byte(uint8_t value) {
+    static const char digits[] = "0123456789abcdef";
+
+    machine_putc(digits[(value >> 4U) & 0x0FU]);
+    machine_putc(digits[value & 0x0FU]);
+}
+
+static void emit_live_snapshot(void) {
+    uint32_t string_byte_count = 0U;
+    uint16_t handle;
+    uint16_t dynamic_index;
+    uint16_t named_index;
+    uint32_t row;
+    uint32_t total_size;
+    uint32_t offset;
+    uint32_t string_offset = 0U;
+    uint8_t *string_section;
+
+    for (handle = 1U; handle <= heap_size; ++handle) {
+        const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(handle);
+        uint8_t field_index;
+
+        for (field_index = 0U; field_index < object->field_count; ++field_index) {
+            string_byte_count += snapshot_string_storage_size(object->fields[field_index]);
+        }
+    }
+    total_size = snapshot_total_size(string_byte_count);
+    if (total_size > SNAPSHOT_BUFFER_LIMIT) {
+        machine_panic("snapshot exceeds buffer capacity");
+    }
+    offset = 0U;
+    snapshot_buffer[offset++] = SNAPSHOT_MAGIC_0;
+    snapshot_buffer[offset++] = SNAPSHOT_MAGIC_1;
+    snapshot_buffer[offset++] = SNAPSHOT_MAGIC_2;
+    snapshot_buffer[offset++] = SNAPSHOT_MAGIC_3;
+    write_u16_le(snapshot_buffer + offset, SNAPSHOT_VERSION);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, heap_size);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, dynamic_class_count);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, named_object_count);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, mono_bitmap_count);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, next_dynamic_method_entry_execution_id);
+    offset += 2U;
+    write_u32_le(snapshot_buffer + offset, string_byte_count);
+    offset += 4U;
+    write_u16_le(snapshot_buffer + offset, (uint16_t)cursor_x);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, (uint16_t)cursor_y);
+    offset += 2U;
+    write_u32_le(snapshot_buffer + offset, total_size);
+    offset += 4U;
+    string_section = snapshot_buffer + (total_size - string_byte_count);
+
+    for (handle = 1U; handle <= heap_size; ++handle) {
+        const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(handle);
+        uint8_t field_index;
+
+        snapshot_buffer[offset++] = object->kind;
+        snapshot_buffer[offset++] = object->field_count;
+        write_u16_le(snapshot_buffer + offset, object->class_handle);
+        offset += 2U;
+        for (field_index = 0U; field_index < OBJECT_FIELD_LIMIT; ++field_index) {
+            snapshot_encode_value(
+                snapshot_buffer + offset,
+                object->fields[field_index],
+                string_section,
+                string_byte_count,
+                &string_offset
+            );
+            offset += SNAPSHOT_VALUE_SIZE;
+        }
+    }
+    for (handle = RECORZ_MVP_GLOBAL_TRANSCRIPT; handle <= RECORZ_MVP_GLOBAL_KERNEL_INSTALLER; ++handle) {
+        write_u16_le(snapshot_buffer + offset, global_handles[handle]);
+        offset += 2U;
+    }
+    write_u16_le(snapshot_buffer + offset, default_form_handle);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, framebuffer_bitmap_handle);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, transcript_behavior_handle);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, transcript_layout_handle);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, transcript_style_handle);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, transcript_metrics_handle);
+    offset += 2U;
+    for (handle = 0U; handle < 128U; ++handle) {
+        write_u16_le(snapshot_buffer + offset, glyph_bitmap_handles[handle]);
+        offset += 2U;
+    }
+    for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
+        const struct recorz_mvp_dynamic_class_definition *definition = &dynamic_classes[dynamic_index];
+        uint8_t ivar_index;
+        uint32_t name_index;
+
+        write_u16_le(snapshot_buffer + offset, definition->class_handle);
+        offset += 2U;
+        write_u16_le(snapshot_buffer + offset, definition->superclass_handle);
+        offset += 2U;
+        snapshot_buffer[offset++] = definition->instance_variable_count;
+        snapshot_buffer[offset++] = 0U;
+        snapshot_buffer[offset++] = 0U;
+        snapshot_buffer[offset++] = 0U;
+        for (name_index = 0U; name_index < METHOD_SOURCE_NAME_LIMIT; ++name_index) {
+            snapshot_buffer[offset++] = (uint8_t)definition->class_name[name_index];
+        }
+        for (ivar_index = 0U; ivar_index < DYNAMIC_CLASS_IVAR_LIMIT; ++ivar_index) {
+            for (name_index = 0U; name_index < METHOD_SOURCE_NAME_LIMIT; ++name_index) {
+                snapshot_buffer[offset++] =
+                    (uint8_t)definition->instance_variable_names[ivar_index][name_index];
+            }
+        }
+    }
+    for (named_index = 0U; named_index < named_object_count; ++named_index) {
+        uint32_t name_index;
+
+        write_u16_le(snapshot_buffer + offset, named_objects[named_index].object_handle);
+        offset += 2U;
+        for (name_index = 0U; name_index < METHOD_SOURCE_NAME_LIMIT; ++name_index) {
+            snapshot_buffer[offset++] = (uint8_t)named_objects[named_index].name[name_index];
+        }
+    }
+    for (handle = 0U; handle < mono_bitmap_count; ++handle) {
+        for (row = 0U; row < MONO_BITMAP_MAX_HEIGHT; ++row) {
+            write_u32_le(snapshot_buffer + offset, mono_bitmap_pool[handle][row]);
+            offset += 4U;
+        }
+    }
+    if (string_offset != string_byte_count || offset != total_size - string_byte_count) {
+        machine_panic("snapshot encoding size mismatch");
+    }
+
+    machine_puts("recorz-snapshot-begin ");
+    panic_put_u32(total_size);
+    machine_putc('\n');
+    for (offset = 0U; offset < total_size; offset += 32U) {
+        uint32_t chunk_size = total_size - offset;
+        uint32_t chunk_index;
+
+        if (chunk_size > 32U) {
+            chunk_size = 32U;
+        }
+        machine_puts("recorz-snapshot-data ");
+        for (chunk_index = 0U; chunk_index < chunk_size; ++chunk_index) {
+            emit_snapshot_hex_byte(snapshot_buffer[offset + chunk_index]);
+        }
+        machine_putc('\n');
+    }
+    machine_puts("recorz-snapshot-end\n");
+}
+
+static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
+    uint16_t object_count;
+    uint16_t dynamic_count;
+    uint16_t saved_named_object_count;
+    uint16_t saved_mono_bitmap_count;
+    uint16_t saved_next_dynamic_method_entry_execution_id;
+    uint32_t string_byte_count;
+    uint16_t saved_cursor_x;
+    uint16_t saved_cursor_y;
+    uint32_t expected_size;
+    uint32_t string_section_offset;
+    uint32_t offset;
+    uint16_t handle;
+    uint16_t dynamic_index;
+    uint16_t named_index;
+    uint32_t row;
+
+    if (size < SNAPSHOT_HEADER_SIZE) {
+        machine_panic("snapshot is too small");
+    }
+    if (blob[0] != SNAPSHOT_MAGIC_0 || blob[1] != SNAPSHOT_MAGIC_1 ||
+        blob[2] != SNAPSHOT_MAGIC_2 || blob[3] != SNAPSHOT_MAGIC_3) {
+        machine_panic("snapshot magic mismatch");
+    }
+    if (read_u16_le(blob + 4U) != SNAPSHOT_VERSION) {
+        machine_panic("snapshot version mismatch");
+    }
+    object_count = read_u16_le(blob + 6U);
+    dynamic_count = read_u16_le(blob + 8U);
+    saved_named_object_count = read_u16_le(blob + 10U);
+    saved_mono_bitmap_count = read_u16_le(blob + 12U);
+    saved_next_dynamic_method_entry_execution_id = read_u16_le(blob + 14U);
+    string_byte_count = read_u32_le(blob + 16U);
+    saved_cursor_x = read_u16_le(blob + 20U);
+    saved_cursor_y = read_u16_le(blob + 22U);
+    expected_size = read_u32_le(blob + 24U);
+    if (object_count == 0U || object_count > HEAP_LIMIT) {
+        machine_panic("snapshot object count exceeds heap capacity");
+    }
+    if (dynamic_count > DYNAMIC_CLASS_LIMIT) {
+        machine_panic("snapshot dynamic class count exceeds capacity");
+    }
+    if (saved_named_object_count > NAMED_OBJECT_LIMIT) {
+        machine_panic("snapshot named object count exceeds capacity");
+    }
+    if (saved_mono_bitmap_count > MONO_BITMAP_LIMIT) {
+        machine_panic("snapshot mono bitmap count exceeds capacity");
+    }
+    if (string_byte_count > SNAPSHOT_STRING_LIMIT) {
+        machine_panic("snapshot string section exceeds capacity");
+    }
+    if (expected_size != size) {
+        machine_panic("snapshot size mismatch");
+    }
+    string_section_offset = SNAPSHOT_HEADER_SIZE +
+                            ((uint32_t)object_count * SNAPSHOT_OBJECT_SIZE) +
+                            (RECORZ_MVP_GLOBAL_KERNEL_INSTALLER * 2U) +
+                            (RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS * 2U) +
+                            (128U * 2U) +
+                            ((uint32_t)dynamic_count * SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE) +
+                            ((uint32_t)saved_named_object_count * SNAPSHOT_NAMED_OBJECT_RECORD_SIZE) +
+                            ((uint32_t)saved_mono_bitmap_count * MONO_BITMAP_MAX_HEIGHT * 4U);
+    if (string_section_offset + string_byte_count != size) {
+        machine_panic("snapshot string section size mismatch");
+    }
+
+    reset_runtime_state();
+    for (row = 0U; row < string_byte_count; ++row) {
+        snapshot_string_pool[row] = (char)blob[string_section_offset + row];
+    }
+    if (string_byte_count < SNAPSHOT_STRING_LIMIT) {
+        snapshot_string_pool[string_byte_count] = '\0';
+    }
+    for (handle = 1U; handle <= object_count; ++handle) {
+        uint8_t kind = blob[SNAPSHOT_HEADER_SIZE + ((uint32_t)(handle - 1U) * SNAPSHOT_OBJECT_SIZE)];
+        (void)heap_allocate(kind);
+    }
+    offset = SNAPSHOT_HEADER_SIZE;
+    for (handle = 1U; handle <= object_count; ++handle) {
+        struct recorz_mvp_heap_object *object = heap_object(handle);
+        uint8_t field_index;
+
+        object->kind = blob[offset++];
+        object->field_count = blob[offset++];
+        object->class_handle = read_u16_le(blob + offset);
+        offset += 2U;
+        if (object->field_count > OBJECT_FIELD_LIMIT) {
+            machine_panic("snapshot field count exceeds object field capacity");
+        }
+        if (object->class_handle == 0U || object->class_handle > object_count) {
+            machine_panic("snapshot class handle is out of range");
+        }
+        for (field_index = 0U; field_index < OBJECT_FIELD_LIMIT; ++field_index) {
+            object->fields[field_index] = snapshot_decode_value(blob + offset, string_byte_count);
+            offset += SNAPSHOT_VALUE_SIZE;
+        }
+    }
+    for (handle = RECORZ_MVP_GLOBAL_TRANSCRIPT; handle <= RECORZ_MVP_GLOBAL_KERNEL_INSTALLER; ++handle) {
+        global_handles[handle] = read_u16_le(blob + offset);
+        if (global_handles[handle] == 0U || global_handles[handle] > object_count) {
+            machine_panic("snapshot global handle is out of range");
+        }
+        offset += 2U;
+    }
+    default_form_handle = read_u16_le(blob + offset);
+    offset += 2U;
+    framebuffer_bitmap_handle = read_u16_le(blob + offset);
+    offset += 2U;
+    transcript_behavior_handle = read_u16_le(blob + offset);
+    offset += 2U;
+    transcript_layout_handle = read_u16_le(blob + offset);
+    offset += 2U;
+    transcript_style_handle = read_u16_le(blob + offset);
+    offset += 2U;
+    transcript_metrics_handle = read_u16_le(blob + offset);
+    offset += 2U;
+    if (default_form_handle == 0U || default_form_handle > object_count ||
+        framebuffer_bitmap_handle == 0U || framebuffer_bitmap_handle > object_count ||
+        transcript_behavior_handle == 0U || transcript_behavior_handle > object_count ||
+        transcript_layout_handle == 0U || transcript_layout_handle > object_count ||
+        transcript_style_handle == 0U || transcript_style_handle > object_count ||
+        transcript_metrics_handle == 0U || transcript_metrics_handle > object_count) {
+        machine_panic("snapshot root handle is out of range");
+    }
+    for (handle = 0U; handle < 128U; ++handle) {
+        glyph_bitmap_handles[handle] = read_u16_le(blob + offset);
+        if (glyph_bitmap_handles[handle] != 0U && glyph_bitmap_handles[handle] > object_count) {
+            machine_panic("snapshot glyph handle is out of range");
+        }
+        offset += 2U;
+    }
+    dynamic_class_count = dynamic_count;
+    for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
+        struct recorz_mvp_dynamic_class_definition *definition = &dynamic_classes[dynamic_index];
+        uint8_t ivar_index;
+        uint32_t name_index;
+
+        definition->class_handle = read_u16_le(blob + offset);
+        offset += 2U;
+        definition->superclass_handle = read_u16_le(blob + offset);
+        offset += 2U;
+        definition->instance_variable_count = blob[offset++];
+        offset += 3U;
+        if (definition->class_handle == 0U || definition->class_handle > object_count ||
+            definition->superclass_handle == 0U || definition->superclass_handle > object_count) {
+            machine_panic("snapshot dynamic class handle is out of range");
+        }
+        if (definition->instance_variable_count > DYNAMIC_CLASS_IVAR_LIMIT) {
+            machine_panic("snapshot dynamic class instance variable count is out of range");
+        }
+        for (name_index = 0U; name_index < METHOD_SOURCE_NAME_LIMIT; ++name_index) {
+            definition->class_name[name_index] = (char)blob[offset++];
+        }
+        for (ivar_index = 0U; ivar_index < DYNAMIC_CLASS_IVAR_LIMIT; ++ivar_index) {
+            for (name_index = 0U; name_index < METHOD_SOURCE_NAME_LIMIT; ++name_index) {
+                definition->instance_variable_names[ivar_index][name_index] = (char)blob[offset++];
+            }
+        }
+    }
+    named_object_count = saved_named_object_count;
+    for (named_index = 0U; named_index < named_object_count; ++named_index) {
+        uint32_t name_index;
+
+        named_objects[named_index].object_handle = read_u16_le(blob + offset);
+        offset += 2U;
+        if (named_objects[named_index].object_handle == 0U ||
+            named_objects[named_index].object_handle > object_count) {
+            machine_panic("snapshot named object handle is out of range");
+        }
+        for (name_index = 0U; name_index < METHOD_SOURCE_NAME_LIMIT; ++name_index) {
+            named_objects[named_index].name[name_index] = (char)blob[offset++];
+        }
+    }
+    mono_bitmap_count = saved_mono_bitmap_count;
+    for (handle = 0U; handle < mono_bitmap_count; ++handle) {
+        for (row = 0U; row < MONO_BITMAP_MAX_HEIGHT; ++row) {
+            mono_bitmap_pool[handle][row] = read_u32_le(blob + offset);
+            offset += 4U;
+        }
+    }
+    if (offset != string_section_offset) {
+        machine_panic("snapshot fixed section size mismatch");
+    }
+    next_dynamic_method_entry_execution_id = saved_next_dynamic_method_entry_execution_id;
+    cursor_x = saved_cursor_x;
+    cursor_y = saved_cursor_y;
+    validate_heap_class_graph(heap_size, 0U);
+    initialize_runtime_caches();
+    {
+        struct recorz_mvp_value fallback_value =
+            heap_get_field(transcript_behavior_object(), TEXT_BEHAVIOR_FIELD_FALLBACK_BITMAP);
+        const struct recorz_mvp_heap_object *fallback_bitmap = heap_object_for_value(fallback_value);
+
+        if (fallback_bitmap->kind != RECORZ_MVP_OBJECT_BITMAP) {
+            machine_panic("snapshot fallback bitmap is not a bitmap");
+        }
+        glyph_fallback_handle = (uint16_t)fallback_value.integer;
+    }
+    if (heap_get_field(heap_object(default_form_handle), FORM_FIELD_BITS).kind != RECORZ_MVP_VALUE_OBJECT ||
+        (uint16_t)heap_get_field(heap_object(default_form_handle), FORM_FIELD_BITS).integer != framebuffer_bitmap_handle) {
+        machine_panic("snapshot default form does not point at the framebuffer bitmap");
+    }
 }
 
 static void push(struct recorz_mvp_value value) {
@@ -3242,6 +3826,58 @@ static void execute_entry_kernel_installer_file_in_class_chunks(
     push(object_value(heap_handle_for_object(class_object)));
 }
 
+static void execute_entry_kernel_installer_remember_object_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("KernelInstaller rememberObject:named: expects an object");
+    }
+    if (arguments[1].kind != RECORZ_MVP_VALUE_STRING || arguments[1].string == 0) {
+        machine_panic("KernelInstaller rememberObject:named: expects a name string");
+    }
+    remember_named_object_handle((uint16_t)arguments[0].integer, arguments[1].string);
+    push(receiver);
+}
+
+static void execute_entry_kernel_installer_object_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint16_t object_handle;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("KernelInstaller objectNamed: expects a name string");
+    }
+    object_handle = named_object_handle_for_name(arguments[0].string);
+    if (object_handle == 0U) {
+        machine_panic("KernelInstaller objectNamed: could not resolve object");
+    }
+    push(object_value(object_handle));
+}
+
+static void execute_entry_kernel_installer_save_snapshot(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)arguments;
+    (void)text;
+    emit_live_snapshot();
+    push(receiver);
+}
+
 static const recorz_mvp_method_entry_handler primitive_binding_handlers[RECORZ_MVP_PRIMITIVE_COUNT] = {
     RECORZ_MVP_GENERATED_PRIMITIVE_BINDING_HANDLERS
 };
@@ -3763,7 +4399,9 @@ void recorz_mvp_vm_run(
     const struct recorz_mvp_program *program,
     const struct recorz_mvp_seed *seed,
     const uint8_t *method_update_blob,
-    uint32_t method_update_size
+    uint32_t method_update_size,
+    const uint8_t *snapshot_blob,
+    uint32_t snapshot_size
 ) {
     const struct recorz_mvp_executable executable = {
         .instruction_source = program->instructions,
@@ -3780,7 +4418,13 @@ void recorz_mvp_vm_run(
     panic_have_instruction = 0U;
     panic_have_send = 0U;
     machine_set_panic_hook(vm_panic_hook);
-    initialize_roots(seed);
+    if (snapshot_blob != 0 && snapshot_size != 0U) {
+        panic_phase = "snapshot";
+        load_snapshot_state(snapshot_blob, snapshot_size);
+        machine_puts("recorz qemu-riscv64 mvp: loaded snapshot\n");
+    } else {
+        initialize_roots(seed);
+    }
     if (method_update_blob != 0 && method_update_size != 0U) {
         panic_phase = "update";
         apply_method_update_payload(method_update_blob, method_update_size);

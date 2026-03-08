@@ -6,10 +6,14 @@ QEMU ?= qemu-system-riscv64
 PYTHON ?= python3
 UPDATE_PAYLOAD ?=
 UPDATE_FW_CFG_NAME ?= opt/recorz-method-update
+SNAPSHOT_PAYLOAD ?=
+SNAPSHOT_FW_CFG_NAME ?= opt/recorz-snapshot
+SNAPSHOT_OUTPUT ?= $(BUILD_DIR)/recorz-live-snapshot.bin
 QEMU_EXTRA_ARGS ?=
 comma := ,
 QEMU_UPDATE_ARGS := $(if $(UPDATE_PAYLOAD),-fw_cfg name=$(UPDATE_FW_CFG_NAME)$(comma)file=$(UPDATE_PAYLOAD))
-QEMU_RUN_ARGS := $(QEMU_UPDATE_ARGS) $(QEMU_EXTRA_ARGS)
+QEMU_SNAPSHOT_ARGS := $(if $(SNAPSHOT_PAYLOAD),-fw_cfg name=$(SNAPSHOT_FW_CFG_NAME)$(comma)file=$(SNAPSHOT_PAYLOAD))
+QEMU_RUN_ARGS := $(QEMU_UPDATE_ARGS) $(QEMU_SNAPSHOT_ARGS) $(QEMU_EXTRA_ARGS)
 
 CFLAGS := -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -ffreestanding -O2 -Wall -Wextra -I$(CURDIR) -I$(BUILD_DIR)
 LDFLAGS := -T $(CURDIR)/linker.ld
@@ -32,7 +36,7 @@ OBJECTS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(filter %.c,$(SOURCES))) \
 	$(patsubst %.S,$(BUILD_DIR)/%.o,$(filter %.S,$(SOURCES))) \
 	$(GENERATED_IMAGE_OBJECT)
 
-.PHONY: all run run-headless screenshot inspect-image clean FORCE
+.PHONY: all run run-headless screenshot save-snapshot inspect-image clean FORCE
 
 all: $(ELF)
 
@@ -79,6 +83,13 @@ screenshot: $(ELF)
 	$(PYTHON) $(ROOT)/tools/qemu_hmp_screendump.py $(MONITOR_SOCK) $(PPM)
 	@PID=$$(cat $(QEMU_PID)); kill $$PID >/dev/null 2>&1 || true
 	@echo "wrote $(PPM)"
+
+save-snapshot: $(ELF)
+	rm -f $(BUILD_DIR)/qemu.log $(QEMU_PID) $(SNAPSHOT_OUTPUT)
+	( $(QEMU) -machine virt -m 128M -smp 1 -kernel $(ELF) -serial stdio -display none -device ramfb $(QEMU_RUN_ARGS) >$(BUILD_DIR)/qemu.log 2>&1 & echo $$! > $(QEMU_PID) )
+	$(PYTHON) $(ROOT)/tools/extract_qemu_riscv_snapshot.py $(BUILD_DIR)/qemu.log $(SNAPSHOT_OUTPUT)
+	@PID=$$(cat $(QEMU_PID)); kill $$PID >/dev/null 2>&1 || true
+	@echo "wrote $(SNAPSHOT_OUTPUT)"
 
 inspect-image: $(GENERATED_IMAGE)
 	$(PYTHON) $(ROOT)/tools/inspect_qemu_riscv_mvp_image.py $(GENERATED_IMAGE)

@@ -65,3 +65,9 @@ RecorzKernelSelector: #setValue: order: 30
 RecorzKernelSelector: #detail order: 31
 !
 RecorzKernelSelector: #setDetail: order: 32
+!
+RecorzKernelSelector: #rememberObject:named: order: 33
+!
+RecorzKernelSelector: #objectNamed: order: 34
+!
+RecorzKernelSelector: #saveSnapshot order: 35
