@@ -128,14 +128,14 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("MEMORY", output)
 
             expected_limits = {
-                "HEAP": 512,
-                "DCLS": 16,
-                "NOBJ": 16,
-                "MSRC": 64,
-                "RSTR": 16384,
+                "HEAP": 384,
+                "DCLS": 8,
+                "NOBJ": 8,
+                "MSRC": 16,
+                "RSTR": 8192,
                 "SSTR": 8192,
-                "SNAP": 65536,
-                "MONO": 16,
+                "SNAP": 24576,
+                "MONO": 8,
             }
             for label, expected_limit in expected_limits.items():
                 match = re.search(rf"{label} (\d+)/(\d+)", output)
