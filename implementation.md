@@ -1,5 +1,13 @@
 # Implementation Log
 
+## 2026-03-07 - Add Workspace Source Session Primitives
+- Expanded the source-declared `Workspace` singleton in `kernel/mvp/Workspace.rz` to remember `lastSource` and expose `evaluate:` plus `rerun`, so the live image now has a minimal persistent session surface in addition to the existing browser state.
+- Added the matching source-owned selectors in `kernel/mvp/Selector.rz`, which grows the kernel selector and method-entry surface without introducing any new builder-owned semantic tables.
+- Extended `platform/qemu-riscv64/vm.c` with a narrow in-image do-it compiler that targets the existing unified executable engine: it supports simple statement streams of global sends with string, small-integer, `nil`, and global operands, then executes them through `execute_executable()` instead of adding a separate evaluator path.
+- Kept the new surface inspectable and image-first by storing the remembered source string directly in the `Workspace` object, so snapshots persist the session source automatically through the existing heap serialization path.
+- Updated the source-derived lowering and image-inspector expectations in `tests/test_qemu_riscv_mvp_lowering.py` and `tests/test_qemu_riscv_image_inspector.py` for the expanded `Workspace` layout and image growth (`objects=301`, `selectors=45`, `methods=41`).
+- Verified with `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_mvp_lowering tests.test_qemu_riscv_image_inspector -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
 ## 2026-03-07 - Add Workspace Named Object Browser Mode
 - Expanded the source-declared `Workspace` singleton in `kernel/mvp/Workspace.rz` with `browseObjectNamed:` and the matching source-owned selector in `kernel/mvp/Selector.rz`, so the live browser surface now covers class lists, individual classes, and remembered named objects through one persisted workspace object.
 - Extended `platform/qemu-riscv64/vm.c` so `Workspace>>reopen` now restores object-browser state as well as class and class-list views, and added a Transcript-style object browser that renders object name, class, slot count, and named dynamic instance variables with their current values.

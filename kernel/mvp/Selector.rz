@@ -85,3 +85,7 @@ RecorzKernelSelector: #browseClasses order: 40
 RecorzKernelSelector: #browseObjectNamed: order: 41
 !
 RecorzKernelSelector: #reopen order: 42
+!
+RecorzKernelSelector: #evaluate: order: 43
+!
+RecorzKernelSelector: #rerun order: 44

@@ -1,10 +1,13 @@
-RecorzKernelClass: #Workspace descriptorOrder: 19 objectKindOrder: 19 sourceBootOrder: 11 instanceVariableNames: 'currentViewKind currentTargetName'
+RecorzKernelClass: #Workspace descriptorOrder: 19 objectKindOrder: 19 sourceBootOrder: 11 instanceVariableNames: 'currentViewKind currentTargetName lastSource'
 !
 RecorzKernelBootObject: #Workspace family: #beforeGlyphs order: 11 class: #Workspace
 globalExports: 'Workspace'
 !
 fileIn: source
     <primitive: #workspaceFileIn>
+!
+evaluate: source
+    <primitive: #workspaceEvaluate>
 !
 browseClasses
     <primitive: #workspaceBrowseClasses>
@@ -14,6 +17,9 @@ browseObjectNamed: objectName
 !
 browseClassNamed: className
     <primitive: #workspaceBrowseClassNamed>
+!
+rerun
+    <primitive: #workspaceRerun>
 !
 reopen
     <primitive: #workspaceReopen>

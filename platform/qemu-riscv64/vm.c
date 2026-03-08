@@ -17,6 +17,8 @@
 #define METHOD_SOURCE_LINE_LIMIT 128U
 #define METHOD_SOURCE_NAME_LIMIT 64U
 #define METHOD_SOURCE_CHUNK_LIMIT 512U
+#define WORKSPACE_SOURCE_INSTRUCTION_LIMIT 64U
+#define WORKSPACE_SOURCE_LITERAL_LIMIT 16U
 #define DYNAMIC_CLASS_LIMIT 16U
 #define DYNAMIC_CLASS_IVAR_LIMIT OBJECT_FIELD_LIMIT
 #define NAMED_OBJECT_LIMIT 16U
@@ -76,7 +78,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_REOPEN
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_RERUN
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -118,6 +120,14 @@ struct recorz_mvp_dynamic_class_definition {
     char class_name[METHOD_SOURCE_NAME_LIMIT];
     uint8_t instance_variable_count;
     char instance_variable_names[DYNAMIC_CLASS_IVAR_LIMIT][METHOD_SOURCE_NAME_LIMIT];
+};
+
+struct recorz_mvp_workspace_source_program {
+    struct recorz_mvp_instruction instructions[WORKSPACE_SOURCE_INSTRUCTION_LIMIT];
+    struct recorz_mvp_literal literals[WORKSPACE_SOURCE_LITERAL_LIMIT];
+    char literal_texts[WORKSPACE_SOURCE_LITERAL_LIMIT][METHOD_SOURCE_CHUNK_LIMIT];
+    uint32_t instruction_count;
+    uint32_t literal_count;
 };
 
 struct recorz_mvp_named_object_binding {
@@ -208,6 +218,7 @@ static struct recorz_mvp_value nil_value(void);
 static uint32_t small_integer_u32(struct recorz_mvp_value value, const char *message);
 static void heap_set_class(uint16_t handle, uint16_t class_handle);
 static uint32_t compiled_method_instruction_word(const struct recorz_mvp_heap_object *compiled_method, uint8_t index);
+static void workspace_evaluate_source(const char *source);
 static uint8_t compiled_method_instruction_opcode(uint32_t instruction);
 static uint8_t compiled_method_instruction_operand_a(uint32_t instruction);
 static uint16_t compiled_method_instruction_operand_b(uint32_t instruction);
@@ -421,6 +432,10 @@ static const char *selector_name(uint8_t selector) {
             return "browseObjectNamed:";
         case RECORZ_MVP_SELECTOR_REOPEN:
             return "reopen";
+        case RECORZ_MVP_SELECTOR_EVALUATE:
+            return "evaluate:";
+        case RECORZ_MVP_SELECTOR_RERUN:
+            return "rerun";
     }
     return "unknown";
 }
@@ -899,6 +914,298 @@ static uint8_t source_selector_id_for_name(const char *name) {
         }
     }
     return 0U;
+}
+
+static const char *source_skip_statement_space(const char *cursor) {
+    while (*cursor == ' ' || *cursor == '\t' || *cursor == '\r' || *cursor == '\n') {
+        ++cursor;
+    }
+    return cursor;
+}
+
+static uint32_t source_copy_next_statement(const char **cursor_ref, char buffer[], uint32_t buffer_size) {
+    const char *cursor = source_skip_statement_space(*cursor_ref);
+    const char *trimmed_start;
+    const char *trimmed_end;
+    uint32_t length = 0U;
+    uint8_t in_string = 0U;
+
+    while (*cursor == '.') {
+        ++cursor;
+        cursor = source_skip_statement_space(cursor);
+    }
+    if (*cursor == '\0') {
+        *cursor_ref = cursor;
+        buffer[0] = '\0';
+        return 0U;
+    }
+    trimmed_start = cursor;
+    while (*cursor != '\0') {
+        if (*cursor == '\'') {
+            in_string = (uint8_t)!in_string;
+            ++cursor;
+            continue;
+        }
+        if (*cursor == '.' && !in_string) {
+            break;
+        }
+        ++cursor;
+    }
+    if (in_string) {
+        machine_panic("Workspace source statement contains an unterminated string");
+    }
+    trimmed_end = cursor;
+    while (
+        trimmed_end > trimmed_start &&
+        (trimmed_end[-1] == ' ' || trimmed_end[-1] == '\t' ||
+         trimmed_end[-1] == '\r' || trimmed_end[-1] == '\n')
+    ) {
+        --trimmed_end;
+    }
+    while (trimmed_start + length < trimmed_end) {
+        if (length + 1U >= buffer_size) {
+            machine_panic("Workspace source statement exceeds buffer capacity");
+        }
+        buffer[length] = trimmed_start[length];
+        ++length;
+    }
+    buffer[length] = '\0';
+    if (*cursor == '.') {
+        ++cursor;
+    }
+    *cursor_ref = cursor;
+    return length;
+}
+
+static const char *source_parse_small_integer(
+    const char *cursor,
+    int32_t *value_out
+) {
+    uint8_t negative = 0U;
+    int32_t value = 0;
+
+    if (*cursor == '-') {
+        negative = 1U;
+        ++cursor;
+    }
+    if (*cursor < '0' || *cursor > '9') {
+        return 0;
+    }
+    while (*cursor >= '0' && *cursor <= '9') {
+        value = (value * 10) + (int32_t)(*cursor - '0');
+        ++cursor;
+    }
+    *value_out = negative ? -value : value;
+    return cursor;
+}
+
+static uint8_t workspace_source_append_instruction(
+    struct recorz_mvp_workspace_source_program *program,
+    uint8_t opcode,
+    uint8_t operand_a,
+    uint16_t operand_b
+) {
+    if (program->instruction_count >= WORKSPACE_SOURCE_INSTRUCTION_LIMIT) {
+        return 0U;
+    }
+    program->instructions[program->instruction_count].opcode = opcode;
+    program->instructions[program->instruction_count].operand_a = operand_a;
+    program->instructions[program->instruction_count].operand_b = operand_b;
+    ++program->instruction_count;
+    return 1U;
+}
+
+static uint16_t workspace_source_append_string_literal(
+    struct recorz_mvp_workspace_source_program *program,
+    const char *text
+) {
+    uint32_t index = program->literal_count;
+    uint32_t char_index = 0U;
+
+    if (index >= WORKSPACE_SOURCE_LITERAL_LIMIT) {
+        machine_panic("Workspace source literal count exceeds capacity");
+    }
+    while (text[char_index] != '\0') {
+        if (char_index + 1U >= METHOD_SOURCE_CHUNK_LIMIT) {
+            machine_panic("Workspace source string literal exceeds capacity");
+        }
+        program->literal_texts[index][char_index] = text[char_index];
+        ++char_index;
+    }
+    program->literal_texts[index][char_index] = '\0';
+    program->literals[index].kind = RECORZ_MVP_LITERAL_STRING;
+    program->literals[index].integer = 0;
+    program->literals[index].string = program->literal_texts[index];
+    ++program->literal_count;
+    return (uint16_t)index;
+}
+
+static uint16_t workspace_source_append_small_integer_literal(
+    struct recorz_mvp_workspace_source_program *program,
+    int32_t value
+) {
+    uint32_t index = program->literal_count;
+
+    if (index >= WORKSPACE_SOURCE_LITERAL_LIMIT) {
+        machine_panic("Workspace source literal count exceeds capacity");
+    }
+    program->literals[index].kind = RECORZ_MVP_LITERAL_SMALL_INTEGER;
+    program->literals[index].integer = value;
+    program->literals[index].string = 0;
+    ++program->literal_count;
+    return (uint16_t)index;
+}
+
+static const char *workspace_compile_operand_push(
+    const char *cursor,
+    struct recorz_mvp_workspace_source_program *program
+) {
+    char identifier[METHOD_SOURCE_NAME_LIMIT];
+    char quoted_text[METHOD_SOURCE_CHUNK_LIMIT];
+    int32_t small_integer = 0;
+    const char *parsed_cursor;
+    uint8_t global_id;
+    uint16_t literal_index;
+
+    cursor = source_skip_statement_space(cursor);
+    if (*cursor == '\'') {
+        parsed_cursor = source_copy_single_quoted_text(cursor, quoted_text, sizeof(quoted_text));
+        if (parsed_cursor == 0) {
+            machine_panic("Workspace source string literal is invalid");
+        }
+        literal_index = workspace_source_append_string_literal(program, quoted_text);
+        if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_LITERAL, 0U, literal_index)) {
+            machine_panic("Workspace source exceeds instruction capacity");
+        }
+        return parsed_cursor;
+    }
+    parsed_cursor = source_parse_small_integer(cursor, &small_integer);
+    if (parsed_cursor != 0) {
+        literal_index = workspace_source_append_small_integer_literal(program, small_integer);
+        if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_LITERAL, 0U, literal_index)) {
+            machine_panic("Workspace source exceeds instruction capacity");
+        }
+        return parsed_cursor;
+    }
+    parsed_cursor = source_parse_identifier(cursor, identifier, sizeof(identifier));
+    if (parsed_cursor == 0) {
+        return 0;
+    }
+    if (source_names_equal(identifier, "nil")) {
+        if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_NIL, 0U, 0U)) {
+            machine_panic("Workspace source exceeds instruction capacity");
+        }
+        return parsed_cursor;
+    }
+    global_id = source_global_id_for_name(identifier);
+    if (global_id == 0U) {
+        machine_panic("Workspace source uses an unknown global operand");
+    }
+    if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_GLOBAL, global_id, 0U)) {
+        machine_panic("Workspace source exceeds instruction capacity");
+    }
+    return parsed_cursor;
+}
+
+static void workspace_compile_statement(
+    const char *statement,
+    struct recorz_mvp_workspace_source_program *program
+) {
+    char selector_buffer[METHOD_SOURCE_NAME_LIMIT];
+    char selector_part[METHOD_SOURCE_NAME_LIMIT];
+    const char *cursor = statement;
+    const char *part_cursor;
+    uint16_t argument_count = 0U;
+    uint32_t selector_length = 0U;
+    uint8_t selector_id;
+
+    cursor = workspace_compile_operand_push(cursor, program);
+    if (cursor == 0) {
+        machine_panic("Workspace source statement is missing a receiver");
+    }
+    cursor = source_skip_statement_space(cursor);
+    part_cursor = source_parse_identifier(cursor, selector_part, sizeof(selector_part));
+    if (part_cursor == 0) {
+        machine_panic("Workspace source statement is missing a selector");
+    }
+    while (selector_part[selector_length] != '\0') {
+        selector_buffer[selector_length] = selector_part[selector_length];
+        ++selector_length;
+    }
+    selector_buffer[selector_length] = '\0';
+    cursor = part_cursor;
+    if (*cursor == ':') {
+        do {
+            if (selector_length + 1U >= sizeof(selector_buffer)) {
+                machine_panic("Workspace keyword selector exceeds capacity");
+            }
+            selector_buffer[selector_length++] = ':';
+            selector_buffer[selector_length] = '\0';
+            ++cursor;
+            cursor = workspace_compile_operand_push(cursor, program);
+            if (cursor == 0) {
+                machine_panic("Workspace keyword send is missing an argument");
+            }
+            ++argument_count;
+            cursor = source_skip_statement_space(cursor);
+            part_cursor = source_parse_identifier(cursor, selector_part, sizeof(selector_part));
+            if (part_cursor == 0 || *part_cursor != ':') {
+                break;
+            }
+            {
+                uint32_t part_index = 0U;
+
+                while (selector_part[part_index] != '\0') {
+                    if (selector_length + 1U >= sizeof(selector_buffer)) {
+                        machine_panic("Workspace keyword selector exceeds capacity");
+                    }
+                    selector_buffer[selector_length++] = selector_part[part_index++];
+                }
+                selector_buffer[selector_length] = '\0';
+            }
+            cursor = part_cursor;
+        } while (*cursor == ':');
+    }
+    cursor = source_skip_statement_space(cursor);
+    if (*cursor != '\0') {
+        machine_panic("Workspace source statement has unexpected trailing text");
+    }
+    selector_id = source_selector_id_for_name(selector_buffer);
+    if (selector_id == 0U) {
+        machine_panic("Workspace source statement uses an unknown selector");
+    }
+    if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_SEND, selector_id, argument_count)) {
+        machine_panic("Workspace source exceeds instruction capacity");
+    }
+}
+
+static void build_workspace_source_program(
+    const char *source,
+    struct recorz_mvp_workspace_source_program *program
+) {
+    const char *cursor = source;
+    char statement[METHOD_SOURCE_CHUNK_LIMIT];
+    uint8_t statement_count = 0U;
+
+    program->instruction_count = 0U;
+    program->literal_count = 0U;
+    if (source == 0 || *source == '\0') {
+        machine_panic("Workspace source is empty");
+    }
+    while (source_copy_next_statement(&cursor, statement, sizeof(statement)) != 0U) {
+        workspace_compile_statement(statement, program);
+        if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_POP, 0U, 0U)) {
+            machine_panic("Workspace source exceeds instruction capacity");
+        }
+        ++statement_count;
+    }
+    if (statement_count == 0U) {
+        machine_panic("Workspace source contains no executable statements");
+    }
+    if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_NIL, 0U, 0U) ||
+        !workspace_source_append_instruction(program, RECORZ_MVP_OP_RETURN, 0U, 0U)) {
+        machine_panic("Workspace source exceeds instruction capacity");
+    }
 }
 
 static const struct recorz_mvp_dynamic_class_definition *dynamic_class_definition_for_name(const char *class_name) {
@@ -1525,6 +1832,13 @@ static uint8_t workspace_current_target_name_field_index(
     return RECORZ_MVP_WORKSPACE_FIELD_CURRENT_TARGET_NAME;
 }
 
+static uint8_t workspace_last_source_field_index(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    validate_workspace_receiver(workspace_object);
+    return RECORZ_MVP_WORKSPACE_FIELD_LAST_SOURCE;
+}
+
 static void workspace_remember_view(
     const struct recorz_mvp_heap_object *workspace_object,
     uint32_t view_kind,
@@ -1549,6 +1863,27 @@ static void workspace_remember_view(
         workspace_handle,
         workspace_current_target_name_field_index(workspace_object),
         string_value(target_name)
+    );
+}
+
+static void workspace_remember_source(
+    const struct recorz_mvp_heap_object *workspace_object,
+    const char *source
+) {
+    uint16_t workspace_handle = heap_handle_for_object(workspace_object);
+
+    if (source == 0 || source[0] == '\0') {
+        heap_set_field(
+            workspace_handle,
+            workspace_last_source_field_index(workspace_object),
+            nil_value()
+        );
+        return;
+    }
+    heap_set_field(
+        workspace_handle,
+        workspace_last_source_field_index(workspace_object),
+        string_value(source)
     );
 }
 
@@ -4342,6 +4677,21 @@ static void execute_entry_workspace_file_in(
     push(receiver);
 }
 
+static void execute_entry_workspace_evaluate(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace evaluate: expects a source string");
+    }
+    workspace_remember_source(object, arguments[0].string);
+    workspace_evaluate_source(arguments[0].string);
+    push(receiver);
+}
+
 static void execute_entry_workspace_browse_classes(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -4394,6 +4744,26 @@ static void execute_entry_workspace_browse_object_named(
     }
     workspace_remember_view(object, WORKSPACE_VIEW_OBJECT, arguments[0].string);
     workspace_render_object_browser(object, arguments[0].string, heap_object(object_handle));
+    push(receiver);
+}
+
+static void execute_entry_workspace_rerun(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    struct recorz_mvp_value source_value;
+
+    (void)arguments;
+    (void)text;
+    source_value = heap_get_field(object, workspace_last_source_field_index(object));
+    if (source_value.kind != RECORZ_MVP_VALUE_STRING ||
+        source_value.string == 0 ||
+        source_value.string[0] == '\0') {
+        machine_panic("Workspace rerun has no remembered source");
+    }
+    workspace_evaluate_source(source_value.string);
     push(receiver);
 }
 
@@ -4640,6 +5010,28 @@ static void execute_executable(
     }
 
     machine_panic("executable did not return");
+}
+
+static void workspace_evaluate_source(const char *source) {
+    struct recorz_mvp_workspace_source_program program;
+    struct recorz_mvp_executable executable = {
+        .instruction_source = program.instructions,
+        .read_instruction = read_program_instruction,
+        .instruction_count = 0U,
+        .literals = program.literals,
+        .literal_count = 0U,
+        .lexical_count = 0U,
+    };
+    uint32_t stack_size_before = stack_size;
+
+    build_workspace_source_program(source, &program);
+    executable.instruction_count = program.instruction_count;
+    executable.literal_count = program.literal_count;
+    execute_executable(&executable, 0, nil_value(), 0U, 0);
+    if (stack_size != stack_size_before + 1U) {
+        machine_panic("Workspace source execution did not return exactly one value");
+    }
+    (void)pop_value();
 }
 
 static void execute_compiled_method(
