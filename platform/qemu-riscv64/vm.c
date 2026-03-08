@@ -932,6 +932,25 @@ static void source_parse_class_side_name_from_chunk(
     }
 }
 
+static const char *source_parse_do_it_chunk_body(const char *chunk) {
+    const char *cursor = chunk;
+
+    if (!source_starts_with(cursor, "RecorzKernelDoIt:")) {
+        machine_panic("KernelInstaller do-it chunk is missing a RecorzKernelDoIt header");
+    }
+    cursor += 17U;
+    if (*cursor == '\n') {
+        ++cursor;
+    } else {
+        cursor = source_skip_horizontal_space(cursor);
+    }
+    cursor = source_skip_blank_lines(cursor);
+    if (*cursor == '\0') {
+        machine_panic("KernelInstaller do-it chunk has no executable source");
+    }
+    return cursor;
+}
+
 static const char *source_parse_identifier(const char *cursor, char buffer[], uint32_t buffer_size) {
     uint32_t length = 0U;
 
@@ -5417,7 +5436,7 @@ static void file_in_chunk_stream_source(const char *source) {
     const struct recorz_mvp_heap_object *class_object = 0;
     const struct recorz_mvp_heap_object *install_class_object = 0;
     uint8_t class_header_count = 0U;
-    uint8_t method_chunk_count = 0U;
+    uint8_t do_it_chunk_count = 0U;
 
     if (source == 0 || *source == '\0') {
         machine_panic("KernelInstaller fileInClassChunks: source is empty");
@@ -5447,17 +5466,18 @@ static void file_in_chunk_stream_source(const char *source) {
             ++class_header_count;
             continue;
         }
+        if (source_starts_with(chunk, "RecorzKernelDoIt:")) {
+            workspace_evaluate_source(source_parse_do_it_chunk_body(chunk));
+            ++do_it_chunk_count;
+            continue;
+        }
         if (install_class_object == 0) {
             machine_panic("KernelInstaller file-in stream is missing an initial RecorzKernelClass chunk");
         }
         install_method_chunk_on_class(install_class_object, chunk);
-        ++method_chunk_count;
     }
-    if (class_header_count == 0U) {
-        machine_panic("KernelInstaller file-in stream contains no class chunks");
-    }
-    if (method_chunk_count == 0U) {
-        machine_panic("KernelInstaller file-in stream contains no method chunks");
+    if (class_header_count == 0U && do_it_chunk_count == 0U) {
+        machine_panic("KernelInstaller file-in stream contains no class or do-it chunks");
     }
 }
 
@@ -5699,7 +5719,8 @@ static void execute_entry_workspace_file_in_current(
         machine_panic("Workspace fileInCurrent has no current source");
     }
     if (source_starts_with(source_value.string, "RecorzKernelClass:") ||
-        source_starts_with(source_value.string, "RecorzKernelClassSide:")) {
+        source_starts_with(source_value.string, "RecorzKernelClassSide:") ||
+        source_starts_with(source_value.string, "RecorzKernelDoIt:")) {
         file_in_chunk_stream_source(source_value.string);
         push(receiver);
         return;

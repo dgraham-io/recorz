@@ -1,0 +1,10 @@
+Workspace setContents: 'RecorzKernelClass: #ChunkWorker superclass: #Object instanceVariableNames: ''''
+!
+cr
+    Display newline.
+    ^self
+!
+RecorzKernelDoIt:
+Transcript show: ''CHUNK''.
+Display newline.'.
+Workspace fileInCurrent.

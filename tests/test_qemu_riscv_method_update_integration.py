@@ -14,6 +14,7 @@ APPEND_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-append-method-test"
 IN_IMAGE_INSTALL_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-in-image-install-test"
 IN_IMAGE_SOURCE_INSTALL_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-in-image-source-install-test"
 IN_IMAGE_CHUNK_FILE_IN_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-in-image-chunk-file-in-test"
+IN_IMAGE_CHUNK_DOIT_FILE_IN_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-in-image-chunk-doit-file-in-test"
 IN_IMAGE_CLASS_FILE_IN_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-in-image-class-file-in-test"
 IN_IMAGE_CLASS_CREATE_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-in-image-class-create-test"
 IN_IMAGE_INSTANCE_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-in-image-instance-test"
@@ -34,6 +35,7 @@ APPEND_UPDATE_SOURCE_PATH = ROOT / "examples" / "qemu_riscv_display_cr_update.rz
 IN_IMAGE_INSTALL_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_install_demo.rz"
 IN_IMAGE_SOURCE_INSTALL_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_source_install_demo.rz"
 IN_IMAGE_CHUNK_FILE_IN_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_chunk_file_in_demo.rz"
+IN_IMAGE_CHUNK_DOIT_FILE_IN_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_chunk_doit_file_in_demo.rz"
 IN_IMAGE_CLASS_FILE_IN_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_class_file_in_demo.rz"
 IN_IMAGE_CLASS_CREATE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_class_create_demo.rz"
 IN_IMAGE_INSTANCE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_instance_demo.rz"
@@ -316,6 +318,20 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
         self.assertGreater(line_1[TEXT_FOREGROUND], 300)
         self.assertGreater(line_2[TEXT_FOREGROUND], 300)
         self.assertGreater(line_3[TEXT_FOREGROUND], 300)
+
+    def test_in_image_chunk_file_in_can_run_do_it_chunks_without_update_payload(self) -> None:
+        updated_log, width, height, updated_data = self.render_demo(
+            build_dir=IN_IMAGE_CHUNK_DOIT_FILE_IN_BUILD_DIR,
+            example_path=IN_IMAGE_CHUNK_DOIT_FILE_IN_DEMO_PATH,
+            update_payload=None,
+        )
+
+        self.assertEqual((width, height), (1024, 768))
+        self.assertIn("recorz qemu-riscv64 mvp: created class ChunkWorker", updated_log)
+        self.assertIn("recorz qemu-riscv64 mvp: rendered", updated_log)
+
+        line_1 = _region_histogram(updated_data, width, 24, 24, 220, 56)
+        self.assertGreater(line_1[TEXT_FOREGROUND], 300)
 
     def test_in_image_class_file_in_resolves_existing_class_without_update_payload(self) -> None:
         baseline_output = self.capture_timeout_output(
