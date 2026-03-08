@@ -94,6 +94,7 @@
 #define WORKSPACE_VIEW_METHOD 5U
 #define WORKSPACE_VIEW_CLASS_METHODS 6U
 #define WORKSPACE_VIEW_CLASS_METHOD 7U
+#define WORKSPACE_VIEW_CLASS_SOURCE 8U
 
 enum recorz_mvp_value_kind {
     RECORZ_MVP_VALUE_NIL = 0,
@@ -2116,6 +2117,9 @@ static const struct recorz_mvp_heap_object *workspace_target_class_for_file_in(
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS) {
         return lookup_class_by_name(target_name_value.string);
     }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_SOURCE) {
+        return lookup_class_by_name(target_name_value.string);
+    }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_METHODS) {
         return lookup_class_by_name(target_name_value.string);
     }
@@ -2232,26 +2236,41 @@ static uint8_t workspace_parse_method_target_name(
     return 1U;
 }
 
+static void workspace_copy_display_text(char output[], const char *text) {
+    uint32_t index = 0U;
+    uint8_t truncated = 0U;
+
+    while (text[index] != '\0') {
+        char character = text[index];
+
+        if (index + 1U >= METHOD_SOURCE_NAME_LIMIT) {
+            truncated = 1U;
+            break;
+        }
+        if (character >= 'a' && character <= 'z') {
+            character = (char)(character - ('a' - 'A'));
+        }
+        output[index++] = character;
+    }
+    if (truncated && METHOD_SOURCE_NAME_LIMIT >= 4U) {
+        if (index > METHOD_SOURCE_NAME_LIMIT - 4U) {
+            index = METHOD_SOURCE_NAME_LIMIT - 4U;
+        }
+        output[index++] = '.';
+        output[index++] = '.';
+        output[index++] = '.';
+    }
+    output[index] = '\0';
+}
+
 static void workspace_write_label_and_text(
     const struct recorz_mvp_heap_object *form,
     const char *label,
     const char *text
 ) {
     char uppercase_buffer[METHOD_SOURCE_NAME_LIMIT];
-    uint32_t index = 0U;
 
-    while (text[index] != '\0') {
-        char character = text[index];
-
-        if (index + 1U >= METHOD_SOURCE_NAME_LIMIT) {
-            machine_panic("Workspace browser text exceeds display buffer capacity");
-        }
-        if (character >= 'a' && character <= 'z') {
-            character = (char)(character - ('a' - 'A'));
-        }
-        uppercase_buffer[index++] = character;
-    }
-    uppercase_buffer[index] = '\0';
+    workspace_copy_display_text(uppercase_buffer, text);
     form_write_string(form, label);
     form_write_string(form, ": ");
     form_write_string(form, uppercase_buffer);
@@ -2263,20 +2282,8 @@ static void workspace_write_text_line(
     const char *text
 ) {
     char uppercase_buffer[METHOD_SOURCE_NAME_LIMIT];
-    uint32_t index = 0U;
 
-    while (text[index] != '\0') {
-        char character = text[index];
-
-        if (index + 1U >= METHOD_SOURCE_NAME_LIMIT) {
-            machine_panic("Workspace browser text exceeds display buffer capacity");
-        }
-        if (character >= 'a' && character <= 'z') {
-            character = (char)(character - ('a' - 'A'));
-        }
-        uppercase_buffer[index++] = character;
-    }
-    uppercase_buffer[index] = '\0';
+    workspace_copy_display_text(uppercase_buffer, text);
     form_write_string(form, uppercase_buffer);
     form_newline(form);
 }
@@ -2437,6 +2444,35 @@ static void workspace_render_method_browser(
     workspace_write_label_and_text(form, "CLASS", class_name);
     workspace_write_label_and_text(form, "SIDE", side_label);
     workspace_write_label_and_text(form, "METHOD", selector_name_text);
+    if (source_value.kind != RECORZ_MVP_VALUE_STRING ||
+        source_value.string == 0 ||
+        source_value.string[0] == '\0') {
+        workspace_write_text_line(form, "NO SOURCE BUFFER");
+        return;
+    }
+    cursor = source_value.string;
+    while (source_copy_trimmed_line(&cursor, line, sizeof(line)) != 0U) {
+        workspace_write_text_line(form, line);
+        wrote_line = 1U;
+    }
+    if (!wrote_line) {
+        workspace_write_text_line(form, "EMPTY SOURCE");
+    }
+}
+
+static void workspace_render_class_source_browser(
+    const struct recorz_mvp_heap_object *workspace_object,
+    const char *class_name
+) {
+    const struct recorz_mvp_heap_object *form = default_form_object();
+    struct recorz_mvp_value source_value = workspace_current_source_value(workspace_object);
+    const char *cursor;
+    char line[METHOD_SOURCE_LINE_LIMIT];
+    uint8_t wrote_line = 0U;
+
+    form_clear(form);
+    workspace_write_label_and_text(form, "CLASS", class_name);
+    workspace_write_label_and_text(form, "VIEW", "SOURCE");
     if (source_value.kind != RECORZ_MVP_VALUE_STRING ||
         source_value.string == 0 ||
         source_value.string[0] == '\0') {
@@ -3706,6 +3742,23 @@ static struct recorz_mvp_live_method_source *mutable_live_method_source_for(
         if (source_record->class_handle == class_handle &&
             source_record->selector_id == selector_id &&
             source_record->argument_count == argument_count) {
+            return source_record;
+        }
+    }
+    return 0;
+}
+
+static const struct recorz_mvp_live_method_source *live_method_source_for(
+    uint16_t class_handle,
+    uint8_t selector_id
+) {
+    uint16_t source_index;
+
+    for (source_index = 0U; source_index < live_method_source_count; ++source_index) {
+        const struct recorz_mvp_live_method_source *source_record = &live_method_sources[source_index];
+
+        if (source_record->class_handle == class_handle &&
+            source_record->selector_id == selector_id) {
             return source_record;
         }
     }
@@ -5748,6 +5801,8 @@ static void execute_entry_workspace_file_out_class_named(
     }
     source = file_out_class_source_by_name(arguments[0].string);
     workspace_remember_current_source(object, source);
+    workspace_remember_view(object, WORKSPACE_VIEW_CLASS_SOURCE, arguments[0].string);
+    workspace_render_class_source_browser(object, arguments[0].string);
     push(receiver);
 }
 
@@ -5927,6 +5982,7 @@ static void execute_entry_workspace_browse_method_of_class_named(
     const char *text
 ) {
     const struct recorz_mvp_heap_object *class_object;
+    const struct recorz_mvp_live_method_source *source_record;
     uint8_t selector_id;
 
     (void)text;
@@ -5947,6 +6003,10 @@ static void execute_entry_workspace_browse_method_of_class_named(
     if (lookup_builtin_method_descriptor(class_object, selector_id, 0U) == 0 &&
         lookup_builtin_method_descriptor(class_object, selector_id, 1U) == 0) {
         machine_panic("Workspace browseMethod:ofClassNamed: could not resolve method");
+    }
+    source_record = live_method_source_for(heap_handle_for_object(class_object), selector_id);
+    if (source_record != 0) {
+        workspace_remember_current_source(object, live_method_source_text(source_record));
     }
     workspace_remember_view(
         object,
@@ -5991,6 +6051,7 @@ static void execute_entry_workspace_browse_class_method_of_class_named(
 ) {
     const struct recorz_mvp_heap_object *class_object;
     const struct recorz_mvp_heap_object *metaclass_object;
+    const struct recorz_mvp_live_method_source *source_record;
     uint8_t selector_id;
 
     (void)text;
@@ -6012,6 +6073,10 @@ static void execute_entry_workspace_browse_class_method_of_class_named(
     if (lookup_builtin_method_descriptor(metaclass_object, selector_id, 0U) == 0 &&
         lookup_builtin_method_descriptor(metaclass_object, selector_id, 1U) == 0) {
         machine_panic("Workspace browseClassMethod:ofClassNamed: could not resolve class-side method");
+    }
+    source_record = live_method_source_for(heap_handle_for_object(metaclass_object), selector_id);
+    if (source_record != 0) {
+        workspace_remember_current_source(object, live_method_source_text(source_record));
     }
     workspace_remember_view(
         object,
@@ -6117,6 +6182,17 @@ static void execute_entry_workspace_reopen(
             machine_panic("Workspace reopen could not resolve the remembered object");
         }
         workspace_render_object_browser(object, target_name_value.string, heap_object(object_handle));
+        push(receiver);
+        return;
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_SOURCE) {
+        target_name_value = heap_get_field(object, workspace_current_target_name_field_index(object));
+        if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
+            target_name_value.string == 0 ||
+            target_name_value.string[0] == '\0') {
+            machine_panic("Workspace reopen is missing the remembered class source target");
+        }
+        workspace_render_class_source_browser(object, target_name_value.string);
         push(receiver);
         return;
     }

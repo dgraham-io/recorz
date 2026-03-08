@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-BUILD_DIR = ROOT / "misc" / "qemu-riscv32-mvp"
+BUILD_DIR = ROOT / "misc" / "qemu-riscv32-dev-mvp"
 PPM_PATH = BUILD_DIR / "recorz-qemu-riscv32-mvp.ppm"
 QEMU_LOG_PATH = BUILD_DIR / "qemu.log"
 

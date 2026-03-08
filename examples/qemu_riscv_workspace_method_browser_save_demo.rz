@@ -3,6 +3,7 @@ Workspace setContents: 'cr
     Display clear.
     ^self'.
 Workspace fileInCurrent.
+Workspace setContents: ''.
 Workspace browseMethodsForClassNamed: 'Display'.
 Workspace browseMethod: 'cr' ofClassNamed: 'Display'.
 KernelInstaller configureStartup: Workspace selectorNamed: 'reopen'.

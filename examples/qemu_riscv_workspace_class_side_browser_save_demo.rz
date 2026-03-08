@@ -5,9 +5,7 @@ RecorzKernelClassSide: #Meta
 cr
     Display newline.
     ^self'.
-Workspace setContents: 'cr
-    Display newline.
-    ^self'.
+Workspace setContents: ''.
 Workspace browseClassMethodsForClassNamed: 'Meta'.
 Workspace browseClassMethod: 'cr' ofClassNamed: 'Meta'.
 KernelInstaller configureStartup: Workspace selectorNamed: 'reopen'.
