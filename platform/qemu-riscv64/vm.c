@@ -61,7 +61,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_OBJECT
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SET_VALUE
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SET_DETAIL
 
 enum recorz_mvp_value_kind {
     RECORZ_MVP_VALUE_NIL = 0,
@@ -354,6 +354,10 @@ static const char *selector_name(uint8_t selector) {
             return "value";
         case RECORZ_MVP_SELECTOR_SET_VALUE:
             return "setValue:";
+        case RECORZ_MVP_SELECTOR_DETAIL:
+            return "detail";
+        case RECORZ_MVP_SELECTOR_SET_DETAIL:
+            return "setDetail:";
     }
     return "unknown";
 }
@@ -1301,14 +1305,69 @@ static const char *class_name_for_object(const struct recorz_mvp_heap_object *cl
     return object_kind_name((uint8_t)class_instance_kind(class_object));
 }
 
-static uint8_t live_instance_field_count_for_class(const struct recorz_mvp_heap_object *class_object) {
+static uint8_t live_instance_field_count_for_class_with_depth(
+    const struct recorz_mvp_heap_object *class_object,
+    uint32_t depth
+) {
     const struct recorz_mvp_dynamic_class_definition *dynamic_definition =
         dynamic_class_definition_for_handle(heap_handle_for_object(class_object));
+    const struct recorz_mvp_heap_object *superclass_object;
+    uint32_t total_count = 0U;
 
-    if (dynamic_definition != 0) {
-        return dynamic_definition->instance_variable_count;
+    if (depth > DYNAMIC_CLASS_LIMIT) {
+        machine_panic("class instance field chain is invalid");
     }
-    return 0U;
+    superclass_object = class_superclass_object_or_null(class_object);
+    if (superclass_object != 0) {
+        total_count = live_instance_field_count_for_class_with_depth(superclass_object, depth + 1U);
+    }
+    if (dynamic_definition != 0) {
+        total_count += dynamic_definition->instance_variable_count;
+    }
+    if (total_count > OBJECT_FIELD_LIMIT) {
+        machine_panic("class instance field count exceeds object field capacity");
+    }
+    return (uint8_t)total_count;
+}
+
+static uint8_t live_instance_field_count_for_class(const struct recorz_mvp_heap_object *class_object) {
+    return live_instance_field_count_for_class_with_depth(class_object, 0U);
+}
+
+static uint8_t class_field_index_for_name_with_depth(
+    const struct recorz_mvp_heap_object *class_object,
+    const char *field_name,
+    uint8_t *field_index_out,
+    uint32_t depth
+) {
+    const struct recorz_mvp_dynamic_class_definition *dynamic_definition =
+        dynamic_class_definition_for_handle(heap_handle_for_object(class_object));
+    const struct recorz_mvp_heap_object *superclass_object = class_superclass_object_or_null(class_object);
+    uint8_t inherited_field_count = 0U;
+    uint8_t field_index;
+
+    if (depth > DYNAMIC_CLASS_LIMIT) {
+        machine_panic("class field lookup chain is invalid");
+    }
+    if (superclass_object != 0) {
+        inherited_field_count = live_instance_field_count_for_class_with_depth(superclass_object, depth + 1U);
+    }
+    if (dynamic_definition == 0) {
+        if (superclass_object == 0) {
+            return 0U;
+        }
+        return class_field_index_for_name_with_depth(superclass_object, field_name, field_index_out, depth + 1U);
+    }
+    for (field_index = 0U; field_index < dynamic_definition->instance_variable_count; ++field_index) {
+        if (source_names_equal(field_name, dynamic_definition->instance_variable_names[field_index])) {
+            *field_index_out = (uint8_t)(inherited_field_count + field_index);
+            return 1U;
+        }
+    }
+    if (superclass_object == 0) {
+        return 0U;
+    }
+    return class_field_index_for_name_with_depth(superclass_object, field_name, field_index_out, depth + 1U);
 }
 
 static uint8_t class_field_index_for_name(
@@ -1316,20 +1375,46 @@ static uint8_t class_field_index_for_name(
     const char *field_name,
     uint8_t *field_index_out
 ) {
-    const struct recorz_mvp_dynamic_class_definition *dynamic_definition =
-        dynamic_class_definition_for_handle(heap_handle_for_object(class_object));
-    uint8_t field_index;
+    return class_field_index_for_name_with_depth(class_object, field_name, field_index_out, 0U);
+}
 
-    if (dynamic_definition == 0) {
-        return 0U;
-    }
-    for (field_index = 0U; field_index < dynamic_definition->instance_variable_count; ++field_index) {
-        if (source_names_equal(field_name, dynamic_definition->instance_variable_names[field_index])) {
-            *field_index_out = field_index;
-            return 1U;
+static void validate_dynamic_class_definition(
+    const struct recorz_mvp_live_class_definition *definition,
+    const struct recorz_mvp_dynamic_class_definition *existing_definition,
+    const struct recorz_mvp_heap_object *superclass_object
+) {
+    uint8_t field_index;
+    uint8_t inherited_field_index;
+
+    if (existing_definition != 0) {
+        if (existing_definition->instance_variable_count != definition->instance_variable_count) {
+            machine_panic("KernelInstaller does not support changing dynamic class instance variables");
+        }
+        for (field_index = 0U; field_index < definition->instance_variable_count; ++field_index) {
+            if (!source_names_equal(
+                    existing_definition->instance_variable_names[field_index],
+                    definition->instance_variable_names[field_index])) {
+                machine_panic("KernelInstaller does not support renaming dynamic class instance variables");
+            }
         }
     }
-    return 0U;
+    for (field_index = 0U; field_index < definition->instance_variable_count; ++field_index) {
+        uint8_t other_field_index;
+
+        for (other_field_index = (uint8_t)(field_index + 1U);
+             other_field_index < definition->instance_variable_count;
+             ++other_field_index) {
+            if (source_names_equal(
+                    definition->instance_variable_names[field_index],
+                    definition->instance_variable_names[other_field_index])) {
+                machine_panic("KernelInstaller class chunk repeats an instance variable name");
+            }
+        }
+        if (superclass_object != 0 &&
+            class_field_index_for_name(superclass_object, definition->instance_variable_names[field_index], &inherited_field_index)) {
+            machine_panic("KernelInstaller class chunk repeats an inherited instance variable name");
+        }
+    }
 }
 
 static uint32_t primitive_kind_for_heap_object(const struct recorz_mvp_heap_object *object) {
@@ -2924,6 +3009,7 @@ static const struct recorz_mvp_heap_object *ensure_class_defined(
 ) {
     const struct recorz_mvp_heap_object *class_object = lookup_class_by_name(definition->class_name);
     struct recorz_mvp_dynamic_class_definition *dynamic_definition = 0;
+    const struct recorz_mvp_dynamic_class_definition *existing_dynamic_definition = 0;
     struct recorz_mvp_live_class_definition superclass_definition;
     const struct recorz_mvp_heap_object *superclass_object;
     uint16_t class_handle;
@@ -2946,6 +3032,10 @@ static const struct recorz_mvp_heap_object *ensure_class_defined(
                     machine_panic("KernelInstaller seeded class superclass does not match class chunk");
                 }
             }
+            return class_object;
+        }
+        existing_dynamic_definition = dynamic_definition;
+        if (!definition->has_superclass && definition->instance_variable_count == 0U) {
             return class_object;
         }
     }
@@ -2977,6 +3067,7 @@ static const struct recorz_mvp_heap_object *ensure_class_defined(
     } else {
         superclass_object = class_object_for_kind(RECORZ_MVP_OBJECT_OBJECT);
     }
+    validate_dynamic_class_definition(definition, existing_dynamic_definition, superclass_object);
     heap_set_field(
         class_handle,
         CLASS_FIELD_SUPERCLASS,

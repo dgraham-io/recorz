@@ -61,3 +61,7 @@ RecorzKernelSelector: #classNamed: order: 28
 RecorzKernelSelector: #value order: 29
 !
 RecorzKernelSelector: #setValue: order: 30
+!
+RecorzKernelSelector: #detail order: 31
+!
+RecorzKernelSelector: #setDetail: order: 32

@@ -20,6 +20,7 @@ IN_IMAGE_INSTANCE_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-in-image-instance-te
 IN_IMAGE_NAMED_CLASS_INSTANCE_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-in-image-named-class-instance-test"
 IN_IMAGE_STATEFUL_CLASS_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-in-image-stateful-class-test"
 IN_IMAGE_INHERITED_METHOD_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-in-image-inherited-method-test"
+IN_IMAGE_INHERITED_STATE_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-in-image-inherited-state-test"
 PPM_PATH = BUILD_DIR / "recorz-qemu-riscv64-mvp.ppm"
 QEMU_LOG_PATH = BUILD_DIR / "qemu.log"
 UPDATE_TOOL_PATH = ROOT / "tools" / "build_qemu_riscv_method_update.py"
@@ -38,6 +39,7 @@ IN_IMAGE_INSTANCE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_instance_
 IN_IMAGE_NAMED_CLASS_INSTANCE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_named_class_instance_demo.rz"
 IN_IMAGE_STATEFUL_CLASS_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_stateful_class_demo.rz"
 IN_IMAGE_INHERITED_METHOD_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_inherited_method_demo.rz"
+IN_IMAGE_INHERITED_STATE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_in_image_inherited_state_demo.rz"
 TEXT_FOREGROUND = (31, 41, 51)
 TEXT_BACKGROUND = (247, 243, 232)
 
@@ -412,6 +414,23 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
         updated_log, width, height, updated_data = self.render_demo(
             build_dir=IN_IMAGE_INHERITED_METHOD_BUILD_DIR,
             example_path=IN_IMAGE_INHERITED_METHOD_DEMO_PATH,
+            update_payload=None,
+        )
+
+        self.assertEqual((width, height), (640, 480))
+        self.assertIn("recorz qemu-riscv64 mvp: created class Parent", updated_log)
+        self.assertIn("recorz qemu-riscv64 mvp: created class Child", updated_log)
+        self.assertIn("recorz qemu-riscv64 mvp: rendered", updated_log)
+
+        line_1 = _region_histogram(updated_data, width, 24, 24, 220, 56)
+        line_2 = _region_histogram(updated_data, width, 24, 58, 220, 90)
+        self.assertGreater(line_1[TEXT_FOREGROUND], 300)
+        self.assertGreater(line_2[TEXT_FOREGROUND], 300)
+
+    def test_in_image_subclass_instances_hold_inherited_and_local_state(self) -> None:
+        updated_log, width, height, updated_data = self.render_demo(
+            build_dir=IN_IMAGE_INHERITED_STATE_BUILD_DIR,
+            example_path=IN_IMAGE_INHERITED_STATE_DEMO_PATH,
             update_payload=None,
         )
 

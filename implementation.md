@@ -721,3 +721,10 @@
 - Added `examples/qemu_riscv_in_image_inherited_method_demo.rz`, which files in `Parent`, files in `Child superclass: #Parent`, instantiates `Child`, and proves that a method defined only on `Parent` is still understood by the `Child` instance.
 - Added integration coverage in `tests/test_qemu_riscv_method_update_integration.py` to lock that inherited-method path at the QEMU framebuffer level.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 EXAMPLE=/Users/david/repos/recorz/examples/qemu_riscv_in_image_inherited_method_demo.rz screenshot`.
+
+## 2026-03-07 - Add Inherited Instance Layout For Live Classes
+- Extended `platform/qemu-riscv64/vm.c` so live instance sizing now counts inherited instance variables across the superclass chain, instead of only looking at the current class’s local ivars.
+- Changed live field-name resolution in the tiny in-image compiler to resolve both inherited and local instance variables, while also offsetting child-local slots after inherited slots so parent and child methods can agree on the same object layout.
+- Added validation for live class headers so dynamic classes cannot silently rename, resize, or duplicate inherited instance-variable names, which keeps the inherited layout stable enough for later image persistence work.
+- Added `kernel/mvp/Selector.rz` entries for `detail` and `setDetail:`, plus `examples/qemu_riscv_in_image_inherited_state_demo.rz` and integration coverage in `tests/test_qemu_riscv_method_update_integration.py` proving that a `Child` instance can hold both inherited `value` state from `Parent` and its own local `detail` state at the same time.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 EXAMPLE=/Users/david/repos/recorz/examples/qemu_riscv_in_image_inherited_state_demo.rz screenshot`.
