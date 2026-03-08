@@ -1,6 +1,6 @@
 | exportedClass item current |
 Display clear.
-KernelInstaller fileInClassChunks: 'RecorzKernelClass: #Exported superclass: #Object instanceVariableNames: ''value''
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #Exported superclass: #Object comment: ''Roundtrip export demo'' instanceVariableNames: ''value''
 !
 value
     ^value

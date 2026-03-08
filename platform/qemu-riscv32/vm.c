@@ -17,6 +17,7 @@
 #define MONO_BITMAP_MAX_HEIGHT 64U
 #define METHOD_SOURCE_LINE_LIMIT 128U
 #define METHOD_SOURCE_NAME_LIMIT 64U
+#define CLASS_COMMENT_LIMIT 128U
 #define METHOD_SOURCE_CHUNK_LIMIT 512U
 #define WORKSPACE_SOURCE_INSTRUCTION_LIMIT 64U
 #define WORKSPACE_SOURCE_LITERAL_LIMIT 16U
@@ -38,7 +39,7 @@
 #define SNAPSHOT_VALUE_SIZE 8U
 #define SNAPSHOT_OBJECT_SIZE (4U + (OBJECT_FIELD_LIMIT * SNAPSHOT_VALUE_SIZE))
 #define SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE \
-    (8U + METHOD_SOURCE_NAME_LIMIT + (DYNAMIC_CLASS_IVAR_LIMIT * METHOD_SOURCE_NAME_LIMIT))
+    (8U + METHOD_SOURCE_NAME_LIMIT + CLASS_COMMENT_LIMIT + (DYNAMIC_CLASS_IVAR_LIMIT * METHOD_SOURCE_NAME_LIMIT))
 #define SNAPSHOT_NAMED_OBJECT_RECORD_SIZE (2U + METHOD_SOURCE_NAME_LIMIT)
 #define SNAPSHOT_LIVE_METHOD_SOURCE_RECORD_SIZE 8U
 
@@ -120,6 +121,7 @@ struct recorz_mvp_live_class_definition {
     char class_name[METHOD_SOURCE_NAME_LIMIT];
     uint8_t has_superclass;
     char superclass_name[METHOD_SOURCE_NAME_LIMIT];
+    char class_comment[CLASS_COMMENT_LIMIT];
     uint8_t instance_variable_count;
     char instance_variable_names[DYNAMIC_CLASS_IVAR_LIMIT][METHOD_SOURCE_NAME_LIMIT];
 };
@@ -128,6 +130,7 @@ struct recorz_mvp_dynamic_class_definition {
     uint16_t class_handle;
     uint16_t superclass_handle;
     char class_name[METHOD_SOURCE_NAME_LIMIT];
+    char class_comment[CLASS_COMMENT_LIMIT];
     uint8_t instance_variable_count;
     char instance_variable_names[DYNAMIC_CLASS_IVAR_LIMIT][METHOD_SOURCE_NAME_LIMIT];
 };
@@ -863,6 +866,7 @@ static void initialize_live_class_definition(struct recorz_mvp_live_class_defini
     definition->class_name[0] = '\0';
     definition->has_superclass = 0U;
     definition->superclass_name[0] = '\0';
+    definition->class_comment[0] = '\0';
     definition->instance_variable_count = 0U;
     for (index = 0U; index < DYNAMIC_CLASS_IVAR_LIMIT; ++index) {
         definition->instance_variable_names[index][0] = '\0';
@@ -900,6 +904,11 @@ static void source_parse_class_definition_from_chunk(
                 machine_panic("KernelInstaller class chunk superclass is invalid");
             }
             definition->has_superclass = 1U;
+        } else if (source_names_equal(keyword, "comment")) {
+            cursor = source_copy_single_quoted_text(cursor, definition->class_comment, sizeof(definition->class_comment));
+            if (cursor == 0) {
+                machine_panic("KernelInstaller class chunk comment is invalid");
+            }
         } else if (source_names_equal(keyword, "instanceVariableNames")) {
             cursor = source_copy_single_quoted_text(cursor, instance_variables, sizeof(instance_variables));
             if (cursor == 0) {
@@ -2406,6 +2415,8 @@ static void workspace_render_class_browser(
     const struct recorz_mvp_heap_object *form = default_form_object();
     const struct recorz_mvp_heap_object *superclass_object = class_superclass_object_or_null(class_object);
     const char *superclass_name = superclass_object == 0 ? "nil" : class_name_for_object(superclass_object);
+    const struct recorz_mvp_dynamic_class_definition *definition =
+        dynamic_class_definition_for_handle(heap_handle_for_object(class_object));
 
     (void)workspace_object;
     form_clear(form);
@@ -2413,6 +2424,9 @@ static void workspace_render_class_browser(
     form_newline(form);
     workspace_write_label_and_text(form, "CLASS", class_name);
     workspace_write_label_and_text(form, "SUPER", superclass_name);
+    if (definition != 0 && definition->class_comment[0] != '\0') {
+        workspace_write_label_and_text(form, "COMMENT", definition->class_comment);
+    }
     workspace_write_label_and_integer(form, "SLOTS", live_instance_field_count_for_class(class_object));
     workspace_write_label_and_integer(form, "METHODS", class_method_count(class_object));
 }
@@ -2963,6 +2977,7 @@ static void reset_runtime_state(void) {
         dynamic_classes[dynamic_index].class_handle = 0U;
         dynamic_classes[dynamic_index].superclass_handle = 0U;
         dynamic_classes[dynamic_index].class_name[0] = '\0';
+        dynamic_classes[dynamic_index].class_comment[0] = '\0';
         dynamic_classes[dynamic_index].instance_variable_count = 0U;
         for (ivar_index = 0U; ivar_index < DYNAMIC_CLASS_IVAR_LIMIT; ++ivar_index) {
             dynamic_classes[dynamic_index].instance_variable_names[ivar_index][0] = '\0';
@@ -4163,6 +4178,9 @@ static void emit_live_snapshot(void) {
         for (name_index = 0U; name_index < METHOD_SOURCE_NAME_LIMIT; ++name_index) {
             snapshot_buffer[offset++] = (uint8_t)definition->class_name[name_index];
         }
+        for (name_index = 0U; name_index < CLASS_COMMENT_LIMIT; ++name_index) {
+            snapshot_buffer[offset++] = (uint8_t)definition->class_comment[name_index];
+        }
         for (ivar_index = 0U; ivar_index < DYNAMIC_CLASS_IVAR_LIMIT; ++ivar_index) {
             for (name_index = 0U; name_index < METHOD_SOURCE_NAME_LIMIT; ++name_index) {
                 snapshot_buffer[offset++] =
@@ -4390,6 +4408,9 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
         }
         for (name_index = 0U; name_index < METHOD_SOURCE_NAME_LIMIT; ++name_index) {
             definition->class_name[name_index] = (char)blob[offset++];
+        }
+        for (name_index = 0U; name_index < CLASS_COMMENT_LIMIT; ++name_index) {
+            definition->class_comment[name_index] = (char)blob[offset++];
         }
         for (ivar_index = 0U; ivar_index < DYNAMIC_CLASS_IVAR_LIMIT; ++ivar_index) {
             for (name_index = 0U; name_index < METHOD_SOURCE_NAME_LIMIT; ++name_index) {
@@ -5226,6 +5247,7 @@ static void copy_dynamic_class_definition(
     destination->class_handle = class_handle;
     destination->superclass_handle = superclass_handle;
     source_copy_identifier(destination->class_name, sizeof(destination->class_name), source->class_name);
+    source_copy_identifier(destination->class_comment, sizeof(destination->class_comment), source->class_comment);
     destination->instance_variable_count = source->instance_variable_count;
     for (ivar_index = 0U; ivar_index < DYNAMIC_CLASS_IVAR_LIMIT; ++ivar_index) {
         destination->instance_variable_names[ivar_index][0] = '\0';
@@ -5259,6 +5281,9 @@ static const struct recorz_mvp_heap_object *ensure_class_defined(
             if (definition->instance_variable_count != 0U) {
                 machine_panic("KernelInstaller does not support redefining seeded class instance variables");
             }
+            if (definition->class_comment[0] != '\0') {
+                machine_panic("KernelInstaller does not support attaching comments to seeded classes");
+            }
             if (definition->has_superclass) {
                 resolved_superclass_name = class_name_for_object(
                     heap_object_for_value(heap_get_field(class_object, CLASS_FIELD_SUPERCLASS))
@@ -5270,7 +5295,9 @@ static const struct recorz_mvp_heap_object *ensure_class_defined(
             return class_object;
         }
         existing_dynamic_definition = dynamic_definition;
-        if (!definition->has_superclass && definition->instance_variable_count == 0U) {
+        if (!definition->has_superclass &&
+            definition->instance_variable_count == 0U &&
+            definition->class_comment[0] == '\0') {
             return class_object;
         }
     }
@@ -5424,6 +5451,11 @@ static void append_dynamic_class_header_source(
         offset,
         class_name_for_object(heap_object(definition->superclass_handle))
     );
+    if (definition->class_comment[0] != '\0') {
+        append_text_checked(buffer, buffer_size, offset, " comment: '");
+        append_text_checked(buffer, buffer_size, offset, definition->class_comment);
+        append_char_checked(buffer, buffer_size, offset, '\'');
+    }
     append_text_checked(buffer, buffer_size, offset, " instanceVariableNames: '");
     for (ivar_index = 0U; ivar_index < definition->instance_variable_count; ++ivar_index) {
         if (ivar_index != 0U) {
