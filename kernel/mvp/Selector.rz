@@ -117,3 +117,5 @@ RecorzKernelSelector: #browseProtocol:ofClassNamed: order: 56
 RecorzKernelSelector: #browseClassProtocolsForClassNamed: order: 57
 !
 RecorzKernelSelector: #browseClassProtocol:ofClassNamed: order: 58
+!
+RecorzKernelSelector: #fileOutPackageNamed: order: 59

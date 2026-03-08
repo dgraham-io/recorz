@@ -1,0 +1,10 @@
+| exportedClass item current |
+Display clear.
+Workspace fileInCurrent.
+exportedClass := KernelInstaller classNamed: 'PackageEcho'.
+item := exportedClass new.
+item setValue: 'ROUNDTRIP'.
+current := item value.
+Transcript show: current.
+exportedClass cr.
+Transcript show: 'TOOLS'.

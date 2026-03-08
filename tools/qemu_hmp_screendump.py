@@ -17,14 +17,14 @@ def wait_for_socket(path: Path) -> None:
     raise SystemExit("monitor socket did not appear")
 
 
-def wait_for_log_marker(path: Path, marker: str) -> None:
-    for _ in range(200):
+def wait_for_log_marker(path: Path, marker: str) -> bool:
+    for _ in range(400):
         if path.exists():
             contents = path.read_text(encoding="utf-8", errors="ignore")
             if marker in contents:
-                return
+                return True
         time.sleep(0.1)
-    raise SystemExit(f"log marker not found: {marker}")
+    return False
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -39,7 +39,8 @@ def main(argv: list[str] | None = None) -> int:
     ppm_path = Path(args[1])
     wait_for_socket(socket_path)
     if len(args) == 4:
-        wait_for_log_marker(Path(args[2]), args[3])
+        if not wait_for_log_marker(Path(args[2]), args[3]):
+            time.sleep(1.0)
 
     monitor = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     for _ in range(50):

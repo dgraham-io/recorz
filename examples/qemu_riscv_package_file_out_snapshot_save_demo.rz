@@ -1,0 +1,25 @@
+Display clear.
+Workspace fileIn: 'RecorzKernelPackage: ''Tools''
+!
+RecorzKernelClass: #PackageEcho superclass: #Object comment: ''Package export demo'' instanceVariableNames: ''value''
+!
+RecorzKernelProtocol: ''accessing''
+!
+value
+    ^value
+!
+setValue: text
+    value := text.
+    ^self
+!
+RecorzKernelClassSide: #PackageEcho
+!
+RecorzKernelProtocol: ''display''
+!
+cr
+    Display newline.
+    ^self
+!'.
+Workspace fileOutPackageNamed: 'Tools'.
+KernelInstaller configureStartup: Workspace selectorNamed: 'reopen'.
+KernelInstaller saveSnapshot.

@@ -112,6 +112,7 @@ save-snapshot: $(ELF) $(QEMU_FILE_IN_DEP)
 	( $(QEMU) -machine virt -m 128M -smp 1 -kernel $(ELF) -serial stdio -display none -device ramfb $(QEMU_RUN_ARGS) >$(BUILD_DIR)/qemu.log 2>&1 & echo $$! > $(QEMU_PID) )
 	$(PYTHON) $(ROOT)/tools/extract_qemu_riscv_snapshot.py $(BUILD_DIR)/qemu.log $(SNAPSHOT_TEMP_OUTPUT)
 	@PID=$$(cat $(QEMU_PID)); kill $$PID >/dev/null 2>&1 || true
+	@mkdir -p $(dir $(SNAPSHOT_OUTPUT))
 	@mv $(SNAPSHOT_TEMP_OUTPUT) $(SNAPSHOT_OUTPUT)
 	@echo "wrote $(SNAPSHOT_OUTPUT)"
 
@@ -121,6 +122,7 @@ continue-snapshot: $(ELF) $(QEMU_FILE_IN_DEP)
 	( $(QEMU) -machine virt -m 128M -smp 1 -kernel $(ELF) -serial stdio -display none -device ramfb $(QEMU_RUN_ARGS) >$(BUILD_DIR)/qemu.log 2>&1 & echo $$! > $(QEMU_PID) )
 	$(PYTHON) $(ROOT)/tools/extract_qemu_riscv_snapshot.py $(BUILD_DIR)/qemu.log $(CONTINUE_SNAPSHOT_TEMP_OUTPUT)
 	@PID=$$(cat $(QEMU_PID)); kill $$PID >/dev/null 2>&1 || true
+	@mkdir -p $(dir $(CONTINUE_SNAPSHOT_OUTPUT))
 	@mv $(CONTINUE_SNAPSHOT_TEMP_OUTPUT) $(CONTINUE_SNAPSHOT_OUTPUT)
 	@echo "wrote $(CONTINUE_SNAPSHOT_OUTPUT)"
 

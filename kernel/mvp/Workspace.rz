@@ -57,6 +57,9 @@ browseClassMethod: selectorName ofClassNamed: className
 fileOutClassNamed: className
     <primitive: #workspaceFileOutClassNamed>
 !
+fileOutPackageNamed: packageName
+    <primitive: #workspaceFileOutPackageNamed>
+!
 rerun
     <primitive: #workspaceRerun>
 !

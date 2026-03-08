@@ -15,7 +15,7 @@
 #define MONO_BITMAP_LIMIT RECORZ_MVP_MONO_BITMAP_LIMIT
 #define MONO_BITMAP_MAX_WIDTH 32U
 #define MONO_BITMAP_MAX_HEIGHT 64U
-#define METHOD_SOURCE_LINE_LIMIT 128U
+#define METHOD_SOURCE_LINE_LIMIT 192U
 #define METHOD_SOURCE_NAME_LIMIT 64U
 #define CLASS_COMMENT_LIMIT 128U
 #define METHOD_SOURCE_CHUNK_LIMIT 512U
@@ -39,7 +39,7 @@
 #define SNAPSHOT_VALUE_SIZE 8U
 #define SNAPSHOT_OBJECT_SIZE (4U + (OBJECT_FIELD_LIMIT * SNAPSHOT_VALUE_SIZE))
 #define SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE \
-    (8U + METHOD_SOURCE_NAME_LIMIT + CLASS_COMMENT_LIMIT + (DYNAMIC_CLASS_IVAR_LIMIT * METHOD_SOURCE_NAME_LIMIT))
+    (8U + (2U * METHOD_SOURCE_NAME_LIMIT) + CLASS_COMMENT_LIMIT + (DYNAMIC_CLASS_IVAR_LIMIT * METHOD_SOURCE_NAME_LIMIT))
 #define SNAPSHOT_NAMED_OBJECT_RECORD_SIZE (2U + METHOD_SOURCE_NAME_LIMIT)
 #define SNAPSHOT_LIVE_METHOD_SOURCE_RECORD_SIZE (8U + METHOD_SOURCE_NAME_LIMIT)
 
@@ -84,7 +84,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_BROWSE_CLASS_PROTOCOL_OF_CLASS_NAMED
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_FILE_OUT_PACKAGE_NAMED
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -100,6 +100,7 @@
 #define WORKSPACE_VIEW_PROTOCOL 10U
 #define WORKSPACE_VIEW_CLASS_PROTOCOLS 11U
 #define WORKSPACE_VIEW_CLASS_PROTOCOL 12U
+#define WORKSPACE_VIEW_PACKAGE_SOURCE 13U
 
 enum recorz_mvp_value_kind {
     RECORZ_MVP_VALUE_NIL = 0,
@@ -125,6 +126,7 @@ struct recorz_mvp_live_class_definition {
     char class_name[METHOD_SOURCE_NAME_LIMIT];
     uint8_t has_superclass;
     char superclass_name[METHOD_SOURCE_NAME_LIMIT];
+    char package_name[METHOD_SOURCE_NAME_LIMIT];
     char class_comment[CLASS_COMMENT_LIMIT];
     uint8_t instance_variable_count;
     char instance_variable_names[DYNAMIC_CLASS_IVAR_LIMIT][METHOD_SOURCE_NAME_LIMIT];
@@ -134,6 +136,7 @@ struct recorz_mvp_dynamic_class_definition {
     uint16_t class_handle;
     uint16_t superclass_handle;
     char class_name[METHOD_SOURCE_NAME_LIMIT];
+    char package_name[METHOD_SOURCE_NAME_LIMIT];
     char class_comment[CLASS_COMMENT_LIMIT];
     uint8_t instance_variable_count;
     char instance_variable_names[DYNAMIC_CLASS_IVAR_LIMIT][METHOD_SOURCE_NAME_LIMIT];
@@ -303,6 +306,7 @@ static void emit_live_snapshot(void);
 static void file_in_class_chunks_source(const char *source);
 static void file_in_chunk_stream_source(const char *source);
 static const char *file_out_class_source_by_name(const char *class_name);
+static const char *file_out_package_source_by_name(const char *package_name);
 static const char *file_out_method_source_by_name(
     const char *class_name,
     uint8_t selector_id,
@@ -891,6 +895,7 @@ static void initialize_live_class_definition(struct recorz_mvp_live_class_defini
     definition->class_name[0] = '\0';
     definition->has_superclass = 0U;
     definition->superclass_name[0] = '\0';
+    definition->package_name[0] = '\0';
     definition->class_comment[0] = '\0';
     definition->instance_variable_count = 0U;
     for (index = 0U; index < DYNAMIC_CLASS_IVAR_LIMIT; ++index) {
@@ -929,6 +934,11 @@ static void source_parse_class_definition_from_chunk(
                 machine_panic("KernelInstaller class chunk superclass is invalid");
             }
             definition->has_superclass = 1U;
+        } else if (source_names_equal(keyword, "package")) {
+            cursor = source_copy_single_quoted_text(cursor, definition->package_name, sizeof(definition->package_name));
+            if (cursor == 0) {
+                machine_panic("KernelInstaller class chunk package is invalid");
+            }
         } else if (source_names_equal(keyword, "comment")) {
             cursor = source_copy_single_quoted_text(cursor, definition->class_comment, sizeof(definition->class_comment));
             if (cursor == 0) {
@@ -1000,6 +1010,27 @@ static void source_parse_protocol_name_from_chunk(
     cursor = source_skip_horizontal_space(cursor);
     if (*cursor != '\0') {
         machine_panic("KernelInstaller protocol chunk has unexpected trailing text");
+    }
+}
+
+static void source_parse_package_name_from_chunk(
+    const char *chunk,
+    char package_name[],
+    uint32_t package_name_size
+) {
+    const char *cursor = chunk;
+
+    if (!source_starts_with(cursor, "RecorzKernelPackage:")) {
+        machine_panic("KernelInstaller package chunk is missing a RecorzKernelPackage header");
+    }
+    cursor += (sizeof("RecorzKernelPackage:") - 1U);
+    cursor = source_copy_single_quoted_text(cursor, package_name, package_name_size);
+    if (cursor == 0) {
+        machine_panic("KernelInstaller package chunk name is invalid");
+    }
+    cursor = source_skip_horizontal_space(cursor);
+    if (*cursor != '\0') {
+        machine_panic("KernelInstaller package chunk has unexpected trailing text");
     }
 }
 
@@ -2642,6 +2673,9 @@ static void workspace_render_class_browser(
     form_newline(form);
     workspace_write_label_and_text(form, "CLASS", class_name);
     workspace_write_label_and_text(form, "SUPER", superclass_name);
+    if (definition != 0 && definition->package_name[0] != '\0') {
+        workspace_write_label_and_text(form, "PACKAGE", definition->package_name);
+    }
     if (definition != 0 && definition->class_comment[0] != '\0') {
         workspace_write_label_and_text(form, "COMMENT", definition->class_comment);
     }
@@ -2948,6 +2982,35 @@ static void workspace_render_class_source_browser(
 
     form_clear(form);
     workspace_write_label_and_text(form, "CLASS", class_name);
+    workspace_write_label_and_text(form, "VIEW", "SOURCE");
+    if (source_value.kind != RECORZ_MVP_VALUE_STRING ||
+        source_value.string == 0 ||
+        source_value.string[0] == '\0') {
+        workspace_write_text_line(form, "NO SOURCE BUFFER");
+        return;
+    }
+    cursor = source_value.string;
+    while (source_copy_trimmed_line(&cursor, line, sizeof(line)) != 0U) {
+        workspace_write_text_line(form, line);
+        wrote_line = 1U;
+    }
+    if (!wrote_line) {
+        workspace_write_text_line(form, "EMPTY SOURCE");
+    }
+}
+
+static void workspace_render_package_source_browser(
+    const struct recorz_mvp_heap_object *workspace_object,
+    const char *package_name
+) {
+    const struct recorz_mvp_heap_object *form = default_form_object();
+    struct recorz_mvp_value source_value = workspace_current_source_value(workspace_object);
+    const char *cursor;
+    char line[METHOD_SOURCE_LINE_LIMIT];
+    uint8_t wrote_line = 0U;
+
+    form_clear(form);
+    workspace_write_label_and_text(form, "PACKAGE", package_name);
     workspace_write_label_and_text(form, "VIEW", "SOURCE");
     if (source_value.kind != RECORZ_MVP_VALUE_STRING ||
         source_value.string == 0 ||
@@ -3386,6 +3449,7 @@ static void reset_runtime_state(void) {
         dynamic_classes[dynamic_index].class_handle = 0U;
         dynamic_classes[dynamic_index].superclass_handle = 0U;
         dynamic_classes[dynamic_index].class_name[0] = '\0';
+        dynamic_classes[dynamic_index].package_name[0] = '\0';
         dynamic_classes[dynamic_index].class_comment[0] = '\0';
         dynamic_classes[dynamic_index].instance_variable_count = 0U;
         for (ivar_index = 0U; ivar_index < DYNAMIC_CLASS_IVAR_LIMIT; ++ivar_index) {
@@ -4595,6 +4659,9 @@ static void emit_live_snapshot(void) {
         for (name_index = 0U; name_index < METHOD_SOURCE_NAME_LIMIT; ++name_index) {
             snapshot_buffer[offset++] = (uint8_t)definition->class_name[name_index];
         }
+        for (name_index = 0U; name_index < METHOD_SOURCE_NAME_LIMIT; ++name_index) {
+            snapshot_buffer[offset++] = (uint8_t)definition->package_name[name_index];
+        }
         for (name_index = 0U; name_index < CLASS_COMMENT_LIMIT; ++name_index) {
             snapshot_buffer[offset++] = (uint8_t)definition->class_comment[name_index];
         }
@@ -4830,6 +4897,9 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
         }
         for (name_index = 0U; name_index < METHOD_SOURCE_NAME_LIMIT; ++name_index) {
             definition->class_name[name_index] = (char)blob[offset++];
+        }
+        for (name_index = 0U; name_index < METHOD_SOURCE_NAME_LIMIT; ++name_index) {
+            definition->package_name[name_index] = (char)blob[offset++];
         }
         for (name_index = 0U; name_index < CLASS_COMMENT_LIMIT; ++name_index) {
             definition->class_comment[name_index] = (char)blob[offset++];
@@ -5695,6 +5765,7 @@ static void copy_dynamic_class_definition(
     destination->class_handle = class_handle;
     destination->superclass_handle = superclass_handle;
     source_copy_identifier(destination->class_name, sizeof(destination->class_name), source->class_name);
+    source_copy_identifier(destination->package_name, sizeof(destination->package_name), source->package_name);
     source_copy_identifier(destination->class_comment, sizeof(destination->class_comment), source->class_comment);
     destination->instance_variable_count = source->instance_variable_count;
     for (ivar_index = 0U; ivar_index < DYNAMIC_CLASS_IVAR_LIMIT; ++ivar_index) {
@@ -5729,6 +5800,9 @@ static const struct recorz_mvp_heap_object *ensure_class_defined(
             if (definition->instance_variable_count != 0U) {
                 machine_panic("KernelInstaller does not support redefining seeded class instance variables");
             }
+            if (definition->package_name[0] != '\0') {
+                machine_panic("KernelInstaller does not support attaching packages to seeded classes");
+            }
             if (definition->class_comment[0] != '\0') {
                 machine_panic("KernelInstaller does not support attaching comments to seeded classes");
             }
@@ -5744,6 +5818,7 @@ static const struct recorz_mvp_heap_object *ensure_class_defined(
         }
         existing_dynamic_definition = dynamic_definition;
         if (!definition->has_superclass &&
+            definition->package_name[0] == '\0' &&
             definition->instance_variable_count == 0U &&
             definition->class_comment[0] == '\0') {
             return class_object;
@@ -5888,6 +5963,27 @@ static int compare_method_source_records(
     return 0;
 }
 
+static int compare_source_names(const char *left, const char *right) {
+    uint32_t index = 0U;
+
+    while (left[index] != '\0' && right[index] != '\0') {
+        if (left[index] < right[index]) {
+            return -1;
+        }
+        if (left[index] > right[index]) {
+            return 1;
+        }
+        ++index;
+    }
+    if (left[index] == '\0' && right[index] != '\0') {
+        return -1;
+    }
+    if (left[index] != '\0' && right[index] == '\0') {
+        return 1;
+    }
+    return 0;
+}
+
 static void append_chunk_text(
     char buffer[],
     uint32_t buffer_size,
@@ -5930,6 +6026,11 @@ static void append_dynamic_class_header_source(
         offset,
         class_name_for_object(heap_object(definition->superclass_handle))
     );
+    if (definition->package_name[0] != '\0') {
+        append_text_checked(buffer, buffer_size, offset, " package: '");
+        append_text_checked(buffer, buffer_size, offset, definition->package_name);
+        append_char_checked(buffer, buffer_size, offset, '\'');
+    }
     if (definition->class_comment[0] != '\0') {
         append_text_checked(buffer, buffer_size, offset, " comment: '");
         append_text_checked(buffer, buffer_size, offset, definition->class_comment);
@@ -6183,6 +6284,59 @@ static const char *file_out_class_source_by_name(const char *class_name) {
     return runtime_string_allocate_copy(kernel_source_io_buffer);
 }
 
+static const char *file_out_package_source_by_name(const char *package_name) {
+    static char package_file_out_buffer[8192];
+    const struct recorz_mvp_dynamic_class_definition *sorted_definitions[DYNAMIC_CLASS_LIMIT];
+    uint16_t sorted_count = 0U;
+    uint16_t dynamic_index;
+    uint32_t offset = 0U;
+    uint8_t wrote_any_chunk = 0U;
+
+    if (package_name == 0 || package_name[0] == '\0') {
+        machine_panic("KernelInstaller fileOutPackageNamed: package name is empty");
+    }
+    package_file_out_buffer[0] = '\0';
+    append_text_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, "RecorzKernelPackage: '");
+    append_text_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, package_name);
+    append_text_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, "'\n!\n");
+    for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
+        const struct recorz_mvp_dynamic_class_definition *definition = &dynamic_classes[dynamic_index];
+        uint16_t insert_index;
+
+        if (!source_names_equal(definition->package_name, package_name)) {
+            continue;
+        }
+        insert_index = sorted_count;
+        while (insert_index != 0U &&
+               compare_source_names(
+                   definition->class_name,
+                   sorted_definitions[insert_index - 1U]->class_name) < 0) {
+            sorted_definitions[insert_index] = sorted_definitions[insert_index - 1U];
+            --insert_index;
+        }
+        sorted_definitions[insert_index] = definition;
+        ++sorted_count;
+    }
+    if (sorted_count == 0U) {
+        machine_panic("KernelInstaller fileOutPackageNamed: could not resolve package");
+    }
+    for (dynamic_index = 0U; dynamic_index < sorted_count; ++dynamic_index) {
+        const struct recorz_mvp_dynamic_class_definition *definition = sorted_definitions[dynamic_index];
+        const char *class_source = file_out_class_source_by_name(definition->class_name);
+
+        append_text_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, class_source);
+        if (dynamic_index + 1U < sorted_count &&
+            package_file_out_buffer[offset - 1U] != '\n') {
+            append_char_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, '\n');
+        }
+        wrote_any_chunk = 1U;
+    }
+    if (!wrote_any_chunk) {
+        machine_panic("KernelInstaller fileOutPackageNamed: package has no live source classes");
+    }
+    return runtime_string_allocate_copy(package_file_out_buffer);
+}
+
 static void execute_entry_kernel_installer_compiled_method_word0_word1_word2_word3_instruction_count(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -6322,6 +6476,7 @@ static void execute_entry_kernel_installer_file_in_class_chunks(
     const char *cursor;
     char chunk[METHOD_SOURCE_CHUNK_LIMIT];
     char class_name[METHOD_SOURCE_NAME_LIMIT];
+    uint8_t found_class = 0U;
 
     (void)object;
     (void)receiver;
@@ -6330,17 +6485,26 @@ static void execute_entry_kernel_installer_file_in_class_chunks(
         machine_panic("KernelInstaller fileInClassChunks: expects a source string");
     }
     cursor = arguments[0].string;
-    if (source_copy_next_chunk(&cursor, chunk, sizeof(chunk)) == 0U) {
-        machine_panic("KernelInstaller fileInClassChunks: source is empty");
-    }
-    if (source_starts_with(chunk, "RecorzKernelClass:")) {
-        struct recorz_mvp_live_class_definition definition;
+    while (source_copy_next_chunk(&cursor, chunk, sizeof(chunk)) != 0U) {
+        if (source_starts_with(chunk, "RecorzKernelPackage:")) {
+            continue;
+        }
+        if (source_starts_with(chunk, "RecorzKernelClass:")) {
+            struct recorz_mvp_live_class_definition definition;
 
-        source_parse_class_definition_from_chunk(chunk, &definition);
-        source_copy_identifier(class_name, sizeof(class_name), definition.class_name);
-    } else if (source_starts_with(chunk, "RecorzKernelClassSide:")) {
-        source_parse_class_side_name_from_chunk(chunk, class_name, sizeof(class_name));
-    } else {
+            source_parse_class_definition_from_chunk(chunk, &definition);
+            source_copy_identifier(class_name, sizeof(class_name), definition.class_name);
+            found_class = 1U;
+            break;
+        }
+        if (source_starts_with(chunk, "RecorzKernelClassSide:")) {
+            source_parse_class_side_name_from_chunk(chunk, class_name, sizeof(class_name));
+            found_class = 1U;
+            break;
+        }
+        machine_panic("KernelInstaller fileInClassChunks: source is missing an initial class header");
+    }
+    if (!found_class) {
         machine_panic("KernelInstaller fileInClassChunks: source is missing an initial class header");
     }
     file_in_class_chunks_source(arguments[0].string);
@@ -6360,6 +6524,7 @@ static void file_in_chunk_stream_source(const char *source) {
     char chunk[METHOD_SOURCE_CHUNK_LIMIT];
     const struct recorz_mvp_heap_object *class_object = 0;
     const struct recorz_mvp_heap_object *install_class_object = 0;
+    char current_package[METHOD_SOURCE_NAME_LIMIT];
     char current_protocol[METHOD_SOURCE_NAME_LIMIT];
     uint8_t class_header_count = 0U;
     uint8_t do_it_chunk_count = 0U;
@@ -6367,12 +6532,21 @@ static void file_in_chunk_stream_source(const char *source) {
     if (source == 0 || *source == '\0') {
         machine_panic("KernelInstaller fileInClassChunks: source is empty");
     }
+    current_package[0] = '\0';
     current_protocol[0] = '\0';
     while (source_copy_next_chunk(&cursor, chunk, sizeof(chunk)) != 0U) {
+        if (source_starts_with(chunk, "RecorzKernelPackage:")) {
+            source_parse_package_name_from_chunk(chunk, current_package, sizeof(current_package));
+            current_protocol[0] = '\0';
+            continue;
+        }
         if (source_starts_with(chunk, "RecorzKernelClass:")) {
             struct recorz_mvp_live_class_definition definition;
 
             source_parse_class_definition_from_chunk(chunk, &definition);
+            if (definition.package_name[0] == '\0' && current_package[0] != '\0') {
+                source_copy_identifier(definition.package_name, sizeof(definition.package_name), current_package);
+            }
             class_object = ensure_class_defined(&definition);
             install_class_object = class_object;
             current_protocol[0] = '\0';
@@ -6489,6 +6663,21 @@ static void execute_entry_kernel_installer_save_snapshot(
     push(receiver);
 }
 
+static void execute_entry_kernel_installer_file_out_package_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("KernelInstaller fileOutPackageNamed: expects a package name string");
+    }
+    push(string_value(file_out_package_source_by_name(arguments[0].string)));
+}
+
 static void execute_entry_kernel_installer_memory_report(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -6572,6 +6761,25 @@ static void execute_entry_workspace_file_out_class_named(
     workspace_remember_current_source(object, source);
     workspace_remember_view(object, WORKSPACE_VIEW_CLASS_SOURCE, arguments[0].string);
     workspace_render_class_source_browser(object, arguments[0].string);
+    push(receiver);
+}
+
+static void execute_entry_workspace_file_out_package_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const char *source;
+
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace fileOutPackageNamed: expects a package name string");
+    }
+    source = file_out_package_source_by_name(arguments[0].string);
+    workspace_remember_current_source(object, source);
+    workspace_remember_view(object, WORKSPACE_VIEW_PACKAGE_SOURCE, arguments[0].string);
+    workspace_render_package_source_browser(object, arguments[0].string);
     push(receiver);
 }
 
@@ -6663,6 +6871,7 @@ static void execute_entry_workspace_file_in_current(
     }
     if (source_starts_with(source_value.string, "RecorzKernelClass:") ||
         source_starts_with(source_value.string, "RecorzKernelClassSide:") ||
+        source_starts_with(source_value.string, "RecorzKernelPackage:") ||
         source_starts_with(source_value.string, "RecorzKernelDoIt:")) {
         file_in_chunk_stream_source(source_value.string);
         push(receiver);
@@ -7184,6 +7393,17 @@ static void execute_entry_workspace_reopen(
             machine_panic("Workspace reopen is missing the remembered class source target");
         }
         workspace_render_class_source_browser(object, target_name_value.string);
+        push(receiver);
+        return;
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PACKAGE_SOURCE) {
+        target_name_value = heap_get_field(object, workspace_current_target_name_field_index(object));
+        if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
+            target_name_value.string == 0 ||
+            target_name_value.string[0] == '\0') {
+            machine_panic("Workspace reopen is missing the remembered package source target");
+        }
+        workspace_render_package_source_browser(object, target_name_value.string);
         push(receiver);
         return;
     }
