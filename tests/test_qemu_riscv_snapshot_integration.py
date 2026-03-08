@@ -498,18 +498,12 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
         line_1 = _region_histogram(data, width, 24, 24, 420, 56)
         line_2 = _region_histogram(data, width, 24, 58, 420, 90)
         line_3 = _region_histogram(data, width, 24, 92, 520, 124)
-        line_4 = _region_histogram(data, width, 24, 126, 520, 158)
-        line_5 = _region_histogram(data, width, 24, 160, 520, 192)
-        line_6 = _region_histogram(data, width, 24, 194, 520, 226)
-        line_7 = _region_histogram(data, width, 24, 228, 520, 260)
+        source_region = _region_histogram(data, width, 24, 126, 900, 360)
 
         self.assertGreater(line_1[TEXT_FOREGROUND], 240)
         self.assertGreater(line_2[TEXT_FOREGROUND], 120)
         self.assertGreater(line_3[TEXT_FOREGROUND], 80)
-        self.assertGreater(line_4[TEXT_FOREGROUND], 240)
-        self.assertGreater(line_5[TEXT_FOREGROUND], 120)
-        self.assertGreater(line_6[TEXT_FOREGROUND], 800)
-        self.assertLess(line_7[TEXT_FOREGROUND], 80)
+        self.assertGreater(source_region[TEXT_FOREGROUND], 2200)
 
     def test_snapshot_preserves_live_class_side_method_lookup(self) -> None:
         save_log = self.save_snapshot(
@@ -615,13 +609,9 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
         line_1 = _region_histogram(data, width, 24, 24, 520, 56)
         line_2 = _region_histogram(data, width, 24, 58, 520, 90)
         line_3 = _region_histogram(data, width, 24, 92, 520, 124)
-        line_4 = _region_histogram(data, width, 24, 126, 520, 158)
-        line_5 = _region_histogram(data, width, 24, 160, 520, 192)
-        line_6 = _region_histogram(data, width, 24, 194, 520, 226)
+        source_region = _region_histogram(data, width, 24, 126, 900, 360)
 
         self.assertGreater(line_1[TEXT_FOREGROUND], 900)
         self.assertGreater(line_2[TEXT_FOREGROUND], 900)
         self.assertGreater(line_3[TEXT_FOREGROUND], 900)
-        self.assertGreater(line_4[TEXT_FOREGROUND], 200)
-        self.assertGreater(line_5[TEXT_FOREGROUND], 1500)
-        self.assertGreater(line_6[TEXT_FOREGROUND], 400)
+        self.assertGreater(source_region[TEXT_FOREGROUND], 2500)

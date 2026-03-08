@@ -280,6 +280,11 @@ static void emit_live_snapshot(void);
 static void file_in_class_chunks_source(const char *source);
 static void file_in_chunk_stream_source(const char *source);
 static const char *file_out_class_source_by_name(const char *class_name);
+static const char *file_out_method_source_by_name(
+    const char *class_name,
+    uint8_t selector_id,
+    uint8_t is_class_side
+);
 static void apply_external_file_in_blob(const uint8_t *blob, uint32_t size);
 static const struct recorz_mvp_heap_object *default_form_object(void);
 static void form_clear(const struct recorz_mvp_heap_object *form);
@@ -5400,6 +5405,29 @@ static void append_dynamic_class_header_source(
     append_char_checked(buffer, buffer_size, offset, '\'');
 }
 
+static void append_class_header_source_for_object(
+    char buffer[],
+    uint32_t buffer_size,
+    uint32_t *offset,
+    const struct recorz_mvp_heap_object *class_object,
+    const char *class_name
+) {
+    const struct recorz_mvp_dynamic_class_definition *definition =
+        dynamic_class_definition_for_handle(heap_handle_for_object(class_object));
+    const struct recorz_mvp_heap_object *superclass_object = class_superclass_object_or_null(class_object);
+    const char *superclass_name = superclass_object == 0 ? "Object" : class_name_for_object(superclass_object);
+
+    if (definition != 0) {
+        append_dynamic_class_header_source(buffer, buffer_size, offset, definition);
+        return;
+    }
+    append_text_checked(buffer, buffer_size, offset, "RecorzKernelClass: #");
+    append_text_checked(buffer, buffer_size, offset, class_name);
+    append_text_checked(buffer, buffer_size, offset, " superclass: #");
+    append_text_checked(buffer, buffer_size, offset, superclass_name);
+    append_text_checked(buffer, buffer_size, offset, " instanceVariableNames: ''");
+}
+
 static void append_live_method_source_chunks(
     char buffer[],
     uint32_t buffer_size,
@@ -5436,6 +5464,96 @@ static void append_live_method_source_chunks(
             wrote_any_chunk
         );
     }
+}
+
+static const struct recorz_mvp_live_method_source *live_method_source_for_selector_and_arity(
+    uint16_t class_handle,
+    uint8_t selector_id,
+    uint8_t argument_count
+) {
+    uint16_t source_index;
+
+    for (source_index = 0U; source_index < live_method_source_count; ++source_index) {
+        const struct recorz_mvp_live_method_source *source_record = &live_method_sources[source_index];
+
+        if (source_record->class_handle == class_handle &&
+            source_record->selector_id == selector_id &&
+            source_record->argument_count == argument_count) {
+            return source_record;
+        }
+    }
+    return 0;
+}
+
+static const char *file_out_method_source_by_name(
+    const char *class_name,
+    uint8_t selector_id,
+    uint8_t is_class_side
+) {
+    const struct recorz_mvp_heap_object *class_object;
+    const struct recorz_mvp_heap_object *method_owner_object;
+    const struct recorz_mvp_heap_object *method_object;
+    const struct recorz_mvp_live_method_source *source_record;
+    uint16_t method_owner_handle;
+    uint32_t offset = 0U;
+    uint8_t wrote_any_chunk = 0U;
+
+    class_object = lookup_class_by_name(class_name);
+    if (class_object == 0) {
+        machine_panic("Workspace method source export could not resolve class");
+    }
+    method_owner_object = is_class_side ? class_side_lookup_target(class_object) : class_object;
+    method_owner_handle = heap_handle_for_object(method_owner_object);
+    method_object = lookup_builtin_method_descriptor(method_owner_object, selector_id, 0U);
+    if (method_object == 0) {
+        method_object = lookup_builtin_method_descriptor(method_owner_object, selector_id, 1U);
+    }
+    if (method_object == 0) {
+        machine_panic("Workspace method source export could not resolve method");
+    }
+    source_record = live_method_source_for_selector_and_arity(
+        method_owner_handle,
+        selector_id,
+        method_descriptor_argument_count(method_object)
+    );
+    if (source_record == 0) {
+        machine_panic("Workspace method source export is missing live source");
+    }
+    kernel_source_io_buffer[0] = '\0';
+    append_class_header_source_for_object(
+        kernel_source_io_buffer,
+        sizeof(kernel_source_io_buffer),
+        &offset,
+        class_object,
+        class_name
+    );
+    append_text_checked(kernel_source_io_buffer, sizeof(kernel_source_io_buffer), &offset, "\n!\n");
+    if (is_class_side) {
+        append_text_checked(
+            kernel_source_io_buffer,
+            sizeof(kernel_source_io_buffer),
+            &offset,
+            "RecorzKernelClassSide: #"
+        );
+        append_text_checked(
+            kernel_source_io_buffer,
+            sizeof(kernel_source_io_buffer),
+            &offset,
+            class_name
+        );
+        append_text_checked(kernel_source_io_buffer, sizeof(kernel_source_io_buffer), &offset, "\n!\n");
+    }
+    append_chunk_text(
+        kernel_source_io_buffer,
+        sizeof(kernel_source_io_buffer),
+        &offset,
+        live_method_source_text(source_record),
+        &wrote_any_chunk
+    );
+    if (!wrote_any_chunk) {
+        machine_panic("Workspace method source export has no method chunk");
+    }
+    return runtime_string_allocate_copy(kernel_source_io_buffer);
 }
 
 static const char *file_out_class_source_by_name(const char *class_name) {
@@ -6089,7 +6207,10 @@ static void execute_entry_workspace_browse_method_of_class_named(
     }
     source_record = live_method_source_for(heap_handle_for_object(class_object), selector_id);
     if (source_record != 0) {
-        workspace_remember_current_source(object, live_method_source_text(source_record));
+        workspace_remember_current_source(
+            object,
+            file_out_method_source_by_name(arguments[1].string, selector_id, 0U)
+        );
     }
     workspace_remember_view(
         object,
@@ -6159,7 +6280,10 @@ static void execute_entry_workspace_browse_class_method_of_class_named(
     }
     source_record = live_method_source_for(heap_handle_for_object(metaclass_object), selector_id);
     if (source_record != 0) {
-        workspace_remember_current_source(object, live_method_source_text(source_record));
+        workspace_remember_current_source(
+            object,
+            file_out_method_source_by_name(arguments[1].string, selector_id, 1U)
+        );
     }
     workspace_remember_view(
         object,
