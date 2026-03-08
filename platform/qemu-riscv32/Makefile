@@ -113,7 +113,7 @@ run-headless: $(ELF) $(QEMU_FILE_IN_DEP)
 screenshot: $(ELF) $(QEMU_FILE_IN_DEP)
 	rm -f $(MONITOR_SOCK) $(PPM) $(QEMU_PID) $(QEMU_LOG)
 	( $(QEMU) -machine virt -m $(QEMU_MEMORY) -smp 1 -kernel $(ELF) -serial file:$(QEMU_LOG) -display none -device ramfb $(QEMU_RUN_ARGS) -monitor unix:$(MONITOR_SOCK),server,nowait >/dev/null 2>&1 & echo $$! > $(QEMU_PID) )
-	$(PYTHON) $(ROOT)/tools/qemu_hmp_screendump.py $(MONITOR_SOCK) $(PPM)
+	$(PYTHON) $(ROOT)/tools/qemu_hmp_screendump.py $(MONITOR_SOCK) $(PPM) $(QEMU_LOG) "recorz qemu-riscv32 mvp: rendered"
 	@PID=$$(cat $(QEMU_PID)); kill $$PID >/dev/null 2>&1 || true
 	@echo "wrote $(PPM)"
 

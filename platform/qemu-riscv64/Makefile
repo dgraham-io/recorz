@@ -42,6 +42,7 @@ GENERATED_IMAGE_OBJECT := $(BUILD_DIR)/demo_image_blob.o
 ELF := $(BUILD_DIR)/recorz-qemu-riscv64-mvp.elf
 PPM := $(BUILD_DIR)/recorz-qemu-riscv64-mvp.ppm
 MONITOR_SOCK := $(BUILD_DIR)/monitor.sock
+QEMU_LOG := $(BUILD_DIR)/qemu.log
 QEMU_PID := $(BUILD_DIR)/qemu.pid
 
 SOURCES := start.S machine.c display.c vm.c program.c seed.c image.c main.c
@@ -102,7 +103,7 @@ run-headless: $(ELF) $(QEMU_FILE_IN_DEP)
 screenshot: $(ELF) $(QEMU_FILE_IN_DEP)
 	rm -f $(MONITOR_SOCK) $(PPM) $(QEMU_PID)
 	( $(QEMU) -machine virt -m 128M -smp 1 -kernel $(ELF) -serial stdio -display none -device ramfb $(QEMU_RUN_ARGS) -monitor unix:$(MONITOR_SOCK),server,nowait >$(BUILD_DIR)/qemu.log 2>&1 & echo $$! > $(QEMU_PID) )
-	$(PYTHON) $(ROOT)/tools/qemu_hmp_screendump.py $(MONITOR_SOCK) $(PPM)
+	$(PYTHON) $(ROOT)/tools/qemu_hmp_screendump.py $(MONITOR_SOCK) $(PPM) $(QEMU_LOG) "recorz qemu-riscv64 mvp: rendered"
 	@PID=$$(cat $(QEMU_PID)); kill $$PID >/dev/null 2>&1 || true
 	@echo "wrote $(PPM)"
 

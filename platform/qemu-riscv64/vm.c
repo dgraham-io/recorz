@@ -41,7 +41,7 @@
     (8U + METHOD_SOURCE_NAME_LIMIT + CLASS_COMMENT_LIMIT + (DYNAMIC_CLASS_IVAR_LIMIT * METHOD_SOURCE_NAME_LIMIT))
 #define SNAPSHOT_NAMED_OBJECT_RECORD_SIZE (2U + METHOD_SOURCE_NAME_LIMIT)
 #define SNAPSHOT_LIVE_METHOD_SOURCE_RECORD_SIZE \
-    (4U + METHOD_SOURCE_CHUNK_LIMIT)
+    (4U + METHOD_SOURCE_NAME_LIMIT + METHOD_SOURCE_CHUNK_LIMIT)
 
 #define FORM_FIELD_BITS RECORZ_MVP_FORM_FIELD_BITS
 #define BITMAP_FIELD_WIDTH RECORZ_MVP_BITMAP_FIELD_WIDTH
@@ -152,6 +152,7 @@ struct recorz_mvp_live_method_source {
     uint16_t class_handle;
     uint8_t selector_id;
     uint8_t argument_count;
+    char protocol_name[METHOD_SOURCE_NAME_LIMIT];
     char source[METHOD_SOURCE_CHUNK_LIMIT];
 };
 
@@ -243,6 +244,14 @@ static struct recorz_mvp_value nil_value(void);
 static uint32_t small_integer_u32(struct recorz_mvp_value value, const char *message);
 static void heap_set_class(uint16_t handle, uint16_t class_handle);
 static uint32_t compiled_method_instruction_word(const struct recorz_mvp_heap_object *compiled_method, uint8_t index);
+static uint32_t text_length(const char *text);
+static uint32_t text_left_margin(void);
+static uint32_t char_width(void);
+static uint32_t char_height(void);
+static uint32_t text_line_spacing(void);
+static uint32_t bitmap_width(const struct recorz_mvp_heap_object *bitmap);
+static uint32_t bitmap_height(const struct recorz_mvp_heap_object *bitmap);
+static const struct recorz_mvp_heap_object *bitmap_for_form(const struct recorz_mvp_heap_object *form);
 static void workspace_evaluate_source(const char *source);
 static uint8_t compiled_method_instruction_opcode(uint32_t instruction);
 static uint8_t compiled_method_instruction_operand_a(uint32_t instruction);
@@ -766,6 +775,11 @@ static uint32_t source_copy_next_chunk(const char **cursor_ref, char buffer[], u
 static const char *source_parse_identifier(const char *cursor, char buffer[], uint32_t buffer_size);
 static const struct recorz_mvp_dynamic_class_definition *dynamic_class_definition_for_name(const char *class_name);
 static struct recorz_mvp_dynamic_class_definition *mutable_dynamic_class_definition_for_handle(uint16_t class_handle);
+static const struct recorz_mvp_live_method_source *live_method_source_for_selector_and_arity(
+    uint16_t class_handle,
+    uint8_t selector_id,
+    uint8_t argument_count
+);
 
 static void source_copy_identifier(char destination[], uint32_t destination_size, const char *source) {
     uint32_t index = 0U;
@@ -945,6 +959,27 @@ static void source_parse_class_side_name_from_chunk(
     cursor = source_skip_horizontal_space(cursor);
     if (*cursor != '\0') {
         machine_panic("KernelInstaller class-side chunk has unexpected trailing text");
+    }
+}
+
+static void source_parse_protocol_name_from_chunk(
+    const char *chunk,
+    char protocol_name[],
+    uint32_t protocol_name_size
+) {
+    const char *cursor = chunk;
+
+    if (!source_starts_with(cursor, "RecorzKernelProtocol:")) {
+        machine_panic("KernelInstaller protocol chunk is missing a RecorzKernelProtocol header");
+    }
+    cursor += 21U;
+    cursor = source_copy_single_quoted_text(cursor, protocol_name, protocol_name_size);
+    if (cursor == 0) {
+        machine_panic("KernelInstaller protocol chunk name is invalid");
+    }
+    cursor = source_skip_horizontal_space(cursor);
+    if (*cursor != '\0') {
+        machine_panic("KernelInstaller protocol chunk has unexpected trailing text");
     }
 }
 
@@ -2290,14 +2325,44 @@ static uint8_t workspace_parse_method_target_name(
     return 1U;
 }
 
-static void workspace_copy_display_text(char output[], const char *text) {
+static uint32_t workspace_visible_columns(const struct recorz_mvp_heap_object *form) {
+    uint32_t left_margin = text_left_margin();
+    uint32_t width = bitmap_width(bitmap_for_form(form));
+    uint32_t char_columns;
+
+    if (width <= left_margin || char_width() == 0U) {
+        return 1U;
+    }
+    char_columns = (width - left_margin) / char_width();
+    return char_columns == 0U ? 1U : char_columns;
+}
+
+static uint8_t workspace_has_line_capacity(const struct recorz_mvp_heap_object *form) {
+    return cursor_y + char_height() < bitmap_height(bitmap_for_form(form));
+}
+
+static void workspace_newline(void) {
+    cursor_x = text_left_margin();
+    cursor_y += char_height() + text_line_spacing();
+}
+
+static void workspace_copy_display_text(
+    char output[],
+    uint32_t output_size,
+    const char *text,
+    uint32_t max_visible_chars
+) {
     uint32_t index = 0U;
+    uint32_t limit = output_size == 0U ? 0U : output_size - 1U;
     uint8_t truncated = 0U;
 
+    if (max_visible_chars != 0U && max_visible_chars < limit) {
+        limit = max_visible_chars;
+    }
     while (text[index] != '\0') {
         char character = text[index];
 
-        if (index + 1U >= METHOD_SOURCE_NAME_LIMIT) {
+        if (index >= limit) {
             truncated = 1U;
             break;
         }
@@ -2306,9 +2371,9 @@ static void workspace_copy_display_text(char output[], const char *text) {
         }
         output[index++] = character;
     }
-    if (truncated && METHOD_SOURCE_NAME_LIMIT >= 4U) {
-        if (index > METHOD_SOURCE_NAME_LIMIT - 4U) {
-            index = METHOD_SOURCE_NAME_LIMIT - 4U;
+    if (truncated && limit >= 3U) {
+        if (index > limit - 3U) {
+            index = limit - 3U;
         }
         output[index++] = '.';
         output[index++] = '.';
@@ -2323,12 +2388,21 @@ static void workspace_write_label_and_text(
     const char *text
 ) {
     char uppercase_buffer[METHOD_SOURCE_NAME_LIMIT];
+    uint32_t columns;
+    uint32_t label_columns;
+    uint32_t text_columns;
 
-    workspace_copy_display_text(uppercase_buffer, text);
+    if (!workspace_has_line_capacity(form)) {
+        return;
+    }
+    columns = workspace_visible_columns(form);
+    label_columns = text_length(label) + 2U;
+    text_columns = columns > label_columns ? columns - label_columns : 0U;
+    workspace_copy_display_text(uppercase_buffer, sizeof(uppercase_buffer), text, text_columns);
     form_write_string(form, label);
     form_write_string(form, ": ");
     form_write_string(form, uppercase_buffer);
-    form_newline(form);
+    workspace_newline();
 }
 
 static void workspace_write_text_line(
@@ -2337,9 +2411,17 @@ static void workspace_write_text_line(
 ) {
     char uppercase_buffer[METHOD_SOURCE_NAME_LIMIT];
 
-    workspace_copy_display_text(uppercase_buffer, text);
+    if (!workspace_has_line_capacity(form)) {
+        return;
+    }
+    workspace_copy_display_text(
+        uppercase_buffer,
+        sizeof(uppercase_buffer),
+        text,
+        workspace_visible_columns(form)
+    );
     form_write_string(form, uppercase_buffer);
-    form_newline(form);
+    workspace_newline();
 }
 
 static void workspace_write_label_and_integer(
@@ -2347,11 +2429,14 @@ static void workspace_write_label_and_integer(
     const char *label,
     uint32_t value
 ) {
+    if (!workspace_has_line_capacity(form)) {
+        return;
+    }
     form_write_string(form, label);
     form_write_string(form, ": ");
     render_small_integer((int32_t)value);
     form_write_string(form, print_buffer);
-    form_newline(form);
+    workspace_newline();
 }
 
 static const char *workspace_named_object_name_for_handle(uint16_t object_handle) {
@@ -2482,8 +2567,28 @@ static void workspace_render_method_list_browser(
         const struct recorz_mvp_heap_object *method_object = (const struct recorz_mvp_heap_object *)heap_object(
             (uint16_t)(heap_handle_for_object(method_start_object) + method_index)
         );
+        const struct recorz_mvp_live_method_source *source_record;
+        char line[METHOD_SOURCE_LINE_LIMIT];
+        uint32_t line_offset = 0U;
 
-        workspace_write_text_line(form, selector_name((uint8_t)method_descriptor_selector(method_object)));
+        source_record = live_method_source_for_selector_and_arity(
+            heap_handle_for_object(class_object),
+            (uint8_t)method_descriptor_selector(method_object),
+            (uint8_t)method_descriptor_argument_count(method_object)
+        );
+        line[0] = '\0';
+        if (source_record != 0 && source_record->protocol_name[0] != '\0') {
+            append_text_checked(line, sizeof(line), &line_offset, source_record->protocol_name);
+            append_text_checked(line, sizeof(line), &line_offset, " :: ");
+        }
+        append_text_checked(
+            line,
+            sizeof(line),
+            &line_offset,
+            selector_name((uint8_t)method_descriptor_selector(method_object))
+        );
+
+        workspace_write_text_line(form, line);
     }
 }
 
@@ -2981,6 +3086,7 @@ static void reset_runtime_state(void) {
         live_method_sources[named_index].class_handle = 0U;
         live_method_sources[named_index].selector_id = 0U;
         live_method_sources[named_index].argument_count = 0U;
+        live_method_sources[named_index].protocol_name[0] = '\0';
         live_method_sources[named_index].source[0] = '\0';
     }
     for (code_index = 0U; code_index < 128U; ++code_index) {
@@ -3664,6 +3770,10 @@ static void forget_live_method_source(
             live_method_sources[move_index - 1U].class_handle = live_method_sources[move_index].class_handle;
             live_method_sources[move_index - 1U].selector_id = live_method_sources[move_index].selector_id;
             live_method_sources[move_index - 1U].argument_count = live_method_sources[move_index].argument_count;
+            for (char_index = 0U; char_index < METHOD_SOURCE_NAME_LIMIT; ++char_index) {
+                live_method_sources[move_index - 1U].protocol_name[char_index] =
+                    live_method_sources[move_index].protocol_name[char_index];
+            }
             for (char_index = 0U; char_index < METHOD_SOURCE_CHUNK_LIMIT; ++char_index) {
                 live_method_sources[move_index - 1U].source[char_index] =
                     live_method_sources[move_index].source[char_index];
@@ -3678,6 +3788,7 @@ static void remember_live_method_source(
     uint16_t class_handle,
     uint8_t selector_id,
     uint8_t argument_count,
+    const char *protocol_name,
     const char *source
 ) {
     struct recorz_mvp_live_method_source *source_record;
@@ -3698,6 +3809,7 @@ static void remember_live_method_source(
     source_record->class_handle = class_handle;
     source_record->selector_id = selector_id;
     source_record->argument_count = argument_count;
+    source_copy_identifier(source_record->protocol_name, sizeof(source_record->protocol_name), protocol_name);
     length = text_length(source);
     if (length + 1U > METHOD_SOURCE_CHUNK_LIMIT) {
         machine_panic("live method source exceeds chunk capacity");
@@ -3987,6 +4099,9 @@ static void emit_live_snapshot(void) {
         offset += 2U;
         snapshot_buffer[offset++] = source_record->selector_id;
         snapshot_buffer[offset++] = source_record->argument_count;
+        for (name_index = 0U; name_index < METHOD_SOURCE_NAME_LIMIT; ++name_index) {
+            snapshot_buffer[offset++] = (uint8_t)source_record->protocol_name[name_index];
+        }
         for (name_index = 0U; name_index < METHOD_SOURCE_CHUNK_LIMIT; ++name_index) {
             snapshot_buffer[offset++] = (uint8_t)source_record->source[name_index];
         }
@@ -4217,6 +4332,9 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
         if (live_method_sources[named_index].class_handle == 0U ||
             live_method_sources[named_index].class_handle > object_count) {
             machine_panic("snapshot live method source class handle is out of range");
+        }
+        for (name_index = 0U; name_index < METHOD_SOURCE_NAME_LIMIT; ++name_index) {
+            live_method_sources[named_index].protocol_name[name_index] = (char)blob[offset++];
         }
         for (name_index = 0U; name_index < METHOD_SOURCE_CHUNK_LIMIT; ++name_index) {
             live_method_sources[named_index].source[name_index] = (char)blob[offset++];
@@ -4922,11 +5040,13 @@ static void file_in_method_chunks_on_class(
 ) {
     const char *cursor = source;
     char chunk[METHOD_SOURCE_CHUNK_LIMIT];
+    char current_protocol[METHOD_SOURCE_NAME_LIMIT];
     uint8_t installed_method_count = 0U;
 
     if (source == 0 || *source == '\0') {
         machine_panic("KernelInstaller method chunk source is empty");
     }
+    current_protocol[0] = '\0';
     while (source_copy_next_chunk(&cursor, chunk, sizeof(chunk)) != 0U) {
         uint16_t compiled_method_handle;
         uint8_t selector_id;
@@ -4934,11 +5054,23 @@ static void file_in_method_chunks_on_class(
 
         if (source_starts_with(chunk, "RecorzKernelClass:") ||
             source_starts_with(chunk, "RecorzKernelClassSide:")) {
+            current_protocol[0] = '\0';
+            continue;
+        }
+        if (source_starts_with(chunk, "RecorzKernelProtocol:")) {
+            source_parse_protocol_name_from_chunk(chunk, current_protocol, sizeof(current_protocol));
             continue;
         }
         compiled_method_handle = compile_source_method_and_allocate(class_object, chunk, &selector_id, &argument_count);
         validate_compiled_method(heap_object(compiled_method_handle), argument_count);
         install_compiled_method_update(class_object, selector_id, argument_count, compiled_method_handle);
+        remember_live_method_source(
+            heap_handle_for_object(class_object),
+            selector_id,
+            (uint8_t)argument_count,
+            current_protocol,
+            chunk
+        );
         ++installed_method_count;
     }
     if (installed_method_count == 0U) {
@@ -4948,6 +5080,7 @@ static void file_in_method_chunks_on_class(
 
 static void install_method_chunk_on_class(
     const struct recorz_mvp_heap_object *class_object,
+    const char *protocol_name,
     const char *chunk
 ) {
     uint16_t compiled_method_handle;
@@ -4957,7 +5090,13 @@ static void install_method_chunk_on_class(
     compiled_method_handle = compile_source_method_and_allocate(class_object, chunk, &selector_id, &argument_count);
     validate_compiled_method(heap_object(compiled_method_handle), argument_count);
     install_compiled_method_update(class_object, selector_id, argument_count, compiled_method_handle);
-    remember_live_method_source(heap_handle_for_object(class_object), selector_id, (uint8_t)argument_count, chunk);
+    remember_live_method_source(
+        heap_handle_for_object(class_object),
+        selector_id,
+        (uint8_t)argument_count,
+        protocol_name,
+        chunk
+    );
 }
 
 static void install_method_source_on_class(
@@ -4971,7 +5110,7 @@ static void install_method_source_on_class(
     compiled_method_handle = compile_source_method_and_allocate(class_object, source, &selector_id, &argument_count);
     validate_compiled_method(heap_object(compiled_method_handle), argument_count);
     install_compiled_method_update(class_object, selector_id, argument_count, compiled_method_handle);
-    remember_live_method_source(heap_handle_for_object(class_object), selector_id, (uint8_t)argument_count, source);
+    remember_live_method_source(heap_handle_for_object(class_object), selector_id, (uint8_t)argument_count, "", source);
 }
 
 static const struct recorz_mvp_heap_object *lookup_class_by_name(const char *class_name) {
@@ -5154,10 +5293,28 @@ static int compare_method_source_records(
     const struct recorz_mvp_live_method_source *left,
     const struct recorz_mvp_live_method_source *right
 ) {
+    const char *left_protocol = left->protocol_name;
+    const char *right_protocol = right->protocol_name;
     const char *left_selector = selector_name(left->selector_id);
     const char *right_selector = selector_name(right->selector_id);
     uint32_t index = 0U;
 
+    while (left_protocol[index] != '\0' && right_protocol[index] != '\0') {
+        if (left_protocol[index] < right_protocol[index]) {
+            return -1;
+        }
+        if (left_protocol[index] > right_protocol[index]) {
+            return 1;
+        }
+        ++index;
+    }
+    if (left_protocol[index] == '\0' && right_protocol[index] != '\0') {
+        return -1;
+    }
+    if (left_protocol[index] != '\0' && right_protocol[index] == '\0') {
+        return 1;
+    }
+    index = 0U;
     while (left_selector[index] != '\0' && right_selector[index] != '\0') {
         if (left_selector[index] < right_selector[index]) {
             return -1;
@@ -5191,6 +5348,19 @@ static void append_chunk_text(
 ) {
     append_text_checked(buffer, buffer_size, offset, chunk_text);
     append_text_checked(buffer, buffer_size, offset, "\n!\n");
+    *wrote_any_chunk = 1U;
+}
+
+static void append_protocol_chunk(
+    char buffer[],
+    uint32_t buffer_size,
+    uint32_t *offset,
+    const char *protocol_name,
+    uint8_t *wrote_any_chunk
+) {
+    append_text_checked(buffer, buffer_size, offset, "RecorzKernelProtocol: '");
+    append_text_checked(buffer, buffer_size, offset, protocol_name);
+    append_text_checked(buffer, buffer_size, offset, "'\n!\n");
     *wrote_any_chunk = 1U;
 }
 
@@ -5257,9 +5427,11 @@ static void append_live_method_source_chunks(
     uint8_t *wrote_any_chunk
 ) {
     const struct recorz_mvp_live_method_source *sorted_sources[LIVE_METHOD_SOURCE_LIMIT];
+    char current_protocol[METHOD_SOURCE_NAME_LIMIT];
     uint16_t source_index;
     uint16_t sorted_count = 0U;
 
+    current_protocol[0] = '\0';
     for (source_index = 0U; source_index < live_method_source_count; ++source_index) {
         const struct recorz_mvp_live_method_source *source_record = &live_method_sources[source_index];
         uint16_t insert_index;
@@ -5277,6 +5449,12 @@ static void append_live_method_source_chunks(
         ++sorted_count;
     }
     for (source_index = 0U; source_index < sorted_count; ++source_index) {
+        if (!source_names_equal(current_protocol, sorted_sources[source_index]->protocol_name)) {
+            source_copy_identifier(current_protocol, sizeof(current_protocol), sorted_sources[source_index]->protocol_name);
+            if (current_protocol[0] != '\0') {
+                append_protocol_chunk(buffer, buffer_size, offset, current_protocol, wrote_any_chunk);
+            }
+        }
         append_chunk_text(
             buffer,
             buffer_size,
@@ -5354,6 +5532,15 @@ static const char *file_out_method_source_by_name(
         append_text_checked(method_file_out_buffer, sizeof(method_file_out_buffer), &offset, "RecorzKernelClassSide: #");
         append_text_checked(method_file_out_buffer, sizeof(method_file_out_buffer), &offset, class_name);
         append_text_checked(method_file_out_buffer, sizeof(method_file_out_buffer), &offset, "\n!\n");
+    }
+    if (source_record->protocol_name[0] != '\0') {
+        append_protocol_chunk(
+            method_file_out_buffer,
+            sizeof(method_file_out_buffer),
+            &offset,
+            source_record->protocol_name,
+            &wrote_any_chunk
+        );
     }
     append_chunk_text(
         method_file_out_buffer,
@@ -5601,12 +5788,14 @@ static void file_in_chunk_stream_source(const char *source) {
     char chunk[METHOD_SOURCE_CHUNK_LIMIT];
     const struct recorz_mvp_heap_object *class_object = 0;
     const struct recorz_mvp_heap_object *install_class_object = 0;
+    char current_protocol[METHOD_SOURCE_NAME_LIMIT];
     uint8_t class_header_count = 0U;
     uint8_t do_it_chunk_count = 0U;
 
     if (source == 0 || *source == '\0') {
         machine_panic("KernelInstaller fileInClassChunks: source is empty");
     }
+    current_protocol[0] = '\0';
     while (source_copy_next_chunk(&cursor, chunk, sizeof(chunk)) != 0U) {
         if (source_starts_with(chunk, "RecorzKernelClass:")) {
             struct recorz_mvp_live_class_definition definition;
@@ -5614,6 +5803,7 @@ static void file_in_chunk_stream_source(const char *source) {
             source_parse_class_definition_from_chunk(chunk, &definition);
             class_object = ensure_class_defined(&definition);
             install_class_object = class_object;
+            current_protocol[0] = '\0';
             ++class_header_count;
             continue;
         }
@@ -5629,18 +5819,27 @@ static void file_in_chunk_stream_source(const char *source) {
                 class_object,
                 class_superclass_object_or_null(class_object)
             );
+            current_protocol[0] = '\0';
             ++class_header_count;
+            continue;
+        }
+        if (source_starts_with(chunk, "RecorzKernelProtocol:")) {
+            if (install_class_object == 0) {
+                machine_panic("KernelInstaller protocol chunk has no active class side");
+            }
+            source_parse_protocol_name_from_chunk(chunk, current_protocol, sizeof(current_protocol));
             continue;
         }
         if (source_starts_with(chunk, "RecorzKernelDoIt:")) {
             workspace_evaluate_source(source_parse_do_it_chunk_body(chunk));
+            current_protocol[0] = '\0';
             ++do_it_chunk_count;
             continue;
         }
         if (install_class_object == 0) {
             machine_panic("KernelInstaller file-in stream is missing an initial RecorzKernelClass chunk");
         }
-        install_method_chunk_on_class(install_class_object, chunk);
+        install_method_chunk_on_class(install_class_object, current_protocol, chunk);
     }
     if (class_header_count == 0U && do_it_chunk_count == 0U) {
         machine_panic("KernelInstaller file-in stream contains no class or do-it chunks");

@@ -2,6 +2,8 @@
 Display clear.
 KernelInstaller fileInClassChunks: 'RecorzKernelClass: #Exported superclass: #Object comment: ''Roundtrip export demo'' instanceVariableNames: ''value''
 !
+RecorzKernelProtocol: ''accessing''
+!
 value
     ^value
 !
@@ -10,6 +12,8 @@ setValue: text
     ^self
 !
 RecorzKernelClassSide: #Exported
+!
+RecorzKernelProtocol: ''display''
 !
 cr
     Display newline.
@@ -20,6 +24,7 @@ exportedClass := KernelInstaller classNamed: 'Exported'.
 item := exportedClass new.
 item setValue: 'ROUNDTRIP'.
 current := item value.
+Display clear.
 Transcript show: current.
 exportedClass cr.
 Transcript show: 'FILEOUT'.
