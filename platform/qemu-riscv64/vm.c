@@ -222,6 +222,7 @@ static void reset_runtime_state(void);
 static void load_snapshot_state(const uint8_t *blob, uint32_t size);
 static void emit_live_snapshot(void);
 static void file_in_class_chunks_source(const char *source);
+static void file_in_chunk_stream_source(const char *source);
 static void apply_external_file_in_blob(const uint8_t *blob, uint32_t size);
 
 static void panic_put_u32(uint32_t value) {
@@ -3544,6 +3545,19 @@ static void file_in_method_chunks_on_class(
     }
 }
 
+static void install_method_chunk_on_class(
+    const struct recorz_mvp_heap_object *class_object,
+    const char *chunk
+) {
+    uint16_t compiled_method_handle;
+    uint8_t selector_id;
+    uint16_t argument_count;
+
+    compiled_method_handle = compile_source_method_and_allocate(class_object, chunk, &selector_id, &argument_count);
+    validate_compiled_method(heap_object(compiled_method_handle), argument_count);
+    install_compiled_method_update(class_object, selector_id, argument_count, compiled_method_handle);
+}
+
 static const struct recorz_mvp_heap_object *lookup_class_by_name(const char *class_name) {
     uint8_t kind;
     const struct recorz_mvp_dynamic_class_definition *dynamic_definition;
@@ -3848,6 +3862,38 @@ static void file_in_class_chunks_source(const char *source) {
     file_in_method_chunks_on_class(source, class_object);
 }
 
+static void file_in_chunk_stream_source(const char *source) {
+    const char *cursor = source;
+    char chunk[METHOD_SOURCE_CHUNK_LIMIT];
+    struct recorz_mvp_live_class_definition definition;
+    const struct recorz_mvp_heap_object *class_object = 0;
+    uint8_t class_chunk_count = 0U;
+    uint8_t method_chunk_count = 0U;
+
+    if (source == 0 || *source == '\0') {
+        machine_panic("KernelInstaller fileInClassChunks: source is empty");
+    }
+    while (source_copy_next_chunk(&cursor, chunk, sizeof(chunk)) != 0U) {
+        if (source_starts_with(chunk, "RecorzKernelClass:")) {
+            source_parse_class_definition_from_chunk(chunk, &definition);
+            class_object = ensure_class_defined(&definition);
+            ++class_chunk_count;
+            continue;
+        }
+        if (class_object == 0) {
+            machine_panic("KernelInstaller file-in stream is missing an initial RecorzKernelClass chunk");
+        }
+        install_method_chunk_on_class(class_object, chunk);
+        ++method_chunk_count;
+    }
+    if (class_chunk_count == 0U) {
+        machine_panic("KernelInstaller file-in stream contains no class chunks");
+    }
+    if (method_chunk_count == 0U) {
+        machine_panic("KernelInstaller file-in stream contains no method chunks");
+    }
+}
+
 static void apply_external_file_in_blob(const uint8_t *blob, uint32_t size) {
     static char file_in_source_buffer[8193];
     uint32_t index;
@@ -3865,7 +3911,7 @@ static void apply_external_file_in_blob(const uint8_t *blob, uint32_t size) {
         file_in_source_buffer[index] = (char)blob[index];
     }
     file_in_source_buffer[size] = '\0';
-    file_in_class_chunks_source(file_in_source_buffer);
+    file_in_chunk_stream_source(file_in_source_buffer);
 }
 
 static void execute_entry_kernel_installer_remember_object_named(

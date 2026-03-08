@@ -1,5 +1,11 @@
 # Implementation Log
 
+## 2026-03-07 - Multi-File External File-In Streams
+- Generalized the external file-in path so the VM can consume a stream of multiple `RecorzKernelClass:` chunk groups in one boot-time payload instead of only a single class chunk blob.
+- Extended the QEMU Makefile with `FILE_IN_PAYLOADS`, which concatenates multiple host `.rz` files into one generated payload and feeds that stream through the existing `opt/recorz-file-in` transport.
+- Added focused Makefile coverage to lock the generated combined payload path and the resulting `fw_cfg` wiring.
+- Verified with `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_makefile -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
 ## 2026-03-07 - Snapshot-First External File-In Workflow
 - Added external `.rz` file-in demos that boot from a saved snapshot, apply a host-provided class chunk over `fw_cfg`, save the evolved image, and then reboot from that persisted result.
 - Added a QEMU snapshot integration case that proves the full workflow end to end: save base image, baseline reload, continue from snapshot with `FILE_IN_PAYLOAD`, save again, and reload the evolved snapshot with the filed-in behavior still present.

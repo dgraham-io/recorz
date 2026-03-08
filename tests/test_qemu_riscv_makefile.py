@@ -119,6 +119,42 @@ class QemuRiscvMakefileTests(unittest.TestCase):
             self.assertIn(f"-fw_cfg name=opt/recorz-file-in,file={file_in_path}", result.stdout)
             self.assertIn(f"-fw_cfg name=opt/recorz-snapshot,file={snapshot_path}", result.stdout)
 
+    @unittest.skipUnless(shutil.which("make"), "make is required for QEMU Makefile tests")
+    def test_continue_snapshot_uses_generated_combined_file_in_payload_for_multiple_sources(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv64-makefile-file-in-stream-") as temp_dir:
+            build_dir = Path(temp_dir)
+            snapshot_path = build_dir / "live.bin"
+            first_file = build_dir / "First.rz"
+            second_file = build_dir / "Second.rz"
+            first_file.write_text("RecorzKernelClass: #First descriptorOrder: 1 instanceVariableNames: ''\n", encoding="utf-8")
+            second_file.write_text("RecorzKernelClass: #Second descriptorOrder: 2 instanceVariableNames: ''\n", encoding="utf-8")
+            result = subprocess.run(
+                [
+                    "make",
+                    "-n",
+                    "-C",
+                    str(PLATFORM_DIR),
+                    f"BUILD_DIR={build_dir}",
+                    f"SNAPSHOT_PAYLOAD={snapshot_path}",
+                    f"FILE_IN_PAYLOADS={first_file} {second_file}",
+                    "continue-snapshot",
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    "make -n continue-snapshot with FILE_IN_PAYLOADS failed\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            combined_payload = build_dir / "external_file_in_payload.rz"
+            self.assertIn(f"for path in {first_file} {second_file}; do", result.stdout)
+            self.assertIn(f"cat $path >> {combined_payload}", result.stdout)
+            self.assertIn(f"-fw_cfg name=opt/recorz-file-in,file={combined_payload}", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
