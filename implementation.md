@@ -1,5 +1,13 @@
 # Implementation Log
 
+## 2026-03-07 - Add Workspace Named Object Browser Mode
+- Expanded the source-declared `Workspace` singleton in `kernel/mvp/Workspace.rz` with `browseObjectNamed:` and the matching source-owned selector in `kernel/mvp/Selector.rz`, so the live browser surface now covers class lists, individual classes, and remembered named objects through one persisted workspace object.
+- Extended `platform/qemu-riscv64/vm.c` so `Workspace>>reopen` now restores object-browser state as well as class and class-list views, and added a Transcript-style object browser that renders object name, class, slot count, and named dynamic instance variables with their current values.
+- Kept the object browser image-first by reusing the existing named-object registry and live class metadata instead of inventing a second persistence path or a separate browser model.
+- Added `examples/qemu_riscv_workspace_object_browser_save_demo.rz` plus `tests/test_qemu_riscv_snapshot_integration.py` coverage proving that a saved snapshot can reboot directly into a persisted object browser view for a live named instance with state.
+- Updated `tests/test_qemu_riscv_mvp_lowering.py` and `tests/test_qemu_riscv_image_inspector.py` for the expanded source-declared browser surface and the resulting image summary (`objects=295`, `selectors=43`, `methods=39`).
+- Verified with `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_mvp_lowering tests.test_qemu_riscv_image_inspector -v`, `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_snapshot_integration.QemuRiscvSnapshotIntegrationTests.test_snapshot_can_reopen_workspace_object_browser_state_without_demo_specific_program -v`, `make -C platform/qemu-riscv64 clean all inspect-image`, and `PYTHONPATH=src python3 -m unittest discover -s tests -v`.
+
 ## 2026-03-07 - Add Workspace Class List Browser Mode
 - Expanded `kernel/mvp/Workspace.rz` so the source-declared `Workspace` singleton now carries persistent browser state (`currentViewKind currentTargetName`) and exposes `browseClasses` alongside the existing class-browser and file-in primitives.
 - Extended the source-declared selector and method-entry surface for the new browser mode in `kernel/mvp/Selector.rz`, then updated the lowering and image-inspector expectations in `tests/test_qemu_riscv_mvp_lowering.py` and `tests/test_qemu_riscv_image_inspector.py` for the resulting image growth (`objects=292`, `selectors=42`, `methods=38`).

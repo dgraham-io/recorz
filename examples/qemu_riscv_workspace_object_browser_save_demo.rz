@@ -1,0 +1,16 @@
+| helperClass helper |
+Workspace fileIn: 'RecorzKernelClass: #BrowserObjectDemo superclass: #Object instanceVariableNames: ''value''
+!
+value
+    ^value
+!
+setValue: text
+    value := text.
+    ^self'.
+helperClass := KernelInstaller classNamed: 'BrowserObjectDemo'.
+helper := helperClass new.
+helper setValue: 'STATEFUL'.
+KernelInstaller rememberObject: helper named: 'browserDemo'.
+Workspace browseObjectNamed: 'browserDemo'.
+KernelInstaller configureStartup: Workspace selectorNamed: 'reopen'.
+KernelInstaller saveSnapshot.

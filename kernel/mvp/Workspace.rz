@@ -9,6 +9,9 @@ fileIn: source
 browseClasses
     <primitive: #workspaceBrowseClasses>
 !
+browseObjectNamed: objectName
+    <primitive: #workspaceBrowseObjectNamed>
+!
 browseClassNamed: className
     <primitive: #workspaceBrowseClassNamed>
 !

@@ -69,6 +69,10 @@ SNAPSHOT_WORKSPACE_CLASS_LIST_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-workspac
 SNAPSHOT_WORKSPACE_CLASS_LIST_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-workspace-class-list-reload-test"
 SNAPSHOT_WORKSPACE_CLASS_LIST_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv64-snapshots" / "workspace-class-list-live-image.bin"
 SNAPSHOT_WORKSPACE_CLASS_LIST_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_workspace_class_list_save_demo.rz"
+SNAPSHOT_WORKSPACE_OBJECT_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-workspace-object-test"
+SNAPSHOT_WORKSPACE_OBJECT_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-workspace-object-reload-test"
+SNAPSHOT_WORKSPACE_OBJECT_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv64-snapshots" / "workspace-object-live-image.bin"
+SNAPSHOT_WORKSPACE_OBJECT_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_workspace_object_browser_save_demo.rz"
 
 
 @unittest.skipUnless(
@@ -343,3 +347,37 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
         self.assertGreater(line_4[TEXT_FOREGROUND], 140)
         self.assertGreater(line_5[TEXT_FOREGROUND], 140)
         self.assertGreater(line_6[TEXT_FOREGROUND], 140)
+
+    def test_snapshot_can_reopen_workspace_object_browser_state_without_demo_specific_program(self) -> None:
+        save_log = self.save_snapshot(
+            build_dir=SNAPSHOT_WORKSPACE_OBJECT_BUILD_DIR,
+            example_path=SNAPSHOT_WORKSPACE_OBJECT_SAVE_DEMO_PATH,
+            snapshot_output=SNAPSHOT_WORKSPACE_OBJECT_OUTPUT_PATH,
+        )
+        self.assertIn("recorz-snapshot-begin", save_log)
+        self.assertTrue(SNAPSHOT_WORKSPACE_OBJECT_OUTPUT_PATH.exists())
+
+        reload_log, width, height, data = self.render_demo(
+            build_dir=SNAPSHOT_WORKSPACE_OBJECT_RELOAD_BUILD_DIR,
+            example_path=SNAPSHOT_WORKSPACE_IDLE_DEMO_PATH,
+            snapshot_payload=SNAPSHOT_WORKSPACE_OBJECT_OUTPUT_PATH,
+        )
+
+        self.assertEqual((width, height), (1280, 1024))
+        self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", reload_log)
+        self.assertIn("recorz qemu-riscv64 mvp: rendered", reload_log)
+        self.assertNotIn("panic:", reload_log)
+
+        line_1 = _region_histogram(data, width, 24, 24, 420, 56)
+        line_2 = _region_histogram(data, width, 24, 58, 500, 90)
+        line_3 = _region_histogram(data, width, 24, 92, 420, 124)
+        line_4 = _region_histogram(data, width, 24, 126, 320, 158)
+        line_5 = _region_histogram(data, width, 24, 160, 500, 192)
+        line_6 = _region_histogram(data, width, 24, 194, 320, 226)
+
+        self.assertGreater(line_1[TEXT_FOREGROUND], 300)
+        self.assertGreater(line_2[TEXT_FOREGROUND], 420)
+        self.assertGreater(line_3[TEXT_FOREGROUND], 320)
+        self.assertGreater(line_4[TEXT_FOREGROUND], 120)
+        self.assertGreater(line_5[TEXT_FOREGROUND], 280)
+        self.assertLess(line_6[TEXT_FOREGROUND], 80)

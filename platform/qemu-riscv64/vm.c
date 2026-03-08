@@ -82,6 +82,7 @@
 #define WORKSPACE_VIEW_NONE 0U
 #define WORKSPACE_VIEW_CLASSES 1U
 #define WORKSPACE_VIEW_CLASS 2U
+#define WORKSPACE_VIEW_OBJECT 3U
 
 enum recorz_mvp_value_kind {
     RECORZ_MVP_VALUE_NIL = 0,
@@ -416,6 +417,8 @@ static const char *selector_name(uint8_t selector) {
             return "browseClassNamed:";
         case RECORZ_MVP_SELECTOR_BROWSE_CLASSES:
             return "browseClasses";
+        case RECORZ_MVP_SELECTOR_BROWSE_OBJECT_NAMED:
+            return "browseObjectNamed:";
         case RECORZ_MVP_SELECTOR_REOPEN:
             return "reopen";
     }
@@ -1610,6 +1613,51 @@ static void workspace_write_label_and_integer(
     form_newline(form);
 }
 
+static const char *workspace_named_object_name_for_handle(uint16_t object_handle) {
+    uint16_t named_index;
+
+    for (named_index = 0U; named_index < named_object_count; ++named_index) {
+        if (named_objects[named_index].object_handle == object_handle) {
+            return named_objects[named_index].name;
+        }
+    }
+    return 0;
+}
+
+static void workspace_write_label_and_value(
+    const struct recorz_mvp_heap_object *form,
+    const char *label,
+    struct recorz_mvp_value value
+) {
+    if (value.kind == RECORZ_MVP_VALUE_NIL) {
+        workspace_write_label_and_text(form, label, "nil");
+        return;
+    }
+    if (value.kind == RECORZ_MVP_VALUE_STRING && value.string != 0) {
+        workspace_write_label_and_text(form, label, value.string);
+        return;
+    }
+    if (value.kind == RECORZ_MVP_VALUE_SMALL_INTEGER) {
+        workspace_write_label_and_integer(form, label, (uint32_t)value.integer);
+        return;
+    }
+    if (value.kind == RECORZ_MVP_VALUE_OBJECT) {
+        const char *named_object_name = workspace_named_object_name_for_handle((uint16_t)value.integer);
+
+        if (named_object_name != 0) {
+            workspace_write_label_and_text(form, label, named_object_name);
+            return;
+        }
+        workspace_write_label_and_text(
+            form,
+            label,
+            class_name_for_object(class_object_for_heap_object(heap_object_for_value(value)))
+        );
+        return;
+    }
+    machine_panic("Workspace browser encountered an unsupported value");
+}
+
 static void workspace_render_class_browser(
     const struct recorz_mvp_heap_object *workspace_object,
     const struct recorz_mvp_heap_object *class_object,
@@ -1659,6 +1707,61 @@ static void workspace_render_class_list_browser(
     for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
         workspace_write_text_line(form, dynamic_classes[dynamic_index].class_name);
     }
+}
+
+static void workspace_render_dynamic_object_fields(
+    const struct recorz_mvp_heap_object *form,
+    const struct recorz_mvp_heap_object *class_object,
+    const struct recorz_mvp_heap_object *object,
+    uint32_t depth
+) {
+    const struct recorz_mvp_dynamic_class_definition *dynamic_definition =
+        dynamic_class_definition_for_handle(heap_handle_for_object(class_object));
+    const struct recorz_mvp_heap_object *superclass_object = class_superclass_object_or_null(class_object);
+    uint8_t field_index;
+
+    if (depth > DYNAMIC_CLASS_LIMIT) {
+        machine_panic("Workspace object browser class chain is invalid");
+    }
+    if (superclass_object != 0) {
+        workspace_render_dynamic_object_fields(form, superclass_object, object, depth + 1U);
+    }
+    if (dynamic_definition == 0) {
+        return;
+    }
+    for (field_index = 0U; field_index < dynamic_definition->instance_variable_count; ++field_index) {
+        uint8_t resolved_field_index;
+
+        if (!class_field_index_for_name(
+                class_object,
+                dynamic_definition->instance_variable_names[field_index],
+                &resolved_field_index)) {
+            machine_panic("Workspace object browser could not resolve an instance variable");
+        }
+        workspace_write_label_and_value(
+            form,
+            dynamic_definition->instance_variable_names[field_index],
+            heap_get_field(object, resolved_field_index)
+        );
+    }
+}
+
+static void workspace_render_object_browser(
+    const struct recorz_mvp_heap_object *workspace_object,
+    const char *object_name,
+    const struct recorz_mvp_heap_object *object
+) {
+    const struct recorz_mvp_heap_object *form = default_form_object();
+    const struct recorz_mvp_heap_object *class_object = class_object_for_heap_object(object);
+
+    (void)workspace_object;
+    form_clear(form);
+    form_write_string(form, "WORKSPACE");
+    form_newline(form);
+    workspace_write_label_and_text(form, "OBJECT", object_name);
+    workspace_write_label_and_text(form, "CLASS", class_name_for_object(class_object));
+    workspace_write_label_and_integer(form, "SLOTS", object->field_count);
+    workspace_render_dynamic_object_fields(form, class_object, object, 0U);
 }
 
 static void validate_dynamic_class_definition(
@@ -4273,6 +4376,27 @@ static void execute_entry_workspace_browse_class_named(
     push(receiver);
 }
 
+static void execute_entry_workspace_browse_object_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint16_t object_handle;
+
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace browseObjectNamed: expects an object name string");
+    }
+    object_handle = named_object_handle_for_name(arguments[0].string);
+    if (object_handle == 0U) {
+        machine_panic("Workspace browseObjectNamed: could not resolve object");
+    }
+    workspace_remember_view(object, WORKSPACE_VIEW_OBJECT, arguments[0].string);
+    workspace_render_object_browser(object, arguments[0].string, heap_object(object_handle));
+    push(receiver);
+}
+
 static void execute_entry_workspace_reopen(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -4296,6 +4420,23 @@ static void execute_entry_workspace_reopen(
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASSES) {
         workspace_render_class_list_browser(object);
+        push(receiver);
+        return;
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_OBJECT) {
+        uint16_t object_handle;
+
+        target_name_value = heap_get_field(object, workspace_current_target_name_field_index(object));
+        if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
+            target_name_value.string == 0 ||
+            target_name_value.string[0] == '\0') {
+            machine_panic("Workspace reopen is missing the remembered object name");
+        }
+        object_handle = named_object_handle_for_name(target_name_value.string);
+        if (object_handle == 0U) {
+            machine_panic("Workspace reopen could not resolve the remembered object");
+        }
+        workspace_render_object_browser(object, target_name_value.string, heap_object(object_handle));
         push(receiver);
         return;
     }
