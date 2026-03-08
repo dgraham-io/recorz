@@ -1,0 +1,15 @@
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #BinaryReporter superclass: #Object instanceVariableNames: ''value''
+!
+value
+    ^value + value
+!
+setValue: number
+    value := number.
+    ^self
+!'.
+KernelInstaller rememberObject: ((KernelInstaller classNamed: 'BinaryReporter') new) named: 'binaryReporter'.
+(KernelInstaller objectNamed: 'binaryReporter') setValue: 3.
+Transcript show: 'BINARY'.
+Transcript cr.
+Transcript show: ((KernelInstaller objectNamed: 'binaryReporter') value) printString.

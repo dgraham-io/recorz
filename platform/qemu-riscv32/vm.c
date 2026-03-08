@@ -695,6 +695,10 @@ static uint8_t source_char_is_identifier_char(char ch) {
     );
 }
 
+static uint8_t source_char_is_binary_selector(char ch) {
+    return (uint8_t)(ch == '+' || ch == '-' || ch == '*');
+}
+
 static uint8_t source_names_equal(const char *left, const char *right) {
     uint32_t index = 0U;
 
@@ -1363,6 +1367,38 @@ static const char *workspace_compile_operand_push(
     return parsed_cursor;
 }
 
+static const char *workspace_compile_expression_push(
+    const char *cursor,
+    struct recorz_mvp_workspace_source_program *program
+) {
+    char selector_buffer[2];
+    const char *parsed_cursor;
+    uint8_t selector_id;
+
+    parsed_cursor = workspace_compile_operand_push(cursor, program);
+    if (parsed_cursor == 0) {
+        return 0;
+    }
+    cursor = source_skip_statement_space(parsed_cursor);
+    while (source_char_is_binary_selector(*cursor)) {
+        selector_buffer[0] = *cursor++;
+        selector_buffer[1] = '\0';
+        cursor = workspace_compile_operand_push(cursor, program);
+        if (cursor == 0) {
+            machine_panic("Workspace binary send is missing an argument");
+        }
+        selector_id = source_selector_id_for_name(selector_buffer);
+        if (selector_id == 0U) {
+            machine_panic("Workspace source statement uses an unknown binary selector");
+        }
+        if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_SEND, selector_id, 1U)) {
+            machine_panic("Workspace source exceeds instruction capacity");
+        }
+        cursor = source_skip_statement_space(cursor);
+    }
+    return cursor;
+}
+
 static void workspace_compile_statement(
     const char *statement,
     struct recorz_mvp_workspace_source_program *program
@@ -1375,14 +1411,17 @@ static void workspace_compile_statement(
     uint32_t selector_length = 0U;
     uint8_t selector_id;
 
-    cursor = workspace_compile_operand_push(cursor, program);
+    cursor = workspace_compile_expression_push(cursor, program);
     if (cursor == 0) {
         machine_panic("Workspace source statement is missing a receiver");
     }
     cursor = source_skip_statement_space(cursor);
+    if (*cursor == '\0') {
+        return;
+    }
     part_cursor = source_parse_identifier(cursor, selector_part, sizeof(selector_part));
     if (part_cursor == 0) {
-        machine_panic("Workspace source statement is missing a selector");
+        machine_panic("Workspace source statement has unexpected trailing text");
     }
     while (selector_part[selector_length] != '\0') {
         selector_buffer[selector_length] = selector_part[selector_length];
@@ -1398,7 +1437,7 @@ static void workspace_compile_statement(
             selector_buffer[selector_length++] = ':';
             selector_buffer[selector_length] = '\0';
             ++cursor;
-            cursor = workspace_compile_operand_push(cursor, program);
+            cursor = workspace_compile_expression_push(cursor, program);
             if (cursor == 0) {
                 machine_panic("Workspace keyword send is missing an argument");
             }
@@ -5588,7 +5627,7 @@ static void compile_source_append_instruction(
     instruction_words[(*instruction_count)++] = encode_compiled_method_word(opcode, operand_a, operand_b);
 }
 
-static const char *compile_source_expression_push(
+static const char *compile_source_primary_push(
     const struct recorz_mvp_heap_object *class_object,
     const char *cursor,
     const char *argument_name,
@@ -5631,6 +5670,57 @@ static const char *compile_source_expression_push(
             0U
         );
         cursor = after_selector;
+    }
+    return cursor;
+}
+
+static const char *compile_source_expression_push(
+    const struct recorz_mvp_heap_object *class_object,
+    const char *cursor,
+    const char *argument_name,
+    uint32_t instruction_words[],
+    uint8_t *instruction_count
+) {
+    char selector_name_buffer[2];
+    const char *parsed_cursor;
+    uint8_t selector_id;
+
+    parsed_cursor = compile_source_primary_push(
+        class_object,
+        cursor,
+        argument_name,
+        instruction_words,
+        instruction_count
+    );
+    if (parsed_cursor == 0) {
+        return 0;
+    }
+    cursor = source_skip_horizontal_space(parsed_cursor);
+    while (source_char_is_binary_selector(*cursor)) {
+        selector_name_buffer[0] = *cursor++;
+        selector_name_buffer[1] = '\0';
+        cursor = compile_source_primary_push(
+            class_object,
+            cursor,
+            argument_name,
+            instruction_words,
+            instruction_count
+        );
+        if (cursor == 0) {
+            machine_panic("KernelInstaller source method binary send is missing an argument");
+        }
+        selector_id = source_selector_id_for_name(selector_name_buffer);
+        if (selector_id == 0U) {
+            machine_panic("KernelInstaller source method uses an unknown binary selector");
+        }
+        compile_source_append_instruction(
+            instruction_words,
+            instruction_count,
+            COMPILED_METHOD_OP_SEND,
+            selector_id,
+            1U
+        );
+        cursor = source_skip_horizontal_space(cursor);
     }
     return cursor;
 }
@@ -5689,7 +5779,18 @@ static uint8_t compile_source_statement_line(
         machine_panic("KernelInstaller source method uses an unsupported receiver expression");
     }
     cursor = source_skip_horizontal_space(cursor);
+    if (*cursor == '.' && cursor[1] == '\0') {
+        *produces_value = 1U;
+        return 1U;
+    }
     keyword_cursor = source_parse_identifier(cursor, selector_name_buffer, sizeof(selector_name_buffer));
+    if (keyword_cursor == 0) {
+        if (*cursor == '\0') {
+            *produces_value = 1U;
+            return 1U;
+        }
+        machine_panic("KernelInstaller source method statement has unexpected trailing text");
+    }
     if (keyword_cursor != 0) {
         const char *after_selector = source_skip_horizontal_space(keyword_cursor);
 

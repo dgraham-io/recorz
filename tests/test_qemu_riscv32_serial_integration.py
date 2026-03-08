@@ -14,6 +14,7 @@ DEFAULT_EXAMPLE = ROOT / "examples" / "qemu_riscv_fb_demo.rz"
 MEMORY_REPORT_EXAMPLE = ROOT / "examples" / "qemu_riscv_memory_report_demo.rz"
 MULTISTATEMENT_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_multistatement_source_demo.rz"
 PACKAGE_COMMENT_ROUNDTRIP_EXAMPLE = ROOT / "examples" / "qemu_riscv_package_comment_roundtrip_demo.rz"
+BINARY_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_binary_method_demo.rz"
 
 
 def _build_elf(build_dir: Path, example_path: Path = DEFAULT_EXAMPLE, *, profile: str = "dev") -> Path:
@@ -258,6 +259,49 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             output = output.replace("\r", "")
             self.assertIn("recorz qemu-riscv32 mvp: created class Reporter", output)
             self.assertIn("1024", output)
+            self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
+
+    def test_in_image_source_compiler_supports_binary_method_expressions(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-binary-method-source-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, BINARY_METHOD_SOURCE_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("recorz qemu-riscv32 mvp: created class BinaryReporter", output)
+            self.assertIn("BINARY", output)
+            self.assertIn("6", output)
             self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
 
     def test_package_comment_round_trips_through_file_out_source(self) -> None:
