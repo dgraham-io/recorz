@@ -3,7 +3,6 @@ from __future__ import annotations
 import shutil
 import subprocess
 import tempfile
-import time
 import unittest
 from pathlib import Path
 
@@ -34,7 +33,7 @@ def _build_elf(build_dir: Path) -> Path:
             f"stdout:\n{result.stdout}\n"
             f"stderr:\n{result.stderr}"
         )
-    return build_dir / "recorz-qemu-riscv32-serial.elf"
+    return build_dir / "recorz-qemu-riscv32-mvp.elf"
 
 
 @unittest.skipUnless(
@@ -61,6 +60,8 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     "stdio",
                     "-display",
                     "none",
+                    "-device",
+                    "ramfb",
                 ],
                 cwd=ROOT,
                 stdout=subprocess.PIPE,
@@ -68,35 +69,21 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 text=True,
             )
             try:
-                deadline = time.time() + 20.0
-                output_chunks: list[str] = []
-                while time.time() < deadline:
-                    line = process.stdout.readline()
-                    if not line:
-                        if process.poll() is not None:
-                            break
-                        continue
-                    output_chunks.append(line)
-                    if "recorz qemu-riscv32 serial: rendered" in line:
-                        break
-                else:
-                    self.fail("QEMU RV32 serial run timed out before rendering")
-            finally:
-                process.terminate()
                 try:
-                    process.wait(timeout=5)
+                    output, _ = process.communicate(timeout=5.0)
                 except subprocess.TimeoutExpired:
                     process.kill()
-                    process.wait(timeout=5)
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
                 if process.stdout is not None:
                     process.stdout.close()
 
-            output = "".join(output_chunks).replace("\r", "")
-            self.assertIn("recorz qemu-riscv32 serial: booting", output)
+            output = output.replace("\r", "")
+            self.assertIn("recorz qemu-riscv32 mvp: booting", output)
             self.assertIn("HELLO FROM RECORZ", output)
             self.assertIn("SIZE: 1280 x 1024", output)
             self.assertIn("RAMFB ONLINE.", output)
-            self.assertIn("recorz qemu-riscv32 serial: rendered", output)
+            self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
 
 
 if __name__ == "__main__":

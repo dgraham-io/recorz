@@ -11,7 +11,7 @@ PLATFORM_DIR = ROOT / "platform" / "qemu-riscv32"
 
 class QemuRiscv32MakefileTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("make"), "make is required for QEMU RISC-V Makefile tests")
-    def test_run_headless_uses_rv32_serial_only_target(self) -> None:
+    def test_run_headless_uses_rv32_framebuffer_target(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-makefile-") as temp_dir:
             build_dir = Path(temp_dir)
             result = subprocess.run(
@@ -36,8 +36,8 @@ class QemuRiscv32MakefileTests(unittest.TestCase):
 
             self.assertIn("qemu-system-riscv32", result.stdout)
             self.assertIn("-march=rv32im -mabi=ilp32", result.stdout)
-            self.assertNotIn("-device ramfb", result.stdout)
-            self.assertNotIn("-fw_cfg", result.stdout)
+            self.assertIn("-device ramfb", result.stdout)
+            self.assertNotIn("-fw_cfg name=", result.stdout)
 
 
 if __name__ == "__main__":

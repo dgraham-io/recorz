@@ -1,5 +1,12 @@
 # Implementation Log
 
+## 2026-03-08 - Add QEMU RV32 Framebuffer Target
+- Brought the new `platform/qemu-riscv32` target up from serial-only bring-up to a real QEMU `virt` framebuffer target by restoring the proven DTB/`fw_cfg`/`ramfb` machine layer and display pipeline on top of the existing RV32 build flags (`rv32im` / `ilp32`).
+- Re-enabled the graphical build and run workflow in `platform/qemu-riscv32/Makefile`, including `run`, `run-headless`, `screenshot`, `save-snapshot`, `continue-snapshot`, and `inspect-image`, while keeping the serial transcript echo in `platform/qemu-riscv32/vm.c` so RV32 still has UART diagnostics during framebuffer bring-up.
+- Switched `platform/qemu-riscv32/main.c` back to the normal MVP boot flow with external method-update, file-in, and snapshot payload hooks, so the RV32 target now exercises the same target-side image/runtime seams as the RV64 QEMU platform instead of a reduced serial-only path.
+- Added RV32-specific framebuffer coverage in `tests/test_qemu_riscv32_render_integration.py`, updated `tests/test_qemu_riscv32_makefile.py` to lock the new `ramfb` build shape, and fixed `tests/test_qemu_riscv32_serial_integration.py` to capture UART output robustly while the graphical target is running.
+- Verified with `make -C platform/qemu-riscv32 clean all inspect-image`, `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv32_makefile tests.test_qemu_riscv32_serial_integration tests.test_qemu_riscv32_render_integration -v`, and `PYTHONPATH=src python3 -m unittest discover -s tests -v`.
+
 ## 2026-03-08 - Add QEMU RV32 Serial Target
 - Added a new `platform/qemu-riscv32` target as the first RV32-clean bring-up slice, reusing the current image/VM core but switching the platform build to `rv32im/ilp32` and `qemu-system-riscv32`.
 - Kept the target deliberately serial-first by replacing the copied `machine.c` with a minimal UART-only machine layer and a no-op display layer, so this step tests CPU width and ABI portability without mixing in `ramfb`, `fw_cfg`, or LiteX-specific display work.

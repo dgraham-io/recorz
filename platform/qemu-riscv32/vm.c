@@ -4568,7 +4568,7 @@ static const struct recorz_mvp_heap_object *ensure_class_defined(
         heap_set_field(class_handle, CLASS_FIELD_METHOD_COUNT, small_integer_value(0));
         dynamic_definition = &dynamic_classes[dynamic_class_count++];
         class_object = (const struct recorz_mvp_heap_object *)heap_object(class_handle);
-        machine_puts("recorz qemu-riscv32 serial: created class ");
+        machine_puts("recorz qemu-riscv32 mvp: created class ");
         machine_puts(definition->class_name);
         machine_putc('\n');
     } else {
@@ -5847,19 +5847,19 @@ void recorz_mvp_vm_run(
     if (snapshot_blob != 0 && snapshot_size != 0U) {
         panic_phase = "snapshot";
         load_snapshot_state(snapshot_blob, snapshot_size);
-        machine_puts("recorz qemu-riscv32 serial: loaded snapshot\n");
+        machine_puts("recorz qemu-riscv32 mvp: loaded snapshot\n");
     } else {
         initialize_roots(seed);
     }
     if (method_update_blob != 0 && method_update_size != 0U) {
         panic_phase = "update";
         apply_method_update_payload(method_update_blob, method_update_size);
-        machine_puts("recorz qemu-riscv32 serial: applied method update\n");
+        machine_puts("recorz qemu-riscv32 mvp: applied method update\n");
     }
     if (file_in_blob != 0 && file_in_size != 0U) {
         panic_phase = "file-in";
         apply_external_file_in_blob(file_in_blob, file_in_size);
-        machine_puts("recorz qemu-riscv32 serial: applied external file-in\n");
+        machine_puts("recorz qemu-riscv32 mvp: applied external file-in\n");
     }
     run_startup_hook_if_configured();
     execute_executable(&executable, 0, nil_value(), 0U, 0);
