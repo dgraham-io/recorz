@@ -219,6 +219,7 @@ static uint32_t cursor_x = 0U;
 static uint32_t cursor_y = 0U;
 static char print_buffer[PRINT_BUFFER_SIZE];
 static char workspace_target_buffer[METHOD_SOURCE_CHUNK_LIMIT];
+static char kernel_source_io_buffer[8193];
 static char runtime_string_pool[RUNTIME_STRING_POOL_LIMIT];
 static uint32_t runtime_string_pool_offset = 0U;
 static char snapshot_string_pool[SNAPSHOT_STRING_LIMIT];
@@ -5082,7 +5083,6 @@ static void append_live_method_source_chunks(
 }
 
 static const char *file_out_class_source_by_name(const char *class_name) {
-    static char class_file_out_buffer[8192];
     const struct recorz_mvp_heap_object *class_object;
     const struct recorz_mvp_dynamic_class_definition *dynamic_definition;
     const struct recorz_mvp_heap_object *metaclass_object;
@@ -5103,11 +5103,16 @@ static const char *file_out_class_source_by_name(const char *class_name) {
     if (live_method_source_count_for_class_handle(class_handle) != class_method_count(class_object)) {
         machine_panic("KernelInstaller fileOutClassNamed: class contains methods without live source");
     }
-    class_file_out_buffer[0] = '\0';
-    append_dynamic_class_header_source(class_file_out_buffer, sizeof(class_file_out_buffer), &offset, dynamic_definition);
+    kernel_source_io_buffer[0] = '\0';
+    append_dynamic_class_header_source(
+        kernel_source_io_buffer,
+        sizeof(kernel_source_io_buffer),
+        &offset,
+        dynamic_definition
+    );
     append_live_method_source_chunks(
-        class_file_out_buffer,
-        sizeof(class_file_out_buffer),
+        kernel_source_io_buffer,
+        sizeof(kernel_source_io_buffer),
         &offset,
         class_handle,
         &wrote_any_chunk
@@ -5119,12 +5124,22 @@ static const char *file_out_class_source_by_name(const char *class_name) {
         machine_panic("KernelInstaller fileOutClassNamed: metaclass contains methods without live source");
     }
     if (class_method_count(metaclass_object) != 0U) {
-        append_text_checked(class_file_out_buffer, sizeof(class_file_out_buffer), &offset, "\n!\n");
-        append_text_checked(class_file_out_buffer, sizeof(class_file_out_buffer), &offset, "RecorzKernelClassSide: #");
-        append_text_checked(class_file_out_buffer, sizeof(class_file_out_buffer), &offset, dynamic_definition->class_name);
+        append_text_checked(kernel_source_io_buffer, sizeof(kernel_source_io_buffer), &offset, "\n!\n");
+        append_text_checked(
+            kernel_source_io_buffer,
+            sizeof(kernel_source_io_buffer),
+            &offset,
+            "RecorzKernelClassSide: #"
+        );
+        append_text_checked(
+            kernel_source_io_buffer,
+            sizeof(kernel_source_io_buffer),
+            &offset,
+            dynamic_definition->class_name
+        );
         append_live_method_source_chunks(
-            class_file_out_buffer,
-            sizeof(class_file_out_buffer),
+            kernel_source_io_buffer,
+            sizeof(kernel_source_io_buffer),
             &offset,
             metaclass_handle,
             &wrote_any_chunk
@@ -5133,7 +5148,7 @@ static const char *file_out_class_source_by_name(const char *class_name) {
     if (!wrote_any_chunk) {
         machine_panic("KernelInstaller fileOutClassNamed: class has no live source methods");
     }
-    return runtime_string_allocate_copy(class_file_out_buffer);
+    return runtime_string_allocate_copy(kernel_source_io_buffer);
 }
 
 static void execute_entry_kernel_installer_compiled_method_word0_word1_word2_word3_instruction_count(
@@ -5359,23 +5374,22 @@ static void file_in_chunk_stream_source(const char *source) {
 }
 
 static void apply_external_file_in_blob(const uint8_t *blob, uint32_t size) {
-    static char file_in_source_buffer[8193];
     uint32_t index;
 
     if (blob == 0 || size == 0U) {
         return;
     }
-    if (size >= sizeof(file_in_source_buffer)) {
+    if (size >= sizeof(kernel_source_io_buffer)) {
         machine_panic("external file-in payload exceeds buffer capacity");
     }
     for (index = 0U; index < size; ++index) {
         if (blob[index] == '\0') {
             machine_panic("external file-in payload contains an unexpected NUL byte");
         }
-        file_in_source_buffer[index] = (char)blob[index];
+        kernel_source_io_buffer[index] = (char)blob[index];
     }
-    file_in_source_buffer[size] = '\0';
-    file_in_chunk_stream_source(file_in_source_buffer);
+    kernel_source_io_buffer[size] = '\0';
+    file_in_chunk_stream_source(kernel_source_io_buffer);
 }
 
 static void execute_entry_kernel_installer_remember_object_named(
