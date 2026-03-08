@@ -11,13 +11,14 @@ ROOT = Path(__file__).resolve().parents[1]
 PLATFORM_DIR = ROOT / "platform" / "qemu-riscv32"
 
 
-def _build_elf(build_dir: Path, example_path: Path) -> Path:
+def _build_elf(build_dir: Path, example_path: Path, *, profile: str = "target") -> Path:
     result = subprocess.run(
         [
             "make",
             "-C",
             str(PLATFORM_DIR),
             f"BUILD_DIR={build_dir}",
+            f"RV32_PROFILE={profile}",
             f"EXAMPLE={example_path}",
             "clean",
             "all",

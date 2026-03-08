@@ -1,5 +1,6 @@
 ROOT := $(abspath $(CURDIR)/../..)
-BUILD_DIR ?= $(ROOT)/misc/qemu-riscv32-mvp
+RV32_PROFILE ?= dev
+BUILD_DIR ?= $(ROOT)/misc/qemu-riscv32-$(RV32_PROFILE)-mvp
 TOOLCHAIN_PREFIX ?= riscv64-unknown-elf-
 CC := $(TOOLCHAIN_PREFIX)gcc
 QEMU ?= qemu-system-riscv32
@@ -31,6 +32,13 @@ DEV_BOOT_EXAMPLE ?= $(ROOT)/examples/qemu_riscv_image_first_boot.rz
 DEV_SAVE_EXAMPLE ?= $(ROOT)/examples/qemu_riscv_image_first_save.rz
 
 CFLAGS := -march=rv32im -mabi=ilp32 -mcmodel=medany -nostdlib -ffreestanding -O2 -Wall -Wextra -I$(CURDIR) -I$(BUILD_DIR)
+ifeq ($(RV32_PROFILE),dev)
+CFLAGS += -DRECORZ_MVP_PROFILE_DEV=1
+else ifeq ($(RV32_PROFILE),target)
+CFLAGS += -DRECORZ_MVP_PROFILE_TARGET=1
+else
+$(error RV32_PROFILE must be dev or target)
+endif
 LDFLAGS := -T $(CURDIR)/linker.ld
 
 EXAMPLE ?= $(ROOT)/examples/qemu_riscv_fb_demo.rz

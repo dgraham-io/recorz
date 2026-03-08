@@ -3643,6 +3643,9 @@ static const char *kernel_memory_report_text(void) {
 
     buffer[0] = '\0';
     append_memory_report_text(buffer, &offset, "MEMORY\n");
+    append_memory_report_text(buffer, &offset, "PROFILE ");
+    append_memory_report_text(buffer, &offset, RECORZ_MVP_PROFILE_NAME);
+    append_memory_report_text(buffer, &offset, "\n");
     append_memory_report_line(buffer, &offset, "HEAP", heap_size, HEAP_LIMIT);
     append_memory_report_line(buffer, &offset, "DCLS", dynamic_class_count, DYNAMIC_CLASS_LIMIT);
     append_memory_report_line(buffer, &offset, "NOBJ", named_object_count, NAMED_OBJECT_LIMIT);

@@ -14,13 +14,14 @@ DEFAULT_EXAMPLE = ROOT / "examples" / "qemu_riscv_fb_demo.rz"
 MEMORY_REPORT_EXAMPLE = ROOT / "examples" / "qemu_riscv_memory_report_demo.rz"
 
 
-def _build_elf(build_dir: Path, example_path: Path = DEFAULT_EXAMPLE) -> Path:
+def _build_elf(build_dir: Path, example_path: Path = DEFAULT_EXAMPLE, *, profile: str = "dev") -> Path:
     result = subprocess.run(
         [
             "make",
             "-C",
             str(PLATFORM_DIR),
             f"BUILD_DIR={build_dir}",
+            f"RV32_PROFILE={profile}",
             f"EXAMPLE={example_path}",
             "clean",
             "all",
@@ -126,16 +127,17 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
 
             output = output.replace("\r", "")
             self.assertIn("MEMORY", output)
+            self.assertIn("PROFILE DEV", output)
 
             expected_limits = {
-                "HEAP": 384,
-                "DCLS": 8,
-                "NOBJ": 8,
-                "MSRC": 16,
-                "RSTR": 8192,
-                "SSTR": 8192,
-                "SNAP": 24576,
-                "MONO": 8,
+                "HEAP": 768,
+                "DCLS": 24,
+                "NOBJ": 24,
+                "MSRC": 64,
+                "RSTR": 32768,
+                "SSTR": 16384,
+                "SNAP": 65536,
+                "MONO": 16,
             }
             for label, expected_limit in expected_limits.items():
                 match = re.search(rf"{label} (\d+)/(\d+)", output)

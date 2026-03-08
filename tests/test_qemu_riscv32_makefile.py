@@ -38,8 +38,37 @@ class QemuRiscv32MakefileTests(unittest.TestCase):
             self.assertIn("qemu-system-riscv32", result.stdout)
             self.assertIn("-m 32M", result.stdout)
             self.assertIn("-march=rv32im -mabi=ilp32", result.stdout)
+            self.assertIn("-DRECORZ_MVP_PROFILE_DEV=1", result.stdout)
             self.assertIn("-device ramfb", result.stdout)
             self.assertNotIn("-fw_cfg name=", result.stdout)
+
+    @unittest.skipUnless(shutil.which("make"), "make is required for QEMU RISC-V Makefile tests")
+    def test_target_profile_can_be_selected_explicitly(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-makefile-target-profile-") as temp_dir:
+            build_dir = Path(temp_dir)
+            result = subprocess.run(
+                [
+                    "make",
+                    "-n",
+                    "-C",
+                    str(PLATFORM_DIR),
+                    f"BUILD_DIR={build_dir}",
+                    "RV32_PROFILE=target",
+                    "run-headless",
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    "make -n run-headless with RV32_PROFILE=target failed\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            self.assertIn("-DRECORZ_MVP_PROFILE_TARGET=1", result.stdout)
+            self.assertNotIn("-DRECORZ_MVP_PROFILE_DEV=1", result.stdout)
 
     @unittest.skipUnless(shutil.which("make"), "make is required for QEMU RISC-V Makefile tests")
     def test_continue_snapshot_uses_a_temporary_output_before_replacing_input_snapshot(self) -> None:
