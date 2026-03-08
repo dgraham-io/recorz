@@ -114,19 +114,39 @@ class QemuRiscv32BudgetIntegrationTests(unittest.TestCase):
 
     def test_object_heap_overflow_reports_target_limit(self) -> None:
         parts = ["Display clear."]
+        instance_selectors = ("value", "detail", "width", "height")
+        class_selectors = ("class", "instanceKind", "defaultForm", "clear")
         for index in range(1, 8):
+            class_chunks = [
+                f"RecorzKernelClass: #Heap{index} superclass: #Object instanceVariableNames: ''a b''",
+            ]
+            for selector in instance_selectors:
+                class_chunks.extend(
+                    [
+                        "!",
+                        selector,
+                        "    ^a",
+                    ]
+                )
+            class_chunks.extend([f"!", f"RecorzKernelClassSide: #Heap{index}"])
+            for selector in class_selectors:
+                class_chunks.extend(
+                    [
+                        "!",
+                        selector,
+                        "    ^self",
+                    ]
+                )
             parts.append(
-                "KernelInstaller fileInClassChunks: "
-                f"'RecorzKernelClass: #Heap{index} superclass: #Object instanceVariableNames: ''''\n!\n"
-                "value\n    ^self\n!\n"
-                f"RecorzKernelClassSide: #Heap{index}\n!\n"
-                "detail\n    ^self'."
+                "KernelInstaller fileInClassChunks: '"
+                + "\n".join(class_chunks)
+                + "'."
             )
         parts.append("Transcript show: 'DONE'.")
 
         output = self.run_source("\n".join(parts))
 
-        self.assertIn("recorz qemu-riscv32 mvp: created class Heap7", output)
+        self.assertIn("recorz qemu-riscv32 mvp: created class Heap4", output)
         self.assertIn("panic: object heap overflow", output)
         self.assertIn("send selector=fileInClassChunks:", output)
 

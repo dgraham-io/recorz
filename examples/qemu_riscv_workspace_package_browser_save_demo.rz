@@ -1,0 +1,8 @@
+Workspace fileIn: 'RecorzKernelPackage: ''Tools''
+!
+RecorzKernelClass: #PackageAlpha superclass: #Object package: ''Tools'' instanceVariableNames: ''''
+!
+RecorzKernelClass: #PackageBeta superclass: #Object package: ''Tools'' instanceVariableNames: '''''.
+Workspace browsePackageNamed: 'Tools'.
+KernelInstaller configureStartup: Workspace selectorNamed: 'reopen'.
+KernelInstaller saveSnapshot.

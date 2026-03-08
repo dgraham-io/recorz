@@ -84,7 +84,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_FILE_OUT_PACKAGE_NAMED
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_BROWSE_PACKAGE_NAMED
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -101,6 +101,8 @@
 #define WORKSPACE_VIEW_CLASS_PROTOCOLS 11U
 #define WORKSPACE_VIEW_CLASS_PROTOCOL 12U
 #define WORKSPACE_VIEW_PACKAGE_SOURCE 13U
+#define WORKSPACE_VIEW_PACKAGES 14U
+#define WORKSPACE_VIEW_PACKAGE 15U
 
 enum recorz_mvp_value_kind {
     RECORZ_MVP_VALUE_NIL = 0,
@@ -2681,6 +2683,111 @@ static void workspace_render_class_browser(
     }
     workspace_write_label_and_integer(form, "SLOTS", live_instance_field_count_for_class(class_object));
     workspace_write_label_and_integer(form, "METHODS", class_method_count(class_object));
+}
+
+static uint8_t workspace_package_seen_earlier(
+    uint16_t dynamic_index,
+    const char *package_name
+) {
+    uint16_t previous_index;
+
+    for (previous_index = 0U; previous_index < dynamic_index; ++previous_index) {
+        if (dynamic_classes[previous_index].package_name[0] == '\0') {
+            continue;
+        }
+        if (source_names_equal(dynamic_classes[previous_index].package_name, package_name)) {
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
+static uint32_t workspace_package_count(void) {
+    uint16_t dynamic_index;
+    uint32_t count = 0U;
+
+    for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
+        if (dynamic_classes[dynamic_index].package_name[0] == '\0') {
+            continue;
+        }
+        if (!workspace_package_seen_earlier(dynamic_index, dynamic_classes[dynamic_index].package_name)) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+static uint32_t workspace_package_class_count(
+    const char *package_name
+) {
+    uint16_t dynamic_index;
+    uint32_t count = 0U;
+
+    for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
+        if (source_names_equal(dynamic_classes[dynamic_index].package_name, package_name)) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+static void workspace_render_package_list_browser(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    const struct recorz_mvp_heap_object *form = default_form_object();
+    uint16_t dynamic_index;
+
+    (void)workspace_object;
+    form_clear(form);
+    form_write_string(form, "WORKSPACE");
+    form_newline(form);
+    form_write_string(form, "PACKAGES");
+    form_newline(form);
+    workspace_write_label_and_integer(form, "PACKAGES", workspace_package_count());
+    if (workspace_package_count() == 0U) {
+        workspace_write_text_line(form, "NO PACKAGES");
+        return;
+    }
+    for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
+        char line[METHOD_SOURCE_LINE_LIMIT];
+        uint32_t line_offset = 0U;
+
+        if (dynamic_classes[dynamic_index].package_name[0] == '\0') {
+            continue;
+        }
+        if (workspace_package_seen_earlier(dynamic_index, dynamic_classes[dynamic_index].package_name)) {
+            continue;
+        }
+        append_text_checked(line, sizeof(line), &line_offset, dynamic_classes[dynamic_index].package_name);
+        append_text_checked(line, sizeof(line), &line_offset, " :: ");
+        render_small_integer((int32_t)workspace_package_class_count(dynamic_classes[dynamic_index].package_name));
+        append_text_checked(line, sizeof(line), &line_offset, print_buffer);
+        workspace_write_text_line(form, line);
+    }
+}
+
+static void workspace_render_package_browser(
+    const struct recorz_mvp_heap_object *workspace_object,
+    const char *package_name
+) {
+    const struct recorz_mvp_heap_object *form = default_form_object();
+    uint16_t dynamic_index;
+    uint32_t class_count = workspace_package_class_count(package_name);
+
+    (void)workspace_object;
+    form_clear(form);
+    workspace_write_label_and_text(form, "PACKAGE", package_name);
+    workspace_write_label_and_integer(form, "CLASSES", class_count);
+    if (class_count == 0U) {
+        workspace_write_text_line(form, "EMPTY PACKAGE");
+        return;
+    }
+    for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
+        if (!source_names_equal(dynamic_classes[dynamic_index].package_name, package_name)) {
+            continue;
+        }
+        workspace_write_text_line(form, dynamic_classes[dynamic_index].class_name);
+    }
 }
 
 static void workspace_render_class_list_browser(
@@ -6898,6 +7005,19 @@ static void execute_entry_workspace_browse_classes(
     push(receiver);
 }
 
+static void execute_entry_workspace_browse_packages(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    workspace_remember_view(object, WORKSPACE_VIEW_PACKAGES, 0);
+    workspace_render_package_list_browser(object);
+    push(receiver);
+}
+
 static void execute_entry_workspace_browse_methods_for_class_named(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -6916,6 +7036,24 @@ static void execute_entry_workspace_browse_methods_for_class_named(
     }
     workspace_remember_view(object, WORKSPACE_VIEW_METHODS, arguments[0].string);
     workspace_render_method_list_browser(object, class_object, arguments[0].string, "INST");
+    push(receiver);
+}
+
+static void execute_entry_workspace_browse_package_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace browsePackageNamed: expects a package name string");
+    }
+    if (workspace_package_class_count(arguments[0].string) == 0U) {
+        machine_panic("Workspace browsePackageNamed: could not resolve package");
+    }
+    workspace_remember_view(object, WORKSPACE_VIEW_PACKAGE, arguments[0].string);
+    workspace_render_package_browser(object, arguments[0].string);
     push(receiver);
 }
 
@@ -7240,6 +7378,11 @@ static void execute_entry_workspace_reopen(
         push(receiver);
         return;
     }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PACKAGES) {
+        workspace_render_package_list_browser(object);
+        push(receiver);
+        return;
+    }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_METHODS) {
         target_name_value = heap_get_field(object, workspace_current_target_name_field_index(object));
         if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
@@ -7404,6 +7547,20 @@ static void execute_entry_workspace_reopen(
             machine_panic("Workspace reopen is missing the remembered package source target");
         }
         workspace_render_package_source_browser(object, target_name_value.string);
+        push(receiver);
+        return;
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PACKAGE) {
+        target_name_value = heap_get_field(object, workspace_current_target_name_field_index(object));
+        if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
+            target_name_value.string == 0 ||
+            target_name_value.string[0] == '\0') {
+            machine_panic("Workspace reopen is missing the remembered package target");
+        }
+        if (workspace_package_class_count(target_name_value.string) == 0U) {
+            machine_panic("Workspace reopen could not resolve the remembered package");
+        }
+        workspace_render_package_browser(object, target_name_value.string);
         push(receiver);
         return;
     }

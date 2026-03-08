@@ -24,8 +24,14 @@ fileInCurrent
 browseClasses
     <primitive: #workspaceBrowseClasses>
 !
+browsePackages
+    <primitive: #workspaceBrowsePackages>
+!
 browseMethodsForClassNamed: className
     <primitive: #workspaceBrowseMethodsForClassNamed>
+!
+browsePackageNamed: packageName
+    <primitive: #workspaceBrowsePackageNamed>
 !
 browseProtocolsForClassNamed: className
     <primitive: #workspaceBrowseProtocolsForClassNamed>
