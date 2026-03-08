@@ -285,6 +285,13 @@ static const char *file_out_method_source_by_name(
     uint8_t selector_id,
     uint8_t is_class_side
 );
+static const char *runtime_string_allocate_copy(const char *text);
+static void append_text_checked(
+    char buffer[],
+    uint32_t buffer_size,
+    uint32_t *offset,
+    const char *text
+);
 static void apply_external_file_in_blob(const uint8_t *blob, uint32_t size);
 static const struct recorz_mvp_heap_object *default_form_object(void);
 static void form_clear(const struct recorz_mvp_heap_object *form);
@@ -958,6 +965,28 @@ static const char *source_parse_do_it_chunk_body(const char *chunk) {
         machine_panic("KernelInstaller do-it chunk has no executable source");
     }
     return cursor;
+}
+
+static const char *workspace_normalize_do_it_source(const char *source) {
+    uint32_t offset = 0U;
+
+    if (source == 0 || source[0] == '\0') {
+        machine_panic("Workspace do-it source is empty");
+    }
+    if (source_starts_with(source, "RecorzKernelDoIt:")) {
+        return source;
+    }
+    kernel_source_io_buffer[0] = '\0';
+    append_text_checked(kernel_source_io_buffer, sizeof(kernel_source_io_buffer), &offset, "RecorzKernelDoIt:\n");
+    append_text_checked(kernel_source_io_buffer, sizeof(kernel_source_io_buffer), &offset, source);
+    return runtime_string_allocate_copy(kernel_source_io_buffer);
+}
+
+static const char *workspace_source_for_evaluation(const char *source) {
+    if (source_starts_with(source, "RecorzKernelDoIt:")) {
+        return source_parse_do_it_chunk_body(source);
+    }
+    return source;
 }
 
 static const char *source_parse_identifier(const char *cursor, char buffer[], uint32_t buffer_size) {
@@ -6038,12 +6067,16 @@ static void execute_entry_workspace_evaluate(
     const struct recorz_mvp_value arguments[],
     const char *text
 ) {
+    const char *chunk_source;
+
     (void)text;
     if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
         machine_panic("Workspace evaluate: expects a source string");
     }
-    workspace_remember_source(object, arguments[0].string);
-    workspace_evaluate_source(arguments[0].string);
+    chunk_source = workspace_normalize_do_it_source(arguments[0].string);
+    workspace_remember_current_source(object, chunk_source);
+    workspace_remember_source(object, chunk_source);
+    workspace_evaluate_source(workspace_source_for_evaluation(chunk_source));
     push(receiver);
 }
 
@@ -6054,6 +6087,7 @@ static void execute_entry_workspace_evaluate_current(
     const char *text
 ) {
     struct recorz_mvp_value source_value;
+    const char *chunk_source;
 
     (void)arguments;
     (void)text;
@@ -6063,8 +6097,10 @@ static void execute_entry_workspace_evaluate_current(
         source_value.string[0] == '\0') {
         machine_panic("Workspace evaluateCurrent has no current source");
     }
-    workspace_remember_source(object, source_value.string);
-    workspace_evaluate_source(source_value.string);
+    chunk_source = workspace_normalize_do_it_source(source_value.string);
+    workspace_remember_current_source(object, chunk_source);
+    workspace_remember_source(object, chunk_source);
+    workspace_evaluate_source(workspace_source_for_evaluation(chunk_source));
     push(receiver);
 }
 
@@ -6310,7 +6346,7 @@ static void execute_entry_workspace_rerun(
         source_value.string[0] == '\0') {
         machine_panic("Workspace rerun has no remembered source");
     }
-    workspace_evaluate_source(source_value.string);
+    workspace_evaluate_source(workspace_source_for_evaluation(source_value.string));
     push(receiver);
 }
 
