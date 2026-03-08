@@ -1,0 +1,8 @@
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #Helper superclass: #Object instanceVariableNames: ''''
+!
+RecorzKernelClassSide: #Helper
+!
+cr
+    Display newline.
+    ^self'.
+KernelInstaller saveSnapshot.

@@ -36,6 +36,12 @@ browseClassNamed: className
 browseMethod: selectorName ofClassNamed: className
     <primitive: #workspaceBrowseMethodOfClassNamed>
 !
+browseClassMethodsForClassNamed: className
+    <primitive: #workspaceBrowseClassMethodsForClassNamed>
+!
+browseClassMethod: selectorName ofClassNamed: className
+    <primitive: #workspaceBrowseClassMethodOfClassNamed>
+!
 rerun
     <primitive: #workspaceRerun>
 !

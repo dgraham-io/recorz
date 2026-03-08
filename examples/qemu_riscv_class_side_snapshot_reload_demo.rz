@@ -1,0 +1,6 @@
+| helperClass |
+Display clear.
+Transcript show: 'TOP'.
+helperClass := KernelInstaller classNamed: 'Helper'.
+helperClass cr.
+Transcript show: 'CLASS SIDE'.

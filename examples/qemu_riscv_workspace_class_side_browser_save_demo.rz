@@ -1,0 +1,14 @@
+Workspace fileIn: 'RecorzKernelClass: #Meta superclass: #Object instanceVariableNames: ''''
+!
+RecorzKernelClassSide: #Meta
+!
+cr
+    Display newline.
+    ^self'.
+Workspace setContents: 'cr
+    Display newline.
+    ^self'.
+Workspace browseClassMethodsForClassNamed: 'Meta'.
+Workspace browseClassMethod: 'cr' ofClassNamed: 'Meta'.
+KernelInstaller configureStartup: Workspace selectorNamed: 'reopen'.
+KernelInstaller saveSnapshot.
