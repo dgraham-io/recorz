@@ -1,0 +1,16 @@
+| child childClass |
+Display clear.
+child := KernelInstaller objectNamed: 'savedChild'.
+childClass := KernelInstaller classNamed: 'Child'.
+KernelInstaller
+    fileInMethodChunks: 'RecorzKernelClass: #Child
+!
+setDetail: text
+    value := text.
+    ^self'
+    onClass: childClass.
+child setDetail: 'I'.
+Transcript show: child value.
+Transcript cr.
+Transcript show: 'SNAPSHOT UPDATED'.
+KernelInstaller saveSnapshot.

@@ -1,5 +1,10 @@
 # Implementation Log
 
+## 2026-03-07 - Persisted Image Development Loop
+- Added second-generation snapshot evolution demos so a saved live image can be resumed, mutated in-image, saved again, and then rebooted with the evolved behavior and state intact.
+- Added a new QEMU snapshot integration case that saves a snapshot, continues from that same snapshot with `continue-snapshot`, replaces a live class method, saves the next generation back to the same path, and then reboots from the evolved snapshot.
+- Verified the persisted-image loop with `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_snapshot_integration -v`, `PYTHONPATH=src python3 -m unittest discover -s tests -v`, and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
 ## 2026-03-07 - Safe Snapshot Continuation Workflow
 - Updated the QEMU Makefile snapshot save path so it always extracts into a temporary file and only replaces the final snapshot path after extraction succeeds, which makes same-path snapshot continuation safe.
 - Added a dedicated `continue-snapshot` target that requires `SNAPSHOT_PAYLOAD`, boots from that snapshot, and writes the next generation back to the same path for a simpler persisted-image development loop.

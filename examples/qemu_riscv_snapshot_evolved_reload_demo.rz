@@ -1,0 +1,6 @@
+| child |
+Display clear.
+child := KernelInstaller objectNamed: 'savedChild'.
+Transcript show: child detail.
+Transcript cr.
+Transcript show: child value.

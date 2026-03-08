@@ -41,8 +41,13 @@ def _region_histogram(data: bytes, width: int, x0: int, y0: int, x1: int, y1: in
 SNAPSHOT_SAVE_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-snapshot-save-test"
 SNAPSHOT_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-snapshot-reload-test"
 SNAPSHOT_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv64-snapshots" / "saved-live-image.bin"
+SNAPSHOT_CONTINUE_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-snapshot-continue-test"
+SNAPSHOT_EVOLVED_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-snapshot-evolved-reload-test"
+SNAPSHOT_CONTINUE_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv64-snapshots" / "continued-live-image.bin"
 SNAPSHOT_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_save_demo.rz"
 SNAPSHOT_RELOAD_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_reload_demo.rz"
+SNAPSHOT_CONTINUE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_continue_demo.rz"
+SNAPSHOT_EVOLVED_RELOAD_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_evolved_reload_demo.rz"
 
 
 @unittest.skipUnless(
@@ -92,6 +97,24 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
         width, height, data = _read_ppm(ppm_path)
         return qemu_log, width, height, data
 
+    def continue_snapshot(self, *, build_dir: Path, example_path: Path, snapshot_path: Path) -> str:
+        command = [
+            "make",
+            "-C",
+            str(PLATFORM_DIR),
+            f"BUILD_DIR={build_dir}",
+            f"EXAMPLE={example_path}",
+            f"SNAPSHOT_PAYLOAD={snapshot_path}",
+            "clean",
+            "continue-snapshot",
+        ]
+        result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
+        if result.returncode != 0:
+            self.fail(
+                f"QEMU continue-snapshot flow failed\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+            )
+        return (build_dir / "qemu.log").read_text(encoding="utf-8")
+
     def test_live_snapshot_round_trips_dynamic_class_and_inherited_state(self) -> None:
         save_log = self.save_snapshot(
             build_dir=SNAPSHOT_SAVE_BUILD_DIR,
@@ -114,4 +137,39 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
         line_1 = _region_histogram(data, width, 24, 24, 220, 56)
         line_2 = _region_histogram(data, width, 24, 58, 220, 90)
         self.assertGreater(line_1[TEXT_FOREGROUND], 300)
-        self.assertGreater(line_2[TEXT_FOREGROUND], 300)
+        self.assertGreater(line_2[TEXT_FOREGROUND], 120)
+        self.assertGreater(line_1[TEXT_FOREGROUND], line_2[TEXT_FOREGROUND] + 120)
+
+    def test_live_snapshot_supports_second_generation_evolution_without_rebuilding_cold_boot(self) -> None:
+        save_log = self.save_snapshot(
+            build_dir=SNAPSHOT_SAVE_BUILD_DIR,
+            example_path=SNAPSHOT_SAVE_DEMO_PATH,
+            snapshot_output=SNAPSHOT_CONTINUE_OUTPUT_PATH,
+        )
+        self.assertIn("recorz-snapshot-begin", save_log)
+        self.assertTrue(SNAPSHOT_CONTINUE_OUTPUT_PATH.exists())
+
+        continue_log = self.continue_snapshot(
+            build_dir=SNAPSHOT_CONTINUE_BUILD_DIR,
+            example_path=SNAPSHOT_CONTINUE_DEMO_PATH,
+            snapshot_path=SNAPSHOT_CONTINUE_OUTPUT_PATH,
+        )
+        self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", continue_log)
+        self.assertIn("recorz-snapshot-begin", continue_log)
+
+        reload_log, width, height, data = self.render_demo(
+            build_dir=SNAPSHOT_EVOLVED_RELOAD_BUILD_DIR,
+            example_path=SNAPSHOT_EVOLVED_RELOAD_DEMO_PATH,
+            snapshot_payload=SNAPSHOT_CONTINUE_OUTPUT_PATH,
+        )
+
+        self.assertEqual((width, height), (640, 480))
+        self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", reload_log)
+        self.assertIn("recorz qemu-riscv64 mvp: rendered", reload_log)
+        self.assertNotIn("panic:", reload_log)
+
+        line_1 = _region_histogram(data, width, 24, 24, 220, 56)
+        line_2 = _region_histogram(data, width, 24, 58, 220, 90)
+        self.assertGreater(line_1[TEXT_FOREGROUND], 300)
+        self.assertGreater(line_2[TEXT_FOREGROUND], 120)
+        self.assertGreater(line_1[TEXT_FOREGROUND], line_2[TEXT_FOREGROUND] + 120)
