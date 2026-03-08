@@ -1,0 +1,4 @@
+RecorzKernelClass: #Transcript
+!
+show: text
+    ^self

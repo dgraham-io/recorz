@@ -1,5 +1,10 @@
 # Implementation Log
 
+## 2026-03-07 - Image-First Dev Loop Targets
+- Added fixed image-first boot/save workspace examples plus `dev-init`, `dev-boot`, `dev-screenshot`, and `dev-file-in` Makefile targets so the normal workflow can stay on one persisted image instead of swapping scenario-specific demo scripts.
+- Added a QEMU integration test that initializes a dev snapshot, boots it with the fixed image-first example, files in an external `.rz` update with the same dev workflow, and reboots the same snapshot again to confirm the filed-in behavior persists without changing the example path.
+- Verified with `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_dev_loop_integration -v`, `PYTHONPATH=src python3 -m unittest discover -s tests -v`, and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
 ## 2026-03-07 - Multi-File External File-In Streams
 - Generalized the external file-in path so the VM can consume a stream of multiple `RecorzKernelClass:` chunk groups in one boot-time payload instead of only a single class chunk blob.
 - Extended the QEMU Makefile with `FILE_IN_PAYLOADS`, which concatenates multiple host `.rz` files into one generated payload and feeds that stream through the existing `opt/recorz-file-in` transport.

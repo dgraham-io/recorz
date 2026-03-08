@@ -1,0 +1,3 @@
+Display clear.
+Transcript show: 'IMAGE READY'.
+KernelInstaller saveSnapshot.
