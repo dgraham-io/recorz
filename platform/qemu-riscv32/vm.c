@@ -9,6 +9,7 @@
 #define LEXICAL_LIMIT 32U
 #define MAX_SEND_ARGS 10U
 #define PRINT_BUFFER_SIZE 32U
+#define MEMORY_REPORT_BUFFER_SIZE 256U
 #define HEAP_LIMIT RECORZ_MVP_HEAP_LIMIT
 #define OBJECT_FIELD_LIMIT 4U
 #define MONO_BITMAP_LIMIT RECORZ_MVP_MONO_BITMAP_LIMIT
@@ -82,7 +83,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_FILE_OUT_CLASS_NAMED
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_MEMORY_REPORT
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -1469,6 +1470,46 @@ static void render_small_integer(int32_t value) {
         print_buffer[out_index++] = scratch[index - cursor - 1U];
     }
     print_buffer[out_index] = '\0';
+}
+
+static void append_memory_report_text(
+    char buffer[],
+    uint32_t *offset,
+    const char *text
+) {
+    uint32_t index = 0U;
+
+    while (text[index] != '\0') {
+        if (*offset + 1U >= MEMORY_REPORT_BUFFER_SIZE) {
+            machine_panic("KernelInstaller memory report exceeds buffer capacity");
+        }
+        buffer[(*offset)++] = text[index++];
+    }
+    buffer[*offset] = '\0';
+}
+
+static void append_memory_report_u32(
+    char buffer[],
+    uint32_t *offset,
+    uint32_t value
+) {
+    render_small_integer((int32_t)value);
+    append_memory_report_text(buffer, offset, print_buffer);
+}
+
+static void append_memory_report_line(
+    char buffer[],
+    uint32_t *offset,
+    const char *label,
+    uint32_t used,
+    uint32_t limit
+) {
+    append_memory_report_text(buffer, offset, label);
+    append_memory_report_text(buffer, offset, " ");
+    append_memory_report_u32(buffer, offset, used);
+    append_memory_report_text(buffer, offset, "/");
+    append_memory_report_u32(buffer, offset, limit);
+    append_memory_report_text(buffer, offset, "\n");
 }
 
 static uint16_t heap_allocate(uint8_t kind) {
@@ -3566,6 +3607,21 @@ static uint32_t snapshot_string_storage_size(struct recorz_mvp_value value) {
     return text_length(value.string) + 1U;
 }
 
+static uint32_t current_snapshot_string_byte_count(void) {
+    uint32_t string_byte_count = 0U;
+    uint16_t handle;
+
+    for (handle = 1U; handle <= heap_size; ++handle) {
+        const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(handle);
+        uint8_t field_index;
+
+        for (field_index = 0U; field_index < object->field_count; ++field_index) {
+            string_byte_count += snapshot_string_storage_size(object->fields[field_index]);
+        }
+    }
+    return string_byte_count;
+}
+
 static uint32_t snapshot_total_size(uint32_t string_byte_count) {
     return SNAPSHOT_HEADER_SIZE +
            (heap_size * SNAPSHOT_OBJECT_SIZE) +
@@ -3577,6 +3633,37 @@ static uint32_t snapshot_total_size(uint32_t string_byte_count) {
            ((uint32_t)live_method_source_count * SNAPSHOT_LIVE_METHOD_SOURCE_RECORD_SIZE) +
            ((uint32_t)mono_bitmap_count * MONO_BITMAP_MAX_HEIGHT * 4U) +
            string_byte_count;
+}
+
+static const char *kernel_memory_report_text(void) {
+    char buffer[MEMORY_REPORT_BUFFER_SIZE];
+    uint32_t offset = 0U;
+    uint32_t snapshot_string_bytes = current_snapshot_string_byte_count();
+    uint32_t snapshot_size = snapshot_total_size(snapshot_string_bytes);
+
+    buffer[0] = '\0';
+    append_memory_report_text(buffer, &offset, "MEMORY\n");
+    append_memory_report_line(buffer, &offset, "HEAP", heap_size, HEAP_LIMIT);
+    append_memory_report_line(buffer, &offset, "DCLS", dynamic_class_count, DYNAMIC_CLASS_LIMIT);
+    append_memory_report_line(buffer, &offset, "NOBJ", named_object_count, NAMED_OBJECT_LIMIT);
+    append_memory_report_line(buffer, &offset, "MSRC", live_method_source_count, LIVE_METHOD_SOURCE_LIMIT);
+    append_memory_report_line(
+        buffer,
+        &offset,
+        "RSTR",
+        runtime_string_pool_offset,
+        RUNTIME_STRING_POOL_LIMIT
+    );
+    append_memory_report_line(
+        buffer,
+        &offset,
+        "SSTR",
+        snapshot_string_bytes,
+        SNAPSHOT_STRING_LIMIT
+    );
+    append_memory_report_line(buffer, &offset, "SNAP", snapshot_size, SNAPSHOT_BUFFER_LIMIT);
+    append_memory_report_line(buffer, &offset, "MONO", mono_bitmap_count, MONO_BITMAP_LIMIT);
+    return runtime_string_allocate_copy(buffer);
 }
 
 static void snapshot_encode_value(
@@ -3659,7 +3746,7 @@ static void emit_snapshot_hex_byte(uint8_t value) {
 }
 
 static void emit_live_snapshot(void) {
-    uint32_t string_byte_count = 0U;
+    uint32_t string_byte_count;
     uint16_t handle;
     uint16_t dynamic_index;
     uint16_t named_index;
@@ -3670,14 +3757,7 @@ static void emit_live_snapshot(void) {
     uint32_t string_offset = 0U;
     uint8_t *string_section;
 
-    for (handle = 1U; handle <= heap_size; ++handle) {
-        const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(handle);
-        uint8_t field_index;
-
-        for (field_index = 0U; field_index < object->field_count; ++field_index) {
-            string_byte_count += snapshot_string_storage_size(object->fields[field_index]);
-        }
-    }
+    string_byte_count = current_snapshot_string_byte_count();
     total_size = snapshot_total_size(string_byte_count);
     if (total_size > SNAPSHOT_BUFFER_LIMIT) {
         machine_panic("snapshot exceeds buffer capacity");
@@ -5345,6 +5425,19 @@ static void execute_entry_kernel_installer_save_snapshot(
     (void)text;
     emit_live_snapshot();
     push(receiver);
+}
+
+static void execute_entry_kernel_installer_memory_report(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    push(string_value(kernel_memory_report_text()));
 }
 
 static void execute_entry_kernel_installer_configure_startup_selector_named(

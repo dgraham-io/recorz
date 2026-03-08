@@ -21,6 +21,9 @@ fileInClassChunks: source
 fileOutClassNamed: className
     <primitive: #kernelInstallerFileOutClassNamed>
 !
+memoryReport
+    <primitive: #kernelInstallerMemoryReport>
+!
 classNamed: className
     <primitive: #kernelInstallerClassNamed>
 !

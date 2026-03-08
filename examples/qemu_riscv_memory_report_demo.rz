@@ -1,0 +1,2 @@
+Display clear.
+Transcript show: KernelInstaller memoryReport.

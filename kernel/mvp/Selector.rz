@@ -107,3 +107,5 @@ RecorzKernelSelector: #browseClassMethodsForClassNamed: order: 51
 RecorzKernelSelector: #browseClassMethod:ofClassNamed: order: 52
 !
 RecorzKernelSelector: #fileOutClassNamed: order: 53
+!
+RecorzKernelSelector: #memoryReport order: 54
