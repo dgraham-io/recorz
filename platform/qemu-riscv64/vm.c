@@ -75,8 +75,9 @@
 #define BITMAP_STORAGE_FRAMEBUFFER RECORZ_MVP_BITMAP_STORAGE_FRAMEBUFFER
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
-#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_OBJECT
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_CLEAR_STARTUP
+#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_REOPEN
+#define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE
 
 enum recorz_mvp_value_kind {
     RECORZ_MVP_VALUE_NIL = 0,
@@ -163,7 +164,7 @@ static uint16_t heap_size = 0U;
 static uint16_t class_handles_by_kind[MAX_OBJECT_KIND + 1U];
 static uint16_t class_descriptor_handles_by_kind[MAX_OBJECT_KIND + 1U];
 static uint16_t selector_handles_by_id[MAX_SELECTOR_ID + 1U];
-static uint16_t global_handles[RECORZ_MVP_GLOBAL_KERNEL_INSTALLER + 1U];
+static uint16_t global_handles[MAX_GLOBAL_ID + 1U];
 static struct recorz_mvp_dynamic_class_definition dynamic_classes[DYNAMIC_CLASS_LIMIT];
 static struct recorz_mvp_named_object_binding named_objects[NAMED_OBJECT_LIMIT];
 static uint16_t default_form_handle = 0U;
@@ -226,6 +227,10 @@ static void emit_live_snapshot(void);
 static void file_in_class_chunks_source(const char *source);
 static void file_in_chunk_stream_source(const char *source);
 static void apply_external_file_in_blob(const uint8_t *blob, uint32_t size);
+static const struct recorz_mvp_heap_object *default_form_object(void);
+static void form_clear(const struct recorz_mvp_heap_object *form);
+static void form_newline(const struct recorz_mvp_heap_object *form);
+static void form_write_string(const struct recorz_mvp_heap_object *form, const char *text);
 
 static void panic_put_u32(uint32_t value) {
     char digits[10];
@@ -401,6 +406,12 @@ static const char *selector_name(uint8_t selector) {
             return "configureStartup:selectorNamed:";
         case RECORZ_MVP_SELECTOR_CLEAR_STARTUP:
             return "clearStartup";
+        case RECORZ_MVP_SELECTOR_FILE_IN:
+            return "fileIn:";
+        case RECORZ_MVP_SELECTOR_BROWSE_CLASS_NAMED:
+            return "browseClassNamed:";
+        case RECORZ_MVP_SELECTOR_REOPEN:
+            return "reopen";
     }
     return "unknown";
 }
@@ -445,6 +456,8 @@ static const char *object_kind_name(uint8_t kind) {
             return "KernelInstaller";
         case RECORZ_MVP_OBJECT_OBJECT:
             return "Object";
+        case RECORZ_MVP_OBJECT_WORKSPACE:
+            return "Workspace";
     }
     return "UnknownObject";
 }
@@ -860,6 +873,9 @@ static uint8_t source_global_id_for_name(const char *name) {
     if (source_names_equal(name, "KernelInstaller")) {
         return RECORZ_MVP_GLOBAL_KERNEL_INSTALLER;
     }
+    if (source_names_equal(name, "Workspace")) {
+        return RECORZ_MVP_GLOBAL_WORKSPACE;
+    }
     return 0U;
 }
 
@@ -1000,7 +1016,7 @@ static struct recorz_mvp_value object_value(uint16_t handle) {
 }
 
 static struct recorz_mvp_value global_value(uint8_t global_id) {
-    if (global_id == 0U || global_id > RECORZ_MVP_GLOBAL_KERNEL_INSTALLER || global_handles[global_id] == 0U) {
+    if (global_id == 0U || global_id > MAX_GLOBAL_ID || global_handles[global_id] == 0U) {
         machine_panic("unknown global in MVP VM");
     }
     return object_value(global_handles[global_id]);
@@ -1471,6 +1487,67 @@ static uint8_t class_field_index_for_name(
     return class_field_index_for_name_with_depth(class_object, field_name, field_index_out, 0U);
 }
 
+static const struct recorz_mvp_heap_object *default_form_object(void) {
+    if (default_form_handle == 0U) {
+        machine_panic("default form is not initialized");
+    }
+    return (const struct recorz_mvp_heap_object *)heap_object(default_form_handle);
+}
+
+static uint8_t workspace_current_class_name_field_index(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    const struct recorz_mvp_heap_object *workspace_class = class_object_for_heap_object(workspace_object);
+    uint8_t field_index = 0U;
+
+    if (!class_field_index_for_name(workspace_class, "currentClassName", &field_index)) {
+        machine_panic("Workspace currentClassName field is not declared");
+    }
+    return field_index;
+}
+
+static void workspace_write_label_and_text(
+    const struct recorz_mvp_heap_object *form,
+    const char *label,
+    const char *text
+) {
+    form_write_string(form, label);
+    form_write_string(form, ": ");
+    form_write_string(form, text);
+    form_newline(form);
+}
+
+static void workspace_write_label_and_integer(
+    const struct recorz_mvp_heap_object *form,
+    const char *label,
+    uint32_t value
+) {
+    form_write_string(form, label);
+    form_write_string(form, ": ");
+    render_small_integer((int32_t)value);
+    form_write_string(form, print_buffer);
+    form_newline(form);
+}
+
+static void workspace_render_class_browser(
+    const struct recorz_mvp_heap_object *workspace_object,
+    const struct recorz_mvp_heap_object *class_object,
+    const char *class_name
+) {
+    const struct recorz_mvp_heap_object *form = default_form_object();
+    const struct recorz_mvp_heap_object *superclass_object = class_superclass_object_or_null(class_object);
+    const char *superclass_name = superclass_object == 0 ? "nil" : class_name_for_object(superclass_object);
+
+    (void)workspace_object;
+    form_clear(form);
+    form_write_string(form, "WORKSPACE");
+    form_newline(form);
+    workspace_write_label_and_text(form, "CLASS", class_name);
+    workspace_write_label_and_text(form, "SUPER", superclass_name);
+    workspace_write_label_and_integer(form, "SLOTS", live_instance_field_count_for_class(class_object));
+    workspace_write_label_and_integer(form, "METHODS", class_method_count(class_object));
+}
+
 static void validate_dynamic_class_definition(
     const struct recorz_mvp_live_class_definition *definition,
     const struct recorz_mvp_dynamic_class_definition *existing_definition,
@@ -1540,7 +1617,7 @@ static void validate_compiled_method(
         }
         switch (opcode) {
             case COMPILED_METHOD_OP_PUSH_GLOBAL:
-                if (operand_a < RECORZ_MVP_GLOBAL_TRANSCRIPT || operand_a > RECORZ_MVP_GLOBAL_KERNEL_INSTALLER) {
+                if (operand_a < RECORZ_MVP_GLOBAL_TRANSCRIPT || operand_a > MAX_GLOBAL_ID) {
                     machine_panic("compiled method pushGlobal global id is out of range");
                 }
                 ++stack_depth;
@@ -1823,7 +1900,7 @@ static void reset_runtime_state(void) {
     cursor_x = 0U;
     cursor_y = 0U;
     snapshot_string_pool[0] = '\0';
-    for (global_index = 0U; global_index <= RECORZ_MVP_GLOBAL_KERNEL_INSTALLER; ++global_index) {
+    for (global_index = 0U; global_index <= MAX_GLOBAL_ID; ++global_index) {
         global_handles[global_index] = 0U;
     }
     for (dynamic_index = 0U; dynamic_index < DYNAMIC_CLASS_LIMIT; ++dynamic_index) {
@@ -2384,10 +2461,10 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
     validate_heap_class_graph(heap_size, 1U);
     initialize_runtime_caches();
 
-    for (global_index = 0U; global_index <= RECORZ_MVP_GLOBAL_KERNEL_INSTALLER; ++global_index) {
+    for (global_index = 0U; global_index <= MAX_GLOBAL_ID; ++global_index) {
         global_handles[global_index] = 0U;
     }
-    for (global_index = RECORZ_MVP_GLOBAL_TRANSCRIPT; global_index <= RECORZ_MVP_GLOBAL_KERNEL_INSTALLER; ++global_index) {
+    for (global_index = RECORZ_MVP_GLOBAL_TRANSCRIPT; global_index <= MAX_GLOBAL_ID; ++global_index) {
         global_handles[global_index] = seed_handle_at(seed, seed->global_object_indices[global_index]);
     }
 
@@ -2450,7 +2527,7 @@ static uint32_t snapshot_string_storage_size(struct recorz_mvp_value value) {
 static uint32_t snapshot_total_size(uint32_t string_byte_count) {
     return SNAPSHOT_HEADER_SIZE +
            (heap_size * SNAPSHOT_OBJECT_SIZE) +
-           (RECORZ_MVP_GLOBAL_KERNEL_INSTALLER * 2U) +
+           (MAX_GLOBAL_ID * 2U) +
            (RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS * 2U) +
            (128U * 2U) +
            ((uint32_t)dynamic_class_count * SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE) +
@@ -2611,7 +2688,7 @@ static void emit_live_snapshot(void) {
             offset += SNAPSHOT_VALUE_SIZE;
         }
     }
-    for (handle = RECORZ_MVP_GLOBAL_TRANSCRIPT; handle <= RECORZ_MVP_GLOBAL_KERNEL_INSTALLER; ++handle) {
+    for (handle = RECORZ_MVP_GLOBAL_TRANSCRIPT; handle <= MAX_GLOBAL_ID; ++handle) {
         write_u16_le(snapshot_buffer + offset, global_handles[handle]);
         offset += 2U;
     }
@@ -2752,7 +2829,7 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     }
     string_section_offset = SNAPSHOT_HEADER_SIZE +
                             ((uint32_t)object_count * SNAPSHOT_OBJECT_SIZE) +
-                            (RECORZ_MVP_GLOBAL_KERNEL_INSTALLER * 2U) +
+                            (MAX_GLOBAL_ID * 2U) +
                             (RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS * 2U) +
                             (128U * 2U) +
                             ((uint32_t)dynamic_count * SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE) +
@@ -2793,7 +2870,7 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
             offset += SNAPSHOT_VALUE_SIZE;
         }
     }
-    for (handle = RECORZ_MVP_GLOBAL_TRANSCRIPT; handle <= RECORZ_MVP_GLOBAL_KERNEL_INSTALLER; ++handle) {
+    for (handle = RECORZ_MVP_GLOBAL_TRANSCRIPT; handle <= MAX_GLOBAL_ID; ++handle) {
         global_handles[handle] = read_u16_le(blob + offset);
         if (global_handles[handle] == 0U || global_handles[handle] > object_count) {
             machine_panic("snapshot global handle is out of range");
@@ -4031,6 +4108,75 @@ static void execute_entry_kernel_installer_clear_startup(
     (void)text;
     startup_hook_receiver_handle = 0U;
     startup_hook_selector_id = 0U;
+    push(receiver);
+}
+
+static void execute_entry_workspace_file_in(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace fileIn: expects a chunk stream string");
+    }
+    file_in_chunk_stream_source(arguments[0].string);
+    push(receiver);
+}
+
+static void execute_entry_workspace_browse_class_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const struct recorz_mvp_heap_object *class_object;
+    uint8_t field_index;
+
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace browseClassNamed: expects a class name string");
+    }
+    class_object = lookup_class_by_name(arguments[0].string);
+    if (class_object == 0) {
+        machine_panic("Workspace browseClassNamed: could not resolve class");
+    }
+    field_index = workspace_current_class_name_field_index(object);
+    heap_set_field(heap_handle_for_object(object), field_index, string_value(arguments[0].string));
+    workspace_render_class_browser(object, class_object, arguments[0].string);
+    push(receiver);
+}
+
+static void execute_entry_workspace_reopen(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    struct recorz_mvp_value class_name_value;
+    uint8_t field_index;
+    const struct recorz_mvp_heap_object *form = default_form_object();
+    const struct recorz_mvp_heap_object *class_object;
+
+    (void)arguments;
+    (void)text;
+    field_index = workspace_current_class_name_field_index(object);
+    class_name_value = heap_get_field(object, field_index);
+    if (class_name_value.kind != RECORZ_MVP_VALUE_STRING || class_name_value.string == 0 ||
+        class_name_value.string[0] == '\0') {
+        form_clear(form);
+        form_write_string(form, "WORKSPACE");
+        form_newline(form);
+        push(receiver);
+        return;
+    }
+    class_object = lookup_class_by_name(class_name_value.string);
+    if (class_object == 0) {
+        machine_panic("Workspace reopen could not resolve the remembered class");
+    }
+    workspace_render_class_browser(object, class_object, class_name_value.string);
     push(receiver);
 }
 

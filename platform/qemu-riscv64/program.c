@@ -7,7 +7,8 @@
 #define RECORZ_MVP_PROGRAM_INSTRUCTION_LIMIT 512U
 #define RECORZ_MVP_PROGRAM_LITERAL_LIMIT 128U
 #define RECORZ_MVP_PROGRAM_OBJECT_FIELD_LIMIT 4U
-#define RECORZ_MVP_PROGRAM_MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_CLEAR_STARTUP
+#define RECORZ_MVP_PROGRAM_MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_REOPEN
+#define RECORZ_MVP_PROGRAM_MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE
 
 static struct recorz_mvp_instruction loaded_instructions[RECORZ_MVP_PROGRAM_INSTRUCTION_LIMIT];
 static struct recorz_mvp_literal loaded_literals[RECORZ_MVP_PROGRAM_LITERAL_LIMIT];
@@ -30,7 +31,7 @@ static void validate_instruction(
     switch (instruction->opcode) {
         case RECORZ_MVP_OP_PUSH_GLOBAL:
             if (instruction->operand_a < RECORZ_MVP_GLOBAL_TRANSCRIPT ||
-                instruction->operand_a > RECORZ_MVP_GLOBAL_KERNEL_INSTALLER) {
+                instruction->operand_a > RECORZ_MVP_PROGRAM_MAX_GLOBAL_ID) {
                 machine_panic("program manifest global operand is out of range");
             }
             return;

@@ -317,6 +317,9 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
             declared_method_count += method_count
 
     globals_summary: dict[str, int] = {}
+    global_name_by_binding_id = {
+        mvp.GLOBAL_VALUES[constant_name]: name for name, constant_name in mvp.GLOBAL_SPECS
+    }
     for _ in range(global_binding_count):
         binding_id, object_index = struct.unpack_from(mvp.SEED_BINDING_FORMAT, blob, offset)
         offset += binding_size
@@ -324,22 +327,10 @@ def inspect_seed_manifest(blob: bytes) -> dict[str, object]:
             raise ImageInspectionError("seed manifest global binding id is invalid")
         if object_index >= object_count:
             raise ImageInspectionError("seed manifest global binding object index is out of range")
-        if binding_id == mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_TRANSCRIPT"]:
-            globals_summary["Transcript"] = object_index
-        elif binding_id == mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_DISPLAY"]:
-            globals_summary["Display"] = object_index
-        elif binding_id == mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_BITBLT"]:
-            globals_summary["BitBlt"] = object_index
-        elif binding_id == mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_GLYPHS"]:
-            globals_summary["Glyphs"] = object_index
-        elif binding_id == mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_FORM"]:
-            globals_summary["Form"] = object_index
-        elif binding_id == mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_BITMAP"]:
-            globals_summary["Bitmap"] = object_index
-        elif binding_id == mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_KERNEL_INSTALLER"]:
-            globals_summary["KernelInstaller"] = object_index
-        else:
+        global_name = global_name_by_binding_id.get(binding_id)
+        if global_name is None:
             raise ImageInspectionError("seed manifest global binding id is unknown")
+        globals_summary[global_name] = object_index
 
     roots_summary: dict[str, int] = {}
     for _ in range(root_binding_count):

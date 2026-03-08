@@ -745,6 +745,13 @@
 - Updated `tests/test_qemu_riscv_mvp_lowering.py` to lock the generated runtime header for the new shared opcode values and reverified the normal QEMU/image path with the expanded execution contract.
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
 
+## 2026-03-07 - Add Workspace Singleton And Transcript Browser Primitives
+- Added `kernel/mvp/Workspace.rz` as a source-declared boot class and singleton global with `currentClassName` state plus the first three workspace/browser messages: `fileIn:`, `browseClassNamed:`, and `reopen`.
+- Extended the source-declared selector universe in `kernel/mvp/Selector.rz` with `fileIn:`, `browseClassNamed:`, and `reopen`, which keeps the new workspace surface aligned with the same image-owned selector objects and method metadata as the rest of the MVP kernel.
+- Extended the target runtime in `platform/qemu-riscv64/vm.c`, `platform/qemu-riscv64/program.c`, and `platform/qemu-riscv64/vm.h` so the VM now understands the larger global/object/selector ranges, exposes the `Workspace` global to source, and routes the new workspace primitives through a tiny Transcript-style browser that clears the default form and prints class name, superclass, slot count, and local method count.
+- Updated `tools/inspect_qemu_riscv_mvp_image.py`, `tests/test_qemu_riscv_mvp_lowering.py`, and `tests/test_qemu_riscv_image_inspector.py` for the enlarged boot image summary (`objects=289`, `classes=20`, `selectors=41`, `methods=37`, `globals=8`) now that the image seeds `Workspace` alongside the existing kernel singletons.
+- Verified with `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_mvp_lowering tests.test_qemu_riscv_image_inspector -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
 ## 2026-03-07 - Add Stateful Live Class Demo Path
 - Extended the source-declared selector universe in `kernel/mvp/Selector.rz` with `value` and `setValue:` so the live class demo can use normal selector objects instead of falling back to a one-off runtime escape hatch, and updated the target/runtime selector-range checks in `platform/qemu-riscv64/vm.c` and `platform/qemu-riscv64/program.c` to follow the expanded source-owned selector set.
 - Changed `tools/build_qemu_riscv_mvp_image.py` to materialize selector seed objects for the full declared selector universe rather than only the selectors referenced by the seeded built-in method table, which keeps live-installed methods aligned with the source-owned runtime symbol contract.
