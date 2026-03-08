@@ -1,0 +1,25 @@
+| exportedClass item current |
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #Exported superclass: #Object instanceVariableNames: ''value''
+!
+value
+    ^value
+!
+setValue: text
+    value := text.
+    ^self
+!
+RecorzKernelClassSide: #Exported
+!
+cr
+    Display newline.
+    ^self'.
+Workspace fileOutClassNamed: 'Exported'.
+Workspace fileInCurrent.
+exportedClass := KernelInstaller classNamed: 'Exported'.
+item := exportedClass new.
+item setValue: 'ROUNDTRIP'.
+current := item value.
+Transcript show: current.
+exportedClass cr.
+Transcript show: 'FILEOUT'.

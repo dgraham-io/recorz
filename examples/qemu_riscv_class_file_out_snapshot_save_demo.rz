@@ -1,0 +1,17 @@
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #Exported superclass: #Object instanceVariableNames: ''value''
+!
+value
+    ^value
+!
+setValue: text
+    value := text.
+    ^self
+!
+RecorzKernelClassSide: #Exported
+!
+cr
+    Display newline.
+    ^self'.
+Workspace fileOutClassNamed: 'Exported'.
+KernelInstaller saveSnapshot.

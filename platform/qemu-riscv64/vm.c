@@ -22,6 +22,8 @@
 #define DYNAMIC_CLASS_LIMIT 16U
 #define DYNAMIC_CLASS_IVAR_LIMIT OBJECT_FIELD_LIMIT
 #define NAMED_OBJECT_LIMIT 16U
+#define LIVE_METHOD_SOURCE_LIMIT 64U
+#define RUNTIME_STRING_POOL_LIMIT 16384U
 #define SNAPSHOT_STRING_LIMIT 8192U
 #define SNAPSHOT_BUFFER_LIMIT 65536U
 
@@ -29,13 +31,15 @@
 #define SNAPSHOT_MAGIC_1 'C'
 #define SNAPSHOT_MAGIC_2 'Z'
 #define SNAPSHOT_MAGIC_3 'T'
-#define SNAPSHOT_VERSION 2U
-#define SNAPSHOT_HEADER_SIZE 32U
+#define SNAPSHOT_VERSION 3U
+#define SNAPSHOT_HEADER_SIZE 36U
 #define SNAPSHOT_VALUE_SIZE 8U
 #define SNAPSHOT_OBJECT_SIZE (4U + (OBJECT_FIELD_LIMIT * SNAPSHOT_VALUE_SIZE))
 #define SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE \
     (8U + METHOD_SOURCE_NAME_LIMIT + (DYNAMIC_CLASS_IVAR_LIMIT * METHOD_SOURCE_NAME_LIMIT))
 #define SNAPSHOT_NAMED_OBJECT_RECORD_SIZE (2U + METHOD_SOURCE_NAME_LIMIT)
+#define SNAPSHOT_LIVE_METHOD_SOURCE_RECORD_SIZE \
+    (4U + METHOD_SOURCE_CHUNK_LIMIT)
 
 #define FORM_FIELD_BITS RECORZ_MVP_FORM_FIELD_BITS
 #define BITMAP_FIELD_WIDTH RECORZ_MVP_BITMAP_FIELD_WIDTH
@@ -78,7 +82,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_BROWSE_CLASS_METHOD_OF_CLASS_NAMED
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_FILE_OUT_CLASS_NAMED
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -139,6 +143,13 @@ struct recorz_mvp_named_object_binding {
     uint16_t object_handle;
 };
 
+struct recorz_mvp_live_method_source {
+    uint16_t class_handle;
+    uint8_t selector_id;
+    uint8_t argument_count;
+    char source[METHOD_SOURCE_CHUNK_LIMIT];
+};
+
 enum recorz_mvp_method_return_mode {
     RECORZ_MVP_METHOD_RETURN_RESULT = 1,
     RECORZ_MVP_METHOD_RETURN_RECEIVER = 2,
@@ -186,6 +197,7 @@ static uint16_t selector_handles_by_id[MAX_SELECTOR_ID + 1U];
 static uint16_t global_handles[MAX_GLOBAL_ID + 1U];
 static struct recorz_mvp_dynamic_class_definition dynamic_classes[DYNAMIC_CLASS_LIMIT];
 static struct recorz_mvp_named_object_binding named_objects[NAMED_OBJECT_LIMIT];
+static struct recorz_mvp_live_method_source live_method_sources[LIVE_METHOD_SOURCE_LIMIT];
 static uint16_t default_form_handle = 0U;
 static uint16_t framebuffer_bitmap_handle = 0U;
 static uint16_t next_dynamic_method_entry_execution_id = RECORZ_MVP_METHOD_ENTRY_COUNT;
@@ -201,10 +213,13 @@ static uint16_t startup_hook_selector_id = 0U;
 static uint32_t mono_bitmap_pool[MONO_BITMAP_LIMIT][MONO_BITMAP_MAX_HEIGHT];
 static uint16_t mono_bitmap_count = 0U;
 static uint16_t named_object_count = 0U;
+static uint16_t live_method_source_count = 0U;
 static uint32_t cursor_x = 0U;
 static uint32_t cursor_y = 0U;
 static char print_buffer[PRINT_BUFFER_SIZE];
 static char workspace_target_buffer[METHOD_SOURCE_CHUNK_LIMIT];
+static char runtime_string_pool[RUNTIME_STRING_POOL_LIMIT];
+static uint32_t runtime_string_pool_offset = 0U;
 static char snapshot_string_pool[SNAPSHOT_STRING_LIMIT];
 static uint8_t snapshot_buffer[SNAPSHOT_BUFFER_LIMIT];
 
@@ -258,6 +273,7 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size);
 static void emit_live_snapshot(void);
 static void file_in_class_chunks_source(const char *source);
 static void file_in_chunk_stream_source(const char *source);
+static const char *file_out_class_source_by_name(const char *class_name);
 static void apply_external_file_in_blob(const uint8_t *blob, uint32_t size);
 static const struct recorz_mvp_heap_object *default_form_object(void);
 static void form_clear(const struct recorz_mvp_heap_object *form);
@@ -468,6 +484,8 @@ static const char *selector_name(uint8_t selector) {
             return "browseClassMethodsForClassNamed:";
         case RECORZ_MVP_SELECTOR_BROWSE_CLASS_METHOD_OF_CLASS_NAMED:
             return "browseClassMethod:ofClassNamed:";
+        case RECORZ_MVP_SELECTOR_FILE_OUT_CLASS_NAMED:
+            return "fileOutClassNamed:";
     }
     return "unknown";
 }
@@ -2785,6 +2803,7 @@ static void reset_runtime_state(void) {
     next_dynamic_method_entry_execution_id = RECORZ_MVP_METHOD_ENTRY_COUNT;
     dynamic_class_count = 0U;
     named_object_count = 0U;
+    live_method_source_count = 0U;
     default_form_handle = 0U;
     framebuffer_bitmap_handle = 0U;
     glyph_fallback_handle = 0U;
@@ -2796,6 +2815,8 @@ static void reset_runtime_state(void) {
     startup_hook_selector_id = 0U;
     cursor_x = 0U;
     cursor_y = 0U;
+    runtime_string_pool_offset = 0U;
+    runtime_string_pool[0] = '\0';
     snapshot_string_pool[0] = '\0';
     for (global_index = 0U; global_index <= MAX_GLOBAL_ID; ++global_index) {
         global_handles[global_index] = 0U;
@@ -2814,6 +2835,12 @@ static void reset_runtime_state(void) {
     for (named_index = 0U; named_index < NAMED_OBJECT_LIMIT; ++named_index) {
         named_objects[named_index].name[0] = '\0';
         named_objects[named_index].object_handle = 0U;
+    }
+    for (named_index = 0U; named_index < LIVE_METHOD_SOURCE_LIMIT; ++named_index) {
+        live_method_sources[named_index].class_handle = 0U;
+        live_method_sources[named_index].selector_id = 0U;
+        live_method_sources[named_index].argument_count = 0U;
+        live_method_sources[named_index].source[0] = '\0';
     }
     for (code_index = 0U; code_index < 128U; ++code_index) {
         glyph_bitmap_handles[code_index] = 0U;
@@ -3414,6 +3441,115 @@ static uint32_t text_length(const char *text) {
     return length;
 }
 
+static const char *runtime_string_allocate_copy(const char *text) {
+    uint32_t length;
+    uint32_t index;
+    uint32_t start;
+
+    if (text == 0) {
+        machine_panic("runtime string source is null");
+    }
+    length = text_length(text);
+    if (length + 1U > RUNTIME_STRING_POOL_LIMIT) {
+        machine_panic("runtime string exceeds pool capacity");
+    }
+    if (runtime_string_pool_offset + length + 1U > RUNTIME_STRING_POOL_LIMIT) {
+        machine_panic("runtime string pool overflow");
+    }
+    start = runtime_string_pool_offset;
+    for (index = 0U; index < length; ++index) {
+        runtime_string_pool[start + index] = text[index];
+    }
+    runtime_string_pool[start + length] = '\0';
+    runtime_string_pool_offset += length + 1U;
+    return runtime_string_pool + start;
+}
+
+static struct recorz_mvp_live_method_source *mutable_live_method_source_for(
+    uint16_t class_handle,
+    uint8_t selector_id,
+    uint8_t argument_count
+) {
+    uint16_t source_index;
+
+    for (source_index = 0U; source_index < live_method_source_count; ++source_index) {
+        struct recorz_mvp_live_method_source *source_record = &live_method_sources[source_index];
+
+        if (source_record->class_handle == class_handle &&
+            source_record->selector_id == selector_id &&
+            source_record->argument_count == argument_count) {
+            return source_record;
+        }
+    }
+    return 0;
+}
+
+static void forget_live_method_source(
+    uint16_t class_handle,
+    uint8_t selector_id,
+    uint8_t argument_count
+) {
+    uint16_t source_index;
+
+    for (source_index = 0U; source_index < live_method_source_count; ++source_index) {
+        struct recorz_mvp_live_method_source *source_record = &live_method_sources[source_index];
+        uint16_t move_index;
+
+        if (source_record->class_handle != class_handle ||
+            source_record->selector_id != selector_id ||
+            source_record->argument_count != argument_count) {
+            continue;
+        }
+        for (move_index = source_index + 1U; move_index < live_method_source_count; ++move_index) {
+            uint32_t char_index;
+
+            live_method_sources[move_index - 1U].class_handle = live_method_sources[move_index].class_handle;
+            live_method_sources[move_index - 1U].selector_id = live_method_sources[move_index].selector_id;
+            live_method_sources[move_index - 1U].argument_count = live_method_sources[move_index].argument_count;
+            for (char_index = 0U; char_index < METHOD_SOURCE_CHUNK_LIMIT; ++char_index) {
+                live_method_sources[move_index - 1U].source[char_index] =
+                    live_method_sources[move_index].source[char_index];
+            }
+        }
+        --live_method_source_count;
+        return;
+    }
+}
+
+static void remember_live_method_source(
+    uint16_t class_handle,
+    uint8_t selector_id,
+    uint8_t argument_count,
+    const char *source
+) {
+    struct recorz_mvp_live_method_source *source_record;
+    uint32_t length;
+    uint32_t index;
+
+    if (source == 0 || source[0] == '\0') {
+        forget_live_method_source(class_handle, selector_id, argument_count);
+        return;
+    }
+    source_record = mutable_live_method_source_for(class_handle, selector_id, argument_count);
+    if (source_record == 0) {
+        if (live_method_source_count >= LIVE_METHOD_SOURCE_LIMIT) {
+            machine_panic("live method source registry overflow");
+        }
+        source_record = &live_method_sources[live_method_source_count++];
+    }
+    source_record->class_handle = class_handle;
+    source_record->selector_id = selector_id;
+    source_record->argument_count = argument_count;
+    length = text_length(source);
+    if (length + 1U > METHOD_SOURCE_CHUNK_LIMIT) {
+        machine_panic("live method source exceeds chunk capacity");
+    }
+    for (index = 0U; index < length; ++index) {
+        source_record->source[index] = source[index];
+    }
+    source_record->source[length] = '\0';
+}
+
 static uint32_t snapshot_string_storage_size(struct recorz_mvp_value value) {
     if (value.kind != RECORZ_MVP_VALUE_STRING || value.string == 0) {
         return 0U;
@@ -3429,6 +3565,7 @@ static uint32_t snapshot_total_size(uint32_t string_byte_count) {
            (128U * 2U) +
            ((uint32_t)dynamic_class_count * SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE) +
            ((uint32_t)named_object_count * SNAPSHOT_NAMED_OBJECT_RECORD_SIZE) +
+           ((uint32_t)live_method_source_count * SNAPSHOT_LIVE_METHOD_SOURCE_RECORD_SIZE) +
            ((uint32_t)mono_bitmap_count * MONO_BITMAP_MAX_HEIGHT * 4U) +
            string_byte_count;
 }
@@ -3517,6 +3654,7 @@ static void emit_live_snapshot(void) {
     uint16_t handle;
     uint16_t dynamic_index;
     uint16_t named_index;
+    uint16_t live_method_index;
     uint32_t row;
     uint32_t total_size;
     uint32_t offset;
@@ -3561,6 +3699,10 @@ static void emit_live_snapshot(void) {
     write_u16_le(snapshot_buffer + offset, startup_hook_receiver_handle);
     offset += 2U;
     write_u16_le(snapshot_buffer + offset, startup_hook_selector_id);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, live_method_source_count);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, 0U);
     offset += 2U;
     write_u32_le(snapshot_buffer + offset, total_size);
     offset += 4U;
@@ -3637,6 +3779,18 @@ static void emit_live_snapshot(void) {
             snapshot_buffer[offset++] = (uint8_t)named_objects[named_index].name[name_index];
         }
     }
+    for (live_method_index = 0U; live_method_index < live_method_source_count; ++live_method_index) {
+        const struct recorz_mvp_live_method_source *source_record = &live_method_sources[live_method_index];
+        uint32_t name_index;
+
+        write_u16_le(snapshot_buffer + offset, source_record->class_handle);
+        offset += 2U;
+        snapshot_buffer[offset++] = source_record->selector_id;
+        snapshot_buffer[offset++] = source_record->argument_count;
+        for (name_index = 0U; name_index < METHOD_SOURCE_CHUNK_LIMIT; ++name_index) {
+            snapshot_buffer[offset++] = (uint8_t)source_record->source[name_index];
+        }
+    }
     for (handle = 0U; handle < mono_bitmap_count; ++handle) {
         for (row = 0U; row < MONO_BITMAP_MAX_HEIGHT; ++row) {
             write_u32_le(snapshot_buffer + offset, mono_bitmap_pool[handle][row]);
@@ -3670,6 +3824,7 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     uint16_t object_count;
     uint16_t dynamic_count;
     uint16_t saved_named_object_count;
+    uint16_t saved_live_method_source_count;
     uint16_t saved_mono_bitmap_count;
     uint16_t saved_next_dynamic_method_entry_execution_id;
     uint32_t string_byte_count;
@@ -3705,7 +3860,8 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     saved_cursor_y = read_u16_le(blob + 22U);
     saved_startup_hook_receiver_handle = read_u16_le(blob + 24U);
     saved_startup_hook_selector_id = read_u16_le(blob + 26U);
-    expected_size = read_u32_le(blob + 28U);
+    saved_live_method_source_count = read_u16_le(blob + 28U);
+    expected_size = read_u32_le(blob + 32U);
     if (object_count == 0U || object_count > HEAP_LIMIT) {
         machine_panic("snapshot object count exceeds heap capacity");
     }
@@ -3714,6 +3870,9 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     }
     if (saved_named_object_count > NAMED_OBJECT_LIMIT) {
         machine_panic("snapshot named object count exceeds capacity");
+    }
+    if (saved_live_method_source_count > LIVE_METHOD_SOURCE_LIMIT) {
+        machine_panic("snapshot live method source count exceeds capacity");
     }
     if (saved_mono_bitmap_count > MONO_BITMAP_LIMIT) {
         machine_panic("snapshot mono bitmap count exceeds capacity");
@@ -3731,6 +3890,7 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
                             (128U * 2U) +
                             ((uint32_t)dynamic_count * SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE) +
                             ((uint32_t)saved_named_object_count * SNAPSHOT_NAMED_OBJECT_RECORD_SIZE) +
+                            ((uint32_t)saved_live_method_source_count * SNAPSHOT_LIVE_METHOD_SOURCE_RECORD_SIZE) +
                             ((uint32_t)saved_mono_bitmap_count * MONO_BITMAP_MAX_HEIGHT * 4U);
     if (string_section_offset + string_byte_count != size) {
         machine_panic("snapshot string section size mismatch");
@@ -3841,6 +4001,25 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
         }
         for (name_index = 0U; name_index < METHOD_SOURCE_NAME_LIMIT; ++name_index) {
             named_objects[named_index].name[name_index] = (char)blob[offset++];
+        }
+    }
+    live_method_source_count = saved_live_method_source_count;
+    for (named_index = 0U; named_index < live_method_source_count; ++named_index) {
+        uint32_t name_index;
+
+        live_method_sources[named_index].class_handle = read_u16_le(blob + offset);
+        offset += 2U;
+        live_method_sources[named_index].selector_id = blob[offset++];
+        live_method_sources[named_index].argument_count = blob[offset++];
+        if (live_method_sources[named_index].class_handle == 0U ||
+            live_method_sources[named_index].class_handle > object_count) {
+            machine_panic("snapshot live method source class handle is out of range");
+        }
+        for (name_index = 0U; name_index < METHOD_SOURCE_CHUNK_LIMIT; ++name_index) {
+            live_method_sources[named_index].source[name_index] = (char)blob[offset++];
+        }
+        if (live_method_sources[named_index].source[METHOD_SOURCE_CHUNK_LIMIT - 1U] != '\0') {
+            machine_panic("snapshot live method source is not terminated");
         }
     }
     mono_bitmap_count = saved_mono_bitmap_count;
@@ -4197,6 +4376,21 @@ static void execute_entry_kernel_installer_class_named(
         machine_panic("KernelInstaller classNamed: could not resolve class");
     }
     push(object_value(heap_handle_for_object(class_object)));
+}
+
+static void execute_entry_kernel_installer_file_out_class_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("KernelInstaller fileOutClassNamed: expects a class name string");
+    }
+    push(string_value(file_out_class_source_by_name(arguments[0].string)));
 }
 
 static uint8_t compile_source_operand_push(
@@ -4560,6 +4754,7 @@ static void install_method_chunk_on_class(
     compiled_method_handle = compile_source_method_and_allocate(class_object, chunk, &selector_id, &argument_count);
     validate_compiled_method(heap_object(compiled_method_handle), argument_count);
     install_compiled_method_update(class_object, selector_id, argument_count, compiled_method_handle);
+    remember_live_method_source(heap_handle_for_object(class_object), selector_id, (uint8_t)argument_count, chunk);
 }
 
 static void install_method_source_on_class(
@@ -4573,6 +4768,7 @@ static void install_method_source_on_class(
     compiled_method_handle = compile_source_method_and_allocate(class_object, source, &selector_id, &argument_count);
     validate_compiled_method(heap_object(compiled_method_handle), argument_count);
     install_compiled_method_update(class_object, selector_id, argument_count, compiled_method_handle);
+    remember_live_method_source(heap_handle_for_object(class_object), selector_id, (uint8_t)argument_count, source);
 }
 
 static const struct recorz_mvp_heap_object *lookup_class_by_name(const char *class_name) {
@@ -4703,6 +4899,151 @@ static const struct recorz_mvp_heap_object *ensure_class_defined(
     return (const struct recorz_mvp_heap_object *)heap_object(class_handle);
 }
 
+static uint32_t live_method_source_count_for_class_handle(uint16_t class_handle) {
+    uint16_t source_index;
+    uint32_t count = 0U;
+
+    for (source_index = 0U; source_index < live_method_source_count; ++source_index) {
+        if (live_method_sources[source_index].class_handle == class_handle) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+static void append_text_checked(
+    char buffer[],
+    uint32_t buffer_size,
+    uint32_t *offset,
+    const char *text
+) {
+    uint32_t index = 0U;
+
+    while (text[index] != '\0') {
+        if (*offset + 1U >= buffer_size) {
+            machine_panic("class file-out text exceeds buffer capacity");
+        }
+        buffer[(*offset)++] = text[index++];
+    }
+    buffer[*offset] = '\0';
+}
+
+static void append_char_checked(
+    char buffer[],
+    uint32_t buffer_size,
+    uint32_t *offset,
+    char ch
+) {
+    if (*offset + 1U >= buffer_size) {
+        machine_panic("class file-out text exceeds buffer capacity");
+    }
+    buffer[(*offset)++] = ch;
+    buffer[*offset] = '\0';
+}
+
+static void append_dynamic_class_header_source(
+    char buffer[],
+    uint32_t buffer_size,
+    uint32_t *offset,
+    const struct recorz_mvp_dynamic_class_definition *definition
+) {
+    uint8_t ivar_index;
+
+    append_text_checked(buffer, buffer_size, offset, "RecorzKernelClass: #");
+    append_text_checked(buffer, buffer_size, offset, definition->class_name);
+    append_text_checked(buffer, buffer_size, offset, " superclass: #");
+    append_text_checked(
+        buffer,
+        buffer_size,
+        offset,
+        class_name_for_object(heap_object(definition->superclass_handle))
+    );
+    append_text_checked(buffer, buffer_size, offset, " instanceVariableNames: '");
+    for (ivar_index = 0U; ivar_index < definition->instance_variable_count; ++ivar_index) {
+        if (ivar_index != 0U) {
+            append_char_checked(buffer, buffer_size, offset, ' ');
+        }
+        append_text_checked(buffer, buffer_size, offset, definition->instance_variable_names[ivar_index]);
+    }
+    append_char_checked(buffer, buffer_size, offset, '\'');
+}
+
+static void append_live_method_source_chunks(
+    char buffer[],
+    uint32_t buffer_size,
+    uint32_t *offset,
+    uint16_t class_handle,
+    uint8_t *wrote_any_chunk
+) {
+    uint16_t source_index;
+
+    for (source_index = 0U; source_index < live_method_source_count; ++source_index) {
+        const struct recorz_mvp_live_method_source *source_record = &live_method_sources[source_index];
+
+        if (source_record->class_handle != class_handle) {
+            continue;
+        }
+        append_text_checked(buffer, buffer_size, offset, "\n!\n");
+        append_text_checked(buffer, buffer_size, offset, source_record->source);
+        *wrote_any_chunk = 1U;
+    }
+}
+
+static const char *file_out_class_source_by_name(const char *class_name) {
+    static char class_file_out_buffer[8192];
+    const struct recorz_mvp_heap_object *class_object;
+    const struct recorz_mvp_dynamic_class_definition *dynamic_definition;
+    const struct recorz_mvp_heap_object *metaclass_object;
+    uint16_t class_handle;
+    uint16_t metaclass_handle;
+    uint32_t offset = 0U;
+    uint8_t wrote_any_chunk = 0U;
+
+    class_object = lookup_class_by_name(class_name);
+    if (class_object == 0) {
+        machine_panic("KernelInstaller fileOutClassNamed: could not resolve class");
+    }
+    class_handle = heap_handle_for_object(class_object);
+    dynamic_definition = dynamic_class_definition_for_handle(class_handle);
+    if (dynamic_definition == 0) {
+        machine_panic("KernelInstaller fileOutClassNamed: only live classes support file-out in the MVP");
+    }
+    if (live_method_source_count_for_class_handle(class_handle) != class_method_count(class_object)) {
+        machine_panic("KernelInstaller fileOutClassNamed: class contains methods without live source");
+    }
+    class_file_out_buffer[0] = '\0';
+    append_dynamic_class_header_source(class_file_out_buffer, sizeof(class_file_out_buffer), &offset, dynamic_definition);
+    append_live_method_source_chunks(
+        class_file_out_buffer,
+        sizeof(class_file_out_buffer),
+        &offset,
+        class_handle,
+        &wrote_any_chunk
+    );
+
+    metaclass_object = class_side_lookup_target(class_object);
+    metaclass_handle = heap_handle_for_object(metaclass_object);
+    if (live_method_source_count_for_class_handle(metaclass_handle) != class_method_count(metaclass_object)) {
+        machine_panic("KernelInstaller fileOutClassNamed: metaclass contains methods without live source");
+    }
+    if (class_method_count(metaclass_object) != 0U) {
+        append_text_checked(class_file_out_buffer, sizeof(class_file_out_buffer), &offset, "\n!\n");
+        append_text_checked(class_file_out_buffer, sizeof(class_file_out_buffer), &offset, "RecorzKernelClassSide: #");
+        append_text_checked(class_file_out_buffer, sizeof(class_file_out_buffer), &offset, dynamic_definition->class_name);
+        append_live_method_source_chunks(
+            class_file_out_buffer,
+            sizeof(class_file_out_buffer),
+            &offset,
+            metaclass_handle,
+            &wrote_any_chunk
+        );
+    }
+    if (!wrote_any_chunk) {
+        machine_panic("KernelInstaller fileOutClassNamed: class has no live source methods");
+    }
+    return runtime_string_allocate_copy(class_file_out_buffer);
+}
+
 static void execute_entry_kernel_installer_compiled_method_word0_word1_word2_word3_instruction_count(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -4774,6 +5115,7 @@ static void execute_entry_kernel_installer_install_compiled_method_on_class_sele
         machine_panic("KernelInstaller argumentCount exceeds send capacity");
     }
     validate_compiled_method(compiled_method, argument_count);
+    forget_live_method_source(heap_handle_for_object(class_object), (uint8_t)selector_id, (uint8_t)argument_count);
     install_compiled_method_update(
         class_object,
         (uint8_t)selector_id,
@@ -5047,6 +5389,23 @@ static void execute_entry_workspace_file_in(
         machine_panic("Workspace fileIn: expects a chunk stream string");
     }
     file_in_chunk_stream_source(arguments[0].string);
+    push(receiver);
+}
+
+static void execute_entry_workspace_file_out_class_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const char *source;
+
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace fileOutClassNamed: expects a class name string");
+    }
+    source = file_out_class_source_by_name(arguments[0].string);
+    workspace_remember_current_source(object, source);
     push(receiver);
 }
 
@@ -5904,6 +6263,7 @@ static void apply_method_update_payload(const uint8_t *blob, uint32_t size) {
     class_object = class_object_for_kind((uint8_t)class_kind);
     compiled_method_handle = allocate_updated_compiled_method(blob, instruction_count);
     validate_compiled_method(heap_object(compiled_method_handle), argument_count);
+    forget_live_method_source(heap_handle_for_object(class_object), (uint8_t)selector, (uint8_t)argument_count);
     install_compiled_method_update(class_object, (uint8_t)selector, argument_count, compiled_method_handle);
 }
 

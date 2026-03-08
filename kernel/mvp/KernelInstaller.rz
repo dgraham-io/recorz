@@ -18,6 +18,9 @@ fileInMethodChunks: source onClass: class
 fileInClassChunks: source
     <primitive: #kernelInstallerFileInClassChunks>
 !
+fileOutClassNamed: className
+    <primitive: #kernelInstallerFileOutClassNamed>
+!
 classNamed: className
     <primitive: #kernelInstallerClassNamed>
 !
