@@ -1,0 +1,235 @@
+{
+  "program": {
+    "magic": "RCZP",
+    "version": 1,
+    "header_format": "<4sHHHH",
+    "instruction_format": "<BBH",
+    "literal_header_format": "<BBHi"
+  },
+  "image": {
+    "magic": "RCZI",
+    "version": 1,
+    "header_format": "<4sHHII8s",
+    "section_format": "<HHII",
+    "sections": {
+      "program": 1,
+      "seed": 2,
+      "entry": 3
+    },
+    "features": {
+      "fnv1a32": 1
+    },
+    "profile": "RV64MVP1",
+    "entry": {
+      "magic": "RCZE",
+      "version": 1,
+      "format": "<4sHHHHHH",
+      "kinds": {
+        "doit": 1
+      }
+    }
+  },
+  "seed": {
+    "magic": "RCZS",
+    "version": 16,
+    "header_format": "<4sHHHHHH",
+    "binding_format": "<HH",
+    "object_header_format": "<BBH",
+    "field_format": "<Bi",
+    "invalid_object_index": 65535,
+    "field_kinds": [
+      {
+        "name": "nil",
+        "constant": "RECORZ_MVP_SEED_FIELD_NIL",
+        "value": 0
+      },
+      {
+        "name": "small_integer",
+        "constant": "RECORZ_MVP_SEED_FIELD_SMALL_INTEGER",
+        "value": 1
+      },
+      {
+        "name": "object_index",
+        "constant": "RECORZ_MVP_SEED_FIELD_OBJECT_INDEX",
+        "value": 2
+      }
+    ]
+  },
+  "opcodes": [
+    {
+      "name": "push_global",
+      "constant": "RECORZ_MVP_OP_PUSH_GLOBAL",
+      "value": 1
+    },
+    {
+      "name": "push_literal",
+      "constant": "RECORZ_MVP_OP_PUSH_LITERAL",
+      "value": 2
+    },
+    {
+      "name": "send",
+      "constant": "RECORZ_MVP_OP_SEND",
+      "value": 3
+    },
+    {
+      "name": "dup",
+      "constant": "RECORZ_MVP_OP_DUP",
+      "value": 4
+    },
+    {
+      "name": "pop",
+      "constant": "RECORZ_MVP_OP_POP",
+      "value": 5
+    },
+    {
+      "name": "return",
+      "constant": "RECORZ_MVP_OP_RETURN",
+      "value": 6
+    },
+    {
+      "name": "push_nil",
+      "constant": "RECORZ_MVP_OP_PUSH_NIL",
+      "value": 7
+    },
+    {
+      "name": "push_lexical",
+      "constant": "RECORZ_MVP_OP_PUSH_LEXICAL",
+      "value": 8
+    },
+    {
+      "name": "store_lexical",
+      "constant": "RECORZ_MVP_OP_STORE_LEXICAL",
+      "value": 9
+    },
+    {
+      "name": "push_root",
+      "constant": "RECORZ_MVP_OP_PUSH_ROOT",
+      "value": 10
+    },
+    {
+      "name": "push_argument",
+      "constant": "RECORZ_MVP_OP_PUSH_ARGUMENT",
+      "value": 11
+    },
+    {
+      "name": "push_field",
+      "constant": "RECORZ_MVP_OP_PUSH_FIELD",
+      "value": 12
+    },
+    {
+      "name": "return_receiver",
+      "constant": "RECORZ_MVP_OP_RETURN_RECEIVER",
+      "value": 13
+    },
+    {
+      "name": "store_field",
+      "constant": "RECORZ_MVP_OP_STORE_FIELD",
+      "value": 14
+    }
+  ],
+  "literal_kinds": [
+    {
+      "name": "string",
+      "constant": "RECORZ_MVP_LITERAL_STRING",
+      "value": 1
+    },
+    {
+      "name": "small_integer",
+      "constant": "RECORZ_MVP_LITERAL_SMALL_INTEGER",
+      "value": 2
+    }
+  ],
+  "compiled_method": {
+    "max_instructions": 4,
+    "opcodes": [
+      {
+        "name": "push_global",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_GLOBAL",
+        "value": 1
+      },
+      {
+        "name": "push_literal",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_LITERAL",
+        "value": 2
+      },
+      {
+        "name": "send",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_SEND",
+        "value": 3
+      },
+      {
+        "name": "dup",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_DUP",
+        "value": 4
+      },
+      {
+        "name": "pop",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_POP",
+        "value": 5
+      },
+      {
+        "name": "return_top",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_RETURN_TOP",
+        "value": 6
+      },
+      {
+        "name": "push_nil",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_NIL",
+        "value": 7
+      },
+      {
+        "name": "push_lexical",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_LEXICAL",
+        "value": 8
+      },
+      {
+        "name": "store_lexical",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_STORE_LEXICAL",
+        "value": 9
+      },
+      {
+        "name": "push_root",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_ROOT",
+        "value": 10
+      },
+      {
+        "name": "push_argument",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_ARGUMENT",
+        "value": 11
+      },
+      {
+        "name": "push_field",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_FIELD",
+        "value": 12
+      },
+      {
+        "name": "return_receiver",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_RETURN_RECEIVER",
+        "value": 13
+      },
+      {
+        "name": "store_field",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_STORE_FIELD",
+        "value": 14
+      }
+    ]
+  },
+  "method_update": {
+    "magic": "RCZU",
+    "version": 1,
+    "header_format": "<4sHHHHHH",
+    "fw_cfg_name": "opt/recorz-method-update"
+  },
+  "method_implementations": [
+    {
+      "name": "primitive",
+      "constant": "RECORZ_MVP_METHOD_IMPLEMENTATION_PRIMITIVE",
+      "value": 1
+    },
+    {
+      "name": "compiled",
+      "constant": "RECORZ_MVP_METHOD_IMPLEMENTATION_COMPILED",
+      "value": 7
+    }
+  ]
+}

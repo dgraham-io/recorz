@@ -1,5 +1,12 @@
 # Implementation Log
 
+## 2026-03-08 - Add QEMU RV32 Serial Target
+- Added a new `platform/qemu-riscv32` target as the first RV32-clean bring-up slice, reusing the current image/VM core but switching the platform build to `rv32im/ilp32` and `qemu-system-riscv32`.
+- Kept the target deliberately serial-first by replacing the copied `machine.c` with a minimal UART-only machine layer and a no-op display layer, so this step tests CPU width and ABI portability without mixing in `ramfb`, `fw_cfg`, or LiteX-specific display work.
+- Made the RV32 target visibly useful by echoing framebuffer-form transcript writes and newlines to serial in `platform/qemu-riscv32/vm.c`, which lets the existing default demo prove real execution on RV32 without inventing a separate serial Transcript class.
+- Added `tests/test_qemu_riscv32_makefile.py` to lock the new build/run shape (`qemu-system-riscv32`, `rv32im`, no `ramfb`, no `fw_cfg`) and `tests/test_qemu_riscv32_serial_integration.py` to verify that the default Recorz demo boots and prints `HELLO FROM RECORZ` plus the existing runtime metadata over QEMU RV32 serial.
+- Verified with `make -C platform/qemu-riscv32 clean all inspect-image` and `PYTHONPATH=src python3 -m unittest discover -s tests -v`.
+
 ## 2026-03-07 - Add Persistent Workspace Method Browser
 - Expanded the source-declared `Workspace` surface in `kernel/mvp/Workspace.rz` with `browseMethodsForClassNamed:` and `browseMethod:ofClassNamed:`, and added the matching selectors in `kernel/mvp/Selector.rz`, so the live image now has a class/method browser state instead of only class, object, and buffer actions.
 - Extended `platform/qemu-riscv64/vm.c` with Transcript-style method-list and method-source browsers, plus persisted view-state reopening for `WORKSPACE_VIEW_METHODS` and `WORKSPACE_VIEW_METHOD`, keeping the session model image-owned and snapshot-friendly.
