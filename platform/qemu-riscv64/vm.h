@@ -54,6 +54,8 @@ void recorz_mvp_vm_run(
     const struct recorz_mvp_seed *seed,
     const uint8_t *method_update_blob,
     uint32_t method_update_size,
+    const uint8_t *file_in_blob,
+    uint32_t file_in_size,
     const uint8_t *snapshot_blob,
     uint32_t snapshot_size
 );

@@ -221,6 +221,8 @@ static void initialize_runtime_caches(void);
 static void reset_runtime_state(void);
 static void load_snapshot_state(const uint8_t *blob, uint32_t size);
 static void emit_live_snapshot(void);
+static void file_in_class_chunks_source(const char *source);
+static void apply_external_file_in_blob(const uint8_t *blob, uint32_t size);
 
 static void panic_put_u32(uint32_t value) {
     char digits[10];
@@ -3816,14 +3818,54 @@ static void execute_entry_kernel_installer_file_in_class_chunks(
     if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
         machine_panic("KernelInstaller fileInClassChunks: expects a source string");
     }
+    file_in_class_chunks_source(arguments[0].string);
     cursor = arguments[0].string;
     if (source_copy_next_chunk(&cursor, chunk, sizeof(chunk)) == 0U) {
         machine_panic("KernelInstaller fileInClassChunks: source is empty");
     }
     source_parse_class_definition_from_chunk(chunk, &definition);
-    class_object = ensure_class_defined(&definition);
-    file_in_method_chunks_on_class(arguments[0].string, class_object);
+    class_object = lookup_class_by_name(definition.class_name);
+    if (class_object == 0) {
+        machine_panic("KernelInstaller fileInClassChunks: class could not be resolved after install");
+    }
     push(object_value(heap_handle_for_object(class_object)));
+}
+
+static void file_in_class_chunks_source(const char *source) {
+    const char *cursor = source;
+    char chunk[METHOD_SOURCE_CHUNK_LIMIT];
+    struct recorz_mvp_live_class_definition definition;
+    const struct recorz_mvp_heap_object *class_object;
+
+    if (source == 0 || *source == '\0') {
+        machine_panic("KernelInstaller fileInClassChunks: source is empty");
+    }
+    if (source_copy_next_chunk(&cursor, chunk, sizeof(chunk)) == 0U) {
+        machine_panic("KernelInstaller fileInClassChunks: source is empty");
+    }
+    source_parse_class_definition_from_chunk(chunk, &definition);
+    class_object = ensure_class_defined(&definition);
+    file_in_method_chunks_on_class(source, class_object);
+}
+
+static void apply_external_file_in_blob(const uint8_t *blob, uint32_t size) {
+    static char file_in_source_buffer[8193];
+    uint32_t index;
+
+    if (blob == 0 || size == 0U) {
+        return;
+    }
+    if (size >= sizeof(file_in_source_buffer)) {
+        machine_panic("external file-in payload exceeds buffer capacity");
+    }
+    for (index = 0U; index < size; ++index) {
+        if (blob[index] == '\0') {
+            machine_panic("external file-in payload contains an unexpected NUL byte");
+        }
+        file_in_source_buffer[index] = (char)blob[index];
+    }
+    file_in_source_buffer[size] = '\0';
+    file_in_class_chunks_source(file_in_source_buffer);
 }
 
 static void execute_entry_kernel_installer_remember_object_named(
@@ -4400,6 +4442,8 @@ void recorz_mvp_vm_run(
     const struct recorz_mvp_seed *seed,
     const uint8_t *method_update_blob,
     uint32_t method_update_size,
+    const uint8_t *file_in_blob,
+    uint32_t file_in_size,
     const uint8_t *snapshot_blob,
     uint32_t snapshot_size
 ) {
@@ -4429,6 +4473,11 @@ void recorz_mvp_vm_run(
         panic_phase = "update";
         apply_method_update_payload(method_update_blob, method_update_size);
         machine_puts("recorz qemu-riscv64 mvp: applied method update\n");
+    }
+    if (file_in_blob != 0 && file_in_size != 0U) {
+        panic_phase = "file-in";
+        apply_external_file_in_blob(file_in_blob, file_in_size);
+        machine_puts("recorz qemu-riscv64 mvp: applied external file-in\n");
     }
     execute_executable(&executable, 0, nil_value(), 0U, 0);
     panic_phase = "return";

@@ -1,5 +1,11 @@
 # Implementation Log
 
+## 2026-03-07 - External File-In Transport For Snapshot Boot
+- Added a new `FILE_IN_PAYLOAD` QEMU `fw_cfg` transport so the target can receive an external `.rz` class chunk file at boot without going through the older method-update payload path.
+- Extended the target boot path to read that payload in `main.c`, pass it into the VM, and apply it through the existing class-chunk installer before the top-level program runs.
+- Added focused Makefile coverage to lock both the new `opt/recorz-file-in` `fw_cfg` wiring and the existing safe same-path `continue-snapshot` replacement flow.
+- Verified with `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_makefile -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
 ## 2026-03-07 - Persisted Image Development Loop
 - Added second-generation snapshot evolution demos so a saved live image can be resumed, mutated in-image, saved again, and then rebooted with the evolved behavior and state intact.
 - Added a new QEMU snapshot integration case that saves a snapshot, continues from that same snapshot with `continue-snapshot`, replaces a live class method, saves the next generation back to the same path, and then reboots from the evolved snapshot.

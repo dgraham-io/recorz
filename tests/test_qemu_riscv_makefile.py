@@ -88,6 +88,37 @@ class QemuRiscvMakefileTests(unittest.TestCase):
             self.assertIn(f"mv {temp_snapshot_path} {snapshot_path}", result.stdout)
             self.assertNotIn(f"rm -f {snapshot_path}", result.stdout)
 
+    @unittest.skipUnless(shutil.which("make"), "make is required for QEMU Makefile tests")
+    def test_continue_snapshot_includes_external_file_in_fw_cfg_when_requested(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv64-makefile-file-in-") as temp_dir:
+            build_dir = Path(temp_dir)
+            snapshot_path = build_dir / "live.bin"
+            file_in_path = build_dir / "update.rz"
+            result = subprocess.run(
+                [
+                    "make",
+                    "-n",
+                    "-C",
+                    str(PLATFORM_DIR),
+                    f"BUILD_DIR={build_dir}",
+                    f"SNAPSHOT_PAYLOAD={snapshot_path}",
+                    f"FILE_IN_PAYLOAD={file_in_path}",
+                    "continue-snapshot",
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    "make -n continue-snapshot with FILE_IN_PAYLOAD failed\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            self.assertIn(f"-fw_cfg name=opt/recorz-file-in,file={file_in_path}", result.stdout)
+            self.assertIn(f"-fw_cfg name=opt/recorz-snapshot,file={snapshot_path}", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
