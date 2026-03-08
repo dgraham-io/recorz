@@ -1,0 +1,4 @@
+RecorzKernelClass: #Child superclass: #Parent instanceVariableNames: 'detail'
+!
+detail
+    ^value

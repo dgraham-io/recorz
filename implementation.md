@@ -1,5 +1,10 @@
 # Implementation Log
 
+## 2026-03-07 - Snapshot-First External File-In Workflow
+- Added external `.rz` file-in demos that boot from a saved snapshot, apply a host-provided class chunk over `fw_cfg`, save the evolved image, and then reboot from that persisted result.
+- Added a QEMU snapshot integration case that proves the full workflow end to end: save base image, baseline reload, continue from snapshot with `FILE_IN_PAYLOAD`, save again, and reload the evolved snapshot with the filed-in behavior still present.
+- Verified with `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_snapshot_integration -v`, `PYTHONPATH=src python3 -m unittest discover -s tests -v`, and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
 ## 2026-03-07 - External File-In Transport For Snapshot Boot
 - Added a new `FILE_IN_PAYLOAD` QEMU `fw_cfg` transport so the target can receive an external `.rz` class chunk file at boot without going through the older method-update payload path.
 - Extended the target boot path to read that payload in `main.c`, pass it into the VM, and apply it through the existing class-chunk installer before the top-level program runs.

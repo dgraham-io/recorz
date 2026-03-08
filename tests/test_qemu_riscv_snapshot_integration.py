@@ -44,10 +44,17 @@ SNAPSHOT_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv64-snapshots" / "saved-live-im
 SNAPSHOT_CONTINUE_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-snapshot-continue-test"
 SNAPSHOT_EVOLVED_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-snapshot-evolved-reload-test"
 SNAPSHOT_CONTINUE_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv64-snapshots" / "continued-live-image.bin"
+SNAPSHOT_FILE_IN_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-snapshot-file-in-test"
+SNAPSHOT_FILE_IN_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-snapshot-file-in-reload-test"
+SNAPSHOT_FILE_IN_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv64-snapshots" / "file-in-live-image.bin"
 SNAPSHOT_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_save_demo.rz"
 SNAPSHOT_RELOAD_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_reload_demo.rz"
 SNAPSHOT_CONTINUE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_continue_demo.rz"
 SNAPSHOT_EVOLVED_RELOAD_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_evolved_reload_demo.rz"
+SNAPSHOT_FILE_IN_BASE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_file_in_base_demo.rz"
+SNAPSHOT_FILE_IN_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_file_in_save_demo.rz"
+SNAPSHOT_FILE_IN_RELOAD_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_file_in_reload_demo.rz"
+SNAPSHOT_FILE_IN_UPDATE_PATH = ROOT / "examples" / "qemu_riscv_snapshot_file_in_update.rz"
 
 
 @unittest.skipUnless(
@@ -97,7 +104,14 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
         width, height, data = _read_ppm(ppm_path)
         return qemu_log, width, height, data
 
-    def continue_snapshot(self, *, build_dir: Path, example_path: Path, snapshot_path: Path) -> str:
+    def continue_snapshot(
+        self,
+        *,
+        build_dir: Path,
+        example_path: Path,
+        snapshot_path: Path,
+        file_in_payload: Path | None = None,
+    ) -> str:
         command = [
             "make",
             "-C",
@@ -108,6 +122,8 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
             "clean",
             "continue-snapshot",
         ]
+        if file_in_payload is not None:
+            command.insert(-2, f"FILE_IN_PAYLOAD={file_in_payload}")
         result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
         if result.returncode != 0:
             self.fail(
@@ -139,6 +155,53 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
         self.assertGreater(line_1[TEXT_FOREGROUND], 300)
         self.assertGreater(line_2[TEXT_FOREGROUND], 120)
         self.assertGreater(line_1[TEXT_FOREGROUND], line_2[TEXT_FOREGROUND] + 120)
+
+    def test_external_file_in_payload_can_evolve_a_saved_snapshot(self) -> None:
+        save_log = self.save_snapshot(
+            build_dir=SNAPSHOT_SAVE_BUILD_DIR,
+            example_path=SNAPSHOT_FILE_IN_BASE_DEMO_PATH,
+            snapshot_output=SNAPSHOT_FILE_IN_OUTPUT_PATH,
+        )
+        self.assertIn("recorz-snapshot-begin", save_log)
+        self.assertTrue(SNAPSHOT_FILE_IN_OUTPUT_PATH.exists())
+
+        baseline_reload_log, baseline_width, baseline_height, baseline_data = self.render_demo(
+            build_dir=SNAPSHOT_RELOAD_BUILD_DIR,
+            example_path=SNAPSHOT_FILE_IN_RELOAD_DEMO_PATH,
+            snapshot_payload=SNAPSHOT_FILE_IN_OUTPUT_PATH,
+        )
+        self.assertEqual((baseline_width, baseline_height), (640, 480))
+        self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", baseline_reload_log)
+
+        continue_log = self.continue_snapshot(
+            build_dir=SNAPSHOT_FILE_IN_BUILD_DIR,
+            example_path=SNAPSHOT_FILE_IN_SAVE_DEMO_PATH,
+            snapshot_path=SNAPSHOT_FILE_IN_OUTPUT_PATH,
+            file_in_payload=SNAPSHOT_FILE_IN_UPDATE_PATH,
+        )
+        self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", continue_log)
+        self.assertIn("recorz qemu-riscv64 mvp: applied external file-in", continue_log)
+        self.assertIn("recorz-snapshot-begin", continue_log)
+
+        reload_log, width, height, data = self.render_demo(
+            build_dir=SNAPSHOT_FILE_IN_RELOAD_BUILD_DIR,
+            example_path=SNAPSHOT_FILE_IN_RELOAD_DEMO_PATH,
+            snapshot_payload=SNAPSHOT_FILE_IN_OUTPUT_PATH,
+        )
+
+        self.assertEqual((width, height), (640, 480))
+        self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", reload_log)
+        self.assertIn("recorz qemu-riscv64 mvp: rendered", reload_log)
+        self.assertNotIn("panic:", reload_log)
+
+        baseline_line_1 = _region_histogram(baseline_data, baseline_width, 24, 24, 260, 56)
+        baseline_line_2 = _region_histogram(baseline_data, baseline_width, 24, 58, 260, 90)
+        line_1 = _region_histogram(data, width, 24, 24, 260, 56)
+        line_2 = _region_histogram(data, width, 24, 58, 260, 90)
+
+        self.assertGreater(line_1[TEXT_FOREGROUND], 300)
+        self.assertGreater(line_2[TEXT_FOREGROUND], baseline_line_2[TEXT_FOREGROUND] + 180)
+        self.assertGreater(line_2[TEXT_FOREGROUND], baseline_line_1[TEXT_FOREGROUND] - 80)
 
     def test_live_snapshot_supports_second_generation_evolution_without_rebuilding_cold_boot(self) -> None:
         save_log = self.save_snapshot(
