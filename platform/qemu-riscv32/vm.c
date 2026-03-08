@@ -3498,6 +3498,128 @@ static uint32_t text_length(const char *text) {
     return length;
 }
 
+static uint8_t runtime_string_pool_contains(const char *text, uint32_t *offset_out) {
+    uint32_t offset;
+
+    if (text == 0) {
+        return 0U;
+    }
+    if (text < runtime_string_pool || text >= runtime_string_pool + runtime_string_pool_offset) {
+        return 0U;
+    }
+    offset = (uint32_t)(text - runtime_string_pool);
+    if (offset_out != 0) {
+        *offset_out = offset;
+    }
+    return 1U;
+}
+
+static void runtime_string_mark_live_value(
+    struct recorz_mvp_value value,
+    uint8_t live_starts[],
+    uint32_t live_starts_size
+) {
+    uint32_t offset;
+
+    if (value.kind != RECORZ_MVP_VALUE_STRING ||
+        !runtime_string_pool_contains(value.string, &offset)) {
+        return;
+    }
+    live_starts[offset >> 3U] |= (uint8_t)(1U << (offset & 7U));
+    (void)live_starts_size;
+}
+
+static uint8_t runtime_string_live_start_is_marked(
+    const uint8_t live_starts[],
+    uint32_t offset
+) {
+    return (uint8_t)((live_starts[offset >> 3U] & (uint8_t)(1U << (offset & 7U))) != 0U);
+}
+
+static void runtime_string_rewrite_live_value(
+    struct recorz_mvp_value *value,
+    const char *old_text,
+    const char *new_text
+) {
+    if (value->kind == RECORZ_MVP_VALUE_STRING && value->string == old_text) {
+        value->string = new_text;
+    }
+}
+
+static void runtime_string_rewrite_references(const char *old_text, const char *new_text) {
+    uint32_t stack_index;
+    uint16_t handle;
+
+    for (stack_index = 0U; stack_index < stack_size; ++stack_index) {
+        runtime_string_rewrite_live_value(&stack[stack_index], old_text, new_text);
+    }
+    for (handle = 1U; handle <= heap_size; ++handle) {
+        struct recorz_mvp_heap_object *object = heap_object(handle);
+        uint8_t field_index;
+
+        for (field_index = 0U; field_index < object->field_count; ++field_index) {
+            runtime_string_rewrite_live_value(&object->fields[field_index], old_text, new_text);
+        }
+    }
+    runtime_string_rewrite_live_value(&panic_send_receiver, old_text, new_text);
+    for (stack_index = 0U; stack_index < MAX_SEND_ARGS; ++stack_index) {
+        runtime_string_rewrite_live_value(&panic_send_arguments[stack_index], old_text, new_text);
+    }
+}
+
+static void runtime_string_compact_live_references(void) {
+    uint8_t live_starts[(RUNTIME_STRING_POOL_LIMIT + 7U) / 8U];
+    uint32_t write_offset = 0U;
+    uint32_t read_offset;
+    uint32_t live_starts_index;
+    uint32_t stack_index;
+    uint16_t handle;
+
+    for (live_starts_index = 0U; live_starts_index < sizeof(live_starts); ++live_starts_index) {
+        live_starts[live_starts_index] = 0U;
+    }
+    for (stack_index = 0U; stack_index < stack_size; ++stack_index) {
+        runtime_string_mark_live_value(stack[stack_index], live_starts, sizeof(live_starts));
+    }
+    for (handle = 1U; handle <= heap_size; ++handle) {
+        const struct recorz_mvp_heap_object *object = heap_object(handle);
+        uint8_t field_index;
+
+        for (field_index = 0U; field_index < object->field_count; ++field_index) {
+            runtime_string_mark_live_value(object->fields[field_index], live_starts, sizeof(live_starts));
+        }
+    }
+    runtime_string_mark_live_value(panic_send_receiver, live_starts, sizeof(live_starts));
+    for (stack_index = 0U; stack_index < MAX_SEND_ARGS; ++stack_index) {
+        runtime_string_mark_live_value(panic_send_arguments[stack_index], live_starts, sizeof(live_starts));
+    }
+
+    read_offset = 0U;
+    while (read_offset < runtime_string_pool_offset) {
+        uint32_t string_length = text_length(runtime_string_pool + read_offset);
+
+        if (runtime_string_live_start_is_marked(live_starts, read_offset)) {
+            const char *old_text = runtime_string_pool + read_offset;
+            const char *new_text = runtime_string_pool + write_offset;
+            uint32_t char_index;
+
+            if (write_offset != read_offset) {
+                for (char_index = 0U; char_index <= string_length; ++char_index) {
+                    runtime_string_pool[write_offset + char_index] =
+                        runtime_string_pool[read_offset + char_index];
+                }
+                runtime_string_rewrite_references(old_text, new_text);
+            }
+            write_offset += string_length + 1U;
+        }
+        read_offset += string_length + 1U;
+    }
+    runtime_string_pool_offset = write_offset;
+    if (runtime_string_pool_offset < RUNTIME_STRING_POOL_LIMIT) {
+        runtime_string_pool[runtime_string_pool_offset] = '\0';
+    }
+}
+
 static const char *runtime_string_allocate_copy(const char *text) {
     uint32_t length;
     uint32_t index;
@@ -3509,6 +3631,9 @@ static const char *runtime_string_allocate_copy(const char *text) {
     length = text_length(text);
     if (length + 1U > RUNTIME_STRING_POOL_LIMIT) {
         machine_panic("runtime string exceeds pool capacity");
+    }
+    if (runtime_string_pool_offset + length + 1U > RUNTIME_STRING_POOL_LIMIT) {
+        runtime_string_compact_live_references();
     }
     if (runtime_string_pool_offset + length + 1U > RUNTIME_STRING_POOL_LIMIT) {
         machine_panic("runtime string pool overflow");

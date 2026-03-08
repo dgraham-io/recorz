@@ -1,5 +1,12 @@
 # Implementation Log
 
+## 2026-03-08 - Compact RV32 Runtime Strings
+- Reduced the RV32 `dev` runtime string pool budget in `platform/qemu-riscv32/vm.h` from `32768` to `8192` bytes now that runtime-generated strings are compacted instead of accumulating monotonically.
+- Added live runtime-string compaction in `platform/qemu-riscv32/vm.c`: when the pool would overflow, the VM now scans heap fields, the execution stack, and the panic send context for string references into the pool, compacts only the still-live strings, and rewrites those references to the new offsets before retrying the allocation.
+- Kept the change RV32-focused and behavior-preserving by leaving the string model intact; the optimization only reclaims dead one-shot strings from repeated `KernelInstaller memoryReport` / `fileOutClassNamed:` style operations instead of inventing a new string object kind.
+- Extended `tests/test_qemu_riscv32_serial_integration.py` with a QEMU proof that repeatedly stores `KernelInstaller memoryReport` into `Workspace`, then reads it back without tripping `runtime string pool overflow`, which would fail with the old monotonic pool.
+- Verified with `PYTHONPATH=src:. python3 -m unittest tests.test_qemu_riscv32_serial_integration tests.test_qemu_riscv32_snapshot_integration tests.test_qemu_riscv32_dev_loop_integration tests.test_qemu_riscv32_budget_integration -v` and `make -C platform/qemu-riscv32 clean all inspect-image`.
+
 ## 2026-03-08 - Set QEMU Framebuffer To 1024x768
 - Changed the seeded framebuffer bitmap in `kernel/mvp/Bitmap.rz` from `1280x1024` to `1024x768`, keeping the image-owned display size aligned with the more practical FPGA-oriented target mode we discussed.
 - Updated both QEMU display backends in `platform/qemu-riscv64/display.h` and `platform/qemu-riscv32/display.h` so the host-side framebuffer allocation and `ramfb` registration match the seeded bitmap dimensions on both RV64 and RV32 targets.

@@ -135,7 +135,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 "NOBJ": 24,
                 "MSRC": 64,
                 "MSRP": 16384,
-                "RSTR": 32768,
+                "RSTR": 8192,
                 "SSTR": 16384,
                 "SNAP": 65536,
                 "MONO": 16,
@@ -147,6 +147,74 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 limit = int(match.group(2))
                 self.assertEqual(limit, expected_limit, label)
                 self.assertLess(used, limit, label)
+
+    def test_runtime_string_pool_compacts_dead_workspace_strings(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-runtime-strings-") as temp_dir:
+            temp_path = Path(temp_dir)
+            example_path = temp_path / "runtime_string_compaction.rz"
+            class_source = (
+                "RecorzKernelClass: #ReplayLongRuntimeStringReuse superclass: #Object instanceVariableNames: ''\n!\n"
+                "value\n    ^self\n!\n"
+                "setValue: extremelyVerboseArgumentNameForSourceInflationPurposes\n    ^self\n!\n"
+                "RecorzKernelClassSide: #ReplayLongRuntimeStringReuse\n!\n"
+                "detail\n    ^self"
+            )
+            escaped_class_source = class_source.replace("'", "''")
+            repeated_updates = "\n".join(
+                "Workspace setContents: (KernelInstaller fileOutClassNamed: 'ReplayLongRuntimeStringReuse')."
+                for _ in range(70)
+            )
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "Display clear.",
+                        f"KernelInstaller fileInClassChunks: '{escaped_class_source}'.",
+                        repeated_updates,
+                        "Transcript show: Workspace contents.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            elf_path = _build_elf(temp_path / "build", example_path)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("RecorzKernelClass:", output)
+            self.assertIn("ReplayLongRuntime", output)
+            self.assertIn("setValue:", output)
+            self.assertNotIn("panic: runtime string pool overflow", output)
+            self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
 
 
 if __name__ == "__main__":
