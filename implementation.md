@@ -1,5 +1,11 @@
 # Implementation Log
 
+## 2026-03-07 - Persisted Workspace Source Session Rerun
+- Added `examples/qemu_riscv_workspace_session_save_demo.rz`, which proves that a live `Workspace` session can remember source via `evaluate:`, configure itself as the persisted startup hook, and save that state into a snapshot without any host-side method update payload.
+- Extended `tests/test_qemu_riscv_snapshot_integration.py` with a QEMU end-to-end case that saves the session-bearing image, reboots from that snapshot with the idle workspace demo, and verifies the restored framebuffer output comes from `Workspace>>rerun` rather than a demo-specific top-level script.
+- Fixed `platform/qemu-riscv64/program.c` so the top-level program manifest accepts the expanded selector range up through `#rerun`; without that fix, the new save demo failed during program validation before the runtime could persist or replay the workspace session.
+- Verified with `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_snapshot_integration.QemuRiscvSnapshotIntegrationTests.test_snapshot_can_rerun_workspace_source_session_without_demo_specific_program -v`, `PYTHONPATH=src python3 -m unittest discover -s tests -v`, and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
 ## 2026-03-07 - Add Workspace Source Session Primitives
 - Expanded the source-declared `Workspace` singleton in `kernel/mvp/Workspace.rz` to remember `lastSource` and expose `evaluate:` plus `rerun`, so the live image now has a minimal persistent session surface in addition to the existing browser state.
 - Added the matching source-owned selectors in `kernel/mvp/Selector.rz`, which grows the kernel selector and method-entry surface without introducing any new builder-owned semantic tables.

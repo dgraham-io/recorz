@@ -1,0 +1,3 @@
+Workspace evaluate: 'Workspace browseClassNamed: ''Workspace''. Transcript show: ''RERUN''.'.
+KernelInstaller configureStartup: Workspace selectorNamed: 'rerun'.
+KernelInstaller saveSnapshot.
