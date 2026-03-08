@@ -3,6 +3,7 @@ BUILD_DIR ?= $(ROOT)/misc/qemu-riscv32-mvp
 TOOLCHAIN_PREFIX ?= riscv64-unknown-elf-
 CC := $(TOOLCHAIN_PREFIX)gcc
 QEMU ?= qemu-system-riscv32
+QEMU_MEMORY ?= 32M
 PYTHON ?= python3
 UPDATE_PAYLOAD ?=
 UPDATE_FW_CFG_NAME ?= opt/recorz-method-update
@@ -96,21 +97,21 @@ $(ELF): $(OBJECTS) $(CURDIR)/linker.ld
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJECTS) -o $@
 
 run: $(ELF) $(QEMU_FILE_IN_DEP)
-	$(QEMU) -machine virt -m 128M -smp 1 -kernel $(ELF) -serial mon:stdio -device ramfb $(QEMU_RUN_ARGS)
+	$(QEMU) -machine virt -m $(QEMU_MEMORY) -smp 1 -kernel $(ELF) -serial mon:stdio -device ramfb $(QEMU_RUN_ARGS)
 
 run-headless: $(ELF) $(QEMU_FILE_IN_DEP)
-	$(QEMU) -machine virt -m 128M -smp 1 -kernel $(ELF) -serial stdio -display none -device ramfb $(QEMU_RUN_ARGS)
+	$(QEMU) -machine virt -m $(QEMU_MEMORY) -smp 1 -kernel $(ELF) -serial stdio -display none -device ramfb $(QEMU_RUN_ARGS)
 
 screenshot: $(ELF) $(QEMU_FILE_IN_DEP)
 	rm -f $(MONITOR_SOCK) $(PPM) $(QEMU_PID) $(QEMU_LOG)
-	( $(QEMU) -machine virt -m 128M -smp 1 -kernel $(ELF) -serial file:$(QEMU_LOG) -display none -device ramfb $(QEMU_RUN_ARGS) -monitor unix:$(MONITOR_SOCK),server,nowait >/dev/null 2>&1 & echo $$! > $(QEMU_PID) )
+	( $(QEMU) -machine virt -m $(QEMU_MEMORY) -smp 1 -kernel $(ELF) -serial file:$(QEMU_LOG) -display none -device ramfb $(QEMU_RUN_ARGS) -monitor unix:$(MONITOR_SOCK),server,nowait >/dev/null 2>&1 & echo $$! > $(QEMU_PID) )
 	$(PYTHON) $(ROOT)/tools/qemu_hmp_screendump.py $(MONITOR_SOCK) $(PPM)
 	@PID=$$(cat $(QEMU_PID)); kill $$PID >/dev/null 2>&1 || true
 	@echo "wrote $(PPM)"
 
 save-snapshot: $(ELF) $(QEMU_FILE_IN_DEP)
 	rm -f $(QEMU_LOG) $(QEMU_PID) $(SNAPSHOT_TEMP_OUTPUT)
-	( $(QEMU) -machine virt -m 128M -smp 1 -kernel $(ELF) -serial file:$(QEMU_LOG) -display none -device ramfb $(QEMU_RUN_ARGS) >/dev/null 2>&1 & echo $$! > $(QEMU_PID) )
+	( $(QEMU) -machine virt -m $(QEMU_MEMORY) -smp 1 -kernel $(ELF) -serial file:$(QEMU_LOG) -display none -device ramfb $(QEMU_RUN_ARGS) >/dev/null 2>&1 & echo $$! > $(QEMU_PID) )
 	$(PYTHON) $(ROOT)/tools/extract_qemu_riscv_snapshot.py --timeout $(SNAPSHOT_EXTRACT_TIMEOUT) $(QEMU_LOG) $(SNAPSHOT_TEMP_OUTPUT)
 	@PID=$$(cat $(QEMU_PID)); kill $$PID >/dev/null 2>&1 || true
 	@mv $(SNAPSHOT_TEMP_OUTPUT) $(SNAPSHOT_OUTPUT)
@@ -119,7 +120,7 @@ save-snapshot: $(ELF) $(QEMU_FILE_IN_DEP)
 continue-snapshot: $(ELF) $(QEMU_FILE_IN_DEP)
 	@test -n "$(SNAPSHOT_PAYLOAD)" || (echo "SNAPSHOT_PAYLOAD is required for continue-snapshot" >&2; exit 1)
 	rm -f $(QEMU_LOG) $(QEMU_PID) $(CONTINUE_SNAPSHOT_TEMP_OUTPUT)
-	( $(QEMU) -machine virt -m 128M -smp 1 -kernel $(ELF) -serial file:$(QEMU_LOG) -display none -device ramfb $(QEMU_RUN_ARGS) >/dev/null 2>&1 & echo $$! > $(QEMU_PID) )
+	( $(QEMU) -machine virt -m $(QEMU_MEMORY) -smp 1 -kernel $(ELF) -serial file:$(QEMU_LOG) -display none -device ramfb $(QEMU_RUN_ARGS) >/dev/null 2>&1 & echo $$! > $(QEMU_PID) )
 	$(PYTHON) $(ROOT)/tools/extract_qemu_riscv_snapshot.py --timeout $(SNAPSHOT_EXTRACT_TIMEOUT) $(QEMU_LOG) $(CONTINUE_SNAPSHOT_TEMP_OUTPUT)
 	@PID=$$(cat $(QEMU_PID)); kill $$PID >/dev/null 2>&1 || true
 	@mv $(CONTINUE_SNAPSHOT_TEMP_OUTPUT) $(CONTINUE_SNAPSHOT_OUTPUT)

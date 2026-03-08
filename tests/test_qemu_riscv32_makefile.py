@@ -36,6 +36,7 @@ class QemuRiscv32MakefileTests(unittest.TestCase):
                 )
 
             self.assertIn("qemu-system-riscv32", result.stdout)
+            self.assertIn("-m 32M", result.stdout)
             self.assertIn("-march=rv32im -mabi=ilp32", result.stdout)
             self.assertIn("-device ramfb", result.stdout)
             self.assertNotIn("-fw_cfg name=", result.stdout)

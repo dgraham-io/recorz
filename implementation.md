@@ -897,3 +897,8 @@
 - Changed `platform/qemu-riscv32/Makefile` to write screenshot and snapshot serial output directly to `qemu.log` with `-serial file:...` and to reuse the longer snapshot extraction timeout in the RV32 save/continue flows, removing host stdout buffering from the persisted-image path.
 - Updated `tests/test_qemu_riscv32_makefile.py` to match the timeout-aware RV32 snapshot extraction command.
 - Verified with `PYTHONPATH=src:. python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv32 clean all inspect-image`.
+
+## 2026-03-08 - Reduce RV32 QEMU Memory Budget To 32MB
+- Added `QEMU_MEMORY ?= 32M` to `platform/qemu-riscv32/Makefile` and switched all RV32 run, screenshot, save-snapshot, and continue-snapshot flows to use that shared budget instead of a hardcoded `128M`, so the RV32 target now runs against a tighter memory profile closer to the eventual hardware constraints.
+- Updated `tests/test_qemu_riscv32_makefile.py` to lock the new `-m 32M` runtime invocation in the RV32 Makefile surface.
+- Verified that the reduced budget still supports the full RV32 live-image workflow with `PYTHONPATH=src:. python3 -m unittest tests.test_qemu_riscv32_makefile tests.test_qemu_riscv32_serial_integration tests.test_qemu_riscv32_render_integration tests.test_qemu_riscv32_dev_loop_integration tests.test_qemu_riscv32_snapshot_integration -v` and `make -C platform/qemu-riscv32 clean all inspect-image`.
