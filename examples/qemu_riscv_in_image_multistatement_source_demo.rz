@@ -1,0 +1,11 @@
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #Reporter superclass: #Object instanceVariableNames: ''''
+!
+clear
+    Display clear.
+    ^self
+!
+detail
+    ^Display defaultForm width'.
+KernelInstaller rememberObject: ((KernelInstaller classNamed: 'Reporter') new) named: 'reporter'.
+(KernelInstaller objectNamed: 'reporter') clear.
+Transcript show: ((KernelInstaller objectNamed: 'reporter') detail) printString.

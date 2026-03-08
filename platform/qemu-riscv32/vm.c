@@ -76,6 +76,7 @@
 #define COMPILED_METHOD_OP_PUSH_ARGUMENT RECORZ_MVP_COMPILED_METHOD_OP_PUSH_ARGUMENT
 #define COMPILED_METHOD_OP_PUSH_FIELD RECORZ_MVP_COMPILED_METHOD_OP_PUSH_FIELD
 #define COMPILED_METHOD_OP_SEND RECORZ_MVP_COMPILED_METHOD_OP_SEND
+#define COMPILED_METHOD_OP_POP RECORZ_MVP_COMPILED_METHOD_OP_POP
 #define COMPILED_METHOD_OP_RETURN_TOP RECORZ_MVP_COMPILED_METHOD_OP_RETURN_TOP
 #define COMPILED_METHOD_OP_RETURN_RECEIVER RECORZ_MVP_COMPILED_METHOD_OP_RETURN_RECEIVER
 #define COMPILED_METHOD_OP_STORE_FIELD RECORZ_MVP_COMPILED_METHOD_OP_STORE_FIELD
@@ -3292,6 +3293,12 @@ static void validate_compiled_method(
                 }
                 --stack_depth;
                 break;
+            case COMPILED_METHOD_OP_POP:
+                if (stack_depth == 0U) {
+                    machine_panic("compiled method pop stack underflow");
+                }
+                --stack_depth;
+                break;
             case COMPILED_METHOD_OP_SEND:
                 if (operand_a < RECORZ_MVP_SELECTOR_SHOW ||
                     operand_a > MAX_SELECTOR_ID) {
@@ -5469,57 +5476,85 @@ static uint8_t compile_source_operand_push(
     return 0U;
 }
 
+static void compile_source_append_instruction(
+    uint32_t instruction_words[],
+    uint8_t *instruction_count,
+    uint8_t opcode,
+    uint8_t operand_a,
+    uint16_t operand_b
+) {
+    if (*instruction_count >= COMPILED_METHOD_MAX_INSTRUCTIONS) {
+        machine_panic("KernelInstaller source method exceeds compiled method capacity");
+    }
+    instruction_words[(*instruction_count)++] = encode_compiled_method_word(opcode, operand_a, operand_b);
+}
+
+static const char *compile_source_expression_push(
+    const struct recorz_mvp_heap_object *class_object,
+    const char *cursor,
+    const char *argument_name,
+    uint32_t instruction_words[],
+    uint8_t *instruction_count
+) {
+    char token[METHOD_SOURCE_NAME_LIMIT];
+    const char *token_cursor;
+    uint8_t selector_id;
+
+    cursor = source_skip_horizontal_space(cursor);
+    token_cursor = source_parse_identifier(cursor, token, sizeof(token));
+    if (token_cursor == 0) {
+        return 0;
+    }
+    if (!compile_source_operand_push(class_object, token, argument_name, instruction_words, instruction_count)) {
+        return 0;
+    }
+    cursor = source_skip_horizontal_space(token_cursor);
+    while (source_char_is_identifier_start(*cursor)) {
+        const char *selector_cursor = source_parse_identifier(cursor, token, sizeof(token));
+        const char *after_selector;
+
+        if (selector_cursor == 0) {
+            break;
+        }
+        after_selector = source_skip_horizontal_space(selector_cursor);
+        if (*after_selector == ':') {
+            break;
+        }
+        selector_id = source_selector_id_for_name(token);
+        if (selector_id == 0U) {
+            machine_panic("KernelInstaller source method uses an unknown unary selector");
+        }
+        compile_source_append_instruction(
+            instruction_words,
+            instruction_count,
+            COMPILED_METHOD_OP_SEND,
+            selector_id,
+            0U
+        );
+        cursor = after_selector;
+    }
+    return cursor;
+}
+
 static uint8_t compile_source_statement_line(
     const struct recorz_mvp_heap_object *class_object,
     const char *line,
     const char *argument_name,
     uint32_t instruction_words[],
-    uint8_t *instruction_count
+    uint8_t *instruction_count,
+    uint8_t *produces_value
 ) {
     char receiver_name[METHOD_SOURCE_NAME_LIMIT];
     char selector_name_buffer[METHOD_SOURCE_NAME_LIMIT];
-    char argument_buffer[METHOD_SOURCE_NAME_LIMIT];
     const char *cursor = line;
     const char *keyword_cursor;
     uint8_t selector_id;
 
+    *produces_value = 0U;
     cursor = source_skip_horizontal_space(cursor);
     if (source_names_equal(cursor, "")) {
         return 1U;
     }
-    if (source_names_equal(cursor, "Display defaultForm clear.") ||
-        source_names_equal(cursor, "Display defaultForm newline.")) {
-        const char *selector_name = source_names_equal(cursor, "Display defaultForm clear.") ? "clear" : "newline";
-
-        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_ROOT, RECORZ_MVP_SEED_ROOT_DEFAULT_FORM, 0U);
-        selector_id = source_selector_id_for_name(selector_name);
-        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_SEND, selector_id, 0U);
-        return 1U;
-    }
-    if (source_names_equal(cursor, "Display defaultForm")) {
-        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_ROOT, RECORZ_MVP_SEED_ROOT_DEFAULT_FORM, 0U);
-        return 1U;
-    }
-    if (source_names_equal(cursor, "Display newline.")) {
-        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_GLOBAL, RECORZ_MVP_GLOBAL_DISPLAY, 0U);
-        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_SEND, RECORZ_MVP_SELECTOR_NEWLINE, 0U);
-        return 1U;
-    }
-    if (source_names_equal(cursor, "Display clear.")) {
-        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_GLOBAL, RECORZ_MVP_GLOBAL_DISPLAY, 0U);
-        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_SEND, RECORZ_MVP_SELECTOR_CLEAR, 0U);
-        return 1U;
-    }
-
-    if (source_names_equal(cursor, "Display defaultForm writeString: text.")) {
-        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_ROOT, RECORZ_MVP_SEED_ROOT_DEFAULT_FORM, 0U);
-        if (!compile_source_operand_push(class_object, "text", argument_name, instruction_words, instruction_count)) {
-            machine_panic("KernelInstaller source method uses an unknown argument operand");
-        }
-        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_SEND, RECORZ_MVP_SELECTOR_WRITE_STRING, 1U);
-        return 1U;
-    }
-
     cursor = source_parse_identifier(cursor, receiver_name, sizeof(receiver_name));
     if (cursor == 0) {
         return 0U;
@@ -5533,7 +5568,7 @@ static uint8_t compile_source_statement_line(
         if (!class_field_index_for_name(class_object, receiver_name, &field_index)) {
             machine_panic("KernelInstaller source method assignment target must be an instance variable");
         }
-        cursor = source_parse_identifier(cursor, argument_buffer, sizeof(argument_buffer));
+        cursor = compile_source_expression_push(class_object, cursor, argument_name, instruction_words, instruction_count);
         if (cursor == 0) {
             machine_panic("KernelInstaller source method assignment right-hand side is invalid");
         }
@@ -5541,64 +5576,39 @@ static uint8_t compile_source_statement_line(
         if (*cursor != '.' || cursor[1] != '\0') {
             machine_panic("KernelInstaller source method assignment has unexpected trailing text");
         }
-        if (!compile_source_operand_push(class_object, argument_buffer, argument_name, instruction_words, instruction_count)) {
-            machine_panic("KernelInstaller source method assignment uses an unsupported right-hand side");
-        }
-        if (*instruction_count >= COMPILED_METHOD_MAX_INSTRUCTIONS) {
-            machine_panic("KernelInstaller source method exceeds compiled method capacity");
-        }
-        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_STORE_FIELD, field_index, 0U);
+        compile_source_append_instruction(
+            instruction_words,
+            instruction_count,
+            COMPILED_METHOD_OP_STORE_FIELD,
+            field_index,
+            0U
+        );
         return 1U;
     }
-    if (
-        source_names_equal(receiver_name, "Display") &&
-        cursor[0] == 'd' &&
-        cursor[1] == 'e' &&
-        cursor[2] == 'f' &&
-        cursor[3] == 'a' &&
-        cursor[4] == 'u' &&
-        cursor[5] == 'l' &&
-        cursor[6] == 't' &&
-        cursor[7] == 'F' &&
-        cursor[8] == 'o' &&
-        cursor[9] == 'r' &&
-        cursor[10] == 'm' &&
-        (cursor[11] == ' ' || cursor[11] == '\t')
-    ) {
-        cursor += 11;
-        cursor = source_skip_horizontal_space(cursor);
-        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_ROOT, RECORZ_MVP_SEED_ROOT_DEFAULT_FORM, 0U);
-    } else {
-        if (!compile_source_operand_push(class_object, receiver_name, argument_name, instruction_words, instruction_count)) {
-            machine_panic("KernelInstaller source method uses an unsupported receiver expression");
-        }
+    cursor = compile_source_expression_push(class_object, line, argument_name, instruction_words, instruction_count);
+    if (cursor == 0) {
+        machine_panic("KernelInstaller source method uses an unsupported receiver expression");
     }
-
+    cursor = source_skip_horizontal_space(cursor);
     keyword_cursor = source_parse_identifier(cursor, selector_name_buffer, sizeof(selector_name_buffer));
-    if (keyword_cursor == 0) {
-        machine_panic("KernelInstaller source method statement is missing a selector");
-    }
-    cursor = keyword_cursor;
-    if (*cursor == ':') {
-        ++cursor;
-        cursor = source_skip_horizontal_space(cursor);
-        if (cursor == 0 || !source_char_is_identifier_start(*cursor)) {
-            machine_panic("KernelInstaller source method keyword send is missing an argument");
-        }
-        cursor = source_parse_identifier(cursor, argument_buffer, sizeof(argument_buffer));
-        if (cursor == 0) {
-            machine_panic("KernelInstaller source method keyword argument is invalid");
-        }
-        cursor = source_skip_horizontal_space(cursor);
-        if (*cursor != '.' || cursor[1] != '\0') {
-            machine_panic("KernelInstaller source method statement has unexpected trailing text");
-        }
-        if (!compile_source_operand_push(class_object, argument_buffer, argument_name, instruction_words, instruction_count)) {
-            machine_panic("KernelInstaller source method uses an unsupported keyword argument");
-        }
-        {
+    if (keyword_cursor != 0) {
+        const char *after_selector = source_skip_horizontal_space(keyword_cursor);
+
+        if (*after_selector == ':') {
             uint32_t selector_length = 0U;
 
+            cursor = source_skip_horizontal_space(after_selector + 1);
+            if (cursor == 0 || !source_char_is_identifier_start(*cursor)) {
+                machine_panic("KernelInstaller source method keyword send is missing an argument");
+            }
+            cursor = compile_source_expression_push(class_object, cursor, argument_name, instruction_words, instruction_count);
+            if (cursor == 0) {
+                machine_panic("KernelInstaller source method keyword argument is invalid");
+            }
+            cursor = source_skip_horizontal_space(cursor);
+            if (*cursor != '.' || cursor[1] != '\0') {
+                machine_panic("KernelInstaller source method statement has unexpected trailing text");
+            }
             while (selector_name_buffer[selector_length] != '\0') {
                 ++selector_length;
             }
@@ -5607,23 +5617,30 @@ static uint8_t compile_source_statement_line(
             }
             selector_name_buffer[selector_length++] = ':';
             selector_name_buffer[selector_length] = '\0';
+            selector_id = source_selector_id_for_name(selector_name_buffer);
+            if (selector_id == 0U) {
+                machine_panic("KernelInstaller source method uses an unknown keyword selector");
+            }
+            compile_source_append_instruction(
+                instruction_words,
+                instruction_count,
+                COMPILED_METHOD_OP_SEND,
+                selector_id,
+                1U
+            );
+            *produces_value = 1U;
+            return 1U;
         }
-        selector_id = source_selector_id_for_name(selector_name_buffer);
-        if (selector_id == 0U) {
-            machine_panic("KernelInstaller source method uses an unknown keyword selector");
-        }
-        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_SEND, selector_id, 1U);
-        return 1U;
     }
-    cursor = source_skip_horizontal_space(cursor);
     if (*cursor != '.' || cursor[1] != '\0') {
-        machine_panic("KernelInstaller source method statement has unexpected trailing text");
+        if (keyword_cursor == 0) {
+            machine_panic("KernelInstaller source method statement has unexpected trailing text");
+        }
+        if (source_skip_horizontal_space(keyword_cursor)[0] == ':') {
+            machine_panic("KernelInstaller source method keyword send is missing an argument");
+        }
     }
-    selector_id = source_selector_id_for_name(selector_name_buffer);
-    if (selector_id == 0U) {
-        machine_panic("KernelInstaller source method uses an unknown unary selector");
-    }
-    instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_SEND, selector_id, 0U);
+    *produces_value = 1U;
     return 1U;
 }
 
@@ -5634,7 +5651,6 @@ static void compile_source_return_line(
     uint32_t instruction_words[],
     uint8_t *instruction_count
 ) {
-    char return_name[METHOD_SOURCE_NAME_LIMIT];
     const char *cursor = source_skip_horizontal_space(line);
 
     if (*cursor != '^') {
@@ -5649,7 +5665,7 @@ static void compile_source_return_line(
         instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_RETURN_RECEIVER, 0U, 0U);
         return;
     }
-    cursor = source_parse_identifier(cursor, return_name, sizeof(return_name));
+    cursor = compile_source_expression_push(class_object, cursor, argument_name, instruction_words, instruction_count);
     if (cursor == 0) {
         machine_panic("KernelInstaller source method return expression is unsupported");
     }
@@ -5657,13 +5673,13 @@ static void compile_source_return_line(
     if (*cursor != '\0') {
         machine_panic("KernelInstaller source method return has unexpected trailing text");
     }
-    if (!compile_source_operand_push(class_object, return_name, argument_name, instruction_words, instruction_count)) {
-        machine_panic("KernelInstaller source method return uses an unsupported operand");
-    }
-    if (*instruction_count >= COMPILED_METHOD_MAX_INSTRUCTIONS) {
-        machine_panic("KernelInstaller source method exceeds compiled method capacity");
-    }
-    instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_RETURN_TOP, 0U, 0U);
+    compile_source_append_instruction(
+        instruction_words,
+        instruction_count,
+        COMPILED_METHOD_OP_RETURN_TOP,
+        0U,
+        0U
+    );
 }
 
 static uint16_t compile_source_method_and_allocate(
@@ -5674,7 +5690,6 @@ static uint16_t compile_source_method_and_allocate(
 ) {
     char header_line[METHOD_SOURCE_LINE_LIMIT];
     char statement_line[METHOD_SOURCE_LINE_LIMIT];
-    char return_line[METHOD_SOURCE_LINE_LIMIT];
     char trailing_line[METHOD_SOURCE_LINE_LIMIT];
     char selector_name_buffer[METHOD_SOURCE_NAME_LIMIT];
     char argument_name[METHOD_SOURCE_NAME_LIMIT];
@@ -5684,6 +5699,8 @@ static uint16_t compile_source_method_and_allocate(
     uint8_t instruction_count = 0U;
     uint8_t selector_id;
     uint16_t argument_count = 0U;
+    uint8_t found_return = 0U;
+    uint8_t pending_statement_value = 0U;
 
     argument_name[0] = '\0';
     if (source == 0 || *source == '\0') {
@@ -5729,29 +5746,45 @@ static uint16_t compile_source_method_and_allocate(
         machine_panic("KernelInstaller source method uses an unknown selector");
     }
 
-    if (source_copy_trimmed_line(&cursor, statement_line, sizeof(statement_line)) == 0U) {
-        machine_panic("KernelInstaller source method is missing a return");
-    }
-    if (statement_line[0] == '^') {
-        uint32_t return_index = 0U;
+    while (source_copy_trimmed_line(&cursor, statement_line, sizeof(statement_line)) != 0U) {
+        uint8_t produces_value = 0U;
+        const char *trimmed_line = source_skip_horizontal_space(statement_line);
 
-        while (statement_line[return_index] != '\0') {
-            if (return_index + 1U >= sizeof(return_line)) {
-                machine_panic("KernelInstaller source method return exceeds buffer capacity");
+        if (pending_statement_value) {
+            const char *return_cursor = source_skip_horizontal_space(trimmed_line + 1);
+
+            if (!(trimmed_line[0] == '^' && source_names_equal(return_cursor, "self"))) {
+                compile_source_append_instruction(
+                    instruction_words,
+                    &instruction_count,
+                    COMPILED_METHOD_OP_POP,
+                    0U,
+                    0U
+                );
             }
-            return_line[return_index] = statement_line[return_index];
-            ++return_index;
+            pending_statement_value = 0U;
         }
-        return_line[return_index] = '\0';
-    } else {
-        if (!compile_source_statement_line(class_object, statement_line, argument_name, instruction_words, &instruction_count)) {
+
+        if (trimmed_line[0] == '^') {
+            compile_source_return_line(class_object, statement_line, argument_name, instruction_words, &instruction_count);
+            found_return = 1U;
+            break;
+        }
+        if (!compile_source_statement_line(
+                class_object,
+                statement_line,
+                argument_name,
+                instruction_words,
+                &instruction_count,
+                &produces_value
+            )) {
             machine_panic("KernelInstaller source method statement is unsupported");
         }
-        if (source_copy_trimmed_line(&cursor, return_line, sizeof(return_line)) == 0U) {
-            machine_panic("KernelInstaller source method is missing a return");
-        }
+        pending_statement_value = produces_value;
     }
-    compile_source_return_line(class_object, return_line, argument_name, instruction_words, &instruction_count);
+    if (!found_return) {
+        machine_panic("KernelInstaller source method is missing a return");
+    }
     if (source_copy_trimmed_line(&cursor, trailing_line, sizeof(trailing_line)) != 0U) {
         machine_panic("KernelInstaller source method has unexpected trailing lines");
     }
