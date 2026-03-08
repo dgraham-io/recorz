@@ -1,5 +1,11 @@
 # Implementation Log
 
+## 2026-03-07 - Safe Snapshot Continuation Workflow
+- Updated the QEMU Makefile snapshot save path so it always extracts into a temporary file and only replaces the final snapshot path after extraction succeeds, which makes same-path snapshot continuation safe.
+- Added a dedicated `continue-snapshot` target that requires `SNAPSHOT_PAYLOAD`, boots from that snapshot, and writes the next generation back to the same path for a simpler persisted-image development loop.
+- Added a focused Makefile regression that checks the dry-run output uses a temporary snapshot path and does not delete the input snapshot before the replacement move.
+- Verified with `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_makefile -v`.
+
 ## 2026-03-07 - Existing-Class In-Image Class File-In
 - Added `KernelInstaller>>fileInClassChunks:` so the running image can accept a small `RecorzKernelClass:` chunk stream, resolve an existing class from the class header, and file its method chunks in through the existing live install path.
 - Added the new selector and primitive-backed entry to the MVP kernel source tree, extended the target VM with class-header parsing and existing-class lookup, and updated the host-side image inspector and structural tests for the enlarged selector/method-entry set.
