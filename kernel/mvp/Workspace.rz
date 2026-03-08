@@ -27,6 +27,12 @@ browseClasses
 browseMethodsForClassNamed: className
     <primitive: #workspaceBrowseMethodsForClassNamed>
 !
+browseProtocolsForClassNamed: className
+    <primitive: #workspaceBrowseProtocolsForClassNamed>
+!
+browseProtocol: protocolName ofClassNamed: className
+    <primitive: #workspaceBrowseProtocolOfClassNamed>
+!
 browseObjectNamed: objectName
     <primitive: #workspaceBrowseObjectNamed>
 !
@@ -38,6 +44,12 @@ browseMethod: selectorName ofClassNamed: className
 !
 browseClassMethodsForClassNamed: className
     <primitive: #workspaceBrowseClassMethodsForClassNamed>
+!
+browseClassProtocolsForClassNamed: className
+    <primitive: #workspaceBrowseClassProtocolsForClassNamed>
+!
+browseClassProtocol: protocolName ofClassNamed: className
+    <primitive: #workspaceBrowseClassProtocolOfClassNamed>
 !
 browseClassMethod: selectorName ofClassNamed: className
     <primitive: #workspaceBrowseClassMethodOfClassNamed>

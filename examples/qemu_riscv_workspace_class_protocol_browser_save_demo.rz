@@ -1,0 +1,12 @@
+Workspace fileIn: 'RecorzKernelClass: #MetaGrouped superclass: #Object instanceVariableNames: ''''
+!
+RecorzKernelClassSide: #MetaGrouped
+!
+RecorzKernelProtocol: ''display''
+!
+cr
+    Display newline.
+    ^self'.
+Workspace browseClassProtocol: 'display' ofClassNamed: 'MetaGrouped'.
+KernelInstaller configureStartup: Workspace selectorNamed: 'reopen'.
+KernelInstaller saveSnapshot.

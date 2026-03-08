@@ -1,0 +1,18 @@
+Workspace fileIn: 'RecorzKernelClass: #Grouped superclass: #Object instanceVariableNames: ''value''
+!
+RecorzKernelProtocol: ''accessing''
+!
+value
+    ^value
+!
+setValue: text
+    value := text.
+    ^self
+!
+RecorzKernelProtocol: ''printing''
+!
+printString
+    ^value'.
+Workspace browseProtocolsForClassNamed: 'Grouped'.
+KernelInstaller configureStartup: Workspace selectorNamed: 'reopen'.
+KernelInstaller saveSnapshot.

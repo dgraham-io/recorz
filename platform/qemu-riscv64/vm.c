@@ -84,7 +84,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_MEMORY_REPORT
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_BROWSE_CLASS_PROTOCOL_OF_CLASS_NAMED
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -96,6 +96,10 @@
 #define WORKSPACE_VIEW_CLASS_METHODS 6U
 #define WORKSPACE_VIEW_CLASS_METHOD 7U
 #define WORKSPACE_VIEW_CLASS_SOURCE 8U
+#define WORKSPACE_VIEW_PROTOCOLS 9U
+#define WORKSPACE_VIEW_PROTOCOL 10U
+#define WORKSPACE_VIEW_CLASS_PROTOCOLS 11U
+#define WORKSPACE_VIEW_CLASS_PROTOCOL 12U
 
 enum recorz_mvp_value_kind {
     RECORZ_MVP_VALUE_NIL = 0,
@@ -262,6 +266,13 @@ static uint8_t workspace_parse_method_target_name(
     uint32_t class_name_size,
     char selector_name[],
     uint32_t selector_name_size
+);
+static uint8_t workspace_parse_protocol_target_name(
+    const char *target_name,
+    char class_name[],
+    uint32_t class_name_size,
+    char protocol_name[],
+    uint32_t protocol_name_size
 );
 static void install_compiled_method_update(
     const struct recorz_mvp_heap_object *class_object,
@@ -2243,6 +2254,50 @@ static const struct recorz_mvp_heap_object *workspace_target_class_for_file_in(
         }
         return ensure_dedicated_metaclass_for_class(class_object, class_superclass_object_or_null(class_object));
     }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PROTOCOLS) {
+        return lookup_class_by_name(target_name_value.string);
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PROTOCOL) {
+        char class_name[METHOD_SOURCE_NAME_LIMIT];
+        char protocol_name[METHOD_SOURCE_NAME_LIMIT];
+
+        if (!workspace_parse_protocol_target_name(
+                target_name_value.string,
+                class_name,
+                sizeof(class_name),
+                protocol_name,
+                sizeof(protocol_name))) {
+            machine_panic("Workspace protocol target is invalid");
+        }
+        return lookup_class_by_name(class_name);
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_PROTOCOLS) {
+        const struct recorz_mvp_heap_object *class_object = lookup_class_by_name(target_name_value.string);
+
+        if (class_object == 0) {
+            return 0;
+        }
+        return ensure_dedicated_metaclass_for_class(class_object, class_superclass_object_or_null(class_object));
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_PROTOCOL) {
+        char class_name[METHOD_SOURCE_NAME_LIMIT];
+        char protocol_name[METHOD_SOURCE_NAME_LIMIT];
+        const struct recorz_mvp_heap_object *class_object;
+
+        if (!workspace_parse_protocol_target_name(
+                target_name_value.string,
+                class_name,
+                sizeof(class_name),
+                protocol_name,
+                sizeof(protocol_name))) {
+            machine_panic("Workspace class-side protocol target is invalid");
+        }
+        class_object = lookup_class_by_name(class_name);
+        if (class_object == 0) {
+            return 0;
+        }
+        return ensure_dedicated_metaclass_for_class(class_object, class_superclass_object_or_null(class_object));
+    }
     return 0;
 }
 
@@ -2322,6 +2377,84 @@ static uint8_t workspace_parse_method_target_name(
         return 0U;
     }
     selector_name[selector_length] = '\0';
+    return 1U;
+}
+
+static const char *workspace_compose_protocol_target_name(
+    const char *class_name,
+    const char *protocol_name
+) {
+    uint32_t offset = 0U;
+    const char *part = class_name;
+
+    if (class_name == 0 || class_name[0] == '\0' || protocol_name == 0 || protocol_name[0] == '\0') {
+        machine_panic("Workspace protocol target is incomplete");
+    }
+    while (*part != '\0') {
+        if (offset + 1U >= sizeof(workspace_target_buffer)) {
+            machine_panic("Workspace protocol target exceeds buffer capacity");
+        }
+        workspace_target_buffer[offset++] = *part++;
+    }
+    if (offset + 2U >= sizeof(workspace_target_buffer)) {
+        machine_panic("Workspace protocol target exceeds buffer capacity");
+    }
+    workspace_target_buffer[offset++] = '\n';
+    part = protocol_name;
+    while (*part != '\0') {
+        if (offset + 1U >= sizeof(workspace_target_buffer)) {
+            machine_panic("Workspace protocol target exceeds buffer capacity");
+        }
+        workspace_target_buffer[offset++] = *part++;
+    }
+    workspace_target_buffer[offset] = '\0';
+    return workspace_target_buffer;
+}
+
+static uint8_t workspace_parse_protocol_target_name(
+    const char *target_name,
+    char class_name[],
+    uint32_t class_name_size,
+    char protocol_name[],
+    uint32_t protocol_name_size
+) {
+    const char *separator = target_name;
+    uint32_t class_length;
+    uint32_t protocol_length = 0U;
+    uint32_t index;
+
+    if (target_name == 0 || target_name[0] == '\0') {
+        return 0U;
+    }
+    while (separator[0] != '\0') {
+        if (separator[0] == '\n') {
+            break;
+        }
+        ++separator;
+    }
+    if (separator[0] == '\0') {
+        return 0U;
+    }
+    class_length = (uint32_t)(separator - target_name);
+    if (class_length == 0U || class_length + 1U > class_name_size) {
+        return 0U;
+    }
+    for (index = 0U; index < class_length; ++index) {
+        class_name[index] = target_name[index];
+    }
+    class_name[class_length] = '\0';
+    separator += 1;
+    while (separator[protocol_length] != '\0') {
+        if (protocol_length + 1U >= protocol_name_size) {
+            return 0U;
+        }
+        protocol_name[protocol_length] = separator[protocol_length];
+        ++protocol_length;
+    }
+    if (protocol_length == 0U) {
+        return 0U;
+    }
+    protocol_name[protocol_length] = '\0';
     return 1U;
 }
 
@@ -2589,6 +2722,178 @@ static void workspace_render_method_list_browser(
         );
 
         workspace_write_text_line(form, line);
+    }
+}
+
+static const char *workspace_protocol_name_for_method(
+    const struct recorz_mvp_heap_object *class_object,
+    const struct recorz_mvp_heap_object *method_object
+) {
+    const struct recorz_mvp_live_method_source *source_record = live_method_source_for_selector_and_arity(
+        heap_handle_for_object(class_object),
+        (uint8_t)method_descriptor_selector(method_object),
+        (uint8_t)method_descriptor_argument_count(method_object)
+    );
+
+    if (source_record == 0 || source_record->protocol_name[0] == '\0') {
+        return "UNFILED";
+    }
+    return source_record->protocol_name;
+}
+
+static uint32_t workspace_protocol_method_count(
+    const struct recorz_mvp_heap_object *class_object,
+    const char *protocol_name
+) {
+    const struct recorz_mvp_heap_object *method_start_object = class_method_start_object(class_object);
+    uint32_t method_count = class_method_count(class_object);
+    uint32_t method_index;
+    uint32_t count = 0U;
+
+    if (method_count == 0U || method_start_object == 0) {
+        return 0U;
+    }
+    for (method_index = 0U; method_index < method_count; ++method_index) {
+        const struct recorz_mvp_heap_object *method_object = (const struct recorz_mvp_heap_object *)heap_object(
+            (uint16_t)(heap_handle_for_object(method_start_object) + method_index)
+        );
+
+        if (source_names_equal(workspace_protocol_name_for_method(class_object, method_object), protocol_name)) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+static uint8_t workspace_protocol_seen_earlier(
+    const struct recorz_mvp_heap_object *class_object,
+    const struct recorz_mvp_heap_object *method_start_object,
+    uint32_t method_index,
+    const char *protocol_name
+) {
+    uint32_t previous_index;
+
+    for (previous_index = 0U; previous_index < method_index; ++previous_index) {
+        const struct recorz_mvp_heap_object *previous_method_object =
+            (const struct recorz_mvp_heap_object *)heap_object(
+                (uint16_t)(heap_handle_for_object(method_start_object) + previous_index)
+            );
+
+        if (source_names_equal(
+                workspace_protocol_name_for_method(class_object, previous_method_object),
+                protocol_name)) {
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
+static uint32_t workspace_protocol_count(
+    const struct recorz_mvp_heap_object *class_object
+) {
+    const struct recorz_mvp_heap_object *method_start_object = class_method_start_object(class_object);
+    uint32_t method_count = class_method_count(class_object);
+    uint32_t method_index;
+    uint32_t count = 0U;
+
+    if (method_count == 0U || method_start_object == 0) {
+        return 0U;
+    }
+    for (method_index = 0U; method_index < method_count; ++method_index) {
+        const struct recorz_mvp_heap_object *method_object = (const struct recorz_mvp_heap_object *)heap_object(
+            (uint16_t)(heap_handle_for_object(method_start_object) + method_index)
+        );
+        const char *protocol_name = workspace_protocol_name_for_method(class_object, method_object);
+
+        if (!workspace_protocol_seen_earlier(class_object, method_start_object, method_index, protocol_name)) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+static void workspace_render_protocol_list_browser(
+    const struct recorz_mvp_heap_object *workspace_object,
+    const struct recorz_mvp_heap_object *class_object,
+    const char *class_name,
+    const char *side_label
+) {
+    const struct recorz_mvp_heap_object *form = default_form_object();
+    const struct recorz_mvp_heap_object *method_start_object = class_method_start_object(class_object);
+    uint32_t method_count = class_method_count(class_object);
+    uint32_t protocol_count = workspace_protocol_count(class_object);
+    uint32_t method_index;
+
+    (void)workspace_object;
+    form_clear(form);
+    workspace_write_label_and_text(form, "CLASS", class_name);
+    workspace_write_label_and_text(form, "SIDE", side_label);
+    workspace_write_label_and_text(form, "VIEW", "PROTOCOLS");
+    workspace_write_label_and_integer(form, "PROTOCOLS", protocol_count);
+    if (method_count == 0U) {
+        workspace_write_text_line(form, "NO METHODS");
+        return;
+    }
+    if (method_start_object == 0) {
+        machine_panic("Workspace protocol list is missing a method start");
+    }
+    for (method_index = 0U; method_index < method_count; ++method_index) {
+        const struct recorz_mvp_heap_object *method_object = (const struct recorz_mvp_heap_object *)heap_object(
+            (uint16_t)(heap_handle_for_object(method_start_object) + method_index)
+        );
+        const char *protocol_name = workspace_protocol_name_for_method(class_object, method_object);
+        char line[METHOD_SOURCE_LINE_LIMIT];
+        uint32_t line_offset = 0U;
+
+        if (workspace_protocol_seen_earlier(class_object, method_start_object, method_index, protocol_name)) {
+            continue;
+        }
+        append_text_checked(line, sizeof(line), &line_offset, protocol_name);
+        append_text_checked(line, sizeof(line), &line_offset, " (");
+        render_small_integer((int32_t)workspace_protocol_method_count(class_object, protocol_name));
+        append_text_checked(line, sizeof(line), &line_offset, print_buffer);
+        append_text_checked(line, sizeof(line), &line_offset, ")");
+        workspace_write_text_line(form, line);
+    }
+}
+
+static void workspace_render_protocol_method_list_browser(
+    const struct recorz_mvp_heap_object *workspace_object,
+    const struct recorz_mvp_heap_object *class_object,
+    const char *class_name,
+    const char *side_label,
+    const char *protocol_name
+) {
+    const struct recorz_mvp_heap_object *form = default_form_object();
+    const struct recorz_mvp_heap_object *method_start_object = class_method_start_object(class_object);
+    uint32_t method_count = class_method_count(class_object);
+    uint32_t protocol_method_count = workspace_protocol_method_count(class_object, protocol_name);
+    uint32_t method_index;
+
+    (void)workspace_object;
+    form_clear(form);
+    workspace_write_label_and_text(form, "CLASS", class_name);
+    workspace_write_label_and_text(form, "SIDE", side_label);
+    workspace_write_label_and_text(form, "PROTO", protocol_name);
+    workspace_write_label_and_integer(form, "METHODS", protocol_method_count);
+    if (method_count == 0U || protocol_method_count == 0U) {
+        workspace_write_text_line(form, "NO METHODS");
+        return;
+    }
+    if (method_start_object == 0) {
+        machine_panic("Workspace protocol browser is missing a method start");
+    }
+    for (method_index = 0U; method_index < method_count; ++method_index) {
+        const struct recorz_mvp_heap_object *method_object = (const struct recorz_mvp_heap_object *)heap_object(
+            (uint16_t)(heap_handle_for_object(method_start_object) + method_index)
+        );
+
+        if (!source_names_equal(
+                workspace_protocol_name_for_method(class_object, method_object),
+                protocol_name)) {
+            continue;
+        }
+        workspace_write_text_line(form, selector_name((uint8_t)method_descriptor_selector(method_object)));
     }
 }
 
@@ -6139,6 +6444,61 @@ static void execute_entry_workspace_browse_methods_for_class_named(
     push(receiver);
 }
 
+static void execute_entry_workspace_browse_protocols_for_class_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const struct recorz_mvp_heap_object *class_object;
+
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace browseProtocolsForClassNamed: expects a class name string");
+    }
+    class_object = lookup_class_by_name(arguments[0].string);
+    if (class_object == 0) {
+        machine_panic("Workspace browseProtocolsForClassNamed: could not resolve class");
+    }
+    workspace_remember_view(object, WORKSPACE_VIEW_PROTOCOLS, arguments[0].string);
+    workspace_render_protocol_list_browser(object, class_object, arguments[0].string, "INST");
+    push(receiver);
+}
+
+static void execute_entry_workspace_browse_protocol_of_class_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const struct recorz_mvp_heap_object *class_object;
+
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace browseProtocol:ofClassNamed: expects a protocol name string");
+    }
+    if (arguments[1].kind != RECORZ_MVP_VALUE_STRING || arguments[1].string == 0) {
+        machine_panic("Workspace browseProtocol:ofClassNamed: expects a class name string");
+    }
+    class_object = lookup_class_by_name(arguments[1].string);
+    if (class_object == 0) {
+        machine_panic("Workspace browseProtocol:ofClassNamed: could not resolve class");
+    }
+    workspace_remember_view(
+        object,
+        WORKSPACE_VIEW_PROTOCOL,
+        workspace_compose_protocol_target_name(arguments[1].string, arguments[0].string)
+    );
+    workspace_render_protocol_method_list_browser(
+        object,
+        class_object,
+        arguments[1].string,
+        "INST",
+        arguments[0].string
+    );
+    push(receiver);
+}
+
 static void execute_entry_workspace_browse_class_named(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -6252,6 +6612,66 @@ static void execute_entry_workspace_browse_class_methods_for_class_named(
     push(receiver);
 }
 
+static void execute_entry_workspace_browse_class_protocols_for_class_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const struct recorz_mvp_heap_object *class_object;
+
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace browseClassProtocolsForClassNamed: expects a class name string");
+    }
+    class_object = lookup_class_by_name(arguments[0].string);
+    if (class_object == 0) {
+        machine_panic("Workspace browseClassProtocolsForClassNamed: could not resolve class");
+    }
+    workspace_remember_view(object, WORKSPACE_VIEW_CLASS_PROTOCOLS, arguments[0].string);
+    workspace_render_protocol_list_browser(
+        object,
+        class_side_lookup_target(class_object),
+        arguments[0].string,
+        "CLASS"
+    );
+    push(receiver);
+}
+
+static void execute_entry_workspace_browse_class_protocol_of_class_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const struct recorz_mvp_heap_object *class_object;
+
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace browseClassProtocol:ofClassNamed: expects a protocol name string");
+    }
+    if (arguments[1].kind != RECORZ_MVP_VALUE_STRING || arguments[1].string == 0) {
+        machine_panic("Workspace browseClassProtocol:ofClassNamed: expects a class name string");
+    }
+    class_object = lookup_class_by_name(arguments[1].string);
+    if (class_object == 0) {
+        machine_panic("Workspace browseClassProtocol:ofClassNamed: could not resolve class");
+    }
+    workspace_remember_view(
+        object,
+        WORKSPACE_VIEW_CLASS_PROTOCOL,
+        workspace_compose_protocol_target_name(arguments[1].string, arguments[0].string)
+    );
+    workspace_render_protocol_method_list_browser(
+        object,
+        class_side_lookup_target(class_object),
+        arguments[1].string,
+        "CLASS",
+        arguments[0].string
+    );
+    push(receiver);
+}
+
 static void execute_entry_workspace_browse_class_method_of_class_named(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -6360,6 +6780,47 @@ static void execute_entry_workspace_reopen(
         push(receiver);
         return;
     }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PROTOCOLS) {
+        target_name_value = heap_get_field(object, workspace_current_target_name_field_index(object));
+        if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
+            target_name_value.string == 0 ||
+            target_name_value.string[0] == '\0') {
+            machine_panic("Workspace reopen is missing the remembered protocol-list class");
+        }
+        class_object = lookup_class_by_name(target_name_value.string);
+        if (class_object == 0) {
+            machine_panic("Workspace reopen could not resolve the remembered protocol-list class");
+        }
+        workspace_render_protocol_list_browser(object, class_object, target_name_value.string, "INST");
+        push(receiver);
+        return;
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PROTOCOL) {
+        char class_name[METHOD_SOURCE_NAME_LIMIT];
+        char protocol_name[METHOD_SOURCE_NAME_LIMIT];
+
+        target_name_value = heap_get_field(object, workspace_current_target_name_field_index(object));
+        if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
+            target_name_value.string == 0 ||
+            target_name_value.string[0] == '\0') {
+            machine_panic("Workspace reopen is missing the remembered protocol target");
+        }
+        if (!workspace_parse_protocol_target_name(
+                target_name_value.string,
+                class_name,
+                sizeof(class_name),
+                protocol_name,
+                sizeof(protocol_name))) {
+            machine_panic("Workspace reopen remembered protocol target is invalid");
+        }
+        class_object = lookup_class_by_name(class_name);
+        if (class_object == 0) {
+            machine_panic("Workspace reopen could not resolve the remembered protocol class");
+        }
+        workspace_render_protocol_method_list_browser(object, class_object, class_name, "INST", protocol_name);
+        push(receiver);
+        return;
+    }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_METHODS) {
         target_name_value = heap_get_field(object, workspace_current_target_name_field_index(object));
         if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
@@ -6376,6 +6837,58 @@ static void execute_entry_workspace_reopen(
             class_side_lookup_target(class_object),
             target_name_value.string,
             "CLASS"
+        );
+        push(receiver);
+        return;
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_PROTOCOLS) {
+        target_name_value = heap_get_field(object, workspace_current_target_name_field_index(object));
+        if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
+            target_name_value.string == 0 ||
+            target_name_value.string[0] == '\0') {
+            machine_panic("Workspace reopen is missing the remembered class-side protocol-list class");
+        }
+        class_object = lookup_class_by_name(target_name_value.string);
+        if (class_object == 0) {
+            machine_panic("Workspace reopen could not resolve the remembered class-side protocol-list class");
+        }
+        workspace_render_protocol_list_browser(
+            object,
+            class_side_lookup_target(class_object),
+            target_name_value.string,
+            "CLASS"
+        );
+        push(receiver);
+        return;
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_PROTOCOL) {
+        char class_name[METHOD_SOURCE_NAME_LIMIT];
+        char protocol_name[METHOD_SOURCE_NAME_LIMIT];
+
+        target_name_value = heap_get_field(object, workspace_current_target_name_field_index(object));
+        if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
+            target_name_value.string == 0 ||
+            target_name_value.string[0] == '\0') {
+            machine_panic("Workspace reopen is missing the remembered class-side protocol target");
+        }
+        if (!workspace_parse_protocol_target_name(
+                target_name_value.string,
+                class_name,
+                sizeof(class_name),
+                protocol_name,
+                sizeof(protocol_name))) {
+            machine_panic("Workspace reopen remembered class-side protocol target is invalid");
+        }
+        class_object = lookup_class_by_name(class_name);
+        if (class_object == 0) {
+            machine_panic("Workspace reopen could not resolve the remembered class-side protocol class");
+        }
+        workspace_render_protocol_method_list_browser(
+            object,
+            class_side_lookup_target(class_object),
+            class_name,
+            "CLASS",
+            protocol_name
         );
         push(receiver);
         return;
