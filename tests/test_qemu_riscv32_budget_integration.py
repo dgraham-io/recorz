@@ -140,7 +140,7 @@ class QemuRiscv32BudgetIntegrationTests(unittest.TestCase):
                 f"RecorzKernelClassSide: #Snap{index}\n!\n"
                 "detail\n    ^self'."
             )
-        parts.append("Workspace setContents: '" + ("A" * 7000) + "'.")
+        parts.append("Workspace setContents: '" + ("A" * 9000) + "'.")
         parts.append("KernelInstaller saveSnapshot.")
 
         output = self.run_source("\n".join(parts))

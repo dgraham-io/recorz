@@ -134,6 +134,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 "DCLS": 24,
                 "NOBJ": 24,
                 "MSRC": 64,
+                "MSRP": 16384,
                 "RSTR": 32768,
                 "SSTR": 16384,
                 "SNAP": 65536,
