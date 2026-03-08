@@ -1,0 +1,17 @@
+| bannerClass banner |
+bannerClass := KernelInstaller fileInClassChunks: 'RecorzKernelClass: #StartupBanner superclass: #Object instanceVariableNames: ''detail''
+!
+detail
+    ^detail
+!
+setDetail: text
+    detail := text.
+    ^self
+!
+value
+    Transcript show: detail.
+    ^self'.
+banner := bannerClass new.
+banner setDetail: 'STARTUP READY'.
+KernelInstaller configureStartup: banner selectorNamed: 'value'.
+KernelInstaller saveSnapshot.

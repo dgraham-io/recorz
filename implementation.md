@@ -1,5 +1,11 @@
 # Implementation Log
 
+## 2026-03-07 - Persisted Startup Behavior Demo
+- Added a startup-behavior snapshot proof with `qemu_riscv_startup_hook_save_demo.rz` and `qemu_riscv_startup_hook_idle_demo.rz`: the first configures and saves a startup hook, and the second is a no-op top-level program so the rebooted image’s own startup behavior is solely responsible for the visible framebuffer output.
+- Added a QEMU snapshot integration case that saves the configured image, reboots from that snapshot with the no-op program, and verifies the saved startup output renders without any scenario-specific host script.
+- Fixed two runtime seams exposed by the new proof: the program loader now accepts the extended selector range, and the compiled-method validator no longer incorrectly rejects nested sends whose arity exceeds the method’s own argument count.
+- Verified with `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_snapshot_integration.QemuRiscvSnapshotIntegrationTests.test_snapshot_can_boot_into_persisted_startup_behavior_without_demo_specific_program -v` and `PYTHONPATH=src python3 -m unittest discover -s tests -v`.
+
 ## 2026-03-07 - Persisted Startup Hook State
 - Added a persisted startup hook to the QEMU MVP runtime so the image can remember one receiver object plus selector name across snapshot save/reload and invoke that hook automatically on boot after snapshot load, method updates, and external file-in.
 - Added `KernelInstaller>>configureStartup:selectorNamed:` and `KernelInstaller>>clearStartup` in the kernel source tree, extended the selector universe, and wired the new primitive-backed installer entries into the target VM and snapshot format.

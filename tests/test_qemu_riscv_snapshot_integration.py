@@ -55,6 +55,11 @@ SNAPSHOT_FILE_IN_BASE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_file_
 SNAPSHOT_FILE_IN_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_file_in_save_demo.rz"
 SNAPSHOT_FILE_IN_RELOAD_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_file_in_reload_demo.rz"
 SNAPSHOT_FILE_IN_UPDATE_PATH = ROOT / "examples" / "qemu_riscv_snapshot_file_in_update.rz"
+SNAPSHOT_STARTUP_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-startup-hook-test"
+SNAPSHOT_STARTUP_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv64-startup-hook-reload-test"
+SNAPSHOT_STARTUP_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv64-snapshots" / "startup-hook-live-image.bin"
+SNAPSHOT_STARTUP_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_startup_hook_save_demo.rz"
+SNAPSHOT_STARTUP_IDLE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_startup_hook_idle_demo.rz"
 
 
 @unittest.skipUnless(
@@ -236,3 +241,28 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
         self.assertGreater(line_1[TEXT_FOREGROUND], 300)
         self.assertGreater(line_2[TEXT_FOREGROUND], 120)
         self.assertGreater(line_1[TEXT_FOREGROUND], line_2[TEXT_FOREGROUND] + 120)
+
+    def test_snapshot_can_boot_into_persisted_startup_behavior_without_demo_specific_program(self) -> None:
+        save_log = self.save_snapshot(
+            build_dir=SNAPSHOT_STARTUP_BUILD_DIR,
+            example_path=SNAPSHOT_STARTUP_SAVE_DEMO_PATH,
+            snapshot_output=SNAPSHOT_STARTUP_OUTPUT_PATH,
+        )
+        self.assertIn("recorz-snapshot-begin", save_log)
+        self.assertTrue(SNAPSHOT_STARTUP_OUTPUT_PATH.exists())
+
+        reload_log, width, height, data = self.render_demo(
+            build_dir=SNAPSHOT_STARTUP_RELOAD_BUILD_DIR,
+            example_path=SNAPSHOT_STARTUP_IDLE_DEMO_PATH,
+            snapshot_payload=SNAPSHOT_STARTUP_OUTPUT_PATH,
+        )
+
+        self.assertEqual((width, height), (640, 480))
+        self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", reload_log)
+        self.assertIn("recorz qemu-riscv64 mvp: rendered", reload_log)
+        self.assertNotIn("panic:", reload_log)
+
+        line_1 = _region_histogram(data, width, 24, 24, 260, 56)
+        line_2 = _region_histogram(data, width, 24, 58, 260, 90)
+        self.assertGreater(line_1[TEXT_FOREGROUND], 320)
+        self.assertLess(line_2[TEXT_FOREGROUND], 100)

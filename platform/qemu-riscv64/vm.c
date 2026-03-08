@@ -1579,7 +1579,7 @@ static void validate_compiled_method(
                     machine_panic("compiled method send selector is out of range");
                 }
                 send_count = operand_b;
-                if (send_count > MAX_SEND_ARGS || send_count > argument_count) {
+                if (send_count > MAX_SEND_ARGS) {
                     machine_panic("compiled method send argument count is out of range");
                 }
                 if (stack_depth < send_count + 1U) {
