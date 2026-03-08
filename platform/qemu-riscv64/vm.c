@@ -78,13 +78,15 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_FILE_IN_CURRENT
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_BROWSE_METHOD_OF_CLASS_NAMED
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE
 
 #define WORKSPACE_VIEW_NONE 0U
 #define WORKSPACE_VIEW_CLASSES 1U
 #define WORKSPACE_VIEW_CLASS 2U
 #define WORKSPACE_VIEW_OBJECT 3U
+#define WORKSPACE_VIEW_METHODS 4U
+#define WORKSPACE_VIEW_METHOD 5U
 
 enum recorz_mvp_value_kind {
     RECORZ_MVP_VALUE_NIL = 0,
@@ -200,6 +202,7 @@ static uint16_t named_object_count = 0U;
 static uint32_t cursor_x = 0U;
 static uint32_t cursor_y = 0U;
 static char print_buffer[PRINT_BUFFER_SIZE];
+static char workspace_target_buffer[METHOD_SOURCE_CHUNK_LIMIT];
 static char snapshot_string_pool[SNAPSHOT_STRING_LIMIT];
 static uint8_t snapshot_buffer[SNAPSHOT_BUFFER_LIMIT];
 
@@ -222,6 +225,13 @@ static void workspace_evaluate_source(const char *source);
 static uint8_t compiled_method_instruction_opcode(uint32_t instruction);
 static uint8_t compiled_method_instruction_operand_a(uint32_t instruction);
 static uint16_t compiled_method_instruction_operand_b(uint32_t instruction);
+static uint8_t workspace_parse_method_target_name(
+    const char *target_name,
+    char class_name[],
+    uint32_t class_name_size,
+    char selector_name[],
+    uint32_t selector_name_size
+);
 static void install_compiled_method_update(
     const struct recorz_mvp_heap_object *class_object,
     uint8_t selector,
@@ -444,6 +454,10 @@ static const char *selector_name(uint8_t selector) {
             return "evaluateCurrent";
         case RECORZ_MVP_SELECTOR_FILE_IN_CURRENT:
             return "fileInCurrent";
+        case RECORZ_MVP_SELECTOR_BROWSE_METHODS_FOR_CLASS_NAMED:
+            return "browseMethodsForClassNamed:";
+        case RECORZ_MVP_SELECTOR_BROWSE_METHOD_OF_CLASS_NAMED:
+            return "browseMethod:ofClassNamed:";
     }
     return "unknown";
 }
@@ -1959,7 +1973,98 @@ static const struct recorz_mvp_heap_object *workspace_target_class_for_file_in(
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS) {
         return lookup_class_by_name(target_name_value.string);
     }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_METHODS) {
+        return lookup_class_by_name(target_name_value.string);
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_METHOD) {
+        char class_name[METHOD_SOURCE_NAME_LIMIT];
+        char selector_name[METHOD_SOURCE_NAME_LIMIT];
+
+        if (!workspace_parse_method_target_name(target_name_value.string, class_name, sizeof(class_name), selector_name, sizeof(selector_name))) {
+            machine_panic("Workspace method target is invalid");
+        }
+        return lookup_class_by_name(class_name);
+    }
     return 0;
+}
+
+static const char *workspace_compose_method_target_name(
+    const char *class_name,
+    const char *selector_name
+) {
+    uint32_t offset = 0U;
+    const char *part = class_name;
+
+    if (class_name == 0 || class_name[0] == '\0' || selector_name == 0 || selector_name[0] == '\0') {
+        machine_panic("Workspace method target is incomplete");
+    }
+    while (*part != '\0') {
+        if (offset + 1U >= sizeof(workspace_target_buffer)) {
+            machine_panic("Workspace method target exceeds buffer capacity");
+        }
+        workspace_target_buffer[offset++] = *part++;
+    }
+    if (offset + 2U >= sizeof(workspace_target_buffer)) {
+        machine_panic("Workspace method target exceeds buffer capacity");
+    }
+    workspace_target_buffer[offset++] = '>';
+    workspace_target_buffer[offset++] = '>';
+    part = selector_name;
+    while (*part != '\0') {
+        if (offset + 1U >= sizeof(workspace_target_buffer)) {
+            machine_panic("Workspace method target exceeds buffer capacity");
+        }
+        workspace_target_buffer[offset++] = *part++;
+    }
+    workspace_target_buffer[offset] = '\0';
+    return workspace_target_buffer;
+}
+
+static uint8_t workspace_parse_method_target_name(
+    const char *target_name,
+    char class_name[],
+    uint32_t class_name_size,
+    char selector_name[],
+    uint32_t selector_name_size
+) {
+    const char *separator = target_name;
+    uint32_t class_length;
+    uint32_t selector_length = 0U;
+    uint32_t index;
+
+    if (target_name == 0 || target_name[0] == '\0') {
+        return 0U;
+    }
+    while (separator[0] != '\0') {
+        if (separator[0] == '>' && separator[1] == '>') {
+            break;
+        }
+        ++separator;
+    }
+    if (separator[0] == '\0') {
+        return 0U;
+    }
+    class_length = (uint32_t)(separator - target_name);
+    if (class_length == 0U || class_length + 1U > class_name_size) {
+        return 0U;
+    }
+    for (index = 0U; index < class_length; ++index) {
+        class_name[index] = target_name[index];
+    }
+    class_name[class_length] = '\0';
+    separator += 2;
+    while (separator[selector_length] != '\0') {
+        if (selector_length + 1U >= selector_name_size) {
+            return 0U;
+        }
+        selector_name[selector_length] = separator[selector_length];
+        ++selector_length;
+    }
+    if (selector_length == 0U) {
+        return 0U;
+    }
+    selector_name[selector_length] = '\0';
+    return 1U;
 }
 
 static void workspace_write_label_and_text(
@@ -2116,6 +2221,66 @@ static void workspace_render_class_list_browser(
     }
     for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
         workspace_write_text_line(form, dynamic_classes[dynamic_index].class_name);
+    }
+}
+
+static void workspace_render_method_list_browser(
+    const struct recorz_mvp_heap_object *workspace_object,
+    const struct recorz_mvp_heap_object *class_object,
+    const char *class_name
+) {
+    const struct recorz_mvp_heap_object *form = default_form_object();
+    const struct recorz_mvp_heap_object *method_start_object = class_method_start_object(class_object);
+    uint32_t method_count = class_method_count(class_object);
+    uint32_t method_index;
+
+    (void)workspace_object;
+    form_clear(form);
+    workspace_write_label_and_text(form, "CLASS", class_name);
+    workspace_write_label_and_integer(form, "METHODS", method_count);
+    if (method_count == 0U) {
+        workspace_write_text_line(form, "NO METHODS");
+        return;
+    }
+    if (method_start_object == 0) {
+        machine_panic("Workspace method list is missing a method start");
+    }
+    for (method_index = 0U; method_index < method_count; ++method_index) {
+        const struct recorz_mvp_heap_object *method_object = (const struct recorz_mvp_heap_object *)heap_object(
+            (uint16_t)(heap_handle_for_object(method_start_object) + method_index)
+        );
+
+        workspace_write_text_line(form, selector_name((uint8_t)method_descriptor_selector(method_object)));
+    }
+}
+
+static void workspace_render_method_browser(
+    const struct recorz_mvp_heap_object *workspace_object,
+    const char *class_name,
+    const char *selector_name_text
+) {
+    const struct recorz_mvp_heap_object *form = default_form_object();
+    struct recorz_mvp_value source_value = workspace_current_source_value(workspace_object);
+    const char *cursor;
+    char line[METHOD_SOURCE_LINE_LIMIT];
+    uint8_t wrote_line = 0U;
+
+    form_clear(form);
+    workspace_write_label_and_text(form, "CLASS", class_name);
+    workspace_write_label_and_text(form, "METHOD", selector_name_text);
+    if (source_value.kind != RECORZ_MVP_VALUE_STRING ||
+        source_value.string == 0 ||
+        source_value.string[0] == '\0') {
+        workspace_write_text_line(form, "NO SOURCE BUFFER");
+        return;
+    }
+    cursor = source_value.string;
+    while (source_copy_trimmed_line(&cursor, line, sizeof(line)) != 0U) {
+        workspace_write_text_line(form, line);
+        wrote_line = 1U;
+    }
+    if (!wrote_line) {
+        workspace_write_text_line(form, "EMPTY SOURCE");
     }
 }
 
@@ -4865,6 +5030,27 @@ static void execute_entry_workspace_browse_classes(
     push(receiver);
 }
 
+static void execute_entry_workspace_browse_methods_for_class_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const struct recorz_mvp_heap_object *class_object;
+
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace browseMethodsForClassNamed: expects a class name string");
+    }
+    class_object = lookup_class_by_name(arguments[0].string);
+    if (class_object == 0) {
+        machine_panic("Workspace browseMethodsForClassNamed: could not resolve class");
+    }
+    workspace_remember_view(object, WORKSPACE_VIEW_METHODS, arguments[0].string);
+    workspace_render_method_list_browser(object, class_object, arguments[0].string);
+    push(receiver);
+}
+
 static void execute_entry_workspace_browse_class_named(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -4904,6 +5090,43 @@ static void execute_entry_workspace_browse_object_named(
     }
     workspace_remember_view(object, WORKSPACE_VIEW_OBJECT, arguments[0].string);
     workspace_render_object_browser(object, arguments[0].string, heap_object(object_handle));
+    push(receiver);
+}
+
+static void execute_entry_workspace_browse_method_of_class_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const struct recorz_mvp_heap_object *class_object;
+    uint8_t selector_id;
+
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace browseMethod:ofClassNamed: expects a selector name string");
+    }
+    if (arguments[1].kind != RECORZ_MVP_VALUE_STRING || arguments[1].string == 0) {
+        machine_panic("Workspace browseMethod:ofClassNamed: expects a class name string");
+    }
+    selector_id = source_selector_id_for_name(arguments[0].string);
+    if (selector_id == 0U) {
+        machine_panic("Workspace browseMethod:ofClassNamed: selector is not declared");
+    }
+    class_object = lookup_class_by_name(arguments[1].string);
+    if (class_object == 0) {
+        machine_panic("Workspace browseMethod:ofClassNamed: could not resolve class");
+    }
+    if (lookup_builtin_method_descriptor(class_object, selector_id, 0U) == 0 &&
+        lookup_builtin_method_descriptor(class_object, selector_id, 1U) == 0) {
+        machine_panic("Workspace browseMethod:ofClassNamed: could not resolve method");
+    }
+    workspace_remember_view(
+        object,
+        WORKSPACE_VIEW_METHOD,
+        workspace_compose_method_target_name(arguments[1].string, arguments[0].string)
+    );
+    workspace_render_method_browser(object, arguments[1].string, arguments[0].string);
     push(receiver);
 }
 
@@ -4953,6 +5176,21 @@ static void execute_entry_workspace_reopen(
         push(receiver);
         return;
     }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_METHODS) {
+        target_name_value = heap_get_field(object, workspace_current_target_name_field_index(object));
+        if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
+            target_name_value.string == 0 ||
+            target_name_value.string[0] == '\0') {
+            machine_panic("Workspace reopen is missing the remembered method-list class");
+        }
+        class_object = lookup_class_by_name(target_name_value.string);
+        if (class_object == 0) {
+            machine_panic("Workspace reopen could not resolve the remembered method-list class");
+        }
+        workspace_render_method_list_browser(object, class_object, target_name_value.string);
+        push(receiver);
+        return;
+    }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_OBJECT) {
         uint16_t object_handle;
 
@@ -4967,6 +5205,28 @@ static void execute_entry_workspace_reopen(
             machine_panic("Workspace reopen could not resolve the remembered object");
         }
         workspace_render_object_browser(object, target_name_value.string, heap_object(object_handle));
+        push(receiver);
+        return;
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_METHOD) {
+        char class_name[METHOD_SOURCE_NAME_LIMIT];
+        char selector_name_text[METHOD_SOURCE_NAME_LIMIT];
+
+        target_name_value = heap_get_field(object, workspace_current_target_name_field_index(object));
+        if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
+            target_name_value.string == 0 ||
+            target_name_value.string[0] == '\0') {
+            machine_panic("Workspace reopen is missing the remembered method target");
+        }
+        if (!workspace_parse_method_target_name(
+                target_name_value.string,
+                class_name,
+                sizeof(class_name),
+                selector_name_text,
+                sizeof(selector_name_text))) {
+            machine_panic("Workspace reopen remembered method target is invalid");
+        }
+        workspace_render_method_browser(object, class_name, selector_name_text);
         push(receiver);
         return;
     }

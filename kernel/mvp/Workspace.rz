@@ -24,11 +24,17 @@ fileInCurrent
 browseClasses
     <primitive: #workspaceBrowseClasses>
 !
+browseMethodsForClassNamed: className
+    <primitive: #workspaceBrowseMethodsForClassNamed>
+!
 browseObjectNamed: objectName
     <primitive: #workspaceBrowseObjectNamed>
 !
 browseClassNamed: className
     <primitive: #workspaceBrowseClassNamed>
+!
+browseMethod: selectorName ofClassNamed: className
+    <primitive: #workspaceBrowseMethodOfClassNamed>
 !
 rerun
     <primitive: #workspaceRerun>

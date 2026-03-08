@@ -1,5 +1,13 @@
 # Implementation Log
 
+## 2026-03-07 - Add Persistent Workspace Method Browser
+- Expanded the source-declared `Workspace` surface in `kernel/mvp/Workspace.rz` with `browseMethodsForClassNamed:` and `browseMethod:ofClassNamed:`, and added the matching selectors in `kernel/mvp/Selector.rz`, so the live image now has a class/method browser state instead of only class, object, and buffer actions.
+- Extended `platform/qemu-riscv64/vm.c` with Transcript-style method-list and method-source browsers, plus persisted view-state reopening for `WORKSPACE_VIEW_METHODS` and `WORKSPACE_VIEW_METHOD`, keeping the session model image-owned and snapshot-friendly.
+- Reused the new current-buffer model by making the method browser show the persisted workspace source buffer for the selected method, which keeps the session inspectable and avoids a separate non-image method-source cache.
+- Added `examples/qemu_riscv_workspace_method_browser_save_demo.rz` and snapshot integration coverage proving that the image can install a method from the current workspace buffer, switch into a method browser view, save, reboot, and reopen directly into that persisted method-source view without a demo-specific reload script.
+- Updated the source-derived lowering and image-inspector expectations for the enlarged kernel surface (`objects=319`, `selectors=51`, `methods=47`) and the new workspace browse primitives.
+- Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
 ## 2026-03-07 - Add Workspace Current Buffer Actions
 - Expanded the source-declared `Workspace` singleton in `kernel/mvp/Workspace.rz` with a real current buffer (`currentSource`) plus `contents`, `setContents:`, `evaluateCurrent`, and `fileInCurrent`, so the image now has a persistent editable session buffer instead of only a remembered rerun string.
 - Extended the selector, method-entry, and primitive-binding surface in `kernel/mvp/Selector.rz`, `platform/qemu-riscv64/program.c`, and `platform/qemu-riscv64/vm.c` so top-level programs and the target VM both accept the new workspace session messages.

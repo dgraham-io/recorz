@@ -97,3 +97,7 @@ RecorzKernelSelector: #setContents: order: 46
 RecorzKernelSelector: #evaluateCurrent order: 47
 !
 RecorzKernelSelector: #fileInCurrent order: 48
+!
+RecorzKernelSelector: #browseMethodsForClassNamed: order: 49
+!
+RecorzKernelSelector: #browseMethod:ofClassNamed: order: 50
