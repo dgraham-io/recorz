@@ -67,10 +67,8 @@ class QemuRiscv32MakefileTests(unittest.TestCase):
                 )
 
             temp_snapshot_path = f"{snapshot_path}.tmp"
-            self.assertIn(
-                f"extract_qemu_riscv_snapshot.py {build_dir / 'qemu.log'} {temp_snapshot_path}",
-                result.stdout,
-            )
+            self.assertIn("extract_qemu_riscv_snapshot.py --timeout", result.stdout)
+            self.assertIn(f"{build_dir / 'qemu.log'} {temp_snapshot_path}", result.stdout)
             self.assertIn(f"mv {temp_snapshot_path} {snapshot_path}", result.stdout)
             self.assertNotIn(f"rm -f {snapshot_path}", result.stdout)
 

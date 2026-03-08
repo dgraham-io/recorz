@@ -890,3 +890,10 @@
 - Reused the same `DEV_SNAPSHOT`, `DEV_BOOT_EXAMPLE`, and `DEV_SAVE_EXAMPLE` shape as the RV64 target, so the host-side transport stays uniform while RV32 becomes the first-class development path.
 - Added `tests/test_qemu_riscv32_makefile.py` coverage for the new RV32 snapshot/dev targets, including temporary-output safety for `continue-snapshot` and proof that `dev-file-in` routes through the snapshot continuation flow with the RV32 target.
 - Verified with `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv32_makefile -v` and `make -C platform/qemu-riscv32 clean all inspect-image`.
+
+## 2026-03-08 - Add RV32 Snapshot And Live-Image Parity Coverage
+- Added RV32-specific live-image integration coverage in `tests/test_qemu_riscv32_dev_loop_integration.py` and `tests/test_qemu_riscv32_snapshot_integration.py`, so the same persisted-image workflow already proven on RV64 is now exercised directly on the RV32 target: snapshot save/reload, snapshot-first file-in, workspace/browser reopen, class-side persistence, and class file-out round-trip.
+- Hardened `tools/extract_qemu_riscv_snapshot.py` for the actual RV32 QEMU serial log shape by accepting both CRLF line endings and prefixed `recorz-snapshot-begin` markers, then locked those cases in `tests/test_qemu_riscv_snapshot_extractor.py`.
+- Changed `platform/qemu-riscv32/Makefile` to write screenshot and snapshot serial output directly to `qemu.log` with `-serial file:...` and to reuse the longer snapshot extraction timeout in the RV32 save/continue flows, removing host stdout buffering from the persisted-image path.
+- Updated `tests/test_qemu_riscv32_makefile.py` to match the timeout-aware RV32 snapshot extraction command.
+- Verified with `PYTHONPATH=src:. python3 -m unittest discover -s tests -v` and `make -C platform/qemu-riscv32 clean all inspect-image`.

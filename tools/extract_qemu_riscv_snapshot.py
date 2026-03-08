@@ -9,12 +9,13 @@ import time
 from pathlib import Path
 
 
-BEGIN_RE = re.compile(r"^recorz-snapshot-begin (\d+)$", re.MULTILINE)
+BEGIN_RE = re.compile(r"recorz-snapshot-begin (\d+)")
 DATA_RE = re.compile(r"^recorz-snapshot-data ([0-9a-f]+)$", re.MULTILINE)
 END_RE = re.compile(r"^recorz-snapshot-end$", re.MULTILINE)
 
 
 def extract_snapshot_bytes(log_text: str) -> bytes | None:
+    log_text = log_text.replace("\r\n", "\n").replace("\r", "\n")
     begin_match = BEGIN_RE.search(log_text)
     end_match = END_RE.search(log_text)
 
