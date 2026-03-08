@@ -1,5 +1,13 @@
 # Implementation Log
 
+## 2026-03-07 - Add Workspace Current Buffer Actions
+- Expanded the source-declared `Workspace` singleton in `kernel/mvp/Workspace.rz` with a real current buffer (`currentSource`) plus `contents`, `setContents:`, `evaluateCurrent`, and `fileInCurrent`, so the image now has a persistent editable session buffer instead of only a remembered rerun string.
+- Extended the selector, method-entry, and primitive-binding surface in `kernel/mvp/Selector.rz`, `platform/qemu-riscv64/program.c`, and `platform/qemu-riscv64/vm.c` so top-level programs and the target VM both accept the new workspace session messages.
+- Kept the implementation aligned with the current in-image installer path by making `Workspace>>fileInCurrent` reuse the existing class chunk installer for class chunks and the existing method-source installer for method buffers on the currently browsed class.
+- Added `examples/qemu_riscv_workspace_buffer_save_demo.rz` plus `tests/test_qemu_riscv_snapshot_integration.py` coverage proving that a saved snapshot can reboot into `Workspace>>evaluateCurrent` and run the persisted buffer without a demo-specific top-level script.
+- Updated `tests/test_qemu_riscv_mvp_lowering.py` and `tests/test_qemu_riscv_image_inspector.py` for the enlarged source-derived kernel surface and the resulting image growth (`objects=313`, `selectors=49`, `methods=45`).
+- Verified with `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_mvp_lowering tests.test_qemu_riscv_image_inspector tests.test_qemu_riscv_snapshot_integration.QemuRiscvSnapshotIntegrationTests.test_snapshot_can_evaluate_persisted_workspace_buffer_without_demo_specific_program -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
 ## 2026-03-07 - Persisted Workspace Source Session Rerun
 - Added `examples/qemu_riscv_workspace_session_save_demo.rz`, which proves that a live `Workspace` session can remember source via `evaluate:`, configure itself as the persisted startup hook, and save that state into a snapshot without any host-side method update payload.
 - Extended `tests/test_qemu_riscv_snapshot_integration.py` with a QEMU end-to-end case that saves the session-bearing image, reboots from that snapshot with the idle workspace demo, and verifies the restored framebuffer output comes from `Workspace>>rerun` rather than a demo-specific top-level script.

@@ -1,0 +1,4 @@
+Workspace setContents: 'Workspace browseClassNamed: ''Workspace''. Transcript show: ''CURRENT''.'.
+Workspace evaluateCurrent.
+KernelInstaller configureStartup: Workspace selectorNamed: 'evaluateCurrent'.
+KernelInstaller saveSnapshot.

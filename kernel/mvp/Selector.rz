@@ -89,3 +89,11 @@ RecorzKernelSelector: #reopen order: 42
 RecorzKernelSelector: #evaluate: order: 43
 !
 RecorzKernelSelector: #rerun order: 44
+!
+RecorzKernelSelector: #contents order: 45
+!
+RecorzKernelSelector: #setContents: order: 46
+!
+RecorzKernelSelector: #evaluateCurrent order: 47
+!
+RecorzKernelSelector: #fileInCurrent order: 48

@@ -78,7 +78,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_RERUN
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_FILE_IN_CURRENT
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -436,6 +436,14 @@ static const char *selector_name(uint8_t selector) {
             return "evaluate:";
         case RECORZ_MVP_SELECTOR_RERUN:
             return "rerun";
+        case RECORZ_MVP_SELECTOR_CONTENTS:
+            return "contents";
+        case RECORZ_MVP_SELECTOR_SET_CONTENTS:
+            return "setContents:";
+        case RECORZ_MVP_SELECTOR_EVALUATE_CURRENT:
+            return "evaluateCurrent";
+        case RECORZ_MVP_SELECTOR_FILE_IN_CURRENT:
+            return "fileInCurrent";
     }
     return "unknown";
 }
@@ -1832,6 +1840,13 @@ static uint8_t workspace_current_target_name_field_index(
     return RECORZ_MVP_WORKSPACE_FIELD_CURRENT_TARGET_NAME;
 }
 
+static uint8_t workspace_current_source_field_index(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    validate_workspace_receiver(workspace_object);
+    return RECORZ_MVP_WORKSPACE_FIELD_CURRENT_SOURCE;
+}
+
 static uint8_t workspace_last_source_field_index(
     const struct recorz_mvp_heap_object *workspace_object
 ) {
@@ -1885,6 +1900,66 @@ static void workspace_remember_source(
         workspace_last_source_field_index(workspace_object),
         string_value(source)
     );
+}
+
+static void workspace_remember_current_source(
+    const struct recorz_mvp_heap_object *workspace_object,
+    const char *source
+) {
+    uint16_t workspace_handle = heap_handle_for_object(workspace_object);
+
+    if (source == 0 || source[0] == '\0') {
+        heap_set_field(
+            workspace_handle,
+            workspace_current_source_field_index(workspace_object),
+            nil_value()
+        );
+        return;
+    }
+    heap_set_field(
+        workspace_handle,
+        workspace_current_source_field_index(workspace_object),
+        string_value(source)
+    );
+}
+
+static struct recorz_mvp_value workspace_current_source_value(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    uint8_t field_index = workspace_current_source_field_index(workspace_object);
+
+    if (workspace_object->field_count <= field_index) {
+        return nil_value();
+    }
+    return heap_get_field(workspace_object, field_index);
+}
+
+static const struct recorz_mvp_heap_object *workspace_target_class_for_file_in(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    struct recorz_mvp_value view_kind_value;
+    struct recorz_mvp_value target_name_value;
+
+    if (workspace_object->field_count <= workspace_current_view_kind_field_index(workspace_object)) {
+        return 0;
+    }
+    view_kind_value = heap_get_field(workspace_object, workspace_current_view_kind_field_index(workspace_object));
+    if (view_kind_value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+        return 0;
+    }
+    if (workspace_object->field_count <= workspace_current_target_name_field_index(workspace_object)) {
+        return 0;
+    }
+    target_name_value = heap_get_field(workspace_object, workspace_current_target_name_field_index(workspace_object));
+    if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
+        target_name_value.string == 0 ||
+        target_name_value.string[0] == '\0') {
+        return 0;
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS) {
+        return lookup_class_by_name(target_name_value.string);
+    }
+    return 0;
 }
 
 static void workspace_write_label_and_text(
@@ -4215,6 +4290,19 @@ static void install_method_chunk_on_class(
     install_compiled_method_update(class_object, selector_id, argument_count, compiled_method_handle);
 }
 
+static void install_method_source_on_class(
+    const struct recorz_mvp_heap_object *class_object,
+    const char *source
+) {
+    uint16_t compiled_method_handle;
+    uint8_t selector_id;
+    uint16_t argument_count;
+
+    compiled_method_handle = compile_source_method_and_allocate(class_object, source, &selector_id, &argument_count);
+    validate_compiled_method(heap_object(compiled_method_handle), argument_count);
+    install_compiled_method_update(class_object, selector_id, argument_count, compiled_method_handle);
+}
+
 static const struct recorz_mvp_heap_object *lookup_class_by_name(const char *class_name) {
     uint8_t kind;
     const struct recorz_mvp_dynamic_class_definition *dynamic_definition;
@@ -4426,9 +4514,6 @@ static void execute_entry_kernel_installer_install_method_source_on_class(
     const char *text
 ) {
     const struct recorz_mvp_heap_object *class_object;
-    uint16_t compiled_method_handle;
-    uint8_t selector_id;
-    uint16_t argument_count;
 
     (void)object;
     (void)text;
@@ -4442,9 +4527,7 @@ static void execute_entry_kernel_installer_install_method_source_on_class(
     if (class_object->kind != RECORZ_MVP_OBJECT_CLASS) {
         machine_panic("KernelInstaller installMethodSource:onClass: expects a Class");
     }
-    compiled_method_handle = compile_source_method_and_allocate(class_object, arguments[0].string, &selector_id, &argument_count);
-    validate_compiled_method(heap_object(compiled_method_handle), argument_count);
-    install_compiled_method_update(class_object, selector_id, argument_count, compiled_method_handle);
+    install_method_source_on_class(class_object, arguments[0].string);
     push(receiver);
 }
 
@@ -4677,6 +4760,32 @@ static void execute_entry_workspace_file_in(
     push(receiver);
 }
 
+static void execute_entry_workspace_contents(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    push(workspace_current_source_value(object));
+}
+
+static void execute_entry_workspace_set_contents(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace setContents: expects a source string");
+    }
+    workspace_remember_current_source(object, arguments[0].string);
+    push(receiver);
+}
+
 static void execute_entry_workspace_evaluate(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -4689,6 +4798,57 @@ static void execute_entry_workspace_evaluate(
     }
     workspace_remember_source(object, arguments[0].string);
     workspace_evaluate_source(arguments[0].string);
+    push(receiver);
+}
+
+static void execute_entry_workspace_evaluate_current(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    struct recorz_mvp_value source_value;
+
+    (void)arguments;
+    (void)text;
+    source_value = workspace_current_source_value(object);
+    if (source_value.kind != RECORZ_MVP_VALUE_STRING ||
+        source_value.string == 0 ||
+        source_value.string[0] == '\0') {
+        machine_panic("Workspace evaluateCurrent has no current source");
+    }
+    workspace_remember_source(object, source_value.string);
+    workspace_evaluate_source(source_value.string);
+    push(receiver);
+}
+
+static void execute_entry_workspace_file_in_current(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    struct recorz_mvp_value source_value;
+    const struct recorz_mvp_heap_object *class_object;
+
+    (void)arguments;
+    (void)text;
+    source_value = workspace_current_source_value(object);
+    if (source_value.kind != RECORZ_MVP_VALUE_STRING ||
+        source_value.string == 0 ||
+        source_value.string[0] == '\0') {
+        machine_panic("Workspace fileInCurrent has no current source");
+    }
+    if (source_starts_with(source_value.string, "RecorzKernelClass:")) {
+        file_in_chunk_stream_source(source_value.string);
+        push(receiver);
+        return;
+    }
+    class_object = workspace_target_class_for_file_in(object);
+    if (class_object == 0) {
+        machine_panic("Workspace fileInCurrent has no target class");
+    }
+    install_method_source_on_class(class_object, source_value.string);
     push(receiver);
 }
 
