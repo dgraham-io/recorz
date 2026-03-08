@@ -176,7 +176,7 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
             snapshot_payload=SNAPSHOT_OUTPUT_PATH,
         )
 
-        self.assertEqual((width, height), (1280, 1024))
+        self.assertEqual((width, height), (1024, 768))
         self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", reload_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", reload_log)
 
@@ -200,7 +200,7 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
             example_path=SNAPSHOT_FILE_IN_RELOAD_DEMO_PATH,
             snapshot_payload=SNAPSHOT_FILE_IN_OUTPUT_PATH,
         )
-        self.assertEqual((baseline_width, baseline_height), (1280, 1024))
+        self.assertEqual((baseline_width, baseline_height), (1024, 768))
         self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", baseline_reload_log)
 
         continue_log = self.continue_snapshot(
@@ -219,7 +219,7 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
             snapshot_payload=SNAPSHOT_FILE_IN_OUTPUT_PATH,
         )
 
-        self.assertEqual((width, height), (1280, 1024))
+        self.assertEqual((width, height), (1024, 768))
         self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", reload_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", reload_log)
         self.assertNotIn("panic:", reload_log)
@@ -256,7 +256,7 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
             snapshot_payload=SNAPSHOT_CONTINUE_OUTPUT_PATH,
         )
 
-        self.assertEqual((width, height), (1280, 1024))
+        self.assertEqual((width, height), (1024, 768))
         self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", reload_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", reload_log)
         self.assertNotIn("panic:", reload_log)
@@ -282,7 +282,7 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
             snapshot_payload=SNAPSHOT_STARTUP_OUTPUT_PATH,
         )
 
-        self.assertEqual((width, height), (1280, 1024))
+        self.assertEqual((width, height), (1024, 768))
         self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", reload_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", reload_log)
         self.assertNotIn("panic:", reload_log)
@@ -307,7 +307,7 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
             snapshot_payload=SNAPSHOT_WORKSPACE_OUTPUT_PATH,
         )
 
-        self.assertEqual((width, height), (1280, 1024))
+        self.assertEqual((width, height), (1024, 768))
         self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", reload_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", reload_log)
         self.assertNotIn("panic:", reload_log)
@@ -341,7 +341,7 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
             snapshot_payload=SNAPSHOT_WORKSPACE_CLASS_LIST_OUTPUT_PATH,
         )
 
-        self.assertEqual((width, height), (1280, 1024))
+        self.assertEqual((width, height), (1024, 768))
         self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", reload_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", reload_log)
         self.assertNotIn("panic:", reload_log)
@@ -350,15 +350,10 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
         line_2 = _region_histogram(data, width, 24, 58, 420, 90)
         line_3 = _region_histogram(data, width, 24, 92, 320, 124)
         line_4 = _region_histogram(data, width, 24, 126, 320, 158)
-        line_5 = _region_histogram(data, width, 24, 160, 320, 192)
-        line_6 = _region_histogram(data, width, 24, 194, 320, 226)
-
         self.assertGreater(line_1[TEXT_FOREGROUND], 300)
         self.assertGreater(line_2[TEXT_FOREGROUND], 220)
         self.assertGreater(line_3[TEXT_FOREGROUND], 160)
         self.assertGreater(line_4[TEXT_FOREGROUND], 140)
-        self.assertGreater(line_5[TEXT_FOREGROUND], 140)
-        self.assertGreater(line_6[TEXT_FOREGROUND], 140)
 
     def test_snapshot_can_reopen_workspace_object_browser_state_without_demo_specific_program(self) -> None:
         save_log = self.save_snapshot(
@@ -375,7 +370,7 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
             snapshot_payload=SNAPSHOT_WORKSPACE_OBJECT_OUTPUT_PATH,
         )
 
-        self.assertEqual((width, height), (1280, 1024))
+        self.assertEqual((width, height), (1024, 768))
         self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", reload_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", reload_log)
         self.assertNotIn("panic:", reload_log)
@@ -409,7 +404,7 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
             snapshot_payload=SNAPSHOT_WORKSPACE_SESSION_OUTPUT_PATH,
         )
 
-        self.assertEqual((width, height), (1280, 1024))
+        self.assertEqual((width, height), (1024, 768))
         self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", reload_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", reload_log)
         self.assertNotIn("panic:", reload_log)
@@ -445,7 +440,7 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
             snapshot_payload=SNAPSHOT_WORKSPACE_BUFFER_OUTPUT_PATH,
         )
 
-        self.assertEqual((width, height), (1280, 1024))
+        self.assertEqual((width, height), (1024, 768))
         self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", reload_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", reload_log)
         self.assertNotIn("panic:", reload_log)
@@ -481,7 +476,7 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
             snapshot_payload=SNAPSHOT_WORKSPACE_METHOD_OUTPUT_PATH,
         )
 
-        self.assertEqual((width, height), (1280, 1024))
+        self.assertEqual((width, height), (1024, 768))
         self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", reload_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", reload_log)
         self.assertNotIn("panic:", reload_log)

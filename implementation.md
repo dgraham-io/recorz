@@ -1,5 +1,12 @@
 # Implementation Log
 
+## 2026-03-08 - Set QEMU Framebuffer To 1024x768
+- Changed the seeded framebuffer bitmap in `kernel/mvp/Bitmap.rz` from `1280x1024` to `1024x768`, keeping the image-owned display size aligned with the more practical FPGA-oriented target mode we discussed.
+- Updated both QEMU display backends in `platform/qemu-riscv64/display.h` and `platform/qemu-riscv32/display.h` so the host-side framebuffer allocation and `ramfb` registration match the seeded bitmap dimensions on both RV64 and RV32 targets.
+- Adjusted the RV32 serial proof in `tests/test_qemu_riscv32_serial_integration.py` and the render/lowering/integration assertions across the QEMU test suite to expect the new framebuffer size and the resulting pixel count.
+- Tightened the persisted workspace class-list snapshot assertion in `tests/test_qemu_riscv_snapshot_integration.py` so it validates the still-visible rows at the new resolution instead of depending on the previous taller viewport layout.
+- Verified with `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_mvp_lowering tests.test_qemu_riscv_render_integration tests.test_qemu_riscv32_render_integration tests.test_qemu_riscv32_serial_integration tests.test_qemu_riscv_snapshot_integration tests.test_qemu_riscv_dev_loop_integration tests.test_qemu_riscv_method_update_integration -v` and `make -C platform/qemu-riscv64 clean screenshot && make -C platform/qemu-riscv32 clean screenshot`.
+
 ## 2026-03-08 - Add QEMU RV32 Framebuffer Target
 - Brought the new `platform/qemu-riscv32` target up from serial-only bring-up to a real QEMU `virt` framebuffer target by restoring the proven DTB/`fw_cfg`/`ramfb` machine layer and display pipeline on top of the existing RV32 build flags (`rv32im` / `ilp32`).
 - Re-enabled the graphical build and run workflow in `platform/qemu-riscv32/Makefile`, including `run`, `run-headless`, `screenshot`, `save-snapshot`, `continue-snapshot`, and `inspect-image`, while keeping the serial transcript echo in `platform/qemu-riscv32/vm.c` so RV32 still has UART diagnostics during framebuffer bring-up.

@@ -1,7 +1,7 @@
 RecorzKernelClass: #Bitmap descriptorOrder: 9 objectKindOrder: 3 sourceBootOrder: 6 instanceVariableNames: 'width height storageKind storageId'
 !
 RecorzKernelBootObject: #FramebufferBitmap family: #beforeGlyphs order: 8 class: #Bitmap
-fields: 'small:1280 small:1024 small:1 small:0'
+fields: 'small:1024 small:768 small:1 small:0'
 rootExports: 'framebuffer_bitmap'
 !
 RecorzKernelRoot: #framebuffer_bitmap object: #FramebufferBitmap order: 1

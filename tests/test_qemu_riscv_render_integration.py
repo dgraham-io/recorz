@@ -57,7 +57,7 @@ class QemuRiscvRenderIntegrationTests(unittest.TestCase):
         self.assertIn("recorz qemu-riscv64 mvp: rendered", qemu_log)
 
         width, height, data = _read_ppm(PPM_PATH)
-        self.assertEqual((width, height), (1280, 1024))
+        self.assertEqual((width, height), (1024, 768))
         self.assertEqual(_pixel(data, width, 0, 0), (247, 243, 232))
         self.assertEqual(_pixel(data, width, 560, 24), (255, 0, 0))
 

@@ -3,8 +3,8 @@
 
 #include <stdint.h>
 
-#define RECORZ_DISPLAY_WIDTH 1280U
-#define RECORZ_DISPLAY_HEIGHT 1024U
+#define RECORZ_DISPLAY_WIDTH 1024U
+#define RECORZ_DISPLAY_HEIGHT 768U
 
 void display_init(void);
 void display_form_fill_color(uint32_t color);

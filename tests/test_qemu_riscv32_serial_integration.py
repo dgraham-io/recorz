@@ -81,7 +81,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             output = output.replace("\r", "")
             self.assertIn("recorz qemu-riscv32 mvp: booting", output)
             self.assertIn("HELLO FROM RECORZ", output)
-            self.assertIn("SIZE: 1280 x 1024", output)
+            self.assertIn("SIZE: 1024 x 768", output)
             self.assertIn("RAMFB ONLINE.", output)
             self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
 
