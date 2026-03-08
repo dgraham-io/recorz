@@ -71,3 +71,7 @@ RecorzKernelSelector: #rememberObject:named: order: 33
 RecorzKernelSelector: #objectNamed: order: 34
 !
 RecorzKernelSelector: #saveSnapshot order: 35
+!
+RecorzKernelSelector: #configureStartup:selectorNamed: order: 36
+!
+RecorzKernelSelector: #clearStartup order: 37

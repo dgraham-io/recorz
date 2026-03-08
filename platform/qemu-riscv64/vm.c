@@ -27,8 +27,8 @@
 #define SNAPSHOT_MAGIC_1 'C'
 #define SNAPSHOT_MAGIC_2 'Z'
 #define SNAPSHOT_MAGIC_3 'T'
-#define SNAPSHOT_VERSION 1U
-#define SNAPSHOT_HEADER_SIZE 28U
+#define SNAPSHOT_VERSION 2U
+#define SNAPSHOT_HEADER_SIZE 32U
 #define SNAPSHOT_VALUE_SIZE 8U
 #define SNAPSHOT_OBJECT_SIZE (4U + (OBJECT_FIELD_LIMIT * SNAPSHOT_VALUE_SIZE))
 #define SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE \
@@ -76,7 +76,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_OBJECT
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SAVE_SNAPSHOT
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_CLEAR_STARTUP
 
 enum recorz_mvp_value_kind {
     RECORZ_MVP_VALUE_NIL = 0,
@@ -176,6 +176,8 @@ static uint16_t transcript_layout_handle = 0U;
 static uint16_t transcript_style_handle = 0U;
 static uint16_t transcript_metrics_handle = 0U;
 static uint16_t transcript_behavior_handle = 0U;
+static uint16_t startup_hook_receiver_handle = 0U;
+static uint16_t startup_hook_selector_id = 0U;
 static uint32_t mono_bitmap_pool[MONO_BITMAP_LIMIT][MONO_BITMAP_MAX_HEIGHT];
 static uint16_t mono_bitmap_count = 0U;
 static uint16_t named_object_count = 0U;
@@ -395,6 +397,10 @@ static const char *selector_name(uint8_t selector) {
             return "objectNamed:";
         case RECORZ_MVP_SELECTOR_SAVE_SNAPSHOT:
             return "saveSnapshot";
+        case RECORZ_MVP_SELECTOR_CONFIGURE_STARTUP_SELECTOR_NAMED:
+            return "configureStartup:selectorNamed:";
+        case RECORZ_MVP_SELECTOR_CLEAR_STARTUP:
+            return "clearStartup";
     }
     return "unknown";
 }
@@ -1812,6 +1818,8 @@ static void reset_runtime_state(void) {
     transcript_style_handle = 0U;
     transcript_metrics_handle = 0U;
     transcript_behavior_handle = 0U;
+    startup_hook_receiver_handle = 0U;
+    startup_hook_selector_id = 0U;
     cursor_x = 0U;
     cursor_y = 0U;
     snapshot_string_pool[0] = '\0';
@@ -2576,6 +2584,10 @@ static void emit_live_snapshot(void) {
     offset += 2U;
     write_u16_le(snapshot_buffer + offset, (uint16_t)cursor_y);
     offset += 2U;
+    write_u16_le(snapshot_buffer + offset, startup_hook_receiver_handle);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, startup_hook_selector_id);
+    offset += 2U;
     write_u32_le(snapshot_buffer + offset, total_size);
     offset += 4U;
     string_section = snapshot_buffer + (total_size - string_byte_count);
@@ -2689,6 +2701,8 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     uint32_t string_byte_count;
     uint16_t saved_cursor_x;
     uint16_t saved_cursor_y;
+    uint16_t saved_startup_hook_receiver_handle;
+    uint16_t saved_startup_hook_selector_id;
     uint32_t expected_size;
     uint32_t string_section_offset;
     uint32_t offset;
@@ -2715,7 +2729,9 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     string_byte_count = read_u32_le(blob + 16U);
     saved_cursor_x = read_u16_le(blob + 20U);
     saved_cursor_y = read_u16_le(blob + 22U);
-    expected_size = read_u32_le(blob + 24U);
+    saved_startup_hook_receiver_handle = read_u16_le(blob + 24U);
+    saved_startup_hook_selector_id = read_u16_le(blob + 26U);
+    expected_size = read_u32_le(blob + 28U);
     if (object_count == 0U || object_count > HEAP_LIMIT) {
         machine_panic("snapshot object count exceeds heap capacity");
     }
@@ -2866,8 +2882,21 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     next_dynamic_method_entry_execution_id = saved_next_dynamic_method_entry_execution_id;
     cursor_x = saved_cursor_x;
     cursor_y = saved_cursor_y;
+    startup_hook_receiver_handle = saved_startup_hook_receiver_handle;
+    startup_hook_selector_id = saved_startup_hook_selector_id;
     validate_heap_class_graph(heap_size, 0U);
     initialize_runtime_caches();
+    if ((startup_hook_receiver_handle == 0U) != (startup_hook_selector_id == 0U)) {
+        machine_panic("snapshot startup hook is incomplete");
+    }
+    if (startup_hook_receiver_handle != 0U) {
+        if (startup_hook_receiver_handle > object_count) {
+            machine_panic("snapshot startup hook receiver is out of range");
+        }
+        if (startup_hook_selector_id == 0U || startup_hook_selector_id > MAX_SELECTOR_ID) {
+            machine_panic("snapshot startup hook selector is out of range");
+        }
+    }
     {
         struct recorz_mvp_value fallback_value =
             heap_get_field(transcript_behavior_object(), TEXT_BEHAVIOR_FIELD_FALLBACK_BITMAP);
@@ -3966,6 +3995,45 @@ static void execute_entry_kernel_installer_save_snapshot(
     push(receiver);
 }
 
+static void execute_entry_kernel_installer_configure_startup_selector_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint8_t selector_id;
+
+    (void)object;
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("KernelInstaller configureStartup:selectorNamed: expects an object");
+    }
+    if (arguments[1].kind != RECORZ_MVP_VALUE_STRING || arguments[1].string == 0) {
+        machine_panic("KernelInstaller configureStartup:selectorNamed: expects a selector name");
+    }
+    selector_id = source_selector_id_for_name(arguments[1].string);
+    if (selector_id == 0U) {
+        machine_panic("KernelInstaller configureStartup:selectorNamed: selector is not declared");
+    }
+    startup_hook_receiver_handle = (uint16_t)arguments[0].integer;
+    startup_hook_selector_id = selector_id;
+    push(receiver);
+}
+
+static void execute_entry_kernel_installer_clear_startup(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)arguments;
+    (void)text;
+    startup_hook_receiver_handle = 0U;
+    startup_hook_selector_id = 0U;
+    push(receiver);
+}
+
 static const recorz_mvp_method_entry_handler primitive_binding_handlers[RECORZ_MVP_PRIMITIVE_COUNT] = {
     RECORZ_MVP_GENERATED_PRIMITIVE_BINDING_HANDLERS
 };
@@ -4483,6 +4551,28 @@ static void perform_send(
     machine_panic("unsupported receiver in MVP VM");
 }
 
+static void run_startup_hook_if_configured(void) {
+    struct recorz_mvp_value receiver;
+
+    if (startup_hook_receiver_handle == 0U || startup_hook_selector_id == 0U) {
+        return;
+    }
+    if (startup_hook_receiver_handle > heap_size) {
+        machine_panic("startup hook receiver is out of range");
+    }
+    if (startup_hook_selector_id > MAX_SELECTOR_ID) {
+        machine_panic("startup hook selector is out of range");
+    }
+    receiver = object_value(startup_hook_receiver_handle);
+    stack_size = 0U;
+    panic_phase = "startup";
+    perform_send(receiver, (uint8_t)startup_hook_selector_id, 0U, 0, 0);
+    if (stack_size == 0U) {
+        machine_panic("startup hook did not return a value");
+    }
+    --stack_size;
+}
+
 void recorz_mvp_vm_run(
     const struct recorz_mvp_program *program,
     const struct recorz_mvp_seed *seed,
@@ -4525,6 +4615,7 @@ void recorz_mvp_vm_run(
         apply_external_file_in_blob(file_in_blob, file_in_size);
         machine_puts("recorz qemu-riscv64 mvp: applied external file-in\n");
     }
+    run_startup_hook_if_configured();
     execute_executable(&executable, 0, nil_value(), 0U, 0);
     panic_phase = "return";
     machine_set_panic_hook(0);

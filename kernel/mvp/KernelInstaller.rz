@@ -29,3 +29,9 @@ objectNamed: name
 !
 saveSnapshot
     <primitive: #kernelInstallerSaveSnapshot>
+!
+configureStartup: object selectorNamed: selectorName
+    <primitive: #kernelInstallerConfigureStartupSelectorNamed>
+!
+clearStartup
+    <primitive: #kernelInstallerClearStartup>

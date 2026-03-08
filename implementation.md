@@ -1,5 +1,10 @@
 # Implementation Log
 
+## 2026-03-07 - Persisted Startup Hook State
+- Added a persisted startup hook to the QEMU MVP runtime so the image can remember one receiver object plus selector name across snapshot save/reload and invoke that hook automatically on boot after snapshot load, method updates, and external file-in.
+- Added `KernelInstaller>>configureStartup:selectorNamed:` and `KernelInstaller>>clearStartup` in the kernel source tree, extended the selector universe, and wired the new primitive-backed installer entries into the target VM and snapshot format.
+- Updated the focused lowering and image-inspector tests for the enlarged selector/method-entry surface and verified the runtime step with `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_mvp_lowering tests.test_qemu_riscv_image_inspector -v` and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
 ## 2026-03-07 - Image-First Dev Loop Targets
 - Added fixed image-first boot/save workspace examples plus `dev-init`, `dev-boot`, `dev-screenshot`, and `dev-file-in` Makefile targets so the normal workflow can stay on one persisted image instead of swapping scenario-specific demo scripts.
 - Added a QEMU integration test that initializes a dev snapshot, boots it with the fixed image-first example, files in an external `.rz` update with the same dev workflow, and reboots the same snapshot again to confirm the filed-in behavior persists without changing the example path.
