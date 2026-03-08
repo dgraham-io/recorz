@@ -1498,12 +1498,11 @@ static uint8_t workspace_current_class_name_field_index(
     const struct recorz_mvp_heap_object *workspace_object
 ) {
     const struct recorz_mvp_heap_object *workspace_class = class_object_for_heap_object(workspace_object);
-    uint8_t field_index = 0U;
 
-    if (!class_field_index_for_name(workspace_class, "currentClassName", &field_index)) {
-        machine_panic("Workspace currentClassName field is not declared");
+    if (class_instance_kind(workspace_class) != RECORZ_MVP_OBJECT_WORKSPACE) {
+        machine_panic("Workspace receiver class is invalid");
     }
-    return field_index;
+    return RECORZ_MVP_WORKSPACE_FIELD_CURRENT_CLASS_NAME;
 }
 
 static void workspace_write_label_and_text(
@@ -1511,9 +1510,24 @@ static void workspace_write_label_and_text(
     const char *label,
     const char *text
 ) {
+    char uppercase_buffer[METHOD_SOURCE_NAME_LIMIT];
+    uint32_t index = 0U;
+
+    while (text[index] != '\0') {
+        char character = text[index];
+
+        if (index + 1U >= METHOD_SOURCE_NAME_LIMIT) {
+            machine_panic("Workspace browser text exceeds display buffer capacity");
+        }
+        if (character >= 'a' && character <= 'z') {
+            character = (char)(character - ('a' - 'A'));
+        }
+        uppercase_buffer[index++] = character;
+    }
+    uppercase_buffer[index] = '\0';
     form_write_string(form, label);
     form_write_string(form, ": ");
-    form_write_string(form, text);
+    form_write_string(form, uppercase_buffer);
     form_newline(form);
 }
 

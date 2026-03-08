@@ -731,6 +731,14 @@
 - Updated `tools/inspect_qemu_riscv_mvp_image.py`, `tests/test_qemu_riscv_mvp_lowering.py`, and `tests/test_qemu_riscv_image_inspector.py` for the new selector, method-entry, primitive, and seed-object counts (`objects=254`, `selectors=24`, `method_entries=29`, `method_descriptors=29`).
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v`, `make -C platform/qemu-riscv64 EXAMPLE=/Users/david/repos/recorz/examples/qemu_riscv_in_image_named_class_instance_demo.rz screenshot`, and `make -C platform/qemu-riscv64 clean all inspect-image`.
 
+## 2026-03-07 - Add Persisted Workspace Browser Startup
+- Added `examples/qemu_riscv_workspace_startup_save_demo.rz` and `examples/qemu_riscv_workspace_startup_idle_demo.rz`, which use the new `Workspace` singleton to file in a tiny live class, browse it, persist `Workspace>>reopen` as the startup hook, save a snapshot, and boot back into that browser state without a demo-specific top-level script.
+- Updated `platform/qemu-riscv64/vm.c` so the workspace browser uppercases displayed class names and superclass names before drawing them, which keeps the Transcript-style browser readable on the current uppercase-only framebuffer glyph set.
+- Fixed `platform/qemu-riscv64/vm.c` so the seeded `Workspace` singleton uses the generated `RECORZ_MVP_WORKSPACE_FIELD_CURRENT_CLASS_NAME` field index instead of the dynamic-class ivar lookup path, which previously caused `Workspace currentClassName field is not declared` at runtime.
+- Fixed `platform/qemu-riscv64/seed.c` so seed global binding validation and required-global checks include the new `Workspace` global instead of stopping at `KernelInstaller`.
+- Added end-to-end coverage in `tests/test_qemu_riscv_snapshot_integration.py` proving that a snapshot can boot directly into the persisted workspace/browser state.
+- Verified with `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_snapshot_integration.QemuRiscvSnapshotIntegrationTests.test_snapshot_can_reopen_workspace_browser_state_without_demo_specific_program -v`, `PYTHONPATH=src python3 -m unittest discover -s tests -v`, and `make -C platform/qemu-riscv64 clean all inspect-image`.
+
 ## 2026-03-07 - Add Live Class Header Metadata
 - Extended the target-side class-chunk parser in `platform/qemu-riscv64/vm.c` from a bare `RecorzKernelClass: #Name` reader to a real live class definition parser that understands `superclass:` and `instanceVariableNames:` for in-image class file-in, while also tolerating the numeric kernel header fields already used by source-owned kernel class files.
 - Replaced the dynamic class registry’s parallel name/handle arrays with stored live class definitions, so dynamically created classes now retain their declared superclass handle and named instance variables inside the running image instead of being treated as anonymous empty `Object` subclasses.
