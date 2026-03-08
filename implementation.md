@@ -957,3 +957,8 @@
 - Hardened the workspace renderer on both QEMU targets so long source lines are clipped with `...` instead of panicking, which keeps class file-out browsing usable for longer class headers and method chunks on both RV64 and RV32.
 - Updated `tests/test_qemu_riscv32_render_integration.py` to follow the RV32 `dev` profile build directory introduced by the profile split.
 - Verified with `PYTHONPATH=src:. python3 -m unittest discover -s tests -v`, `make -C platform/qemu-riscv64 clean all inspect-image`, and `make -C platform/qemu-riscv32 clean all inspect-image`.
+
+## 2026-03-08 - Canonicalize Live Class File-Out Chunk Streams
+- Tightened `fileOutClassNamed:` on both `platform/qemu-riscv64/vm.c` and `platform/qemu-riscv32/vm.c` so live class source export now emits a deterministic chunk stream: the class header is explicitly bang-terminated, instance-side and class-side method chunks are bang-terminated too, and method chunks are emitted in a stable selector/arity order instead of depending on live installation order.
+- Kept the change strictly on the live source export side, so the existing in-image file-in path and snapshot/workspace round-trips continue to consume the same chunk grammar while the exported source becomes a more canonical Smalltalk-style stream for later file-in/file-out evolution.
+- Re-verified the affected round-trip surface with `PYTHONPATH=src:. python3 -m unittest tests.test_qemu_riscv_method_update_integration tests.test_qemu_riscv_snapshot_integration tests.test_qemu_riscv32_snapshot_integration tests.test_qemu_riscv_mvp_lowering -v`, `make -C platform/qemu-riscv64 clean all inspect-image`, and `make -C platform/qemu-riscv32 clean all inspect-image`.

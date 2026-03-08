@@ -5310,6 +5310,50 @@ static void append_char_checked(
     buffer[*offset] = '\0';
 }
 
+static int compare_method_source_records(
+    const struct recorz_mvp_live_method_source *left,
+    const struct recorz_mvp_live_method_source *right
+) {
+    const char *left_selector = selector_name(left->selector_id);
+    const char *right_selector = selector_name(right->selector_id);
+    uint32_t index = 0U;
+
+    while (left_selector[index] != '\0' && right_selector[index] != '\0') {
+        if (left_selector[index] < right_selector[index]) {
+            return -1;
+        }
+        if (left_selector[index] > right_selector[index]) {
+            return 1;
+        }
+        ++index;
+    }
+    if (left_selector[index] == '\0' && right_selector[index] != '\0') {
+        return -1;
+    }
+    if (left_selector[index] != '\0' && right_selector[index] == '\0') {
+        return 1;
+    }
+    if (left->argument_count < right->argument_count) {
+        return -1;
+    }
+    if (left->argument_count > right->argument_count) {
+        return 1;
+    }
+    return 0;
+}
+
+static void append_chunk_text(
+    char buffer[],
+    uint32_t buffer_size,
+    uint32_t *offset,
+    const char *chunk_text,
+    uint8_t *wrote_any_chunk
+) {
+    append_text_checked(buffer, buffer_size, offset, chunk_text);
+    append_text_checked(buffer, buffer_size, offset, "\n!\n");
+    *wrote_any_chunk = 1U;
+}
+
 static void append_dynamic_class_header_source(
     char buffer[],
     uint32_t buffer_size,
@@ -5344,17 +5388,34 @@ static void append_live_method_source_chunks(
     uint16_t class_handle,
     uint8_t *wrote_any_chunk
 ) {
+    const struct recorz_mvp_live_method_source *sorted_sources[LIVE_METHOD_SOURCE_LIMIT];
     uint16_t source_index;
+    uint16_t sorted_count = 0U;
 
     for (source_index = 0U; source_index < live_method_source_count; ++source_index) {
         const struct recorz_mvp_live_method_source *source_record = &live_method_sources[source_index];
+        uint16_t insert_index;
 
         if (source_record->class_handle != class_handle) {
             continue;
         }
-        append_text_checked(buffer, buffer_size, offset, "\n!\n");
-        append_text_checked(buffer, buffer_size, offset, live_method_source_text(source_record));
-        *wrote_any_chunk = 1U;
+        insert_index = sorted_count;
+        while (insert_index != 0U &&
+               compare_method_source_records(source_record, sorted_sources[insert_index - 1U]) < 0) {
+            sorted_sources[insert_index] = sorted_sources[insert_index - 1U];
+            --insert_index;
+        }
+        sorted_sources[insert_index] = source_record;
+        ++sorted_count;
+    }
+    for (source_index = 0U; source_index < sorted_count; ++source_index) {
+        append_chunk_text(
+            buffer,
+            buffer_size,
+            offset,
+            live_method_source_text(sorted_sources[source_index]),
+            wrote_any_chunk
+        );
     }
 }
 
@@ -5386,6 +5447,7 @@ static const char *file_out_class_source_by_name(const char *class_name) {
         &offset,
         dynamic_definition
     );
+    append_text_checked(kernel_source_io_buffer, sizeof(kernel_source_io_buffer), &offset, "\n!\n");
     append_live_method_source_chunks(
         kernel_source_io_buffer,
         sizeof(kernel_source_io_buffer),
@@ -5400,7 +5462,6 @@ static const char *file_out_class_source_by_name(const char *class_name) {
         machine_panic("KernelInstaller fileOutClassNamed: metaclass contains methods without live source");
     }
     if (class_method_count(metaclass_object) != 0U) {
-        append_text_checked(kernel_source_io_buffer, sizeof(kernel_source_io_buffer), &offset, "\n!\n");
         append_text_checked(
             kernel_source_io_buffer,
             sizeof(kernel_source_io_buffer),
@@ -5413,6 +5474,7 @@ static const char *file_out_class_source_by_name(const char *class_name) {
             &offset,
             dynamic_definition->class_name
         );
+        append_text_checked(kernel_source_io_buffer, sizeof(kernel_source_io_buffer), &offset, "\n!\n");
         append_live_method_source_chunks(
             kernel_source_io_buffer,
             sizeof(kernel_source_io_buffer),
