@@ -884,3 +884,9 @@
 - Added proof demos: `examples/qemu_riscv_in_image_class_file_out_demo.rz`, `examples/qemu_riscv_class_file_out_snapshot_save_demo.rz`, and `examples/qemu_riscv_class_file_out_snapshot_reload_demo.rz`. These prove that a live class can be filed out into the workspace buffer, re-filed into the running image, persisted in a snapshot, and re-filed again after reload.
 - Added end-to-end coverage in `tests/test_qemu_riscv_method_update_integration.py` and `tests/test_qemu_riscv_snapshot_integration.py`, and updated `tests/test_qemu_riscv_mvp_lowering.py` and `tests/test_qemu_riscv_image_inspector.py` for the enlarged seed surface (`objects=330`, `selector_objects=54`, `method_entries=51`).
 - Verified with `PYTHONPATH=src python3 -m unittest discover -s tests -v`, `make -C platform/qemu-riscv64 clean all inspect-image`, and `make -C platform/qemu-riscv32 clean all inspect-image`.
+
+## 2026-03-08 - Add RV32 Dev-Loop Makefile Parity
+- Added `dev-init`, `dev-boot`, `dev-screenshot`, and `dev-file-in` to `platform/qemu-riscv32/Makefile`, matching the existing RV64 image-first workflow so RV32 can iterate on one persisted snapshot instead of only running cold-boot examples.
+- Reused the same `DEV_SNAPSHOT`, `DEV_BOOT_EXAMPLE`, and `DEV_SAVE_EXAMPLE` shape as the RV64 target, so the host-side transport stays uniform while RV32 becomes the first-class development path.
+- Added `tests/test_qemu_riscv32_makefile.py` coverage for the new RV32 snapshot/dev targets, including temporary-output safety for `continue-snapshot` and proof that `dev-file-in` routes through the snapshot continuation flow with the RV32 target.
+- Verified with `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv32_makefile -v` and `make -C platform/qemu-riscv32 clean all inspect-image`.
