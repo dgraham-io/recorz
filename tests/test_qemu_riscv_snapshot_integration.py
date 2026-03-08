@@ -151,7 +151,7 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
             snapshot_payload=SNAPSHOT_OUTPUT_PATH,
         )
 
-        self.assertEqual((width, height), (640, 480))
+        self.assertEqual((width, height), (1280, 1024))
         self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", reload_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", reload_log)
 
@@ -175,7 +175,7 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
             example_path=SNAPSHOT_FILE_IN_RELOAD_DEMO_PATH,
             snapshot_payload=SNAPSHOT_FILE_IN_OUTPUT_PATH,
         )
-        self.assertEqual((baseline_width, baseline_height), (640, 480))
+        self.assertEqual((baseline_width, baseline_height), (1280, 1024))
         self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", baseline_reload_log)
 
         continue_log = self.continue_snapshot(
@@ -194,7 +194,7 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
             snapshot_payload=SNAPSHOT_FILE_IN_OUTPUT_PATH,
         )
 
-        self.assertEqual((width, height), (640, 480))
+        self.assertEqual((width, height), (1280, 1024))
         self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", reload_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", reload_log)
         self.assertNotIn("panic:", reload_log)
@@ -231,7 +231,7 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
             snapshot_payload=SNAPSHOT_CONTINUE_OUTPUT_PATH,
         )
 
-        self.assertEqual((width, height), (640, 480))
+        self.assertEqual((width, height), (1280, 1024))
         self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", reload_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", reload_log)
         self.assertNotIn("panic:", reload_log)
@@ -257,7 +257,7 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
             snapshot_payload=SNAPSHOT_STARTUP_OUTPUT_PATH,
         )
 
-        self.assertEqual((width, height), (640, 480))
+        self.assertEqual((width, height), (1280, 1024))
         self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", reload_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", reload_log)
         self.assertNotIn("panic:", reload_log)

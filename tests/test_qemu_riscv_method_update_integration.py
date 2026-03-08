@@ -199,8 +199,8 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
             update_payload=UPDATE_PAYLOAD_PATH,
         )
 
-        self.assertEqual((width, height), (640, 480))
-        self.assertEqual((updated_width, updated_height), (640, 480))
+        self.assertEqual((width, height), (1280, 1024))
+        self.assertEqual((updated_width, updated_height), (1280, 1024))
         self.assertNotIn("applied method update", baseline_log)
         self.assertIn("recorz qemu-riscv64 mvp: applied method update", updated_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", updated_log)
@@ -232,7 +232,7 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
             update_payload=APPEND_UPDATE_PAYLOAD_PATH,
         )
 
-        self.assertEqual((width, height), (640, 480))
+        self.assertEqual((width, height), (1280, 1024))
         self.assertIn("recorz qemu-riscv64 mvp: applied method update", updated_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", updated_log)
 
@@ -256,7 +256,7 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
             update_payload=None,
         )
 
-        self.assertEqual((width, height), (640, 480))
+        self.assertEqual((width, height), (1280, 1024))
         self.assertNotIn("applied method update", updated_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", updated_log)
 
@@ -280,7 +280,7 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
             update_payload=None,
         )
 
-        self.assertEqual((width, height), (640, 480))
+        self.assertEqual((width, height), (1280, 1024))
         self.assertNotIn("applied method update", updated_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", updated_log)
 
@@ -304,7 +304,7 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
             update_payload=None,
         )
 
-        self.assertEqual((width, height), (640, 480))
+        self.assertEqual((width, height), (1280, 1024))
         self.assertNotIn("applied method update", updated_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", updated_log)
 
@@ -330,7 +330,7 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
             update_payload=None,
         )
 
-        self.assertEqual((width, height), (640, 480))
+        self.assertEqual((width, height), (1280, 1024))
         self.assertNotIn("applied method update", updated_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", updated_log)
 
@@ -348,7 +348,7 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
             update_payload=None,
         )
 
-        self.assertEqual((width, height), (640, 480))
+        self.assertEqual((width, height), (1280, 1024))
         self.assertIn("recorz qemu-riscv64 mvp: created class Helper", updated_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", updated_log)
 
@@ -364,7 +364,7 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
             update_payload=None,
         )
 
-        self.assertEqual((width, height), (640, 480))
+        self.assertEqual((width, height), (1280, 1024))
         self.assertIn("recorz qemu-riscv64 mvp: created class Helper", updated_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", updated_log)
 
@@ -382,7 +382,7 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
             update_payload=None,
         )
 
-        self.assertEqual((width, height), (640, 480))
+        self.assertEqual((width, height), (1280, 1024))
         self.assertIn("recorz qemu-riscv64 mvp: created class Helper", updated_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", updated_log)
 
@@ -400,7 +400,7 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
             update_payload=None,
         )
 
-        self.assertEqual((width, height), (640, 480))
+        self.assertEqual((width, height), (1280, 1024))
         self.assertIn("recorz qemu-riscv64 mvp: created class Helper", updated_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", updated_log)
 
@@ -417,7 +417,7 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
             update_payload=None,
         )
 
-        self.assertEqual((width, height), (640, 480))
+        self.assertEqual((width, height), (1280, 1024))
         self.assertIn("recorz qemu-riscv64 mvp: created class Parent", updated_log)
         self.assertIn("recorz qemu-riscv64 mvp: created class Child", updated_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", updated_log)
@@ -434,7 +434,7 @@ class QemuRiscvMethodUpdateIntegrationTests(unittest.TestCase):
             update_payload=None,
         )
 
-        self.assertEqual((width, height), (640, 480))
+        self.assertEqual((width, height), (1280, 1024))
         self.assertIn("recorz qemu-riscv64 mvp: created class Parent", updated_log)
         self.assertIn("recorz qemu-riscv64 mvp: created class Child", updated_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", updated_log)

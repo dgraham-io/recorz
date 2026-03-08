@@ -78,7 +78,7 @@ class QemuRiscvDevLoopIntegrationTests(unittest.TestCase):
         self.assertTrue(DEV_SNAPSHOT_PATH.exists())
 
         baseline_log, baseline_width, baseline_height, baseline_data = self.render_dev_screenshot()
-        self.assertEqual((baseline_width, baseline_height), (640, 480))
+        self.assertEqual((baseline_width, baseline_height), (1280, 1024))
         self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", baseline_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", baseline_log)
 
@@ -88,7 +88,7 @@ class QemuRiscvDevLoopIntegrationTests(unittest.TestCase):
         self.assertIn("recorz-snapshot-begin", file_in_log)
 
         evolved_log, width, height, evolved_data = self.render_dev_screenshot()
-        self.assertEqual((width, height), (640, 480))
+        self.assertEqual((width, height), (1280, 1024))
         self.assertIn("recorz qemu-riscv64 mvp: loaded snapshot", evolved_log)
         self.assertIn("recorz qemu-riscv64 mvp: rendered", evolved_log)
         self.assertNotIn("panic:", evolved_log)

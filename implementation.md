@@ -1,5 +1,10 @@
 # Implementation Log
 
+## 2026-03-07 - Larger QEMU Framebuffer
+- Increased the seeded framebuffer form and target display defaults from `640x480` to `1280x1024` by updating the kernel boot object declaration in `kernel/mvp/Bitmap.rz` and the target display constants in `platform/qemu-riscv64/display.h`.
+- Updated the QEMU screenshot-oriented integration tests and lowering expectations so they assert the larger framebuffer dimensions while keeping the existing rendering behavior and boot flow unchanged.
+- Verified with `PYTHONPATH=src python3 -m unittest tests.test_qemu_riscv_mvp_lowering tests.test_qemu_riscv_render_integration tests.test_qemu_riscv_snapshot_integration tests.test_qemu_riscv_dev_loop_integration tests.test_qemu_riscv_method_update_integration -v` and `make -C platform/qemu-riscv64 clean screenshot`.
+
 ## 2026-03-07 - Persisted Startup Behavior Demo
 - Added a startup-behavior snapshot proof with `qemu_riscv_startup_hook_save_demo.rz` and `qemu_riscv_startup_hook_idle_demo.rz`: the first configures and saves a startup hook, and the second is a no-op top-level program so the rebooted image’s own startup behavior is solely responsible for the visible framebuffer output.
 - Added a QEMU snapshot integration case that saves the configured image, reboots from that snapshot with the no-op program, and verifies the saved startup output renders without any scenario-specific host script.
