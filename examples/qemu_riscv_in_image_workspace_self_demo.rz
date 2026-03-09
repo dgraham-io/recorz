@@ -1,0 +1,2 @@
+Display clear.
+Workspace evaluate: 'self setContents: ''WSELF''. Transcript show: self contents. Transcript cr. (thisContext receiver = Workspace) ifTrue: [ Transcript show: ''WCTX'' ]. Transcript cr.'.

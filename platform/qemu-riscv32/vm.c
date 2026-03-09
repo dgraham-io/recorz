@@ -2037,6 +2037,10 @@ static const char *workspace_compile_operand_push(
                 if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_NIL, 0U, 0U)) {
                     machine_panic("Workspace source exceeds instruction capacity");
                 }
+            } else if (source_names_equal(identifier, "self")) {
+                if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_SELF, 0U, 0U)) {
+                    machine_panic("Workspace source exceeds instruction capacity");
+                }
             } else if (source_names_equal(identifier, "thisContext")) {
                 if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_THIS_CONTEXT, 0U, 0U)) {
                     machine_panic("Workspace source exceeds instruction capacity");
@@ -10621,13 +10625,15 @@ static void workspace_evaluate_source(const char *source) {
         .literal_count = 0U,
         .lexical_count = 0U,
     };
+    struct recorz_mvp_value workspace_receiver = top_level_receiver_value();
+    const struct recorz_mvp_heap_object *workspace_receiver_object = heap_object_for_value(workspace_receiver);
     uint32_t stack_size_before = stack_size;
-    uint16_t context_handle = allocate_source_context_object(0U, nil_value(), "<workspace>");
+    uint16_t context_handle = allocate_source_context_object(0U, workspace_receiver, "<workspace>");
 
     build_workspace_source_program(source, &program);
     executable.instruction_count = program.instruction_count;
     executable.literal_count = program.literal_count;
-    execute_executable(&executable, 0, nil_value(), 0U, 0, context_handle);
+    execute_executable(&executable, workspace_receiver_object, workspace_receiver, 0U, 0, context_handle);
     mark_context_dead(context_handle);
     if (stack_size != stack_size_before + 1U) {
         machine_panic("Workspace source execution did not return exactly one value");
