@@ -1602,11 +1602,49 @@ static uint8_t source_text_contains_identifier(const char *source, const char *i
     return 0U;
 }
 
+static uint8_t source_line_contains_embedded_statement_separator(const char *line) {
+    uint8_t in_string = 0U;
+
+    while (*line != '\0') {
+        if (*line == '\'') {
+            in_string = (uint8_t)!in_string;
+        } else if (!in_string && *line == '.') {
+            const char *cursor = line + 1;
+
+            while (*cursor == ' ' || *cursor == '\t') {
+                ++cursor;
+            }
+            if (*cursor != '\0') {
+                return 1U;
+            }
+        }
+        ++line;
+    }
+    return 0U;
+}
+
 static uint8_t source_text_requires_live_evaluator(const char *source) {
-    return (uint8_t)(
-        source_text_contains_block_literal(source) ||
-        source_text_contains_identifier(source, "thisContext")
-    );
+    const char *cursor = source;
+    char line[METHOD_SOURCE_LINE_LIMIT];
+    uint8_t body_line_count = 0U;
+
+    if (source_text_contains_block_literal(source) ||
+        source_text_contains_identifier(source, "thisContext")) {
+        return 1U;
+    }
+    if (source_copy_trimmed_line(&cursor, line, sizeof(line)) == 0U) {
+        return 0U;
+    }
+    while (source_copy_trimmed_line(&cursor, line, sizeof(line)) != 0U) {
+        if (line[0] == '|' || source_line_contains_embedded_statement_separator(line)) {
+            return 1U;
+        }
+        ++body_line_count;
+        if (body_line_count > 1U) {
+            return 1U;
+        }
+    }
+    return 0U;
 }
 
 static const char *source_parse_method_header(

@@ -2,7 +2,11 @@ Display clear.
 Workspace browseClassNamed: 'Display'.
 Workspace browseMethod: 'newline' ofClassNamed: 'Display'.
 Workspace setContents: 'newline
-    Display clear.
+    | text |
+    text := ''ACC''.
+    Transcript show: text.
+    Transcript cr.
     ^self'.
 Workspace acceptCurrent.
 Workspace reopen.
+Display newline.

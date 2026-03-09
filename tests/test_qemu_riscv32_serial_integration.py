@@ -851,6 +851,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
 
             output = output.replace("\r", "")
             self.assertNotIn("panic:", output)
+            self.assertIn("ACC", output)
             self.assertIn("METHOD: NEWLINE", output)
             self.assertIn("NEWLINE", output)
 
