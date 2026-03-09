@@ -558,11 +558,46 @@ static uint8_t keyboard_modifier_is_pressed(uint32_t value) {
     return value == INPUT_EVENT_VALUE_PRESS || value == INPUT_EVENT_VALUE_REPEAT;
 }
 
+static int keyboard_letter_index(uint16_t code) {
+    switch (code) {
+        case KEY_A: return 0;
+        case KEY_B: return 1;
+        case KEY_C: return 2;
+        case KEY_D: return 3;
+        case KEY_E: return 4;
+        case KEY_F: return 5;
+        case KEY_G: return 6;
+        case KEY_H: return 7;
+        case KEY_I: return 8;
+        case KEY_J: return 9;
+        case KEY_K: return 10;
+        case KEY_L: return 11;
+        case KEY_M: return 12;
+        case KEY_N: return 13;
+        case KEY_O: return 14;
+        case KEY_P: return 15;
+        case KEY_Q: return 16;
+        case KEY_R: return 17;
+        case KEY_S: return 18;
+        case KEY_T: return 19;
+        case KEY_U: return 20;
+        case KEY_V: return 21;
+        case KEY_W: return 22;
+        case KEY_X: return 23;
+        case KEY_Y: return 24;
+        case KEY_Z: return 25;
+        default:
+            return -1;
+    }
+}
+
 static char keyboard_ascii_for_letter(uint16_t code, uint8_t uppercase) {
-    if (code < KEY_A || code > KEY_Z) {
+    int index = keyboard_letter_index(code);
+
+    if (index < 0) {
         return '\0';
     }
-    return (char)((uppercase ? 'A' : 'a') + (code - KEY_A));
+    return (char)((uppercase ? 'A' : 'a') + index);
 }
 
 static char keyboard_ascii_for_key(uint16_t code, uint8_t shifted) {
@@ -596,9 +631,13 @@ static char keyboard_ascii_for_key(uint16_t code, uint8_t shifted) {
 }
 
 static void keyboard_emit_key(uint16_t code) {
-    if (keyboard_ctrl_down && code >= KEY_A && code <= KEY_Z) {
-        keyboard_enqueue_byte((char)(code - KEY_A + 1U));
-        return;
+    if (keyboard_ctrl_down) {
+        int letter_index = keyboard_letter_index(code);
+
+        if (letter_index >= 0) {
+            keyboard_enqueue_byte((char)(letter_index + 1));
+            return;
+        }
     }
     switch (code) {
         case KEY_ENTER:

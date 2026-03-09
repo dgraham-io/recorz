@@ -165,8 +165,11 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
                 process.stdin.write("sendkey shift-a\n")
+                process.stdin.write("sendkey shift-s\n")
+                process.stdin.write("sendkey shift-d\n")
+                process.stdin.write("sendkey shift-f\n")
                 process.stdin.flush()
-                output = _read_file_until(log_path, "COL: 2", timeout=8.0).replace("\r", "")
+                output = _read_file_until(log_path, "COL: 5", timeout=8.0).replace("\r", "")
             finally:
                 if process.poll() is None:
                     process.kill()
@@ -176,7 +179,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 if process.stdin is not None:
                     process.stdin.close()
 
-            self.assertIn("TOP: 1A", output)
+            self.assertIn("TOP: 1ASDF", output)
             self.assertNotIn("panic:", output)
 
     def test_default_demo_boots_and_prints_transcript_over_serial(self) -> None:
