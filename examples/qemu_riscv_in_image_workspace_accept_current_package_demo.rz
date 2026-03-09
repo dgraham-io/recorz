@@ -1,0 +1,15 @@
+Display clear.
+Workspace fileIn: 'RecorzKernelPackage: ''Tools'' comment: ''Shared utilities''
+!
+RecorzKernelClass: #PackageAlpha superclass: #Object package: ''Tools'' instanceVariableNames: ''''
+!'.
+Workspace fileOutPackageNamed: 'Tools'.
+Workspace setContents: 'RecorzKernelPackage: ''Tools'' comment: ''Updated utilities''
+!
+RecorzKernelClass: #PackageAlpha superclass: #Object package: ''Tools'' instanceVariableNames: ''''
+!
+RecorzKernelClass: #PackageBeta superclass: #Object package: ''Tools'' instanceVariableNames: ''''
+!'.
+Workspace acceptCurrent.
+Workspace reopen.
+Workspace browsePackageNamed: 'Tools'.

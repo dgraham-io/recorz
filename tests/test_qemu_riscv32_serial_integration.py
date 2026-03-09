@@ -28,6 +28,7 @@ WORKSPACE_BLOCK_CAPTURE_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_imag
 WORKSPACE_BLOCK_RETURN_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_block_return_demo.rz"
 WORKSPACE_SELF_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_self_demo.rz"
 WORKSPACE_TEMPS_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_temps_demo.rz"
+WORKSPACE_ACCEPT_CURRENT_PACKAGE_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_accept_current_package_demo.rz"
 METHOD_BLOCK_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_demo.rz"
 METHOD_BLOCK_CAPTURE_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_capture_demo.rz"
 METHOD_BLOCK_RETURN_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_return_demo.rz"
@@ -896,6 +897,50 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("WSELF", output)
             self.assertIn("WCTX", output)
             self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
+
+    def test_workspace_accept_current_supports_package_source_browser_updates(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-accept-package-source-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_ACCEPT_CURRENT_PACKAGE_SOURCE_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertNotIn("panic:", output)
+            self.assertIn("PACKAGE: TOOLS", output)
+            self.assertIn("VIEW: SOURCE", output)
+            self.assertIn("COMMENT: UPDATED UTILITIES", output)
+            self.assertIn("PACKAGEBETA", output)
 
     def test_workspace_evaluation_supports_temporaries_and_assignment(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-temps-source-") as temp_dir:
