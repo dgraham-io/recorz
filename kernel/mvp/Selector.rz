@@ -123,3 +123,8 @@ RecorzKernelSelector: #fileOutPackageNamed: order: 59
 RecorzKernelSelector: #browsePackages order: 60
 !
 RecorzKernelSelector: #browsePackageNamed: order: 61
+!
+RecorzKernelSelector: #sum order: 62
+!
+RecorzKernelSelector: #setLeft:right: order: 63
+!

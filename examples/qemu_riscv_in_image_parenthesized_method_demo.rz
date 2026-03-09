@@ -1,0 +1,15 @@
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #ParenReporter superclass: #Object instanceVariableNames: ''value''
+!
+value
+    ^(value + value)
+!
+setValue: number
+    value := number.
+    ^self
+!'.
+KernelInstaller rememberObject: ((KernelInstaller classNamed: 'ParenReporter') new) named: 'parenReporter'.
+(KernelInstaller objectNamed: 'parenReporter') setValue: 3.
+Transcript show: 'PAREN'.
+Transcript cr.
+Transcript show: ((KernelInstaller objectNamed: 'parenReporter') value) printString.

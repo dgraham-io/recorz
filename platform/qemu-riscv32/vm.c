@@ -88,7 +88,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_BROWSE_PACKAGE_NAMED
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SET_LEFT_RIGHT
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -545,6 +545,26 @@ static const char *selector_name(uint8_t selector) {
             return "browseClassMethod:ofClassNamed:";
         case RECORZ_MVP_SELECTOR_FILE_OUT_CLASS_NAMED:
             return "fileOutClassNamed:";
+        case RECORZ_MVP_SELECTOR_MEMORY_REPORT:
+            return "memoryReport";
+        case RECORZ_MVP_SELECTOR_BROWSE_PROTOCOLS_FOR_CLASS_NAMED:
+            return "browseProtocolsForClassNamed:";
+        case RECORZ_MVP_SELECTOR_BROWSE_PROTOCOL_OF_CLASS_NAMED:
+            return "browseProtocol:ofClassNamed:";
+        case RECORZ_MVP_SELECTOR_BROWSE_CLASS_PROTOCOLS_FOR_CLASS_NAMED:
+            return "browseClassProtocolsForClassNamed:";
+        case RECORZ_MVP_SELECTOR_BROWSE_CLASS_PROTOCOL_OF_CLASS_NAMED:
+            return "browseClassProtocol:ofClassNamed:";
+        case RECORZ_MVP_SELECTOR_FILE_OUT_PACKAGE_NAMED:
+            return "fileOutPackageNamed:";
+        case RECORZ_MVP_SELECTOR_BROWSE_PACKAGES:
+            return "browsePackages";
+        case RECORZ_MVP_SELECTOR_BROWSE_PACKAGE_NAMED:
+            return "browsePackageNamed:";
+        case RECORZ_MVP_SELECTOR_SUM:
+            return "sum";
+        case RECORZ_MVP_SELECTOR_SET_LEFT_RIGHT:
+            return "setLeft:right:";
     }
     return "unknown";
 }
@@ -1316,6 +1336,11 @@ static uint16_t workspace_source_append_small_integer_literal(
     return (uint16_t)index;
 }
 
+static const char *workspace_compile_expression_push(
+    const char *cursor,
+    struct recorz_mvp_workspace_source_program *program
+);
+
 static const char *workspace_compile_operand_push(
     const char *cursor,
     struct recorz_mvp_workspace_source_program *program
@@ -1328,6 +1353,18 @@ static const char *workspace_compile_operand_push(
     uint16_t literal_index;
 
     cursor = source_skip_statement_space(cursor);
+    if (*cursor == '(') {
+        ++cursor;
+        parsed_cursor = workspace_compile_expression_push(cursor, program);
+        if (parsed_cursor == 0) {
+            machine_panic("Workspace parenthesized expression is invalid");
+        }
+        parsed_cursor = source_skip_statement_space(parsed_cursor);
+        if (*parsed_cursor != ')') {
+            machine_panic("Workspace parenthesized expression is missing ')'");
+        }
+        return parsed_cursor + 1;
+    }
     if (*cursor == '\'') {
         parsed_cursor = source_copy_single_quoted_text(cursor, quoted_text, sizeof(quoted_text));
         if (parsed_cursor == 0) {
@@ -5588,19 +5625,28 @@ static void execute_entry_kernel_installer_file_out_class_named(
 static uint8_t compile_source_operand_push(
     const struct recorz_mvp_heap_object *class_object,
     const char *name,
-    const char *argument_name,
+    const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t argument_count,
     uint32_t instruction_words[],
     uint8_t *instruction_count
 ) {
+    uint16_t argument_index;
     uint8_t field_index;
     uint8_t global_id;
 
     if (*instruction_count >= COMPILED_METHOD_MAX_INSTRUCTIONS) {
         machine_panic("KernelInstaller source method exceeds compiled method capacity");
     }
-    if (argument_name[0] != '\0' && source_names_equal(name, argument_name)) {
-        instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_ARGUMENT, 0U, 0U);
-        return 1U;
+    for (argument_index = 0U; argument_index < argument_count; ++argument_index) {
+        if (argument_names[argument_index][0] != '\0' &&
+            source_names_equal(name, argument_names[argument_index])) {
+            instruction_words[(*instruction_count)++] = encode_compiled_method_word(
+                COMPILED_METHOD_OP_PUSH_ARGUMENT,
+                (uint8_t)argument_index,
+                0U
+            );
+            return 1U;
+        }
     }
     if (class_field_index_for_name(class_object, name, &field_index)) {
         instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_FIELD, field_index, 0U);
@@ -5627,10 +5673,20 @@ static void compile_source_append_instruction(
     instruction_words[(*instruction_count)++] = encode_compiled_method_word(opcode, operand_a, operand_b);
 }
 
+static const char *compile_source_expression_push(
+    const struct recorz_mvp_heap_object *class_object,
+    const char *cursor,
+    const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t argument_count,
+    uint32_t instruction_words[],
+    uint8_t *instruction_count
+);
+
 static const char *compile_source_primary_push(
     const struct recorz_mvp_heap_object *class_object,
     const char *cursor,
-    const char *argument_name,
+    const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t argument_count,
     uint32_t instruction_words[],
     uint8_t *instruction_count
 ) {
@@ -5639,11 +5695,36 @@ static const char *compile_source_primary_push(
     uint8_t selector_id;
 
     cursor = source_skip_horizontal_space(cursor);
+    if (*cursor == '(') {
+        ++cursor;
+        token_cursor = compile_source_expression_push(
+            class_object,
+            cursor,
+            argument_names,
+            argument_count,
+            instruction_words,
+            instruction_count
+        );
+        if (token_cursor == 0) {
+            machine_panic("KernelInstaller source method parenthesized expression is invalid");
+        }
+        token_cursor = source_skip_horizontal_space(token_cursor);
+        if (*token_cursor != ')') {
+            machine_panic("KernelInstaller source method parenthesized expression is missing ')'");
+        }
+        return token_cursor + 1;
+    }
     token_cursor = source_parse_identifier(cursor, token, sizeof(token));
     if (token_cursor == 0) {
         return 0;
     }
-    if (!compile_source_operand_push(class_object, token, argument_name, instruction_words, instruction_count)) {
+    if (!compile_source_operand_push(
+            class_object,
+            token,
+            argument_names,
+            argument_count,
+            instruction_words,
+            instruction_count)) {
         return 0;
     }
     cursor = source_skip_horizontal_space(token_cursor);
@@ -5677,7 +5758,8 @@ static const char *compile_source_primary_push(
 static const char *compile_source_expression_push(
     const struct recorz_mvp_heap_object *class_object,
     const char *cursor,
-    const char *argument_name,
+    const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t argument_count,
     uint32_t instruction_words[],
     uint8_t *instruction_count
 ) {
@@ -5688,7 +5770,8 @@ static const char *compile_source_expression_push(
     parsed_cursor = compile_source_primary_push(
         class_object,
         cursor,
-        argument_name,
+        argument_names,
+        argument_count,
         instruction_words,
         instruction_count
     );
@@ -5702,7 +5785,8 @@ static const char *compile_source_expression_push(
         cursor = compile_source_primary_push(
             class_object,
             cursor,
-            argument_name,
+            argument_names,
+            argument_count,
             instruction_words,
             instruction_count
         );
@@ -5728,7 +5812,8 @@ static const char *compile_source_expression_push(
 static uint8_t compile_source_statement_line(
     const struct recorz_mvp_heap_object *class_object,
     const char *line,
-    const char *argument_name,
+    const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t argument_count,
     uint32_t instruction_words[],
     uint8_t *instruction_count,
     uint8_t *produces_value
@@ -5757,7 +5842,14 @@ static uint8_t compile_source_statement_line(
         if (!class_field_index_for_name(class_object, receiver_name, &field_index)) {
             machine_panic("KernelInstaller source method assignment target must be an instance variable");
         }
-        cursor = compile_source_expression_push(class_object, cursor, argument_name, instruction_words, instruction_count);
+        cursor = compile_source_expression_push(
+            class_object,
+            cursor,
+            argument_names,
+            argument_count,
+            instruction_words,
+            instruction_count
+        );
         if (cursor == 0) {
             machine_panic("KernelInstaller source method assignment right-hand side is invalid");
         }
@@ -5774,7 +5866,14 @@ static uint8_t compile_source_statement_line(
         );
         return 1U;
     }
-    cursor = compile_source_expression_push(class_object, line, argument_name, instruction_words, instruction_count);
+    cursor = compile_source_expression_push(
+        class_object,
+        line,
+        argument_names,
+        argument_count,
+        instruction_words,
+        instruction_count
+    );
     if (cursor == 0) {
         machine_panic("KernelInstaller source method uses an unsupported receiver expression");
     }
@@ -5801,7 +5900,14 @@ static uint8_t compile_source_statement_line(
             if (cursor == 0 || !source_char_is_identifier_start(*cursor)) {
                 machine_panic("KernelInstaller source method keyword send is missing an argument");
             }
-            cursor = compile_source_expression_push(class_object, cursor, argument_name, instruction_words, instruction_count);
+            cursor = compile_source_expression_push(
+                class_object,
+                cursor,
+                argument_names,
+                argument_count,
+                instruction_words,
+                instruction_count
+            );
             if (cursor == 0) {
                 machine_panic("KernelInstaller source method keyword argument is invalid");
             }
@@ -5847,7 +5953,8 @@ static uint8_t compile_source_statement_line(
 static void compile_source_return_line(
     const struct recorz_mvp_heap_object *class_object,
     const char *line,
-    const char *argument_name,
+    const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t argument_count,
     uint32_t instruction_words[],
     uint8_t *instruction_count
 ) {
@@ -5865,7 +5972,14 @@ static void compile_source_return_line(
         instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_RETURN_RECEIVER, 0U, 0U);
         return;
     }
-    cursor = compile_source_expression_push(class_object, cursor, argument_name, instruction_words, instruction_count);
+    cursor = compile_source_expression_push(
+        class_object,
+        cursor,
+        argument_names,
+        argument_count,
+        instruction_words,
+        instruction_count
+    );
     if (cursor == 0) {
         machine_panic("KernelInstaller source method return expression is unsupported");
     }
@@ -5892,7 +6006,8 @@ static uint16_t compile_source_method_and_allocate(
     char statement_line[METHOD_SOURCE_LINE_LIMIT];
     char trailing_line[METHOD_SOURCE_LINE_LIMIT];
     char selector_name_buffer[METHOD_SOURCE_NAME_LIMIT];
-    char argument_name[METHOD_SOURCE_NAME_LIMIT];
+    char selector_part_buffer[METHOD_SOURCE_NAME_LIMIT];
+    char argument_names[MAX_SEND_ARGS][METHOD_SOURCE_NAME_LIMIT];
     const char *cursor = source;
     const char *header_cursor;
     uint32_t instruction_words[COMPILED_METHOD_MAX_INSTRUCTIONS];
@@ -5901,11 +6016,16 @@ static uint16_t compile_source_method_and_allocate(
     uint16_t argument_count = 0U;
     uint8_t found_return = 0U;
     uint8_t pending_statement_value = 0U;
+    uint32_t selector_length = 0U;
+    uint32_t part_length = 0U;
 
-    argument_name[0] = '\0';
     if (source == 0 || *source == '\0') {
         machine_panic("KernelInstaller source method string is empty");
     }
+    for (argument_count = 0U; argument_count < MAX_SEND_ARGS; ++argument_count) {
+        argument_names[argument_count][0] = '\0';
+    }
+    argument_count = 0U;
     if (source_copy_trimmed_line(&cursor, header_line, sizeof(header_line)) == 0U) {
         machine_panic("KernelInstaller source method is missing a header");
     }
@@ -5914,30 +6034,51 @@ static uint16_t compile_source_method_and_allocate(
         machine_panic("KernelInstaller source method header is invalid");
     }
     header_cursor = source_skip_horizontal_space(header_cursor);
+    while (selector_name_buffer[selector_length] != '\0') {
+        ++selector_length;
+    }
     if (*header_cursor == ':') {
-        ++header_cursor;
-        header_cursor = source_skip_horizontal_space(header_cursor);
-        header_cursor = source_parse_identifier(header_cursor, argument_name, sizeof(argument_name));
-        if (header_cursor == 0) {
-            machine_panic("KernelInstaller source method keyword header is missing an argument name");
-        }
-        header_cursor = source_skip_horizontal_space(header_cursor);
-        if (*header_cursor != '\0') {
-            machine_panic("KernelInstaller source method header has unexpected trailing text");
-        }
-        {
-            uint32_t selector_length = 0U;
-
-            while (selector_name_buffer[selector_length] != '\0') {
-                ++selector_length;
+        while (*header_cursor == ':') {
+            if (argument_count >= MAX_SEND_ARGS) {
+                machine_panic("KernelInstaller source method has too many arguments");
             }
             if (selector_length + 1U >= sizeof(selector_name_buffer)) {
                 machine_panic("KernelInstaller source method selector exceeds buffer capacity");
             }
             selector_name_buffer[selector_length++] = ':';
             selector_name_buffer[selector_length] = '\0';
+            ++header_cursor;
+            header_cursor = source_skip_horizontal_space(header_cursor);
+            header_cursor = source_parse_identifier(
+                header_cursor,
+                argument_names[argument_count],
+                sizeof(argument_names[argument_count])
+            );
+            if (header_cursor == 0) {
+                machine_panic("KernelInstaller source method keyword header is missing an argument name");
+            }
+            ++argument_count;
+            header_cursor = source_skip_horizontal_space(header_cursor);
+            if (*header_cursor == '\0') {
+                break;
+            }
+            header_cursor = source_parse_identifier(header_cursor, selector_part_buffer, sizeof(selector_part_buffer));
+            if (header_cursor == 0) {
+                machine_panic("KernelInstaller source method header has unexpected trailing text");
+            }
+            part_length = 0U;
+            while (selector_part_buffer[part_length] != '\0') {
+                if (selector_length + 1U >= sizeof(selector_name_buffer)) {
+                    machine_panic("KernelInstaller source method selector exceeds buffer capacity");
+                }
+                selector_name_buffer[selector_length++] = selector_part_buffer[part_length++];
+            }
+            selector_name_buffer[selector_length] = '\0';
+            header_cursor = source_skip_horizontal_space(header_cursor);
         }
-        argument_count = 1U;
+        if (*header_cursor != '\0') {
+            machine_panic("KernelInstaller source method header has unexpected trailing text");
+        }
     } else if (*header_cursor != '\0') {
         machine_panic("KernelInstaller source method header has unexpected trailing text");
     }
@@ -5966,14 +6107,22 @@ static uint16_t compile_source_method_and_allocate(
         }
 
         if (trimmed_line[0] == '^') {
-            compile_source_return_line(class_object, statement_line, argument_name, instruction_words, &instruction_count);
+            compile_source_return_line(
+                class_object,
+                statement_line,
+                argument_names,
+                argument_count,
+                instruction_words,
+                &instruction_count
+            );
             found_return = 1U;
             break;
         }
         if (!compile_source_statement_line(
                 class_object,
                 statement_line,
-                argument_name,
+                argument_names,
+                argument_count,
                 instruction_words,
                 &instruction_count,
                 &produces_value

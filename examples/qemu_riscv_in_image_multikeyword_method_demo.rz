@@ -1,0 +1,10 @@
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #KeywordReporter superclass: #Object instanceVariableNames: ''''
+!
+setLeft: leftValue right: rightValue
+    ^leftValue + rightValue
+!'.
+KernelInstaller rememberObject: ((KernelInstaller classNamed: 'KeywordReporter') new) named: 'keywordReporter'.
+Transcript show: 'KEYWORD'.
+Transcript cr.
+Transcript show: ((KernelInstaller objectNamed: 'keywordReporter') setLeft: 2 right: 4) printString.

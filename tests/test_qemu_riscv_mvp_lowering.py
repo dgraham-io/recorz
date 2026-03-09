@@ -612,7 +612,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             mvp.SELECTOR_DEFINITIONS[-9:],
         )
         self.assertEqual(
-            mvp.SELECTOR_DEFINITIONS[-16:],
+            mvp.SELECTOR_DEFINITIONS[-18:],
             [
                 ("RECORZ_MVP_SELECTOR_SET_CONTENTS", 47),
                 ("RECORZ_MVP_SELECTOR_EVALUATE_CURRENT", 48),
@@ -630,6 +630,8 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_FILE_OUT_PACKAGE_NAMED", 60),
                 ("RECORZ_MVP_SELECTOR_BROWSE_PACKAGES", 61),
                 ("RECORZ_MVP_SELECTOR_BROWSE_PACKAGE_NAMED", 62),
+                ("RECORZ_MVP_SELECTOR_SUM", 63),
+                ("RECORZ_MVP_SELECTOR_SET_LEFT_RIGHT", 64),
             ],
         )
 
@@ -1520,7 +1522,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             [
                 (mvp.SEED_FIELD_NIL, 0),
                 (mvp.SEED_FIELD_SMALL_INTEGER, mvp.SEED_OBJECT_CLASS),
-                (mvp.SEED_FIELD_OBJECT_INDEX, 296),
+                (mvp.SEED_FIELD_OBJECT_INDEX, 298),
                 (mvp.SEED_FIELD_SMALL_INTEGER, 2),
             ],
         )
@@ -1547,7 +1549,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
     def test_declares_method_seed_orders_and_materializes_method_seed_objects(self) -> None:
         self.assertEqual(
             mvp.SELECTOR_VALUE_ORDER,
-            list(range(1, 63)),
+            list(range(1, 65)),
         )
         self.assertEqual(
             mvp.COMPILED_METHOD_ENTRY_ORDER[:4],
@@ -1601,6 +1603,8 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(selector_indices[mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_FILE_OUT_PACKAGE_NAMED"]], 221)
         self.assertEqual(selector_indices[mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_BROWSE_PACKAGES"]], 222)
         self.assertEqual(selector_indices[mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_BROWSE_PACKAGE_NAMED"]], 223)
+        self.assertEqual(selector_indices[mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SUM"]], 224)
+        self.assertEqual(selector_indices[mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SET_LEFT_RIGHT"]], 225)
         self.assertEqual(
             selector_seed_objects[0].fields,
             [(mvp.SEED_FIELD_SMALL_INTEGER, mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SHOW"])],
@@ -1736,6 +1740,8 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertIn("RECORZ_MVP_SELECTOR_FILE_OUT_PACKAGE_NAMED = 60,", header)
         self.assertIn("RECORZ_MVP_SELECTOR_BROWSE_PACKAGES = 61,", header)
         self.assertIn("RECORZ_MVP_SELECTOR_BROWSE_PACKAGE_NAMED = 62,", header)
+        self.assertIn("RECORZ_MVP_SELECTOR_SUM = 63,", header)
+        self.assertIn("RECORZ_MVP_SELECTOR_SET_LEFT_RIGHT = 64,", header)
         self.assertIn("enum recorz_mvp_literal_kind {", header)
         self.assertIn("RECORZ_MVP_LITERAL_SMALL_INTEGER = 2,", header)
         self.assertIn("enum recorz_mvp_object_kind {", header)
@@ -2133,7 +2139,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(struct.calcsize(mvp.SEED_HEADER_FORMAT), 16)
         self.assertEqual(magic, mvp.SEED_MAGIC)
         self.assertEqual(version, mvp.SEED_VERSION)
-        self.assertEqual(object_count, 356)
+        self.assertEqual(object_count, 358)
         self.assertEqual(global_binding_count, 8)
         self.assertEqual(root_binding_count, 6)
         self.assertEqual(glyph_code_count, len(mvp.GLYPH_BITMAP_BOOT_SPECS))
@@ -2178,7 +2184,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             first_method_entry_fields,
             [
                 (mvp.SEED_FIELD_SMALL_INTEGER, mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW"]),
-                (mvp.SEED_FIELD_OBJECT_INDEX, 224),
+                (mvp.SEED_FIELD_OBJECT_INDEX, 226),
             ],
         )
         self.assertEqual(first_method_header, (mvp.SEED_OBJECT_METHOD_DESCRIPTOR, 4, 155))
@@ -2190,7 +2196,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 (mvp.SEED_FIELD_SMALL_INTEGER, mvp.SEED_OBJECT_CLASS),
                 (
                     mvp.SEED_FIELD_OBJECT_INDEX,
-                    236 + (mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND"] - 1),
+                    238 + (mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_CLASS_INSTANCE_KIND"] - 1),
                 ),
             ],
         )
