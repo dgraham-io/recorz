@@ -181,8 +181,10 @@ struct recorz_mvp_workspace_source_program {
     struct recorz_mvp_instruction instructions[WORKSPACE_SOURCE_INSTRUCTION_LIMIT];
     struct recorz_mvp_literal literals[WORKSPACE_SOURCE_LITERAL_LIMIT];
     char literal_texts[WORKSPACE_SOURCE_LITERAL_LIMIT][METHOD_SOURCE_CHUNK_LIMIT];
+    char temporary_names[LEXICAL_LIMIT][METHOD_SOURCE_NAME_LIMIT];
     uint32_t instruction_count;
     uint32_t literal_count;
+    uint16_t lexical_count;
 };
 
 struct recorz_mvp_named_object_binding {
@@ -1924,6 +1926,14 @@ static const char *workspace_compile_expression_push(
     const char *cursor,
     struct recorz_mvp_workspace_source_program *program
 );
+static uint16_t workspace_temporary_index(
+    const struct recorz_mvp_workspace_source_program *program,
+    const char *name
+);
+static const char *workspace_parse_temporary_declarations(
+    const char *source,
+    struct recorz_mvp_workspace_source_program *program
+);
 static const char *workspace_compile_operand_push(
     const char *cursor,
     struct recorz_mvp_workspace_source_program *program
@@ -1973,6 +1983,71 @@ static const char *workspace_compile_binary_expression_push(
     return cursor;
 }
 
+static uint16_t workspace_temporary_index(
+    const struct recorz_mvp_workspace_source_program *program,
+    const char *name
+) {
+    uint16_t temporary_index;
+
+    for (temporary_index = 0U; temporary_index < program->lexical_count; ++temporary_index) {
+        if (program->temporary_names[temporary_index][0] != '\0' &&
+            source_names_equal(program->temporary_names[temporary_index], name)) {
+            return temporary_index;
+        }
+    }
+    return 0xFFFFU;
+}
+
+static const char *workspace_parse_temporary_declarations(
+    const char *source,
+    struct recorz_mvp_workspace_source_program *program
+) {
+    const char *cursor = source_skip_horizontal_space(source);
+
+    if (*cursor != '|') {
+        machine_panic("Workspace source temporary declaration is invalid");
+    }
+    ++cursor;
+    cursor = source_skip_horizontal_space(cursor);
+    while (*cursor != '\0') {
+        char name[METHOD_SOURCE_NAME_LIMIT];
+        uint16_t existing_index;
+
+        if (*cursor == '|') {
+            ++cursor;
+            return source_skip_statement_space(cursor);
+        }
+        cursor = source_parse_identifier(cursor, name, sizeof(name));
+        if (cursor == 0) {
+            machine_panic("Workspace source temporary declaration is invalid");
+        }
+        for (existing_index = 0U; existing_index < program->lexical_count; ++existing_index) {
+            if (source_names_equal(program->temporary_names[existing_index], name)) {
+                machine_panic("Workspace source temporary declaration repeats a temporary");
+            }
+        }
+        if (program->lexical_count >= LEXICAL_LIMIT) {
+            machine_panic("Workspace source temporary declaration exceeds lexical capacity");
+        }
+        {
+            uint32_t name_index = 0U;
+
+            while (name[name_index] != '\0') {
+                if (name_index + 1U >= sizeof(program->temporary_names[program->lexical_count])) {
+                    machine_panic("Workspace source temporary name exceeds capacity");
+                }
+                program->temporary_names[program->lexical_count][name_index] = name[name_index];
+                ++name_index;
+            }
+            program->temporary_names[program->lexical_count][name_index] = '\0';
+        }
+        ++program->lexical_count;
+        cursor = source_skip_horizontal_space(cursor);
+    }
+    machine_panic("Workspace source temporary declaration is missing a closing '|'");
+    return 0;
+}
+
 static const char *workspace_compile_operand_push(
     const char *cursor,
     struct recorz_mvp_workspace_source_program *program
@@ -1986,6 +2061,7 @@ static const char *workspace_compile_operand_push(
     const char *after_selector;
     uint8_t global_id;
     uint16_t literal_index;
+    uint16_t temporary_index;
     uint8_t selector_id;
 
     cursor = source_skip_statement_space(cursor);
@@ -2046,12 +2122,19 @@ static const char *workspace_compile_operand_push(
                     machine_panic("Workspace source exceeds instruction capacity");
                 }
             } else {
-                global_id = source_global_id_for_name(identifier);
-                if (global_id == 0U) {
-                    machine_panic("Workspace source uses an unknown global operand");
-                }
-                if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_GLOBAL, global_id, 0U)) {
-                    machine_panic("Workspace source exceeds instruction capacity");
+                temporary_index = workspace_temporary_index(program, identifier);
+                if (temporary_index != 0xFFFFU) {
+                    if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_LEXICAL, 0U, temporary_index)) {
+                        machine_panic("Workspace source exceeds instruction capacity");
+                    }
+                } else {
+                    global_id = source_global_id_for_name(identifier);
+                    if (global_id == 0U) {
+                        machine_panic("Workspace source uses an unknown global operand");
+                    }
+                    if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_GLOBAL, global_id, 0U)) {
+                        machine_panic("Workspace source exceeds instruction capacity");
+                    }
                 }
             }
             cursor = parsed_cursor;
@@ -2268,8 +2351,32 @@ static void workspace_compile_statement(
     struct recorz_mvp_workspace_source_program *program
 ) {
     const char *cursor = statement;
+    char receiver_name[METHOD_SOURCE_NAME_LIMIT];
+    const char *assignment_cursor;
+    uint16_t temporary_index;
 
-    cursor = workspace_compile_expression_push(cursor, program);
+    assignment_cursor = source_parse_identifier(cursor, receiver_name, sizeof(receiver_name));
+    if (assignment_cursor != 0) {
+        assignment_cursor = source_skip_horizontal_space(assignment_cursor);
+        if (assignment_cursor[0] == ':' && assignment_cursor[1] == '=') {
+            temporary_index = workspace_temporary_index(program, receiver_name);
+            if (temporary_index == 0xFFFFU) {
+                machine_panic("Workspace assignment target must be a temporary");
+            }
+            cursor = workspace_compile_expression_push(assignment_cursor + 2, program);
+            if (cursor == 0) {
+                machine_panic("Workspace assignment right-hand side is invalid");
+            }
+            if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_DUP, 0U, 0U) ||
+                !workspace_source_append_instruction(program, RECORZ_MVP_OP_STORE_LEXICAL, 0U, temporary_index)) {
+                machine_panic("Workspace source exceeds instruction capacity");
+            }
+        } else {
+            cursor = workspace_compile_expression_push(cursor, program);
+        }
+    } else {
+        cursor = workspace_compile_expression_push(cursor, program);
+    }
     if (cursor == 0) {
         machine_panic("Workspace source statement is missing a receiver");
     }
@@ -2289,8 +2396,20 @@ static void build_workspace_source_program(
 
     program->instruction_count = 0U;
     program->literal_count = 0U;
+    program->lexical_count = 0U;
+    {
+        uint16_t temporary_index;
+
+        for (temporary_index = 0U; temporary_index < LEXICAL_LIMIT; ++temporary_index) {
+            program->temporary_names[temporary_index][0] = '\0';
+        }
+    }
     if (source == 0 || *source == '\0') {
         machine_panic("Workspace source is empty");
+    }
+    cursor = source_skip_statement_space(cursor);
+    if (*cursor == '|') {
+        cursor = workspace_parse_temporary_declarations(cursor, program);
     }
     while (source_copy_next_statement(&cursor, statement, sizeof(statement)) != 0U) {
         workspace_compile_statement(statement, program);
@@ -10633,6 +10752,7 @@ static void workspace_evaluate_source(const char *source) {
     build_workspace_source_program(source, &program);
     executable.instruction_count = program.instruction_count;
     executable.literal_count = program.literal_count;
+    executable.lexical_count = program.lexical_count;
     execute_executable(&executable, workspace_receiver_object, workspace_receiver, 0U, 0, context_handle);
     mark_context_dead(context_handle);
     if (stack_size != stack_size_before + 1U) {

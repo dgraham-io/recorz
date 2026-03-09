@@ -1,0 +1,4 @@
+Display clear.
+Transcript show: 'WTEMP'.
+Transcript cr.
+Workspace evaluate: '| x y | x := 3. y := x + 4. Transcript show: y printString. Transcript cr. y := y + x + 1. Transcript show: y printString. Transcript cr.'.
