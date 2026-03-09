@@ -1,0 +1,5 @@
+| topLevelSeedMarker |
+Display clear.
+topLevelSeedMarker := 0.
+Transcript show: self contents.
+Transcript cr.

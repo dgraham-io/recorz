@@ -84,6 +84,21 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertEqual(program.instructions[1].operand_a, "RECORZ_MVP_SELECTOR_CONTENTS")
 
+    def test_boot_program_seeds_workspace_contents_with_original_source(self) -> None:
+        program = mvp.build_boot_program("Transcript show: 'BOOT'")
+
+        self.assertEqual(
+            [instruction.opcode for instruction in program.instructions[:4]],
+            [
+                mvp.OP_PUSH_SELF,
+                mvp.OP_PUSH_LITERAL,
+                mvp.OP_SEND,
+                mvp.OP_POP,
+            ],
+        )
+        self.assertEqual(program.instructions[2].operand_a, "RECORZ_MVP_SELECTOR_SET_CONTENTS")
+        self.assertEqual(program.literals[program.instructions[1].operand_b], mvp.Literal(mvp.LITERAL_STRING, "Transcript show: 'BOOT'"))
+
     def test_lowers_display_default_form_and_clear(self) -> None:
         program = mvp.build_program("| form | form := Display defaultForm. form clear. form writeString: 'HELLO'. form newline")
         selectors = [instruction.operand_a for instruction in program.instructions if instruction.opcode == mvp.OP_SEND]

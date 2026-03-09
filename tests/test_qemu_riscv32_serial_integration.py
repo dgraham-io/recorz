@@ -19,6 +19,7 @@ BINARY_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_binary_m
 CONDITIONAL_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_conditional_method_demo.rz"
 TOP_LEVEL_BLOCK_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_top_level_block_demo.rz"
 TOP_LEVEL_SELF_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_top_level_self_demo.rz"
+TOP_LEVEL_SOURCE_BUFFER_EXAMPLE = ROOT / "examples" / "qemu_riscv_top_level_source_buffer_demo.rz"
 WORKSPACE_BLOCK_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_block_demo.rz"
 WORKSPACE_BLOCK_ARGUMENT_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_block_argument_demo.rz"
 WORKSPACE_SELF_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_self_demo.rz"
@@ -547,6 +548,48 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("TOP SELF", output)
             self.assertIn("SELFWORK", output)
             self.assertIn("CTXWORK", output)
+            self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
+
+    def test_top_level_programs_seed_workspace_contents_with_their_source(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-top-level-source-buffer-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, TOP_LEVEL_SOURCE_BUFFER_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("topLevelSeedMarker := 0.", output)
+            self.assertIn("Transcript show: self contents.", output)
             self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
 
     def test_workspace_supports_single_argument_block_literals_and_value_colon(self) -> None:

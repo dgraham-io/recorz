@@ -1808,6 +1808,27 @@ def build_program(source: str) -> Program:
     return Lowerer(source).build()
 
 
+def build_boot_program(source: str) -> Program:
+    program = build_program(source)
+    source_literal = Literal(LITERAL_STRING, source)
+    literals = list(program.literals)
+
+    if source_literal not in literals:
+        literals.append(source_literal)
+    source_literal_index = literals.index(source_literal)
+    prelude = [
+        Instruction(OP_PUSH_SELF),
+        Instruction(OP_PUSH_LITERAL, operand_b=source_literal_index),
+        Instruction(OP_SEND, "RECORZ_MVP_SELECTOR_SET_CONTENTS", 1),
+        Instruction(OP_POP),
+    ]
+    return Program(
+        literals=literals,
+        instructions=prelude + list(program.instructions),
+        lexical_count=program.lexical_count,
+    )
+
+
 def instruction_operand_a_value(instruction: Instruction) -> int:
     if instruction.operand_a == "0":
         return 0
@@ -2748,7 +2769,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     source_text = args.source.read_text()
-    program = build_program(source_text)
+    program = build_boot_program(source_text)
     args.image_output.parent.mkdir(parents=True, exist_ok=True)
     args.image_output.write_bytes(build_image_manifest(program))
     return 0
