@@ -1109,6 +1109,8 @@ def kernel_root_constant_name(root_name: str) -> str:
 
 
 def kernel_selector_constant_stem(selector: str) -> str:
+    if selector == "value:":
+        return "VALUE_ARG"
     if ":" in selector:
         keyword_parts = [part for part in selector.split(":") if part]
         return "_".join(upper_snake_name(part) for part in keyword_parts)

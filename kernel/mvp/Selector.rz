@@ -150,3 +150,5 @@ RecorzKernelSelector: #receiver order: 73
 !
 RecorzKernelSelector: #alive order: 74
 !
+RecorzKernelSelector: #value: order: 75
+!

@@ -103,7 +103,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CONTEXT
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_ALIVE
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_VALUE_ARG
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_FALSE
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -621,6 +621,8 @@ static const char *selector_name(uint8_t selector) {
             return "receiver";
         case RECORZ_MVP_SELECTOR_ALIVE:
             return "alive";
+        case RECORZ_MVP_SELECTOR_VALUE_ARG:
+            return "value:";
     }
     return "unknown";
 }

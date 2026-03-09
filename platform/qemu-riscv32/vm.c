@@ -108,7 +108,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CONTEXT
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_ALIVE
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_VALUE_ARG
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_FALSE
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #define SOURCE_EVAL_ENV_LIMIT 32U
@@ -694,6 +694,8 @@ static const char *selector_name(uint8_t selector) {
             return "receiver";
         case RECORZ_MVP_SELECTOR_ALIVE:
             return "alive";
+        case RECORZ_MVP_SELECTOR_VALUE_ARG:
+            return "value:";
     }
     return "unknown";
 }
@@ -10631,9 +10633,12 @@ static void workspace_evaluate_source(const char *source) {
 
 static void execute_block_closure_with_sender(
     const struct recorz_mvp_heap_object *object,
+    uint16_t argument_count,
+    const struct recorz_mvp_value arguments[],
     uint16_t sender_context_handle
 ) {
-    struct recorz_mvp_source_eval_result result = source_execute_block_closure(object, 0U, 0, sender_context_handle);
+    struct recorz_mvp_source_eval_result result =
+        source_execute_block_closure(object, argument_count, arguments, sender_context_handle);
 
     if (result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
         machine_panic("block non-local return requires a live source caller");
@@ -10928,11 +10933,12 @@ static void dispatch_heap_object_send(
         return;
     }
     if (primitive_kind_for_heap_object(object) == RECORZ_MVP_OBJECT_BLOCK_CLOSURE) {
-        if (selector != RECORZ_MVP_SELECTOR_VALUE || argument_count != 0U) {
-            machine_panic("BlockClosure only understands value");
+        if ((selector == RECORZ_MVP_SELECTOR_VALUE && argument_count == 0U) ||
+            (selector == RECORZ_MVP_SELECTOR_VALUE_ARG && argument_count == 1U)) {
+            execute_block_closure_with_sender(object, argument_count, arguments, sender_context_handle);
+            return;
         }
-        execute_block_closure_with_sender(object, sender_context_handle);
-        return;
+        machine_panic("BlockClosure only understands value/value:");
     }
     class_object = class_object_for_heap_object(object);
     source_record = live_method_source_for_class_chain(
