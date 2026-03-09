@@ -92,7 +92,7 @@ $(GENERATED_FILE_IN_PAYLOAD): $(FILE_IN_PAYLOADS) | $(BUILD_DIR)
 		first=0; \
 	done
 
-$(BUILD_DIR)/%.o: $(CURDIR)/%.c $(CURDIR)/*.h $(GENERATED_BINDINGS_HEADER) | $(BUILD_DIR)
+$(BUILD_DIR)/%.o: $(CURDIR)/%.c $(CURDIR)/*.h $(ROOT)/platform/shared/*.h $(GENERATED_BINDINGS_HEADER) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/%.o: $(CURDIR)/%.S | $(BUILD_DIR)

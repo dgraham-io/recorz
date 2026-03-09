@@ -1,0 +1,8 @@
+Display clear.
+Display defaultForm writeString: 'methodName: arg | temp | ^temp + 1.'.
+Display newline.
+Display defaultForm writeString: '[blockValue] ifTrue: [temp := temp - 1].'.
+Display newline.
+Display defaultForm writeString: 'abcxyz 0123456789 [] ^ | < > = - + * /'.
+Transcript show: 'glyph demo rendered'.
+Transcript cr.
