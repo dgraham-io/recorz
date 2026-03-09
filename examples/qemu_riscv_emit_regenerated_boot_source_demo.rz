@@ -1,0 +1,9 @@
+Workspace fileIn: 'RecorzKernelPackage: ''Tools'' comment: ''Shared utilities''
+!
+RecorzKernelClass: #RegeneratedDemo superclass: #Object package: ''Tools'' instanceVariableNames: ''''
+!
+value
+    ^''REGEN''
+!'.
+Workspace browsePackageNamed: 'Tools'.
+Workspace emitRegeneratedBootSource.

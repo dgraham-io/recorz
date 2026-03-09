@@ -86,3 +86,6 @@ saveRecoverySnapshot
 !
 recoverLastSource
     <primitive: #workspaceRecoverLastSource>
+!
+emitRegeneratedBootSource
+    <primitive: #workspaceEmitRegeneratedBootSource>

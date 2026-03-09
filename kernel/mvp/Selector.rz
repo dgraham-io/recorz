@@ -178,3 +178,5 @@ RecorzKernelSelector: #saveRecoverySnapshot order: 87
 !
 RecorzKernelSelector: #recoverLastSource order: 88
 !
+RecorzKernelSelector: #emitRegeneratedBootSource order: 89
+!

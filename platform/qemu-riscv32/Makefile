@@ -16,6 +16,10 @@ SNAPSHOT_FW_CFG_NAME ?= opt/recorz-snapshot
 SNAPSHOT_OUTPUT ?= $(BUILD_DIR)/recorz-live-snapshot.bin
 SNAPSHOT_TEMP_OUTPUT ?= $(SNAPSHOT_OUTPUT).tmp
 SNAPSHOT_EXTRACT_TIMEOUT ?= 60
+REGENERATED_BOOT_SOURCE_OUTPUT ?= $(BUILD_DIR)/regenerated_boot_source.rz
+REGENERATED_BOOT_SOURCE_TEMP_OUTPUT ?= $(REGENERATED_BOOT_SOURCE_OUTPUT).tmp
+REGENERATED_BOOT_SOURCE_EXTRACT_TIMEOUT ?= 60
+REGENERATED_IMAGE_OUTPUT ?= $(BUILD_DIR)/regenerated_image.bin
 QEMU_EXTRA_ARGS ?=
 comma := ,
 QEMU_UPDATE_ARGS := $(if $(UPDATE_PAYLOAD),-fw_cfg name=$(UPDATE_FW_CFG_NAME)$(comma)file=$(UPDATE_PAYLOAD))
@@ -60,7 +64,7 @@ OBJECTS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(filter %.c,$(SOURCES))) \
 	$(patsubst %.S,$(BUILD_DIR)/%.o,$(filter %.S,$(SOURCES))) \
 	$(GENERATED_IMAGE_OBJECT)
 
-.PHONY: all run run-headless screenshot save-snapshot continue-snapshot dev-init dev-boot dev-screenshot dev-file-in inspect-image clean FORCE
+.PHONY: all run run-headless screenshot save-snapshot continue-snapshot regenerate-boot-source regenerate-image dev-init dev-boot dev-screenshot dev-file-in inspect-image clean FORCE
 
 all: $(ELF)
 
@@ -135,6 +139,19 @@ continue-snapshot: $(ELF) $(QEMU_FILE_IN_DEP)
 	@mkdir -p $(dir $(CONTINUE_SNAPSHOT_OUTPUT))
 	@mv $(CONTINUE_SNAPSHOT_TEMP_OUTPUT) $(CONTINUE_SNAPSHOT_OUTPUT)
 	@echo "wrote $(CONTINUE_SNAPSHOT_OUTPUT)"
+
+regenerate-boot-source: $(ELF) $(QEMU_FILE_IN_DEP)
+	rm -f $(QEMU_LOG) $(QEMU_PID) $(REGENERATED_BOOT_SOURCE_TEMP_OUTPUT)
+	( $(QEMU) -machine virt -m $(QEMU_MEMORY) -smp 1 -kernel $(ELF) -serial file:$(QEMU_LOG) -display none -device ramfb $(QEMU_RUN_ARGS) >/dev/null 2>&1 & echo $$! > $(QEMU_PID) )
+	$(PYTHON) $(ROOT)/tools/extract_qemu_riscv_regenerated_boot_source.py --timeout $(REGENERATED_BOOT_SOURCE_EXTRACT_TIMEOUT) $(QEMU_LOG) $(REGENERATED_BOOT_SOURCE_TEMP_OUTPUT)
+	@PID=$$(cat $(QEMU_PID)); kill $$PID >/dev/null 2>&1 || true
+	@mkdir -p $(dir $(REGENERATED_BOOT_SOURCE_OUTPUT))
+	@mv $(REGENERATED_BOOT_SOURCE_TEMP_OUTPUT) $(REGENERATED_BOOT_SOURCE_OUTPUT)
+	@echo "wrote $(REGENERATED_BOOT_SOURCE_OUTPUT)"
+
+regenerate-image: regenerate-boot-source
+	PYTHONPATH=$(ROOT)/src $(PYTHON) $(IMAGE_SCRIPT) $(REGENERATED_BOOT_SOURCE_OUTPUT) $(REGENERATED_IMAGE_OUTPUT)
+	@echo "wrote $(REGENERATED_IMAGE_OUTPUT)"
 
 dev-init:
 	@mkdir -p $(dir $(DEV_SNAPSHOT))

@@ -20,13 +20,14 @@
 #define CLASS_COMMENT_LIMIT 128U
 #define PACKAGE_COMMENT_LIMIT CLASS_COMMENT_LIMIT
 #define METHOD_SOURCE_CHUNK_LIMIT 512U
+#define PACKAGE_SOURCE_BUFFER_LIMIT 16384U
 #define WORKSPACE_SOURCE_INSTRUCTION_LIMIT 64U
 #define WORKSPACE_SOURCE_LITERAL_LIMIT 16U
 #define DYNAMIC_CLASS_LIMIT 16U
 #define PACKAGE_LIMIT DYNAMIC_CLASS_LIMIT
 #define DYNAMIC_CLASS_IVAR_LIMIT OBJECT_FIELD_LIMIT
 #define NAMED_OBJECT_LIMIT 16U
-#define LIVE_METHOD_SOURCE_LIMIT 64U
+#define LIVE_METHOD_SOURCE_LIMIT 128U
 #define LIVE_STRING_LITERAL_LIMIT 64U
 #define RUNTIME_STRING_POOL_LIMIT 16384U
 #define SNAPSHOT_STRING_LIMIT 8192U
@@ -107,7 +108,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEST_RUNNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_RECOVER_LAST_SOURCE
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_EMIT_REGENERATED_BOOT_SOURCE
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_TEST_RUNNER
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -274,6 +275,8 @@ static uint32_t cursor_x = 0U;
 static uint32_t cursor_y = 0U;
 static char print_buffer[PRINT_BUFFER_SIZE];
 static char workspace_target_buffer[METHOD_SOURCE_CHUNK_LIMIT];
+static char kernel_source_io_buffer[8193];
+static char package_source_io_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char runtime_string_pool[RUNTIME_STRING_POOL_LIMIT];
 static uint32_t runtime_string_pool_offset = 0U;
 static char snapshot_string_pool[SNAPSHOT_STRING_LIMIT];
@@ -346,7 +349,9 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size);
 static void emit_live_snapshot(void);
 static void file_in_class_chunks_source(const char *source);
 static void file_in_chunk_stream_source(const char *source);
+static const char *file_out_class_source_text(const char *class_name, char buffer[], uint32_t buffer_size);
 static const char *file_out_class_source_by_name(const char *class_name);
+static const char *file_out_package_source_text(const char *package_name, char buffer[], uint32_t buffer_size);
 static const char *file_out_package_source_by_name(const char *package_name);
 static int compare_source_names(const char *left, const char *right);
 static const char *runtime_string_allocate_copy(const char *text);
@@ -645,6 +650,16 @@ static const char *selector_name(uint8_t selector) {
             return "testPass";
         case RECORZ_MVP_SELECTOR_TEST_FAIL:
             return "testFail";
+        case RECORZ_MVP_SELECTOR_SAVE_AND_REOPEN:
+            return "saveAndReopen";
+        case RECORZ_MVP_SELECTOR_SAVE_AND_RERUN:
+            return "saveAndRerun";
+        case RECORZ_MVP_SELECTOR_SAVE_RECOVERY_SNAPSHOT:
+            return "saveRecoverySnapshot";
+        case RECORZ_MVP_SELECTOR_RECOVER_LAST_SOURCE:
+            return "recoverLastSource";
+        case RECORZ_MVP_SELECTOR_EMIT_REGENERATED_BOOT_SOURCE:
+            return "emitRegeneratedBootSource";
     }
     return "unknown";
 }
@@ -8082,8 +8097,11 @@ static const char *live_method_source_text(const struct recorz_mvp_live_method_s
     return source_record->source;
 }
 
-static const char *file_out_class_source_by_name(const char *class_name) {
-    static char class_file_out_buffer[8192];
+static const char *file_out_class_source_text(
+    const char *class_name,
+    char buffer[],
+    uint32_t buffer_size
+) {
     const struct recorz_mvp_heap_object *class_object;
     const struct recorz_mvp_dynamic_class_definition *dynamic_definition;
     const struct recorz_mvp_seed_class_source_record *seed_source = 0;
@@ -8115,16 +8133,16 @@ static const char *file_out_class_source_by_name(const char *class_name) {
     if (live_method_source_count_for_class_handle(class_handle) != class_method_count(class_object)) {
         machine_panic("KernelInstaller fileOutClassNamed: class contains methods without live source");
     }
-    class_file_out_buffer[0] = '\0';
+    buffer[0] = '\0';
     if (dynamic_definition != 0) {
-        append_dynamic_class_header_source(class_file_out_buffer, sizeof(class_file_out_buffer), &offset, dynamic_definition);
+        append_dynamic_class_header_source(buffer, buffer_size, &offset, dynamic_definition);
     } else {
-        append_seeded_class_header_source(class_file_out_buffer, sizeof(class_file_out_buffer), &offset, seed_source);
+        append_seeded_class_header_source(buffer, buffer_size, &offset, seed_source);
     }
-    append_text_checked(class_file_out_buffer, sizeof(class_file_out_buffer), &offset, "\n!\n");
+    append_text_checked(buffer, buffer_size, &offset, "\n!\n");
     append_live_method_source_chunks(
-        class_file_out_buffer,
-        sizeof(class_file_out_buffer),
+        buffer,
+        buffer_size,
         &offset,
         class_handle,
         &wrote_any_chunk
@@ -8134,27 +8152,36 @@ static const char *file_out_class_source_by_name(const char *class_name) {
         machine_panic("KernelInstaller fileOutClassNamed: metaclass contains methods without live source");
     }
     if (class_method_count(metaclass_object) != 0U) {
-        append_text_checked(class_file_out_buffer, sizeof(class_file_out_buffer), &offset, "RecorzKernelClassSide: #");
+        append_text_checked(buffer, buffer_size, &offset, "RecorzKernelClassSide: #");
         append_text_checked(
-            class_file_out_buffer,
-            sizeof(class_file_out_buffer),
+            buffer,
+            buffer_size,
             &offset,
             dynamic_definition != 0 ? dynamic_definition->class_name : seed_source->class_name
         );
-        append_text_checked(class_file_out_buffer, sizeof(class_file_out_buffer), &offset, "\n!\n");
+        append_text_checked(buffer, buffer_size, &offset, "\n!\n");
         append_live_method_source_chunks(
-            class_file_out_buffer,
-            sizeof(class_file_out_buffer),
+            buffer,
+            buffer_size,
             &offset,
             metaclass_handle,
             &wrote_any_chunk
         );
     }
-    return runtime_string_allocate_copy(class_file_out_buffer);
+    return buffer;
 }
 
-static const char *file_out_package_source_by_name(const char *package_name) {
-    static char package_file_out_buffer[8192];
+static const char *file_out_class_source_by_name(const char *class_name) {
+    return runtime_string_allocate_copy(
+        file_out_class_source_text(class_name, kernel_source_io_buffer, sizeof(kernel_source_io_buffer))
+    );
+}
+
+static const char *file_out_package_source_text(
+    const char *package_name,
+    char buffer[],
+    uint32_t buffer_size
+) {
     const struct recorz_mvp_live_package_definition *package_definition;
     const struct recorz_mvp_dynamic_class_definition *sorted_definitions[DYNAMIC_CLASS_LIMIT];
     uint16_t sorted_count = 0U;
@@ -8168,16 +8195,16 @@ static const char *file_out_package_source_by_name(const char *package_name) {
     if (package_definition == 0) {
         machine_panic("KernelInstaller fileOutPackageNamed: could not resolve package");
     }
-    package_file_out_buffer[0] = '\0';
-    append_text_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, "RecorzKernelPackage: '");
-    append_text_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, package_name);
-    append_char_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, '\'');
+    buffer[0] = '\0';
+    append_text_checked(buffer, buffer_size, &offset, "RecorzKernelPackage: '");
+    append_text_checked(buffer, buffer_size, &offset, package_name);
+    append_char_checked(buffer, buffer_size, &offset, '\'');
     if (package_definition->package_comment[0] != '\0') {
-        append_text_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, " comment: '");
-        append_text_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, package_definition->package_comment);
-        append_char_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, '\'');
+        append_text_checked(buffer, buffer_size, &offset, " comment: '");
+        append_text_checked(buffer, buffer_size, &offset, package_definition->package_comment);
+        append_char_checked(buffer, buffer_size, &offset, '\'');
     }
-    append_text_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, "\n!\n");
+    append_text_checked(buffer, buffer_size, &offset, "\n!\n");
     for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
         const struct recorz_mvp_dynamic_class_definition *definition = &dynamic_classes[dynamic_index];
         uint16_t insert_index;
@@ -8198,15 +8225,379 @@ static const char *file_out_package_source_by_name(const char *package_name) {
     }
     for (dynamic_index = 0U; dynamic_index < sorted_count; ++dynamic_index) {
         const struct recorz_mvp_dynamic_class_definition *definition = sorted_definitions[dynamic_index];
-        const char *class_source = file_out_class_source_by_name(definition->class_name);
+        const char *class_source = file_out_class_source_text(
+            definition->class_name,
+            kernel_source_io_buffer,
+            sizeof(kernel_source_io_buffer)
+        );
 
-        append_text_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, class_source);
+        append_text_checked(buffer, buffer_size, &offset, class_source);
         if (dynamic_index + 1U < sorted_count &&
-            package_file_out_buffer[offset - 1U] != '\n') {
-            append_char_checked(package_file_out_buffer, sizeof(package_file_out_buffer), &offset, '\n');
+            buffer[offset - 1U] != '\n') {
+            append_char_checked(buffer, buffer_size, &offset, '\n');
         }
     }
-    return runtime_string_allocate_copy(package_file_out_buffer);
+    return buffer;
+}
+
+static const char *file_out_package_source_by_name(const char *package_name) {
+    return runtime_string_allocate_copy(
+        file_out_package_source_text(package_name, package_source_io_buffer, sizeof(package_source_io_buffer))
+    );
+}
+
+struct recorz_mvp_regenerated_boot_source_emitter {
+    uint32_t emitted_size;
+    uint8_t serial_mode;
+    uint8_t line_open;
+    uint8_t line_bytes;
+};
+
+static void emit_regenerated_boot_source_hex_byte(uint8_t value) {
+    static const char digits[] = "0123456789abcdef";
+
+    machine_putc(digits[(value >> 4U) & 0x0FU]);
+    machine_putc(digits[value & 0x0FU]);
+}
+
+static void regenerated_boot_source_emit_byte(
+    struct recorz_mvp_regenerated_boot_source_emitter *emitter,
+    char ch
+) {
+    if (emitter->serial_mode) {
+        if (!emitter->line_open) {
+            machine_puts("recorz-regenerated-boot-source-data ");
+            emitter->line_open = 1U;
+            emitter->line_bytes = 0U;
+        }
+        emit_regenerated_boot_source_hex_byte((uint8_t)ch);
+        ++emitter->line_bytes;
+        if (emitter->line_bytes == 32U) {
+            machine_putc('\n');
+            emitter->line_open = 0U;
+            emitter->line_bytes = 0U;
+        }
+    }
+    ++emitter->emitted_size;
+}
+
+static void regenerated_boot_source_emit_text(
+    struct recorz_mvp_regenerated_boot_source_emitter *emitter,
+    const char *text
+) {
+    uint32_t index = 0U;
+
+    while (text[index] != '\0') {
+        regenerated_boot_source_emit_byte(emitter, text[index++]);
+    }
+}
+
+static void regenerated_boot_source_emit_quoted_string(
+    struct recorz_mvp_regenerated_boot_source_emitter *emitter,
+    const char *text
+) {
+    uint32_t index = 0U;
+
+    while (text[index] != '\0') {
+        if (text[index] == '\'') {
+            regenerated_boot_source_emit_byte(emitter, '\'');
+        }
+        regenerated_boot_source_emit_byte(emitter, text[index]);
+        ++index;
+    }
+}
+
+static void regenerated_boot_source_emit_view_restore(
+    struct recorz_mvp_regenerated_boot_source_emitter *emitter,
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    struct recorz_mvp_value view_kind_value =
+        heap_get_field(workspace_object, workspace_current_view_kind_field_index(workspace_object));
+    struct recorz_mvp_value target_name_value =
+        heap_get_field(workspace_object, workspace_current_target_name_field_index(workspace_object));
+    char class_name[METHOD_SOURCE_NAME_LIMIT];
+    char selector_name_text[METHOD_SOURCE_NAME_LIMIT];
+    char protocol_name[METHOD_SOURCE_NAME_LIMIT];
+
+    if (view_kind_value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+        regenerated_boot_source_emit_text(emitter, "Workspace reopen.\n");
+        return;
+    }
+    if (view_kind_value.integer == WORKSPACE_VIEW_CLASSES) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browseClasses.\n");
+        return;
+    }
+    if (view_kind_value.integer == WORKSPACE_VIEW_PACKAGES) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browsePackages.\n");
+        return;
+    }
+    if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
+        target_name_value.string == 0 ||
+        target_name_value.string[0] == '\0') {
+        regenerated_boot_source_emit_text(emitter, "Workspace reopen.\n");
+        return;
+    }
+    if (view_kind_value.integer == WORKSPACE_VIEW_METHODS) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browseMethodsForClassNamed: '");
+        regenerated_boot_source_emit_quoted_string(emitter, target_name_value.string);
+        regenerated_boot_source_emit_text(emitter, "'.\n");
+        return;
+    }
+    if (view_kind_value.integer == WORKSPACE_VIEW_PACKAGE) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browsePackageNamed: '");
+        regenerated_boot_source_emit_quoted_string(emitter, target_name_value.string);
+        regenerated_boot_source_emit_text(emitter, "'.\n");
+        return;
+    }
+    if (view_kind_value.integer == WORKSPACE_VIEW_PROTOCOLS) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browseProtocolsForClassNamed: '");
+        regenerated_boot_source_emit_quoted_string(emitter, target_name_value.string);
+        regenerated_boot_source_emit_text(emitter, "'.\n");
+        return;
+    }
+    if (view_kind_value.integer == WORKSPACE_VIEW_CLASS) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browseClassNamed: '");
+        regenerated_boot_source_emit_quoted_string(emitter, target_name_value.string);
+        regenerated_boot_source_emit_text(emitter, "'.\n");
+        return;
+    }
+    if (view_kind_value.integer == WORKSPACE_VIEW_OBJECT) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browseObjectNamed: '");
+        regenerated_boot_source_emit_quoted_string(emitter, target_name_value.string);
+        regenerated_boot_source_emit_text(emitter, "'.\n");
+        return;
+    }
+    if (view_kind_value.integer == WORKSPACE_VIEW_CLASS_METHODS) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browseClassMethodsForClassNamed: '");
+        regenerated_boot_source_emit_quoted_string(emitter, target_name_value.string);
+        regenerated_boot_source_emit_text(emitter, "'.\n");
+        return;
+    }
+    if (view_kind_value.integer == WORKSPACE_VIEW_CLASS_PROTOCOLS) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browseClassProtocolsForClassNamed: '");
+        regenerated_boot_source_emit_quoted_string(emitter, target_name_value.string);
+        regenerated_boot_source_emit_text(emitter, "'.\n");
+        return;
+    }
+    if (view_kind_value.integer == WORKSPACE_VIEW_CLASS_SOURCE) {
+        regenerated_boot_source_emit_text(emitter, "Workspace fileOutClassNamed: '");
+        regenerated_boot_source_emit_quoted_string(emitter, target_name_value.string);
+        regenerated_boot_source_emit_text(emitter, "'.\n");
+        return;
+    }
+    if (view_kind_value.integer == WORKSPACE_VIEW_PACKAGE_SOURCE) {
+        regenerated_boot_source_emit_text(emitter, "Workspace fileOutPackageNamed: '");
+        regenerated_boot_source_emit_quoted_string(emitter, target_name_value.string);
+        regenerated_boot_source_emit_text(emitter, "'.\n");
+        return;
+    }
+    if (view_kind_value.integer == WORKSPACE_VIEW_METHOD &&
+        workspace_parse_method_target_name(
+            target_name_value.string,
+            class_name,
+            sizeof(class_name),
+            selector_name_text,
+            sizeof(selector_name_text))) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browseMethod: '");
+        regenerated_boot_source_emit_quoted_string(emitter, selector_name_text);
+        regenerated_boot_source_emit_text(emitter, "' ofClassNamed: '");
+        regenerated_boot_source_emit_quoted_string(emitter, class_name);
+        regenerated_boot_source_emit_text(emitter, "'.\n");
+        return;
+    }
+    if (view_kind_value.integer == WORKSPACE_VIEW_CLASS_METHOD &&
+        workspace_parse_method_target_name(
+            target_name_value.string,
+            class_name,
+            sizeof(class_name),
+            selector_name_text,
+            sizeof(selector_name_text))) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browseClassMethod: '");
+        regenerated_boot_source_emit_quoted_string(emitter, selector_name_text);
+        regenerated_boot_source_emit_text(emitter, "' ofClassNamed: '");
+        regenerated_boot_source_emit_quoted_string(emitter, class_name);
+        regenerated_boot_source_emit_text(emitter, "'.\n");
+        return;
+    }
+    if (view_kind_value.integer == WORKSPACE_VIEW_PROTOCOL &&
+        workspace_parse_protocol_target_name(
+            target_name_value.string,
+            class_name,
+            sizeof(class_name),
+            protocol_name,
+            sizeof(protocol_name))) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browseProtocol: '");
+        regenerated_boot_source_emit_quoted_string(emitter, protocol_name);
+        regenerated_boot_source_emit_text(emitter, "' ofClassNamed: '");
+        regenerated_boot_source_emit_quoted_string(emitter, class_name);
+        regenerated_boot_source_emit_text(emitter, "'.\n");
+        return;
+    }
+    if (view_kind_value.integer == WORKSPACE_VIEW_CLASS_PROTOCOL &&
+        workspace_parse_protocol_target_name(
+            target_name_value.string,
+            class_name,
+            sizeof(class_name),
+            protocol_name,
+            sizeof(protocol_name))) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browseClassProtocol: '");
+        regenerated_boot_source_emit_quoted_string(emitter, protocol_name);
+        regenerated_boot_source_emit_text(emitter, "' ofClassNamed: '");
+        regenerated_boot_source_emit_quoted_string(emitter, class_name);
+        regenerated_boot_source_emit_text(emitter, "'.\n");
+        return;
+    }
+    regenerated_boot_source_emit_text(emitter, "Workspace reopen.\n");
+}
+
+static void regenerated_boot_source_emit_system_source(
+    struct recorz_mvp_regenerated_boot_source_emitter *emitter
+) {
+    const struct recorz_mvp_dynamic_class_definition *sorted_unpackaged[DYNAMIC_CLASS_LIMIT];
+    const struct recorz_mvp_live_package_definition *sorted_packages[PACKAGE_LIMIT];
+    uint16_t unpackaged_count = 0U;
+    uint16_t sorted_package_count = 0U;
+    uint16_t dynamic_index;
+    uint16_t package_index;
+    uint8_t emitted_any_unit = 0U;
+    int16_t max_boot_order = -1;
+    uint16_t object_kind;
+
+    for (object_kind = 1U; object_kind <= MAX_OBJECT_KIND; ++object_kind) {
+        const struct recorz_mvp_seed_class_source_record *seed_source = &recorz_mvp_generated_seed_class_sources[object_kind];
+
+        if (seed_source->class_name != 0 &&
+            seed_source->source_boot_order > max_boot_order) {
+            max_boot_order = seed_source->source_boot_order;
+        }
+    }
+    if (max_boot_order >= 0) {
+        for (object_kind = 0U; object_kind <= (uint16_t)max_boot_order; ++object_kind) {
+            uint16_t seed_kind;
+
+            for (seed_kind = 1U; seed_kind <= MAX_OBJECT_KIND; ++seed_kind) {
+                const struct recorz_mvp_seed_class_source_record *seed_source =
+                    &recorz_mvp_generated_seed_class_sources[seed_kind];
+
+                if (seed_source->class_name == 0 ||
+                    seed_source->source_boot_order != (int16_t)object_kind) {
+                    continue;
+                }
+                if (emitted_any_unit) {
+                    regenerated_boot_source_emit_text(emitter, "\n");
+                }
+                regenerated_boot_source_emit_quoted_string(
+                    emitter,
+                    file_out_class_source_text(
+                        seed_source->class_name,
+                        kernel_source_io_buffer,
+                        sizeof(kernel_source_io_buffer))
+                );
+                emitted_any_unit = 1U;
+            }
+        }
+    }
+    for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
+        const struct recorz_mvp_dynamic_class_definition *definition = &dynamic_classes[dynamic_index];
+        uint16_t insert_index;
+
+        if (definition->package_name[0] != '\0') {
+            continue;
+        }
+        insert_index = unpackaged_count;
+        while (insert_index != 0U &&
+               compare_source_names(
+                   definition->class_name,
+                   sorted_unpackaged[insert_index - 1U]->class_name) < 0) {
+            sorted_unpackaged[insert_index] = sorted_unpackaged[insert_index - 1U];
+            --insert_index;
+        }
+        sorted_unpackaged[insert_index] = definition;
+        ++unpackaged_count;
+    }
+    for (dynamic_index = 0U; dynamic_index < unpackaged_count; ++dynamic_index) {
+        if (emitted_any_unit) {
+            regenerated_boot_source_emit_text(emitter, "\n");
+        }
+        regenerated_boot_source_emit_quoted_string(
+            emitter,
+            file_out_class_source_text(
+                sorted_unpackaged[dynamic_index]->class_name,
+                kernel_source_io_buffer,
+                sizeof(kernel_source_io_buffer))
+        );
+        emitted_any_unit = 1U;
+    }
+    for (package_index = 0U; package_index < package_count; ++package_index) {
+        const struct recorz_mvp_live_package_definition *definition = &live_packages[package_index];
+        uint16_t insert_index;
+
+        if (definition->package_name[0] == '\0') {
+            continue;
+        }
+        insert_index = sorted_package_count;
+        while (insert_index != 0U &&
+               compare_source_names(
+                   definition->package_name,
+                   sorted_packages[insert_index - 1U]->package_name) < 0) {
+            sorted_packages[insert_index] = sorted_packages[insert_index - 1U];
+            --insert_index;
+        }
+        sorted_packages[insert_index] = definition;
+        ++sorted_package_count;
+    }
+    for (package_index = 0U; package_index < sorted_package_count; ++package_index) {
+        if (emitted_any_unit) {
+            regenerated_boot_source_emit_text(emitter, "\n");
+        }
+        regenerated_boot_source_emit_quoted_string(
+            emitter,
+            file_out_package_source_text(
+                sorted_packages[package_index]->package_name,
+                package_source_io_buffer,
+                sizeof(package_source_io_buffer))
+        );
+        emitted_any_unit = 1U;
+    }
+}
+
+static void regenerated_boot_source_emit_program(
+    struct recorz_mvp_regenerated_boot_source_emitter *emitter,
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    struct recorz_mvp_value current_source_value = workspace_current_source_value(workspace_object);
+
+    regenerated_boot_source_emit_text(emitter, "Workspace fileIn: '");
+    regenerated_boot_source_emit_system_source(emitter);
+    regenerated_boot_source_emit_text(emitter, "'.\n");
+    regenerated_boot_source_emit_view_restore(emitter, workspace_object);
+    if (current_source_value.kind == RECORZ_MVP_VALUE_STRING &&
+        current_source_value.string != 0 &&
+        current_source_value.string[0] != '\0') {
+        regenerated_boot_source_emit_text(emitter, "Workspace setContents: '");
+        regenerated_boot_source_emit_quoted_string(emitter, current_source_value.string);
+        regenerated_boot_source_emit_text(emitter, "'.\n");
+    }
+}
+
+static void emit_regenerated_boot_source(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    struct recorz_mvp_regenerated_boot_source_emitter counter = {0U, 0U, 0U, 0U};
+    struct recorz_mvp_regenerated_boot_source_emitter emitter = {0U, 1U, 0U, 0U};
+
+    regenerated_boot_source_emit_program(&counter, workspace_object);
+    machine_puts("recorz-regenerated-boot-source-begin ");
+    panic_put_u32(counter.emitted_size);
+    machine_putc('\n');
+    regenerated_boot_source_emit_program(&emitter, workspace_object);
+    if (emitter.line_open) {
+        machine_putc('\n');
+    }
+    if (emitter.emitted_size != counter.emitted_size) {
+        machine_panic("regenerated boot source size mismatch");
+    }
+    machine_puts("recorz-regenerated-boot-source-end\n");
 }
 
 static void execute_entry_kernel_installer_compiled_method_word0_word1_word2_word3_instruction_count(
@@ -9329,6 +9720,18 @@ static void execute_entry_workspace_recover_last_source(
         machine_panic("Workspace recoverLastSource has no remembered source");
     }
     workspace_remember_current_source(object, source_value.string);
+    push(receiver);
+}
+
+static void execute_entry_workspace_emit_regenerated_boot_source(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    emit_regenerated_boot_source(object);
     push(receiver);
 }
 

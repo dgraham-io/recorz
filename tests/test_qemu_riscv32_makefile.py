@@ -134,6 +134,38 @@ class QemuRiscv32MakefileTests(unittest.TestCase):
             self.assertIn(f"FILE_IN_PAYLOAD={IMAGE_FIRST_UPDATE_PATH}", result.stdout)
             self.assertIn("continue-snapshot", result.stdout)
 
+    @unittest.skipUnless(shutil.which("make"), "make is required for QEMU RISC-V Makefile tests")
+    def test_regenerate_boot_source_uses_a_temporary_output_before_replacing_final_source(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-makefile-regenerate-boot-source-") as temp_dir:
+            build_dir = Path(temp_dir)
+            output_path = build_dir / "regenerated_boot_source.rz"
+            result = subprocess.run(
+                [
+                    "make",
+                    "-n",
+                    "-C",
+                    str(PLATFORM_DIR),
+                    f"BUILD_DIR={build_dir}",
+                    f"REGENERATED_BOOT_SOURCE_OUTPUT={output_path}",
+                    "regenerate-boot-source",
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    "make -n regenerate-boot-source failed\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            temp_output_path = f"{output_path}.tmp"
+            self.assertIn("extract_qemu_riscv_regenerated_boot_source.py --timeout", result.stdout)
+            self.assertIn(f"{build_dir / 'qemu.log'} {temp_output_path}", result.stdout)
+            self.assertIn(f"mv {temp_output_path} {output_path}", result.stdout)
+            self.assertNotIn(f"rm -f {output_path}", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
