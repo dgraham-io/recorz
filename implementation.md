@@ -1,5 +1,11 @@
 # Implementation Log
 
+## 2026-03-09 - Sync Main Specs With Exploratory Newspeak Note
+- Reviewed the existing `docs/` set for contradictions with the new exploratory Newspeak-direction note and did not find any hard conflicts; the main specifications already leave namespace/module structure and capability-oriented authority direction open.
+- Added small clarifying notes to [docs/recorz_architecture_book.md](/Users/david/repos/recorz/docs/recorz_architecture_book.md) and [docs/recorz_language_specification.md](/Users/david/repos/recorz/docs/recorz_language_specification.md) so the main specs now explicitly point at [docs/recorz_potential_newspeak_direction.md](/Users/david/repos/recorz/docs/recorz_potential_newspeak_direction.md) as an exploratory, undecided possibility rather than a current roadmap change.
+- Kept the clarifications narrow: they reaffirm that the active near-term priority remains a minimal Smalltalk/Strongtalk-like Recorz VM.
+- No tests were run because this step is documentation-only.
+
 ## 2026-03-09 - Document Potential Newspeak-Like Direction As Exploratory
 - Added [docs/recorz_potential_newspeak_direction.md](/Users/david/repos/recorz/docs/recorz_potential_newspeak_direction.md) to record a possible future Newspeak-inspired direction without changing the active architectural baseline.
 - Kept the note intentionally conservative: it explicitly preserves the current priority of bringing up a minimal Smalltalk/Strongtalk-like RV32-first VM before revisiting broader language-structure changes.

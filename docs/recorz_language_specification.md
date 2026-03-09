@@ -877,6 +877,12 @@ The following issues remain open and SHALL be resolved by later revisions or imp
 9. HDL elaboration declaration syntax,
 10. whether some subset restrictions are static-only or also runtime-enforced.
 
+Namespace and module structure remain intentionally open. A future implementation
+may explore selected Newspeak-like ideas there, but no such direction is
+currently decided, and this does not change the near-term priority of a minimal
+Smalltalk/Strongtalk-like Recorz system. See
+`docs/recorz_potential_newspeak_direction.md`.
+
 ---
 
 ## 23. Summary of Normative Intent
@@ -892,4 +898,3 @@ Recorz is a Smalltalk-descended language that:
 - SHALL prioritize comprehension, debugging, and inspectability.
 
 Its primary goal is to let programmers begin with ordinary Smalltalk-style code and grow naturally into typed, low-level, and hardware-oriented work without leaving the conceptual world of the language.
-

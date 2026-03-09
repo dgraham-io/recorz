@@ -841,6 +841,12 @@ Key open questions include:
 
 These questions should be answered incrementally as the implementation matures, without violating the architectural through-lines described here.
 
+Namespace/module structure also remains intentionally open. A future implementation
+may explore selected Newspeak-like ideas in that area, but this remains
+explicitly undecided and does not change the near-term priority of bringing up a
+minimal Smalltalk/Strongtalk-like Recorz VM first. See
+`docs/recorz_potential_newspeak_direction.md`.
+
 ---
 
 ## 20. Summary
@@ -903,4 +909,3 @@ For a new contributor, the recommended reading order is:
 7. the Formal Specification as a top-level normative cross-check.
 
 This order moves from architectural intention to language and runtime mechanics, then outward into tools, libraries, and long-term platform concerns.
-
