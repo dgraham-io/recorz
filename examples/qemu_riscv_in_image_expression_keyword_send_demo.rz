@@ -1,0 +1,10 @@
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #KeywordExpressionReporter superclass: #Object instanceVariableNames: ''''
+!
+show: text
+    ^Transcript show: text
+!'.
+KernelInstaller rememberObject: ((KernelInstaller classNamed: 'KeywordExpressionReporter') new) named: 'keywordExpressionReporter'.
+Transcript show: 'EXPR'.
+Transcript cr.
+((KernelInstaller objectNamed: 'keywordExpressionReporter') show: 'RETURN').
