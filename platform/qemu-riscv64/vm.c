@@ -24,6 +24,8 @@
 #define PACKAGE_SOURCE_BUFFER_LIMIT 16384U
 #define REGENERATED_SOURCE_BUFFER_LIMIT 65536U
 #define WORKSPACE_INPUT_MONITOR_STATE_LIMIT METHOD_SOURCE_CHUNK_LIMIT
+#define WORKSPACE_INPUT_MONITOR_STATUS_LIMIT 64U
+#define WORKSPACE_INPUT_MONITOR_FEEDBACK_LIMIT 1024U
 #define WORKSPACE_SOURCE_INSTRUCTION_LIMIT 64U
 #define WORKSPACE_SOURCE_LITERAL_LIMIT 16U
 #define DYNAMIC_CLASS_LIMIT 16U
@@ -251,6 +253,9 @@ static char print_buffer[PRINT_BUFFER_SIZE];
 static char workspace_target_buffer[METHOD_SOURCE_CHUNK_LIMIT];
 static char workspace_input_monitor_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char workspace_input_monitor_cursor_state[WORKSPACE_INPUT_MONITOR_STATE_LIMIT];
+static char workspace_input_monitor_status[WORKSPACE_INPUT_MONITOR_STATUS_LIMIT];
+static char workspace_input_monitor_feedback[WORKSPACE_INPUT_MONITOR_FEEDBACK_LIMIT];
+static uint8_t workspace_input_monitor_capture_enabled = 0U;
 static char kernel_source_io_buffer[8193];
 static char package_source_io_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char regenerated_source_io_buffer[REGENERATED_SOURCE_BUFFER_LIMIT];
@@ -3797,6 +3802,127 @@ static uint32_t workspace_input_monitor_visible_line_capacity(
     return count;
 }
 
+static void workspace_input_monitor_set_status(const char *text) {
+    uint32_t offset = 0U;
+
+    workspace_input_monitor_status[0] = '\0';
+    if (text == 0 || text[0] == '\0') {
+        return;
+    }
+    append_text_checked(
+        workspace_input_monitor_status,
+        sizeof(workspace_input_monitor_status),
+        &offset,
+        text
+    );
+}
+
+static void workspace_input_monitor_clear_feedback(void) {
+    workspace_input_monitor_feedback[0] = '\0';
+}
+
+static void workspace_input_monitor_feedback_append_char(char ch) {
+    uint32_t length = text_length(workspace_input_monitor_feedback);
+    uint32_t index;
+
+    if (ch == '\r') {
+        return;
+    }
+    if (length + 1U < sizeof(workspace_input_monitor_feedback)) {
+        workspace_input_monitor_feedback[length] = ch;
+        workspace_input_monitor_feedback[length + 1U] = '\0';
+        return;
+    }
+    for (index = 1U; index < length; ++index) {
+        workspace_input_monitor_feedback[index - 1U] = workspace_input_monitor_feedback[index];
+    }
+    if (length != 0U) {
+        workspace_input_monitor_feedback[length - 1U] = ch;
+        workspace_input_monitor_feedback[length] = '\0';
+    }
+}
+
+static uint32_t workspace_input_monitor_reserved_output_lines(uint32_t total_visible_lines) {
+    if (total_visible_lines <= 6U) {
+        return 0U;
+    }
+    return 4U;
+}
+
+static const char *workspace_input_monitor_feedback_tail_start(
+    const char *text,
+    uint32_t line_capacity
+) {
+    const char *line_starts[4];
+    const char *cursor = text;
+    uint32_t line_count = 0U;
+
+    if (text == 0 || text[0] == '\0' || line_capacity == 0U) {
+        return text;
+    }
+    while (*cursor != '\0') {
+        if (line_capacity <= 4U) {
+            line_starts[line_count % line_capacity] = cursor;
+        }
+        ++line_count;
+        while (*cursor != '\0' && *cursor != '\n') {
+            ++cursor;
+        }
+        if (*cursor == '\n') {
+            ++cursor;
+        }
+    }
+    if (line_count <= line_capacity || line_capacity > 4U) {
+        return text;
+    }
+    return line_starts[line_count % line_capacity];
+}
+
+static void workspace_render_input_monitor_feedback(
+    const struct recorz_mvp_heap_object *form,
+    uint32_t output_line_capacity
+) {
+    const char *cursor;
+    char line[METHOD_SOURCE_CHUNK_LIMIT];
+    char prefixed_line[METHOD_SOURCE_CHUNK_LIMIT];
+    uint32_t line_offset;
+    uint32_t rendered_lines = 0U;
+
+    if (output_line_capacity == 0U) {
+        return;
+    }
+    workspace_write_label_and_text(
+        form,
+        "STATUS",
+        workspace_input_monitor_status[0] == '\0' ? "READY" : workspace_input_monitor_status
+    );
+    if (output_line_capacity == 1U) {
+        return;
+    }
+    if (workspace_input_monitor_feedback[0] == '\0') {
+        workspace_write_raw_input_monitor_line(form, "OUT> (no output)", 0U, 0U);
+        rendered_lines = 1U;
+    } else {
+        cursor = workspace_input_monitor_feedback_tail_start(
+            workspace_input_monitor_feedback,
+            output_line_capacity - 1U
+        );
+        while (rendered_lines + 1U <= output_line_capacity - 1U &&
+               source_copy_raw_line(&cursor, line, sizeof(line))) {
+            line_offset = 0U;
+            prefixed_line[0] = '\0';
+            append_text_checked(prefixed_line, sizeof(prefixed_line), &line_offset, "OUT> ");
+            append_text_checked(prefixed_line, sizeof(prefixed_line), &line_offset, line);
+            workspace_write_raw_input_monitor_line(form, prefixed_line, 0U, 0U);
+            ++rendered_lines;
+        }
+    }
+    while (rendered_lines + 1U < output_line_capacity) {
+        workspace_write_raw_input_monitor_line(form, "OUT>", 0U, 0U);
+        ++rendered_lines;
+    }
+}
+
 static void workspace_write_label_and_integer(
     const struct recorz_mvp_heap_object *form,
     const char *label,
@@ -4361,6 +4487,7 @@ static void workspace_render_input_monitor_browser(
     uint32_t cursor_column = 0U;
     uint32_t top_line;
     uint32_t visible_line_capacity;
+    uint32_t output_line_capacity;
     uint32_t source_line_index = 0U;
     uint32_t rendered_line_count = 0U;
     uint8_t wrote_line = 0U;
@@ -4381,6 +4508,12 @@ static void workspace_render_input_monitor_browser(
         &cursor_column
     );
     visible_line_capacity = workspace_input_monitor_visible_line_capacity(form);
+    output_line_capacity = workspace_input_monitor_reserved_output_lines(visible_line_capacity);
+    if (visible_line_capacity > output_line_capacity) {
+        visible_line_capacity -= output_line_capacity;
+    } else {
+        visible_line_capacity = 0U;
+    }
     top_line = workspace_input_monitor_top_line(workspace_object);
     if (visible_line_capacity != 0U) {
         if (top_line > cursor_line) {
@@ -4418,6 +4551,7 @@ static void workspace_render_input_monitor_browser(
          rendered_line_count < visible_line_capacity)) {
         workspace_write_raw_input_monitor_line(form, "", cursor_column, 1U);
     }
+    workspace_render_input_monitor_feedback(form, output_line_capacity);
 }
 
 static void workspace_bind_input_monitor_buffer(
@@ -4934,11 +5068,17 @@ static void workspace_evaluate_input_monitor_buffer(
     const char *chunk_source;
 
     if (workspace_input_monitor_buffer[0] == '\0') {
+        workspace_input_monitor_set_status("EMPTY BUFFER");
         return;
     }
+    workspace_input_monitor_clear_feedback();
+    workspace_input_monitor_set_status("RUNNING");
+    workspace_input_monitor_capture_enabled = 1U;
     chunk_source = workspace_normalize_do_it_source(workspace_input_monitor_buffer);
     workspace_remember_source(workspace_object, chunk_source);
     workspace_evaluate_source(workspace_source_for_evaluation(chunk_source));
+    workspace_input_monitor_capture_enabled = 0U;
+    workspace_input_monitor_set_status("RUN OK");
     heap_set_field(
         workspace_handle,
         workspace_current_view_kind_field_index(workspace_object),
@@ -5045,6 +5185,7 @@ static void workspace_accept_input_monitor_buffer(
     char accept_target_name[METHOD_SOURCE_CHUNK_LIMIT];
 
     if (workspace_input_monitor_buffer[0] == '\0') {
+        workspace_input_monitor_set_status("EMPTY BUFFER");
         return;
     }
     if (!workspace_input_monitor_accept_context(
@@ -5052,8 +5193,10 @@ static void workspace_accept_input_monitor_buffer(
             &accept_view_kind,
             accept_target_name,
             sizeof(accept_target_name))) {
+        workspace_input_monitor_set_status("ACCEPT NEEDS BROWSER");
         return;
     }
+    workspace_input_monitor_clear_feedback();
     heap_set_field(
         workspace_handle,
         workspace_current_view_kind_field_index(workspace_object),
@@ -5080,6 +5223,7 @@ static void workspace_accept_input_monitor_buffer(
         workspace_current_source_field_index(workspace_object),
         string_value(workspace_input_monitor_buffer)
     );
+    workspace_input_monitor_set_status("ACCEPT OK");
 }
 
 static void workspace_run_interactive_input_monitor(
@@ -6179,15 +6323,25 @@ static void form_clear(const struct recorz_mvp_heap_object *form) {
 }
 
 static void form_newline(const struct recorz_mvp_heap_object *form) {
+    uint8_t capture_feedback =
+        (uint8_t)(workspace_input_monitor_capture_enabled &&
+                  heap_handle_for_object(form) == default_form_handle);
+
     cursor_x = text_left_margin();
     cursor_y += char_height() + text_line_spacing();
     if (transcript_clear_on_overflow() && cursor_y + char_height() >= bitmap_height(bitmap_for_form(form))) {
         form_clear(form);
     }
+    if (capture_feedback) {
+        workspace_input_monitor_feedback_append_char('\n');
+    }
 }
 
 static void form_write_string(const struct recorz_mvp_heap_object *form, const char *text) {
     uint32_t form_width = bitmap_width(bitmap_for_form(form));
+    uint8_t capture_feedback =
+        (uint8_t)(workspace_input_monitor_capture_enabled &&
+                  heap_handle_for_object(form) == default_form_handle);
 
     while (*text != '\0') {
         const struct recorz_mvp_heap_object *glyph_bitmap;
@@ -6216,6 +6370,9 @@ static void form_write_string(const struct recorz_mvp_heap_object *form, const c
             0U
         );
         cursor_x += char_width();
+        if (capture_feedback) {
+            workspace_input_monitor_feedback_append_char(*text);
+        }
         ++text;
     }
 }

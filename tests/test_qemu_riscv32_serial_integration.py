@@ -533,6 +533,8 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
 
             output = output.replace("\r", "")
             self.assertIn("RUN: CTRL-R", output)
+            self.assertIn("STATUS: RUN OK", output)
+            self.assertIn("OUT> 3", output)
             self.assertIn(
                 "BUFFER=Transcript show: (1 + 2) printString.!",
                 output.replace("\n", ""),
