@@ -1,0 +1,9 @@
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #TempReporter superclass: #Object instanceVariableNames: ''''
+!
+value
+    | current |
+    current := ''TEMP''.
+    ^current
+!'.
+Transcript show: (((KernelInstaller classNamed: 'TempReporter') new) value).

@@ -80,6 +80,7 @@
 #define COMPILED_METHOD_OP_PUSH_ROOT RECORZ_MVP_COMPILED_METHOD_OP_PUSH_ROOT
 #define COMPILED_METHOD_OP_PUSH_ARGUMENT RECORZ_MVP_COMPILED_METHOD_OP_PUSH_ARGUMENT
 #define COMPILED_METHOD_OP_PUSH_NIL RECORZ_MVP_COMPILED_METHOD_OP_PUSH_NIL
+#define COMPILED_METHOD_OP_PUSH_LEXICAL RECORZ_MVP_COMPILED_METHOD_OP_PUSH_LEXICAL
 #define COMPILED_METHOD_OP_PUSH_FIELD RECORZ_MVP_COMPILED_METHOD_OP_PUSH_FIELD
 #define COMPILED_METHOD_OP_PUSH_SELF RECORZ_MVP_COMPILED_METHOD_OP_PUSH_SELF
 #define COMPILED_METHOD_OP_PUSH_SMALL_INTEGER RECORZ_MVP_COMPILED_METHOD_OP_PUSH_SMALL_INTEGER
@@ -88,6 +89,7 @@
 #define COMPILED_METHOD_OP_POP RECORZ_MVP_COMPILED_METHOD_OP_POP
 #define COMPILED_METHOD_OP_RETURN_TOP RECORZ_MVP_COMPILED_METHOD_OP_RETURN_TOP
 #define COMPILED_METHOD_OP_RETURN_RECEIVER RECORZ_MVP_COMPILED_METHOD_OP_RETURN_RECEIVER
+#define COMPILED_METHOD_OP_STORE_LEXICAL RECORZ_MVP_COMPILED_METHOD_OP_STORE_LEXICAL
 #define COMPILED_METHOD_OP_STORE_FIELD RECORZ_MVP_COMPILED_METHOD_OP_STORE_FIELD
 
 #define BITMAP_STORAGE_FRAMEBUFFER RECORZ_MVP_BITMAP_STORAGE_FRAMEBUFFER
@@ -281,6 +283,7 @@ static struct recorz_mvp_value nil_value(void);
 static uint32_t small_integer_u32(struct recorz_mvp_value value, const char *message);
 static void heap_set_class(uint16_t handle, uint16_t class_handle);
 static uint32_t compiled_method_instruction_word(const struct recorz_mvp_heap_object *compiled_method, uint8_t index);
+static uint16_t compiled_method_lexical_count(const struct recorz_mvp_heap_object *compiled_method);
 static uint32_t text_length(const char *text);
 static uint32_t text_left_margin(void);
 static uint32_t char_width(void);
@@ -1409,8 +1412,11 @@ static const char *workspace_compile_operand_push(
     char quoted_text[METHOD_SOURCE_CHUNK_LIMIT];
     int32_t small_integer = 0;
     const char *parsed_cursor;
+    const char *selector_cursor;
+    const char *after_selector;
     uint8_t global_id;
     uint16_t literal_index;
+    uint8_t selector_id;
 
     cursor = source_skip_statement_space(cursor);
     if (*cursor == '(') {
@@ -1461,7 +1467,26 @@ static const char *workspace_compile_operand_push(
     if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_GLOBAL, global_id, 0U)) {
         machine_panic("Workspace source exceeds instruction capacity");
     }
-    return parsed_cursor;
+    cursor = source_skip_statement_space(parsed_cursor);
+    while (source_char_is_identifier_start(*cursor)) {
+        selector_cursor = source_parse_identifier(cursor, identifier, sizeof(identifier));
+        if (selector_cursor == 0) {
+            break;
+        }
+        after_selector = source_skip_statement_space(selector_cursor);
+        if (*after_selector == ':') {
+            break;
+        }
+        selector_id = source_selector_id_for_name(identifier);
+        if (selector_id == 0U) {
+            machine_panic("Workspace source statement uses an unknown unary selector");
+        }
+        if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_SEND, selector_id, 0U)) {
+            machine_panic("Workspace source exceeds instruction capacity");
+        }
+        cursor = after_selector;
+    }
+    return cursor;
 }
 
 static const char *workspace_compile_expression_push(
@@ -2061,6 +2086,30 @@ static uint32_t compiled_method_instruction_word(
         heap_get_field(compiled_method, index),
         "compiled method instruction is not a small integer"
     );
+}
+
+static uint16_t compiled_method_lexical_count(const struct recorz_mvp_heap_object *compiled_method) {
+    uint8_t instruction_index;
+    uint16_t lexical_count = 0U;
+
+    if (compiled_method->kind != RECORZ_MVP_OBJECT_COMPILED_METHOD) {
+        machine_panic("method entry implementation is not a compiled method");
+    }
+    for (instruction_index = 0U; instruction_index < compiled_method->field_count; ++instruction_index) {
+        uint32_t instruction = compiled_method_instruction_word(compiled_method, instruction_index);
+        uint8_t opcode = compiled_method_instruction_opcode(instruction);
+        uint16_t lexical_index;
+
+        if (opcode != COMPILED_METHOD_OP_PUSH_LEXICAL &&
+            opcode != COMPILED_METHOD_OP_STORE_LEXICAL) {
+            continue;
+        }
+        lexical_index = compiled_method_instruction_operand_b(instruction);
+        if ((uint16_t)(lexical_index + 1U) > lexical_count) {
+            lexical_count = (uint16_t)(lexical_index + 1U);
+        }
+    }
+    return lexical_count;
 }
 
 static uint8_t compiled_method_instruction_opcode(uint32_t instruction) {
@@ -3457,6 +3506,12 @@ static void validate_compiled_method(
                 }
                 ++stack_depth;
                 break;
+            case COMPILED_METHOD_OP_PUSH_LEXICAL:
+                if (operand_b >= LEXICAL_LIMIT) {
+                    machine_panic("compiled method pushLexical index is out of range");
+                }
+                ++stack_depth;
+                break;
             case COMPILED_METHOD_OP_PUSH_NIL:
                 ++stack_depth;
                 break;
@@ -3477,6 +3532,15 @@ static void validate_compiled_method(
                     machine_panic("compiled method pushStringLiteral slot is out of range");
                 }
                 ++stack_depth;
+                break;
+            case COMPILED_METHOD_OP_STORE_LEXICAL:
+                if (operand_b >= LEXICAL_LIMIT) {
+                    machine_panic("compiled method storeLexical index is out of range");
+                }
+                if (stack_depth == 0U) {
+                    machine_panic("compiled method storeLexical stack underflow");
+                }
+                --stack_depth;
                 break;
             case COMPILED_METHOD_OP_STORE_FIELD:
                 if (operand_a >= OBJECT_FIELD_LIMIT) {
@@ -5643,10 +5707,13 @@ static uint8_t compile_source_operand_push(
     const char *name,
     const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
     uint16_t argument_count,
+    const char temporary_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t temporary_count,
     uint32_t instruction_words[],
     uint8_t *instruction_count
 ) {
     uint16_t argument_index;
+    uint16_t temporary_index;
     uint8_t field_index;
     uint8_t global_id;
 
@@ -5660,6 +5727,17 @@ static uint8_t compile_source_operand_push(
                 COMPILED_METHOD_OP_PUSH_ARGUMENT,
                 (uint8_t)argument_index,
                 0U
+            );
+            return 1U;
+        }
+    }
+    for (temporary_index = 0U; temporary_index < temporary_count; ++temporary_index) {
+        if (temporary_names[temporary_index][0] != '\0' &&
+            source_names_equal(name, temporary_names[temporary_index])) {
+            instruction_words[(*instruction_count)++] = encode_compiled_method_word(
+                COMPILED_METHOD_OP_PUSH_LEXICAL,
+                0U,
+                temporary_index
             );
             return 1U;
         }
@@ -5694,6 +5772,8 @@ static const char *compile_source_expression_push(
     const char *cursor,
     const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
     uint16_t argument_count,
+    const char temporary_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t temporary_count,
     uint32_t instruction_words[],
     uint8_t *instruction_count
 );
@@ -5702,6 +5782,8 @@ static const char *compile_source_primary_push(
     const char *cursor,
     const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
     uint16_t argument_count,
+    const char temporary_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t temporary_count,
     uint32_t instruction_words[],
     uint8_t *instruction_count
 );
@@ -5711,6 +5793,8 @@ static const char *compile_source_binary_expression_push(
     const char *cursor,
     const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
     uint16_t argument_count,
+    const char temporary_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t temporary_count,
     uint32_t instruction_words[],
     uint8_t *instruction_count
 ) {
@@ -5723,6 +5807,8 @@ static const char *compile_source_binary_expression_push(
         cursor,
         argument_names,
         argument_count,
+        temporary_names,
+        temporary_count,
         instruction_words,
         instruction_count
     );
@@ -5738,6 +5824,8 @@ static const char *compile_source_binary_expression_push(
             cursor,
             argument_names,
             argument_count,
+            temporary_names,
+            temporary_count,
             instruction_words,
             instruction_count
         );
@@ -5765,6 +5853,8 @@ static const char *compile_source_primary_push(
     const char *cursor,
     const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
     uint16_t argument_count,
+    const char temporary_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t temporary_count,
     uint32_t instruction_words[],
     uint8_t *instruction_count
 ) {
@@ -5782,6 +5872,8 @@ static const char *compile_source_primary_push(
             cursor,
             argument_names,
             argument_count,
+            temporary_names,
+            temporary_count,
             instruction_words,
             instruction_count
         );
@@ -5858,6 +5950,8 @@ static const char *compile_source_primary_push(
             token,
             argument_names,
             argument_count,
+            temporary_names,
+            temporary_count,
             instruction_words,
             instruction_count)) {
         return 0;
@@ -5895,6 +5989,8 @@ static const char *compile_source_expression_push(
     const char *cursor,
     const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
     uint16_t argument_count,
+    const char temporary_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t temporary_count,
     uint32_t instruction_words[],
     uint8_t *instruction_count
 ) {
@@ -5911,6 +6007,8 @@ static const char *compile_source_expression_push(
         cursor,
         argument_names,
         argument_count,
+        temporary_names,
+        temporary_count,
         instruction_words,
         instruction_count
     );
@@ -5942,6 +6040,8 @@ static const char *compile_source_expression_push(
             part_cursor + 1,
             argument_names,
             argument_count,
+            temporary_names,
+            temporary_count,
             instruction_words,
             instruction_count
         );
@@ -5989,6 +6089,8 @@ static uint8_t compile_source_statement_line(
     const char *line,
     const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
     uint16_t argument_count,
+    const char temporary_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t temporary_count,
     uint32_t instruction_words[],
     uint8_t *instruction_count,
     uint8_t *produces_value
@@ -6008,17 +6110,17 @@ static uint8_t compile_source_statement_line(
     cursor = source_skip_horizontal_space(cursor);
     if (cursor[0] == ':' && cursor[1] == '=') {
         uint8_t field_index;
+        uint16_t temporary_index;
 
         cursor += 2;
         cursor = source_skip_horizontal_space(cursor);
-        if (!class_field_index_for_name(class_object, receiver_name, &field_index)) {
-            machine_panic("KernelInstaller source method assignment target must be an instance variable");
-        }
         cursor = compile_source_expression_push(
             class_object,
             cursor,
             argument_names,
             argument_count,
+            temporary_names,
+            temporary_count,
             instruction_words,
             instruction_count
         );
@@ -6028,6 +6130,22 @@ static uint8_t compile_source_statement_line(
         cursor = source_skip_horizontal_space(cursor);
         if (*cursor != '.' || cursor[1] != '\0') {
             machine_panic("KernelInstaller source method assignment has unexpected trailing text");
+        }
+        for (temporary_index = 0U; temporary_index < temporary_count; ++temporary_index) {
+            if (temporary_names[temporary_index][0] != '\0' &&
+                source_names_equal(receiver_name, temporary_names[temporary_index])) {
+                compile_source_append_instruction(
+                    instruction_words,
+                    instruction_count,
+                    COMPILED_METHOD_OP_STORE_LEXICAL,
+                    0U,
+                    temporary_index
+                );
+                return 1U;
+            }
+        }
+        if (!class_field_index_for_name(class_object, receiver_name, &field_index)) {
+            machine_panic("KernelInstaller source method assignment target must be a temporary or an instance variable");
         }
         compile_source_append_instruction(
             instruction_words,
@@ -6043,6 +6161,8 @@ static uint8_t compile_source_statement_line(
         line,
         argument_names,
         argument_count,
+        temporary_names,
+        temporary_count,
         instruction_words,
         instruction_count
     );
@@ -6062,6 +6182,8 @@ static void compile_source_return_line(
     const char *line,
     const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
     uint16_t argument_count,
+    const char temporary_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t temporary_count,
     uint32_t instruction_words[],
     uint8_t *instruction_count
 ) {
@@ -6084,6 +6206,8 @@ static void compile_source_return_line(
         cursor,
         argument_names,
         argument_count,
+        temporary_names,
+        temporary_count,
         instruction_words,
         instruction_count
     );
@@ -6103,6 +6227,64 @@ static void compile_source_return_line(
     );
 }
 
+static void compile_source_parse_temporary_declarations(
+    const struct recorz_mvp_heap_object *class_object,
+    const char *line,
+    const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t argument_count,
+    char temporary_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t *temporary_count
+) {
+    const char *cursor = source_skip_horizontal_space(line);
+
+    if (*cursor != '|') {
+        machine_panic("KernelInstaller source temporary declaration is invalid");
+    }
+    ++cursor;
+    cursor = source_skip_horizontal_space(cursor);
+    *temporary_count = 0U;
+    while (*cursor != '\0') {
+        uint16_t existing_index;
+        uint8_t field_index;
+
+        if (*cursor == '|') {
+            ++cursor;
+            cursor = source_skip_horizontal_space(cursor);
+            if (*cursor != '\0') {
+                machine_panic("KernelInstaller source temporary declaration has unexpected trailing text");
+            }
+            return;
+        }
+        if (*temporary_count >= LEXICAL_LIMIT) {
+            machine_panic("KernelInstaller source method has too many temporaries");
+        }
+        cursor = source_parse_identifier(
+            cursor,
+            temporary_names[*temporary_count],
+            sizeof(temporary_names[*temporary_count])
+        );
+        if (cursor == 0) {
+            machine_panic("KernelInstaller source temporary declaration is invalid");
+        }
+        for (existing_index = 0U; existing_index < argument_count; ++existing_index) {
+            if (source_names_equal(temporary_names[*temporary_count], argument_names[existing_index])) {
+                machine_panic("KernelInstaller source temporary repeats an argument name");
+            }
+        }
+        for (existing_index = 0U; existing_index < *temporary_count; ++existing_index) {
+            if (source_names_equal(temporary_names[*temporary_count], temporary_names[existing_index])) {
+                machine_panic("KernelInstaller source temporary declaration repeats a temporary");
+            }
+        }
+        if (class_field_index_for_name(class_object, temporary_names[*temporary_count], &field_index)) {
+            machine_panic("KernelInstaller source temporary repeats an instance variable name");
+        }
+        ++(*temporary_count);
+        cursor = source_skip_horizontal_space(cursor);
+    }
+    machine_panic("KernelInstaller source temporary declaration is missing '|'");
+}
+
 static uint16_t compile_source_method_and_allocate(
     const struct recorz_mvp_heap_object *class_object,
     const char *source,
@@ -6115,16 +6297,19 @@ static uint16_t compile_source_method_and_allocate(
     char selector_name_buffer[METHOD_SOURCE_NAME_LIMIT];
     char selector_part_buffer[METHOD_SOURCE_NAME_LIMIT];
     char argument_names[MAX_SEND_ARGS][METHOD_SOURCE_NAME_LIMIT];
+    char temporary_names[LEXICAL_LIMIT][METHOD_SOURCE_NAME_LIMIT];
     const char *cursor = source;
     const char *header_cursor;
     uint32_t instruction_words[COMPILED_METHOD_MAX_INSTRUCTIONS];
     uint8_t instruction_count = 0U;
     uint8_t selector_id;
     uint16_t argument_count = 0U;
+    uint16_t temporary_count = 0U;
     uint8_t found_return = 0U;
     uint8_t pending_statement_value = 0U;
     uint32_t selector_length = 0U;
     uint32_t part_length = 0U;
+    uint8_t have_pending_line = 0U;
 
     if (source == 0 || *source == '\0') {
         machine_panic("KernelInstaller source method string is empty");
@@ -6132,7 +6317,11 @@ static uint16_t compile_source_method_and_allocate(
     for (argument_count = 0U; argument_count < MAX_SEND_ARGS; ++argument_count) {
         argument_names[argument_count][0] = '\0';
     }
+    for (temporary_count = 0U; temporary_count < LEXICAL_LIMIT; ++temporary_count) {
+        temporary_names[temporary_count][0] = '\0';
+    }
     argument_count = 0U;
+    temporary_count = 0U;
     if (source_copy_trimmed_line(&cursor, header_line, sizeof(header_line)) == 0U) {
         machine_panic("KernelInstaller source method is missing a header");
     }
@@ -6197,10 +6386,27 @@ static uint16_t compile_source_method_and_allocate(
     compiling_method_class_handle = heap_handle_for_object(class_object);
     compiling_method_selector_id = selector_id;
     compiling_method_argument_count = (uint8_t)argument_count;
+    if (source_copy_trimmed_line(&cursor, statement_line, sizeof(statement_line)) != 0U) {
+        const char *trimmed_line = source_skip_horizontal_space(statement_line);
 
-    while (source_copy_trimmed_line(&cursor, statement_line, sizeof(statement_line)) != 0U) {
+        if (trimmed_line[0] == '|') {
+            compile_source_parse_temporary_declarations(
+                class_object,
+                statement_line,
+                argument_names,
+                argument_count,
+                temporary_names,
+                &temporary_count
+            );
+        } else {
+            have_pending_line = 1U;
+        }
+    }
+    while (have_pending_line || source_copy_trimmed_line(&cursor, statement_line, sizeof(statement_line)) != 0U) {
         uint8_t produces_value = 0U;
         const char *trimmed_line = source_skip_horizontal_space(statement_line);
+
+        have_pending_line = 0U;
 
         if (pending_statement_value) {
             const char *return_cursor = source_skip_horizontal_space(trimmed_line + 1);
@@ -6223,6 +6429,8 @@ static uint16_t compile_source_method_and_allocate(
                 statement_line,
                 argument_names,
                 argument_count,
+                temporary_names,
+                temporary_count,
                 instruction_words,
                 &instruction_count
             );
@@ -6234,6 +6442,8 @@ static uint16_t compile_source_method_and_allocate(
                 statement_line,
                 argument_names,
                 argument_count,
+                temporary_names,
+                temporary_count,
                 instruction_words,
                 &instruction_count,
                 &produces_value
@@ -8334,7 +8544,7 @@ static void execute_compiled_method(
         .instruction_count = compiled_method->field_count,
         .literals = 0,
         .literal_count = 0U,
-        .lexical_count = 0U,
+        .lexical_count = compiled_method_lexical_count(compiled_method),
     };
 
     if (compiled_method->kind != RECORZ_MVP_OBJECT_COMPILED_METHOD) {
