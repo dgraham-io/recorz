@@ -8251,6 +8251,7 @@ struct recorz_mvp_regenerated_boot_source_emitter {
     uint8_t serial_mode;
     uint8_t line_open;
     uint8_t line_bytes;
+    const char *data_label;
 };
 
 static void emit_regenerated_boot_source_hex_byte(uint8_t value) {
@@ -8266,7 +8267,7 @@ static void regenerated_boot_source_emit_byte(
 ) {
     if (emitter->serial_mode) {
         if (!emitter->line_open) {
-            machine_puts("recorz-regenerated-boot-source-data ");
+            machine_puts(emitter->data_label);
             emitter->line_open = 1U;
             emitter->line_bytes = 0U;
         }
@@ -8450,15 +8451,46 @@ static void regenerated_boot_source_emit_view_restore(
     regenerated_boot_source_emit_text(emitter, "Workspace reopen.\n");
 }
 
-static void regenerated_boot_source_emit_system_source(
+static void regenerated_boot_source_emit_kernel_source(
+    struct recorz_mvp_regenerated_boot_source_emitter *emitter,
+    uint8_t quote_units
+) {
+    uint8_t emitted_any_unit = 0U;
+    uint16_t descriptor_order;
+
+    for (descriptor_order = 0U; descriptor_order <= MAX_OBJECT_KIND; ++descriptor_order) {
+        uint16_t seed_kind;
+
+        for (seed_kind = 1U; seed_kind <= MAX_OBJECT_KIND; ++seed_kind) {
+            const struct recorz_mvp_seed_class_source_record *seed_source =
+                &recorz_mvp_generated_seed_class_sources[seed_kind];
+
+            if (seed_source->class_name == 0 ||
+                seed_source->descriptor_order != descriptor_order) {
+                continue;
+            }
+            if (emitted_any_unit) {
+                regenerated_boot_source_emit_text(emitter, "\n");
+            }
+            if (quote_units) {
+                regenerated_boot_source_emit_quoted_string(
+                    emitter,
+                    seed_source->builder_source
+                );
+            } else {
+                regenerated_boot_source_emit_text(
+                    emitter,
+                    seed_source->builder_source
+                );
+            }
+            emitted_any_unit = 1U;
+        }
+    }
+}
+
+static void regenerated_boot_source_emit_boot_seed_source(
     struct recorz_mvp_regenerated_boot_source_emitter *emitter
 ) {
-    const struct recorz_mvp_dynamic_class_definition *sorted_unpackaged[DYNAMIC_CLASS_LIMIT];
-    const struct recorz_mvp_live_package_definition *sorted_packages[PACKAGE_LIMIT];
-    uint16_t unpackaged_count = 0U;
-    uint16_t sorted_package_count = 0U;
-    uint16_t dynamic_index;
-    uint16_t package_index;
     uint8_t emitted_any_unit = 0U;
     int16_t max_boot_order = -1;
     uint16_t object_kind;
@@ -8496,6 +8528,23 @@ static void regenerated_boot_source_emit_system_source(
                 emitted_any_unit = 1U;
             }
         }
+    }
+}
+
+static void regenerated_boot_source_emit_system_source(
+    struct recorz_mvp_regenerated_boot_source_emitter *emitter
+) {
+    const struct recorz_mvp_dynamic_class_definition *sorted_unpackaged[DYNAMIC_CLASS_LIMIT];
+    const struct recorz_mvp_live_package_definition *sorted_packages[PACKAGE_LIMIT];
+    uint16_t unpackaged_count = 0U;
+    uint16_t sorted_package_count = 0U;
+    uint16_t dynamic_index;
+    uint16_t package_index;
+    uint8_t emitted_any_unit = 0U;
+
+    regenerated_boot_source_emit_boot_seed_source(emitter);
+    if (emitter->emitted_size != 0U) {
+        emitted_any_unit = 1U;
     }
     for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
         const struct recorz_mvp_dynamic_class_definition *definition = &dynamic_classes[dynamic_index];
@@ -8583,8 +8632,12 @@ static void regenerated_boot_source_emit_program(
 static void emit_regenerated_boot_source(
     const struct recorz_mvp_heap_object *workspace_object
 ) {
-    struct recorz_mvp_regenerated_boot_source_emitter counter = {0U, 0U, 0U, 0U};
-    struct recorz_mvp_regenerated_boot_source_emitter emitter = {0U, 1U, 0U, 0U};
+    struct recorz_mvp_regenerated_boot_source_emitter counter = {
+        0U, 0U, 0U, 0U, "recorz-regenerated-boot-source-data "
+    };
+    struct recorz_mvp_regenerated_boot_source_emitter emitter = {
+        0U, 1U, 0U, 0U, "recorz-regenerated-boot-source-data "
+    };
 
     regenerated_boot_source_emit_program(&counter, workspace_object);
     machine_puts("recorz-regenerated-boot-source-begin ");
@@ -8598,6 +8651,28 @@ static void emit_regenerated_boot_source(
         machine_panic("regenerated boot source size mismatch");
     }
     machine_puts("recorz-regenerated-boot-source-end\n");
+}
+
+static void emit_regenerated_kernel_source(void) {
+    struct recorz_mvp_regenerated_boot_source_emitter counter = {
+        0U, 0U, 0U, 0U, "recorz-regenerated-kernel-source-data "
+    };
+    struct recorz_mvp_regenerated_boot_source_emitter emitter = {
+        0U, 1U, 0U, 0U, "recorz-regenerated-kernel-source-data "
+    };
+
+    regenerated_boot_source_emit_kernel_source(&counter, 0U);
+    machine_puts("recorz-regenerated-kernel-source-begin ");
+    panic_put_u32(counter.emitted_size);
+    machine_putc('\n');
+    regenerated_boot_source_emit_kernel_source(&emitter, 0U);
+    if (emitter.line_open) {
+        machine_putc('\n');
+    }
+    if (emitter.emitted_size != counter.emitted_size) {
+        machine_panic("regenerated kernel source size mismatch");
+    }
+    machine_puts("recorz-regenerated-kernel-source-end\n");
 }
 
 static void execute_entry_kernel_installer_compiled_method_word0_word1_word2_word3_instruction_count(
@@ -9731,6 +9806,7 @@ static void execute_entry_workspace_emit_regenerated_boot_source(
 ) {
     (void)arguments;
     (void)text;
+    emit_regenerated_kernel_source();
     emit_regenerated_boot_source(object);
     push(receiver);
 }

@@ -10,6 +10,7 @@ UPDATE_PAYLOAD ?=
 UPDATE_FW_CFG_NAME ?= opt/recorz-method-update
 FILE_IN_PAYLOAD ?=
 FILE_IN_PAYLOADS ?=
+KERNEL_SOURCE_BUNDLE ?=
 FILE_IN_FW_CFG_NAME ?= opt/recorz-file-in
 SNAPSHOT_PAYLOAD ?=
 SNAPSHOT_FW_CFG_NAME ?= opt/recorz-snapshot
@@ -18,10 +19,14 @@ SNAPSHOT_TEMP_OUTPUT ?= $(SNAPSHOT_OUTPUT).tmp
 SNAPSHOT_EXTRACT_TIMEOUT ?= 60
 REGENERATED_BOOT_SOURCE_OUTPUT ?= $(BUILD_DIR)/regenerated_boot_source.rz
 REGENERATED_BOOT_SOURCE_TEMP_OUTPUT ?= $(REGENERATED_BOOT_SOURCE_OUTPUT).tmp
+REGENERATED_KERNEL_SOURCE_OUTPUT ?= $(BUILD_DIR)/regenerated_kernel_source.rz
+REGENERATED_KERNEL_SOURCE_TEMP_OUTPUT ?= $(REGENERATED_KERNEL_SOURCE_OUTPUT).tmp
 REGENERATED_BOOT_SOURCE_EXTRACT_TIMEOUT ?= 60
+REGENERATED_RUNTIME_BINDINGS_OUTPUT ?= $(BUILD_DIR)/recorz_mvp_regenerated_runtime_bindings.h
 REGENERATED_IMAGE_OUTPUT ?= $(BUILD_DIR)/regenerated_image.bin
 QEMU_EXTRA_ARGS ?=
 comma := ,
+PYTHON_KERNEL_SOURCE_ENV := $(if $(KERNEL_SOURCE_BUNDLE),RECORZ_MVP_KERNEL_SOURCE_BUNDLE=$(KERNEL_SOURCE_BUNDLE))
 QEMU_UPDATE_ARGS := $(if $(UPDATE_PAYLOAD),-fw_cfg name=$(UPDATE_FW_CFG_NAME)$(comma)file=$(UPDATE_PAYLOAD))
 GENERATED_FILE_IN_PAYLOAD := $(BUILD_DIR)/external_file_in_payload.rz
 FILE_IN_EFFECTIVE_PAYLOAD := $(if $(strip $(FILE_IN_PAYLOADS)),$(GENERATED_FILE_IN_PAYLOAD),$(FILE_IN_PAYLOAD))
@@ -64,7 +69,7 @@ OBJECTS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(filter %.c,$(SOURCES))) \
 	$(patsubst %.S,$(BUILD_DIR)/%.o,$(filter %.S,$(SOURCES))) \
 	$(GENERATED_IMAGE_OBJECT)
 
-.PHONY: all run run-headless screenshot save-snapshot continue-snapshot regenerate-boot-source regenerate-image dev-init dev-boot dev-screenshot dev-file-in inspect-image clean FORCE
+.PHONY: all run run-headless screenshot save-snapshot continue-snapshot regenerate-boot-source regenerate-runtime-bindings regenerate-image dev-init dev-boot dev-screenshot dev-file-in inspect-image clean FORCE
 
 all: $(ELF)
 
@@ -72,10 +77,10 @@ $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
 $(GENERATED_IMAGE): FORCE $(IMAGE_SCRIPT) $(EXAMPLE) $(KERNEL_MVP_SOURCES) $(ROOT)/platform/qemu-riscv64/runtime_spec.json $(ROOT)/src/recorz/parser.py $(ROOT)/src/recorz/ast.py $(ROOT)/src/recorz/compiler.py $(ROOT)/src/recorz/model.py | $(BUILD_DIR)
-	PYTHONPATH=$(ROOT)/src $(PYTHON) $(IMAGE_SCRIPT) $(EXAMPLE) $(GENERATED_IMAGE)
+	$(PYTHON_KERNEL_SOURCE_ENV) PYTHONPATH=$(ROOT)/src $(PYTHON) $(IMAGE_SCRIPT) $(EXAMPLE) $(GENERATED_IMAGE)
 
 $(GENERATED_BINDINGS_HEADER): $(GENERATED_BINDINGS_SCRIPT) $(IMAGE_SCRIPT) $(KERNEL_MVP_SOURCES) $(ROOT)/platform/qemu-riscv64/runtime_spec.json $(ROOT)/src/recorz/parser.py $(ROOT)/src/recorz/ast.py $(ROOT)/src/recorz/compiler.py $(ROOT)/src/recorz/model.py | $(BUILD_DIR)
-	PYTHONPATH=$(ROOT)/src $(PYTHON) $(GENERATED_BINDINGS_SCRIPT) $(GENERATED_BINDINGS_HEADER)
+	$(PYTHON_KERNEL_SOURCE_ENV) PYTHONPATH=$(ROOT)/src $(PYTHON) $(GENERATED_BINDINGS_SCRIPT) $(GENERATED_BINDINGS_HEADER)
 
 $(GENERATED_FILE_IN_PAYLOAD): $(FILE_IN_PAYLOADS) | $(BUILD_DIR)
 	@rm -f $@
@@ -141,16 +146,24 @@ continue-snapshot: $(ELF) $(QEMU_FILE_IN_DEP)
 	@echo "wrote $(CONTINUE_SNAPSHOT_OUTPUT)"
 
 regenerate-boot-source: $(ELF) $(QEMU_FILE_IN_DEP)
-	rm -f $(QEMU_LOG) $(QEMU_PID) $(REGENERATED_BOOT_SOURCE_TEMP_OUTPUT)
+	rm -f $(QEMU_LOG) $(QEMU_PID) $(REGENERATED_BOOT_SOURCE_TEMP_OUTPUT) $(REGENERATED_KERNEL_SOURCE_TEMP_OUTPUT)
 	( $(QEMU) -machine virt -m $(QEMU_MEMORY) -smp 1 -kernel $(ELF) -serial file:$(QEMU_LOG) -display none -device ramfb $(QEMU_RUN_ARGS) >/dev/null 2>&1 & echo $$! > $(QEMU_PID) )
+	$(PYTHON) $(ROOT)/tools/extract_qemu_riscv_regenerated_kernel_source.py --timeout $(REGENERATED_BOOT_SOURCE_EXTRACT_TIMEOUT) $(QEMU_LOG) $(REGENERATED_KERNEL_SOURCE_TEMP_OUTPUT)
 	$(PYTHON) $(ROOT)/tools/extract_qemu_riscv_regenerated_boot_source.py --timeout $(REGENERATED_BOOT_SOURCE_EXTRACT_TIMEOUT) $(QEMU_LOG) $(REGENERATED_BOOT_SOURCE_TEMP_OUTPUT)
 	@PID=$$(cat $(QEMU_PID)); kill $$PID >/dev/null 2>&1 || true
+	@mkdir -p $(dir $(REGENERATED_KERNEL_SOURCE_OUTPUT))
+	@mv $(REGENERATED_KERNEL_SOURCE_TEMP_OUTPUT) $(REGENERATED_KERNEL_SOURCE_OUTPUT)
+	@echo "wrote $(REGENERATED_KERNEL_SOURCE_OUTPUT)"
 	@mkdir -p $(dir $(REGENERATED_BOOT_SOURCE_OUTPUT))
 	@mv $(REGENERATED_BOOT_SOURCE_TEMP_OUTPUT) $(REGENERATED_BOOT_SOURCE_OUTPUT)
 	@echo "wrote $(REGENERATED_BOOT_SOURCE_OUTPUT)"
 
+regenerate-runtime-bindings: regenerate-boot-source
+	RECORZ_MVP_KERNEL_SOURCE_BUNDLE=$(REGENERATED_KERNEL_SOURCE_OUTPUT) PYTHONPATH=$(ROOT)/src $(PYTHON) $(GENERATED_BINDINGS_SCRIPT) $(REGENERATED_RUNTIME_BINDINGS_OUTPUT)
+	@echo "wrote $(REGENERATED_RUNTIME_BINDINGS_OUTPUT)"
+
 regenerate-image: regenerate-boot-source
-	PYTHONPATH=$(ROOT)/src $(PYTHON) $(IMAGE_SCRIPT) $(REGENERATED_BOOT_SOURCE_OUTPUT) $(REGENERATED_IMAGE_OUTPUT)
+	RECORZ_MVP_KERNEL_SOURCE_BUNDLE=$(REGENERATED_KERNEL_SOURCE_OUTPUT) PYTHONPATH=$(ROOT)/src $(PYTHON) $(IMAGE_SCRIPT) $(REGENERATED_BOOT_SOURCE_OUTPUT) $(REGENERATED_IMAGE_OUTPUT)
 	@echo "wrote $(REGENERATED_IMAGE_OUTPUT)"
 
 dev-init:

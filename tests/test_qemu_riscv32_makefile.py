@@ -139,6 +139,7 @@ class QemuRiscv32MakefileTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-makefile-regenerate-boot-source-") as temp_dir:
             build_dir = Path(temp_dir)
             output_path = build_dir / "regenerated_boot_source.rz"
+            kernel_output_path = build_dir / "regenerated_kernel_source.rz"
             result = subprocess.run(
                 [
                     "make",
@@ -147,6 +148,7 @@ class QemuRiscv32MakefileTests(unittest.TestCase):
                     str(PLATFORM_DIR),
                     f"BUILD_DIR={build_dir}",
                     f"REGENERATED_BOOT_SOURCE_OUTPUT={output_path}",
+                    f"REGENERATED_KERNEL_SOURCE_OUTPUT={kernel_output_path}",
                     "regenerate-boot-source",
                 ],
                 cwd=ROOT,
@@ -161,10 +163,47 @@ class QemuRiscv32MakefileTests(unittest.TestCase):
                 )
 
             temp_output_path = f"{output_path}.tmp"
+            temp_kernel_output_path = f"{kernel_output_path}.tmp"
+            self.assertIn("extract_qemu_riscv_regenerated_kernel_source.py --timeout", result.stdout)
+            self.assertIn(f"{build_dir / 'qemu.log'} {temp_kernel_output_path}", result.stdout)
+            self.assertIn(f"mv {temp_kernel_output_path} {kernel_output_path}", result.stdout)
             self.assertIn("extract_qemu_riscv_regenerated_boot_source.py --timeout", result.stdout)
             self.assertIn(f"{build_dir / 'qemu.log'} {temp_output_path}", result.stdout)
             self.assertIn(f"mv {temp_output_path} {output_path}", result.stdout)
             self.assertNotIn(f"rm -f {output_path}", result.stdout)
+
+    @unittest.skipUnless(shutil.which("make"), "make is required for QEMU RISC-V Makefile tests")
+    def test_regenerate_runtime_bindings_uses_the_regenerated_kernel_source_bundle(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-makefile-regenerate-bindings-") as temp_dir:
+            build_dir = Path(temp_dir)
+            kernel_output_path = build_dir / "regenerated_kernel_source.rz"
+            bindings_output_path = build_dir / "recorz_mvp_regenerated_runtime_bindings.h"
+            result = subprocess.run(
+                [
+                    "make",
+                    "-n",
+                    "-C",
+                    str(PLATFORM_DIR),
+                    f"BUILD_DIR={build_dir}",
+                    f"REGENERATED_KERNEL_SOURCE_OUTPUT={kernel_output_path}",
+                    f"REGENERATED_RUNTIME_BINDINGS_OUTPUT={bindings_output_path}",
+                    "regenerate-runtime-bindings",
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    "make -n regenerate-runtime-bindings failed\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            self.assertIn("extract_qemu_riscv_regenerated_kernel_source.py --timeout", result.stdout)
+            self.assertIn(f"RECORZ_MVP_KERNEL_SOURCE_BUNDLE={kernel_output_path}", result.stdout)
+            self.assertIn("generate_qemu_riscv_mvp_runtime_bindings_header.py", result.stdout)
+            self.assertIn(str(bindings_output_path), result.stdout)
 
 
 if __name__ == "__main__":

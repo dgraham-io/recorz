@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import struct
 import sys
@@ -15,6 +16,7 @@ from typing import Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 KERNEL_MVP_ROOT = ROOT / "kernel" / "mvp"
+KERNEL_SOURCE_BUNDLE_ENV = "RECORZ_MVP_KERNEL_SOURCE_BUNDLE"
 RUNTIME_SPEC_PATH = ROOT / "platform" / "qemu-riscv64" / "runtime_spec.json"
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
@@ -283,6 +285,12 @@ class KernelClassHeader:
     object_kind_order: int
     source_boot_order: int | None
     instance_variables: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class KernelSourceUnit:
+    relative_path: str
+    chunk_sources: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -628,6 +636,54 @@ def parse_kernel_class_header(header_source: str, relative_path: str) -> KernelC
     )
 
 
+def load_kernel_source_units_from_directory() -> list[KernelSourceUnit]:
+    source_units: list[KernelSourceUnit] = []
+
+    for method_path in sorted(KERNEL_MVP_ROOT.glob("*.rz")):
+        chunk_sources = split_kernel_method_chunks(method_path.read_text(encoding="utf-8"))
+        if not chunk_sources:
+            raise LoweringError(f"kernel MVP class file {method_path.name} is empty")
+        source_units.append(KernelSourceUnit(method_path.name, tuple(chunk_sources)))
+    return source_units
+
+
+def load_kernel_source_units_from_bundle(bundle_path: Path) -> list[KernelSourceUnit]:
+    source_units: list[KernelSourceUnit] = []
+    current_chunks: list[str] = []
+    current_relative_path: str | None = None
+    bundle_chunks = split_kernel_method_chunks(bundle_path.read_text(encoding="utf-8"))
+
+    if not bundle_chunks:
+        raise LoweringError(f"kernel source bundle {bundle_path} is empty")
+    for chunk_source in bundle_chunks:
+        stripped = chunk_source.lstrip()
+        if stripped.startswith("RecorzKernelClass:"):
+            if current_chunks:
+                source_units.append(KernelSourceUnit(current_relative_path or bundle_path.name, tuple(current_chunks)))
+            class_header = parse_kernel_class_header(chunk_source, bundle_path.name)
+            current_chunks = [chunk_source]
+            current_relative_path = f"{class_header.class_name}.rz"
+            continue
+        if not current_chunks:
+            raise LoweringError(
+                f"kernel source bundle {bundle_path} contains a non-class chunk before the first class header"
+            )
+        current_chunks.append(chunk_source)
+    if current_chunks:
+        source_units.append(KernelSourceUnit(current_relative_path or bundle_path.name, tuple(current_chunks)))
+    if not source_units:
+        raise LoweringError(f"kernel source bundle {bundle_path} did not declare any kernel classes")
+    return source_units
+
+
+def load_kernel_source_units() -> list[KernelSourceUnit]:
+    bundle_path_text = os.environ.get(KERNEL_SOURCE_BUNDLE_ENV)
+
+    if bundle_path_text:
+        return load_kernel_source_units_from_bundle(Path(bundle_path_text))
+    return load_kernel_source_units_from_directory()
+
+
 def parse_kernel_boot_object_field_specs(field_source: str, relative_path: str) -> tuple[tuple[str, object], ...]:
     field_specs: list[tuple[str, object]] = []
 
@@ -733,11 +789,8 @@ def parse_kernel_glyph_bitmap_family_chunk(
 def load_kernel_class_headers() -> dict[str, KernelClassHeader]:
     class_headers_by_name: dict[str, KernelClassHeader] = {}
 
-    for method_path in sorted(KERNEL_MVP_ROOT.glob("*.rz")):
-        chunk_sources = split_kernel_method_chunks(method_path.read_text(encoding="utf-8"))
-        if not chunk_sources:
-            raise LoweringError(f"kernel MVP class file {method_path.name} is empty")
-        class_header = parse_kernel_class_header(chunk_sources[0], method_path.name)
+    for source_unit in KERNEL_SOURCE_UNITS:
+        class_header = parse_kernel_class_header(source_unit.chunk_sources[0], source_unit.relative_path)
         if class_header.class_name in class_headers_by_name:
             raise LoweringError(f"kernel MVP class {class_header.class_name} is declared more than once")
         class_headers_by_name[class_header.class_name] = class_header
@@ -751,7 +804,7 @@ def load_kernel_class_headers() -> dict[str, KernelClassHeader]:
     if actual_descriptor_orders != expected_descriptor_orders:
         raise LoweringError(
             "kernel MVP class headers must declare a contiguous descriptorOrder range starting at 0"
-        )
+    )
     return class_headers_by_name
 
 
@@ -761,6 +814,7 @@ def object_kind_constant_name_from_class_name(class_name: str) -> str:
     return f"RECORZ_MVP_OBJECT_{re.sub(r'(?<!^)(?=[A-Z])', '_', class_name).upper()}"
 
 
+KERNEL_SOURCE_UNITS = load_kernel_source_units()
 KERNEL_CLASS_HEADERS_BY_NAME = load_kernel_class_headers()
 KERNEL_CLASS_HEADERS_IN_DESCRIPTOR_ORDER = sorted(
     KERNEL_CLASS_HEADERS_BY_NAME.values(),
@@ -869,14 +923,11 @@ def load_kernel_boot_object_declarations() -> dict[str, KernelBootObjectDeclarat
     boot_object_declarations_by_name: dict[str, KernelBootObjectDeclaration] = {}
     family_order_by_name: dict[str, set[int]] = {}
 
-    for method_path in sorted(KERNEL_MVP_ROOT.glob("*.rz")):
-        relative_path = method_path.name
-        chunk_sources = split_kernel_method_chunks(method_path.read_text(encoding="utf-8"))
-        if not chunk_sources:
-            raise LoweringError(f"kernel MVP class file {relative_path} is empty")
-        class_header = parse_kernel_class_header(chunk_sources[0], relative_path)
+    for source_unit in KERNEL_SOURCE_UNITS:
+        relative_path = source_unit.relative_path
+        class_header = parse_kernel_class_header(source_unit.chunk_sources[0], relative_path)
 
-        for chunk_source in chunk_sources[1:]:
+        for chunk_source in source_unit.chunk_sources[1:]:
             if not chunk_source.lstrip().startswith("RecorzKernelBootObject:"):
                 continue
             declaration = parse_kernel_boot_object_chunk(chunk_source, relative_path)
@@ -929,14 +980,11 @@ def boot_object_first_glyph_field_value(object_name: str) -> int:
 def load_kernel_selector_declarations() -> dict[str, KernelSelectorDeclaration]:
     selector_declarations_by_selector: dict[str, KernelSelectorDeclaration] = {}
 
-    for method_path in sorted(KERNEL_MVP_ROOT.glob("*.rz")):
-        relative_path = method_path.name
-        chunk_sources = split_kernel_method_chunks(method_path.read_text(encoding="utf-8"))
-        if not chunk_sources:
-            raise LoweringError(f"kernel MVP class file {relative_path} is empty")
-        class_header = parse_kernel_class_header(chunk_sources[0], relative_path)
+    for source_unit in KERNEL_SOURCE_UNITS:
+        relative_path = source_unit.relative_path
+        class_header = parse_kernel_class_header(source_unit.chunk_sources[0], relative_path)
 
-        for chunk_source in chunk_sources[1:]:
+        for chunk_source in source_unit.chunk_sources[1:]:
             if not chunk_source.lstrip().startswith("RecorzKernelSelector:"):
                 continue
             declaration = parse_kernel_selector_chunk(chunk_source, relative_path)
@@ -975,13 +1023,10 @@ def load_kernel_root_declarations(
 ) -> dict[str, KernelRootDeclaration]:
     root_declarations_by_name: dict[str, KernelRootDeclaration] = {}
 
-    for method_path in sorted(KERNEL_MVP_ROOT.glob("*.rz")):
-        relative_path = method_path.name
-        chunk_sources = split_kernel_method_chunks(method_path.read_text(encoding="utf-8"))
-        if not chunk_sources:
-            raise LoweringError(f"kernel MVP class file {relative_path} is empty")
+    for source_unit in KERNEL_SOURCE_UNITS:
+        relative_path = source_unit.relative_path
 
-        for chunk_source in chunk_sources[1:]:
+        for chunk_source in source_unit.chunk_sources[1:]:
             if not chunk_source.lstrip().startswith("RecorzKernelRoot:"):
                 continue
             declaration = parse_kernel_root_chunk(chunk_source, relative_path)
@@ -1021,14 +1066,11 @@ KERNEL_ROOT_DECLARATIONS_IN_ORDER = sorted(
 def load_kernel_glyph_bitmap_family_declaration() -> KernelGlyphBitmapFamilyDeclaration:
     glyph_family_declaration: KernelGlyphBitmapFamilyDeclaration | None = None
 
-    for method_path in sorted(KERNEL_MVP_ROOT.glob("*.rz")):
-        relative_path = method_path.name
-        chunk_sources = split_kernel_method_chunks(method_path.read_text(encoding="utf-8"))
-        if not chunk_sources:
-            raise LoweringError(f"kernel MVP class file {relative_path} is empty")
-        class_header = parse_kernel_class_header(chunk_sources[0], relative_path)
+    for source_unit in KERNEL_SOURCE_UNITS:
+        relative_path = source_unit.relative_path
+        class_header = parse_kernel_class_header(source_unit.chunk_sources[0], relative_path)
 
-        for chunk_source in chunk_sources[1:]:
+        for chunk_source in source_unit.chunk_sources[1:]:
             if not chunk_source.lstrip().startswith("RecorzKernelGlyphBitmapFamily:"):
                 continue
             declaration = parse_kernel_glyph_bitmap_family_chunk(chunk_source, relative_path)
@@ -1277,12 +1319,9 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
     seen_class_names: set[str] = set()
     discovered_entry_names: set[str] = set()
 
-    for method_path in sorted(KERNEL_MVP_ROOT.glob("*.rz")):
-        relative_path = method_path.name
-        chunk_sources = split_kernel_method_chunks(method_path.read_text(encoding="utf-8"))
-        if not chunk_sources:
-            raise LoweringError(f"kernel MVP class file {relative_path} is empty")
-        class_header = parse_kernel_class_header(chunk_sources[0], relative_path)
+    for source_unit in KERNEL_SOURCE_UNITS:
+        relative_path = source_unit.relative_path
+        class_header = parse_kernel_class_header(source_unit.chunk_sources[0], relative_path)
         class_name = class_header.class_name
         instance_variables = list(class_header.instance_variables)
         expected_class_kind = KERNEL_CLASS_NAME_TO_OBJECT_KIND.get(class_name)
@@ -1294,7 +1333,7 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
         discovered_method_sources_by_class[class_name] = []
         chunk_signatures: set[tuple[str, int]] = set()
 
-        for chunk_source in chunk_sources[1:]:
+        for chunk_source in source_unit.chunk_sources[1:]:
             if chunk_source.lstrip().startswith("RecorzKernelBootObject:"):
                 continue
             if chunk_source.lstrip().startswith("RecorzKernelRoot:"):
@@ -1367,13 +1406,14 @@ def kernel_chunk_is_runtime_file_in_chunk(chunk_source: str) -> bool:
 def load_kernel_canonical_class_sources() -> dict[str, str]:
     canonical_sources_by_name: dict[str, str] = {}
 
-    for method_path in sorted(KERNEL_MVP_ROOT.glob("*.rz")):
-        relative_path = method_path.name
-        chunk_sources = split_kernel_method_chunks(method_path.read_text(encoding="utf-8"))
-        if not chunk_sources:
-            raise LoweringError(f"kernel MVP class file {relative_path} is empty")
-        class_header = parse_kernel_class_header(chunk_sources[0], relative_path)
-        canonical_chunks = [chunk_source for chunk_source in chunk_sources if kernel_chunk_is_runtime_file_in_chunk(chunk_source)]
+    for source_unit in KERNEL_SOURCE_UNITS:
+        relative_path = source_unit.relative_path
+        class_header = parse_kernel_class_header(source_unit.chunk_sources[0], relative_path)
+        canonical_chunks = [
+            chunk_source
+            for chunk_source in source_unit.chunk_sources
+            if kernel_chunk_is_runtime_file_in_chunk(chunk_source)
+        ]
         if not canonical_chunks or not canonical_chunks[0].lstrip().startswith("RecorzKernelClass:"):
             raise LoweringError(f"kernel MVP class file {relative_path} is missing a canonical class header chunk")
         canonical_sources_by_name[class_header.class_name] = "\n!\n".join(canonical_chunks) + "\n!\n"
@@ -1386,6 +1426,24 @@ def load_kernel_canonical_class_sources() -> dict[str, str]:
             + ", ".join(missing_classes)
         )
     return canonical_sources_by_name
+
+
+def load_kernel_builder_class_sources() -> dict[str, str]:
+    builder_sources_by_name: dict[str, str] = {}
+
+    for source_unit in KERNEL_SOURCE_UNITS:
+        relative_path = source_unit.relative_path
+        class_header = parse_kernel_class_header(source_unit.chunk_sources[0], relative_path)
+        builder_sources_by_name[class_header.class_name] = "\n!\n".join(source_unit.chunk_sources) + "\n!\n"
+
+    expected_class_names = set(KERNEL_CLASS_HEADERS_BY_NAME)
+    if set(builder_sources_by_name) != expected_class_names:
+        missing_classes = sorted(expected_class_names - set(builder_sources_by_name))
+        raise LoweringError(
+            "kernel MVP builder source registry is missing classes: "
+            + ", ".join(missing_classes)
+        )
+    return builder_sources_by_name
 
 
 def compile_kernel_method_program(class_name: str, instance_variables: list[str], source: str) -> list[int]:
@@ -1531,6 +1589,7 @@ def build_method_update_manifest(class_name: str, source: str) -> bytes:
 
 KERNEL_METHOD_SOURCE_BY_ENTRY_NAME = load_kernel_method_sources()
 KERNEL_CANONICAL_CLASS_SOURCES_BY_NAME = load_kernel_canonical_class_sources()
+KERNEL_BUILDER_CLASS_SOURCES_BY_NAME = load_kernel_builder_class_sources()
 
 
 def validate_kernel_method_selectors(
@@ -1605,6 +1664,7 @@ def append_generated_seed_class_source_registry(lines: list[str]) -> None:
             "struct recorz_mvp_seed_class_source_record {",
             "    const char *class_name;",
             "    const char *canonical_source;",
+            "    const char *builder_source;",
             "    uint8_t descriptor_order;",
             "    uint8_t object_kind_order;",
             "    int16_t source_boot_order;",
@@ -1613,7 +1673,7 @@ def append_generated_seed_class_source_registry(lines: list[str]) -> None:
             "};",
             "",
             "static const struct recorz_mvp_seed_class_source_record recorz_mvp_generated_seed_class_sources[] = {",
-            "    {0, 0, 0, 0, -1, 0, {0, 0, 0, 0}},",
+            "    {0, 0, 0, 0, 0, -1, 0, {0, 0, 0, 0}},",
         ]
     )
     for class_header in KERNEL_CLASS_HEADERS_IN_OBJECT_KIND_ORDER:
@@ -1627,6 +1687,7 @@ def append_generated_seed_class_source_registry(lines: list[str]) -> None:
                 [
                     json.dumps(class_header.class_name),
                     json.dumps(KERNEL_CANONICAL_CLASS_SOURCES_BY_NAME[class_header.class_name]),
+                    json.dumps(KERNEL_BUILDER_CLASS_SOURCES_BY_NAME[class_header.class_name]),
                     f"{class_header.descriptor_order}",
                     f"{class_header.object_kind_order}",
                     f"{source_boot_order}",
