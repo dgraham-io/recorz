@@ -42,6 +42,7 @@ SELF_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_self_metho
 SMALL_INTEGER_LITERAL_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_small_integer_literal_demo.rz"
 STRING_LITERAL_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_string_literal_demo.rz"
 BOOLEAN_LITERAL_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_boolean_literal_demo.rz"
+WORKSPACE_ACCEPT_CURRENT_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_accept_current_demo.rz"
 COMPILED_METHOD_CONTEXT_UPDATE_DEMO = ROOT / "examples" / "qemu_riscv_compiled_method_context_update_demo.rz"
 COMPILED_METHOD_CONTEXT_UPDATE_SOURCE = ROOT / "examples" / "qemu_riscv_object_detail_sender_context_update.rz"
 UPDATE_TOOL = ROOT / "tools" / "build_qemu_riscv_method_update.py"
@@ -810,6 +811,48 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("AFTER", output)
             self.assertNotIn("LATE", output)
             self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
+
+    def test_workspace_accept_current_installs_and_keeps_method_browser_context(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-accept-current-source-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_ACCEPT_CURRENT_SOURCE_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertNotIn("panic:", output)
+            self.assertIn("METHOD: NEWLINE", output)
+            self.assertIn("NEWLINE", output)
 
     def test_workspace_evaluation_uses_workspace_as_the_receiver(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-self-source-") as temp_dir:

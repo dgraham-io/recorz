@@ -103,7 +103,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CONTEXT
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_VALUE_ARG
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_ACCEPT_CURRENT
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_FALSE
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -623,6 +623,8 @@ static const char *selector_name(uint8_t selector) {
             return "alive";
         case RECORZ_MVP_SELECTOR_VALUE_ARG:
             return "value:";
+        case RECORZ_MVP_SELECTOR_ACCEPT_CURRENT:
+            return "acceptCurrent";
     }
     return "unknown";
 }
@@ -908,6 +910,7 @@ static const struct recorz_mvp_live_method_source *live_method_source_for_select
     uint8_t selector_id,
     uint8_t argument_count
 );
+static const char *live_method_source_text(const struct recorz_mvp_live_method_source *source_record);
 
 static void source_copy_identifier(char destination[], uint32_t destination_size, const char *source) {
     uint32_t index = 0U;
@@ -7499,29 +7502,6 @@ static void append_dynamic_class_header_source(
     append_char_checked(buffer, buffer_size, offset, '\'');
 }
 
-static void append_class_header_source_for_object(
-    char buffer[],
-    uint32_t buffer_size,
-    uint32_t *offset,
-    const struct recorz_mvp_heap_object *class_object,
-    const char *class_name
-) {
-    const struct recorz_mvp_dynamic_class_definition *definition =
-        dynamic_class_definition_for_handle(heap_handle_for_object(class_object));
-    const struct recorz_mvp_heap_object *superclass_object = class_superclass_object_or_null(class_object);
-    const char *superclass_name = superclass_object == 0 ? "Object" : class_name_for_object(superclass_object);
-
-    if (definition != 0) {
-        append_dynamic_class_header_source(buffer, buffer_size, offset, definition);
-        return;
-    }
-    append_text_checked(buffer, buffer_size, offset, "RecorzKernelClass: #");
-    append_text_checked(buffer, buffer_size, offset, class_name);
-    append_text_checked(buffer, buffer_size, offset, " superclass: #");
-    append_text_checked(buffer, buffer_size, offset, superclass_name);
-    append_text_checked(buffer, buffer_size, offset, " instanceVariableNames: ''");
-}
-
 static void append_live_method_source_chunks(
     char buffer[],
     uint32_t buffer_size,
@@ -7587,75 +7567,8 @@ static const struct recorz_mvp_live_method_source *live_method_source_for_select
     return 0;
 }
 
-static const char *file_out_method_source_by_name(
-    const char *class_name,
-    uint8_t selector_id,
-    uint8_t is_class_side
-) {
-    static char method_file_out_buffer[8192];
-    const struct recorz_mvp_heap_object *class_object;
-    const struct recorz_mvp_heap_object *method_owner_object;
-    const struct recorz_mvp_heap_object *method_object;
-    const struct recorz_mvp_live_method_source *source_record;
-    uint16_t method_owner_handle;
-    uint32_t offset = 0U;
-    uint8_t wrote_any_chunk = 0U;
-
-    class_object = lookup_class_by_name(class_name);
-    if (class_object == 0) {
-        machine_panic("Workspace method source export could not resolve class");
-    }
-    method_owner_object = is_class_side ? class_side_lookup_target(class_object) : class_object;
-    method_owner_handle = heap_handle_for_object(method_owner_object);
-    method_object = lookup_builtin_method_descriptor(method_owner_object, selector_id, 0U);
-    if (method_object == 0) {
-        method_object = lookup_builtin_method_descriptor(method_owner_object, selector_id, 1U);
-    }
-    if (method_object == 0) {
-        machine_panic("Workspace method source export could not resolve method");
-    }
-    source_record = live_method_source_for_selector_and_arity(
-        method_owner_handle,
-        selector_id,
-        method_descriptor_argument_count(method_object)
-    );
-    if (source_record == 0) {
-        machine_panic("Workspace method source export is missing live source");
-    }
-    method_file_out_buffer[0] = '\0';
-    append_class_header_source_for_object(
-        method_file_out_buffer,
-        sizeof(method_file_out_buffer),
-        &offset,
-        class_object,
-        class_name
-    );
-    append_text_checked(method_file_out_buffer, sizeof(method_file_out_buffer), &offset, "\n!\n");
-    if (is_class_side) {
-        append_text_checked(method_file_out_buffer, sizeof(method_file_out_buffer), &offset, "RecorzKernelClassSide: #");
-        append_text_checked(method_file_out_buffer, sizeof(method_file_out_buffer), &offset, class_name);
-        append_text_checked(method_file_out_buffer, sizeof(method_file_out_buffer), &offset, "\n!\n");
-    }
-    if (source_record->protocol_name[0] != '\0') {
-        append_protocol_chunk(
-            method_file_out_buffer,
-            sizeof(method_file_out_buffer),
-            &offset,
-            source_record->protocol_name,
-            &wrote_any_chunk
-        );
-    }
-    append_chunk_text(
-        method_file_out_buffer,
-        sizeof(method_file_out_buffer),
-        &offset,
-        source_record->source,
-        &wrote_any_chunk
-    );
-    if (!wrote_any_chunk) {
-        machine_panic("Workspace method source export has no method chunk");
-    }
-    return runtime_string_allocate_copy(method_file_out_buffer);
+static const char *live_method_source_text(const struct recorz_mvp_live_method_source *source_record) {
+    return source_record->source;
 }
 
 static const char *file_out_class_source_by_name(const char *class_name) {
@@ -8308,6 +8221,69 @@ static void execute_entry_workspace_file_in_current(
     push(receiver);
 }
 
+static void execute_entry_workspace_accept_current(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    struct recorz_mvp_value source_value;
+    struct recorz_mvp_value view_kind_value;
+    struct recorz_mvp_value target_name_value;
+    const struct recorz_mvp_heap_object *class_object;
+    char class_name[METHOD_SOURCE_NAME_LIMIT];
+    char selector_name_text[METHOD_SOURCE_NAME_LIMIT];
+
+    (void)arguments;
+    (void)text;
+    source_value = workspace_current_source_value(object);
+    if (source_value.kind != RECORZ_MVP_VALUE_STRING ||
+        source_value.string == 0 ||
+        source_value.string[0] == '\0') {
+        machine_panic("Workspace acceptCurrent has no current source");
+    }
+    if (object->field_count <= workspace_current_view_kind_field_index(object)) {
+        machine_panic("Workspace acceptCurrent has no current browser target");
+    }
+    view_kind_value = heap_get_field(object, workspace_current_view_kind_field_index(object));
+    if (view_kind_value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+        machine_panic("Workspace acceptCurrent requires a method browser target");
+    }
+    if ((uint32_t)view_kind_value.integer != WORKSPACE_VIEW_METHOD &&
+        (uint32_t)view_kind_value.integer != WORKSPACE_VIEW_CLASS_METHOD) {
+        machine_panic("Workspace acceptCurrent requires a method browser target");
+    }
+    class_object = workspace_target_class_for_file_in(object);
+    if (class_object == 0) {
+        machine_panic("Workspace acceptCurrent could not resolve the target class");
+    }
+    if (object->field_count <= workspace_current_target_name_field_index(object)) {
+        machine_panic("Workspace acceptCurrent is missing the current method target");
+    }
+    target_name_value = heap_get_field(object, workspace_current_target_name_field_index(object));
+    if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
+        target_name_value.string == 0 ||
+        target_name_value.string[0] == '\0') {
+        machine_panic("Workspace acceptCurrent is missing the current method target");
+    }
+    if (!workspace_parse_method_target_name(
+            target_name_value.string,
+            class_name,
+            sizeof(class_name),
+            selector_name_text,
+            sizeof(selector_name_text))) {
+        machine_panic("Workspace acceptCurrent current method target is invalid");
+    }
+    install_method_source_on_class(class_object, source_value.string);
+    workspace_render_method_browser(
+        object,
+        class_name,
+        selector_name_text,
+        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_METHOD ? "INST" : "CLASS"
+    );
+    push(receiver);
+}
+
 static void execute_entry_workspace_browse_classes(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -8503,7 +8479,7 @@ static void execute_entry_workspace_browse_method_of_class_named(
     if (source_record != 0) {
         workspace_remember_current_source(
             object,
-            file_out_method_source_by_name(arguments[1].string, selector_id, 0U)
+            live_method_source_text(source_record)
         );
     }
     workspace_remember_view(
@@ -8636,7 +8612,7 @@ static void execute_entry_workspace_browse_class_method_of_class_named(
     if (source_record != 0) {
         workspace_remember_current_source(
             object,
-            file_out_method_source_by_name(arguments[1].string, selector_id, 1U)
+            live_method_source_text(source_record)
         );
     }
     workspace_remember_view(

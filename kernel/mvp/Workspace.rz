@@ -71,3 +71,6 @@ rerun
 !
 reopen
     <primitive: #workspaceReopen>
+!
+acceptCurrent
+    <primitive: #workspaceAcceptCurrent>

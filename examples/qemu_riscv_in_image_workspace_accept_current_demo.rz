@@ -1,0 +1,8 @@
+Display clear.
+Workspace browseClassNamed: 'Display'.
+Workspace browseMethod: 'newline' ofClassNamed: 'Display'.
+Workspace setContents: 'newline
+    Display clear.
+    ^self'.
+Workspace acceptCurrent.
+Workspace reopen.

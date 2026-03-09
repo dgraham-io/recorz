@@ -10,5 +10,9 @@ cr
 Workspace setContents: ''.
 Workspace browseClassMethodsForClassNamed: 'Meta'.
 Workspace browseClassMethod: 'cr' ofClassNamed: 'Meta'.
+Workspace setContents: 'cr
+    Display newline.
+    ^self'.
+Workspace acceptCurrent.
 KernelInstaller configureStartup: Workspace selectorNamed: 'reopen'.
 KernelInstaller saveSnapshot.

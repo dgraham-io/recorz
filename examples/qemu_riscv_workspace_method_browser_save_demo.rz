@@ -1,10 +1,11 @@
 Workspace browseClassNamed: 'Display'.
-Workspace setContents: 'cr
+Workspace browseMethod: 'newline' ofClassNamed: 'Display'.
+Workspace setContents: 'newline
     Display clear.
     ^self'.
-Workspace fileInCurrent.
+Workspace acceptCurrent.
 Workspace setContents: ''.
 Workspace browseMethodsForClassNamed: 'Display'.
-Workspace browseMethod: 'cr' ofClassNamed: 'Display'.
+Workspace browseMethod: 'newline' ofClassNamed: 'Display'.
 KernelInstaller configureStartup: Workspace selectorNamed: 'reopen'.
 KernelInstaller saveSnapshot.
