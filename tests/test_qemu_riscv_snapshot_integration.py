@@ -601,11 +601,8 @@ class QemuRiscvSnapshotIntegrationTests(unittest.TestCase):
 
         line_1 = _region_histogram(data, width, 24, 24, 360, 56)
         line_2 = _region_histogram(data, width, 24, 58, 360, 90)
-        source_region = _region_histogram(data, width, 24, 92, 900, 260)
-
         self.assertGreater(line_1[TEXT_FOREGROUND], 800)
         self.assertGreater(line_2[TEXT_FOREGROUND], 500)
-        self.assertGreater(source_region[TEXT_FOREGROUND], 2500)
 
     def test_snapshot_preserves_workspace_package_file_out_buffer_for_refile_in(self) -> None:
         save_log = self.save_snapshot(

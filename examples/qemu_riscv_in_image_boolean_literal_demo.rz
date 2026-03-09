@@ -1,0 +1,16 @@
+| reporter |
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #BooleanReporter superclass: #Object instanceVariableNames: ''''
+!
+truth
+    ^true
+!
+falsity
+    ^false
+!'.
+reporter := KernelInstaller classNamed: 'BooleanReporter'.
+reporter := reporter new.
+KernelInstaller rememberObject: (reporter truth) named: 'truthValue'.
+Workspace browseObjectNamed: 'truthValue'.
+KernelInstaller rememberObject: (reporter falsity) named: 'falseValue'.
+Workspace browseObjectNamed: 'falseValue'.

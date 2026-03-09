@@ -1,0 +1,4 @@
+RecorzKernelClass: #False descriptorOrder: 21 objectKindOrder: 21 sourceBootOrder: 13 instanceVariableNames: ''
+!
+RecorzKernelBootObject: #False family: #beforeGlyphs order: 13 class: #False
+globalExports: 'false'

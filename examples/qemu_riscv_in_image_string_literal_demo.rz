@@ -1,0 +1,9 @@
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #StringReporter superclass: #Object instanceVariableNames: ''''
+!
+sum
+    ^''OK''
+!'.
+Transcript show: 'STR'.
+Transcript cr.
+Transcript show: (((KernelInstaller classNamed: 'StringReporter') new) sum).

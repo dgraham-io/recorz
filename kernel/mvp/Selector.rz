@@ -128,3 +128,7 @@ RecorzKernelSelector: #sum order: 62
 !
 RecorzKernelSelector: #setLeft:right: order: 63
 !
+RecorzKernelSelector: #truth order: 64
+!
+RecorzKernelSelector: #falsity order: 65
+!

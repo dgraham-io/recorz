@@ -21,6 +21,8 @@ EXPRESSION_KEYWORD_SEND_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_
 NIL_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_nil_method_demo.rz"
 SELF_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_self_method_demo.rz"
 SMALL_INTEGER_LITERAL_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_small_integer_literal_demo.rz"
+STRING_LITERAL_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_string_literal_demo.rz"
+BOOLEAN_LITERAL_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_boolean_literal_demo.rz"
 
 
 def _build_elf(build_dir: Path, example_path: Path = DEFAULT_EXAMPLE, *, profile: str = "dev") -> Path:
@@ -565,6 +567,94 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("recorz qemu-riscv32 mvp: created class LiteralReporter", output)
             self.assertIn("INT", output)
             self.assertIn("6", output)
+            self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
+
+    def test_in_image_source_compiler_supports_string_literals_in_live_method_bodies(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-string-literal-method-source-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, STRING_LITERAL_METHOD_SOURCE_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("recorz qemu-riscv32 mvp: created class StringReporter", output)
+            self.assertIn("STR", output)
+            self.assertIn("OK", output)
+            self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
+
+    def test_in_image_source_compiler_supports_true_and_false_literals_in_live_method_bodies(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-boolean-literal-method-source-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, BOOLEAN_LITERAL_METHOD_SOURCE_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("recorz qemu-riscv32 mvp: created class BooleanReporter", output)
+            self.assertIn("OBJECT: TRUTHVALUE", output)
+            self.assertIn("CLASS: TRUE", output)
+            self.assertIn("OBJECT: FALSEVALUE", output)
+            self.assertIn("CLASS: FALSE", output)
             self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
 
     def test_package_comment_round_trips_through_file_out_source(self) -> None:
