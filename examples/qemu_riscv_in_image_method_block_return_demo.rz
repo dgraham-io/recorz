@@ -1,0 +1,11 @@
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #MethodBlockReturnReporter superclass: #Object instanceVariableNames: ''''
+!
+sum
+    [ ^''EARLY'' ] value.
+    ^''LATE''
+!'.
+Transcript show: 'MRET'.
+Transcript cr.
+Transcript show: (((KernelInstaller classNamed: 'MethodBlockReturnReporter') new) sum).
+Transcript cr.

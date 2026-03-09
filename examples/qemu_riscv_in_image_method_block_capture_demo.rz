@@ -1,0 +1,13 @@
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #MethodBlockCaptureReporter superclass: #Object instanceVariableNames: ''value''
+!
+sum
+    | x |
+    x := 1.
+    [ x := x + 2. x ] value.
+    ^x
+!'.
+Transcript show: 'MCAP'.
+Transcript cr.
+Transcript show: (((KernelInstaller classNamed: 'MethodBlockCaptureReporter') new) sum printString).
+Transcript cr.

@@ -105,6 +105,10 @@
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_BLOCK_CLOSURE
 #define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_GREATER_THAN
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_FALSE
+#define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
+#define SOURCE_EVAL_ENV_LIMIT 32U
+#define SOURCE_EVAL_HOME_CONTEXT_LIMIT 32U
+#define SOURCE_EVAL_BLOCK_STATE_LIMIT 64U
 
 #define WORKSPACE_VIEW_NONE 0U
 #define WORKSPACE_VIEW_CLASSES 1U
@@ -202,6 +206,52 @@ enum recorz_mvp_method_return_mode {
     RECORZ_MVP_METHOD_RETURN_RECEIVER = 2,
 };
 
+enum recorz_mvp_source_eval_result_kind {
+    RECORZ_MVP_SOURCE_EVAL_VALUE = 1,
+    RECORZ_MVP_SOURCE_EVAL_RETURN = 2,
+};
+
+struct recorz_mvp_source_eval_result {
+    uint8_t kind;
+    struct recorz_mvp_value value;
+};
+
+struct recorz_mvp_source_binding {
+    char name[METHOD_SOURCE_NAME_LIMIT];
+    struct recorz_mvp_value value;
+};
+
+struct recorz_mvp_source_lexical_environment {
+    uint8_t in_use;
+    uint8_t binding_count;
+    int16_t parent_index;
+    struct recorz_mvp_source_binding bindings[SOURCE_EVAL_BINDING_LIMIT];
+};
+
+struct recorz_mvp_source_home_context {
+    uint8_t in_use;
+    uint8_t alive;
+    const struct recorz_mvp_heap_object *defining_class;
+    struct recorz_mvp_value receiver;
+    int16_t lexical_environment_index;
+};
+
+struct recorz_mvp_source_method_context {
+    const struct recorz_mvp_heap_object *defining_class;
+    struct recorz_mvp_value receiver;
+    int16_t lexical_environment_index;
+    int16_t home_context_index;
+    uint8_t is_block;
+};
+
+struct recorz_mvp_runtime_block_state {
+    uint8_t in_use;
+    uint16_t block_handle;
+    int16_t lexical_environment_index;
+    int16_t home_context_index;
+    const struct recorz_mvp_heap_object *defining_class;
+};
+
 static const uint32_t font5x7[128][7] = {
     [' '] = {0, 0, 0, 0, 0, 0, 0},
     ['-'] = {0, 0, 0, 31, 0, 0, 0},
@@ -260,6 +310,9 @@ static uint16_t transcript_layout_handle = 0U;
 static uint16_t transcript_style_handle = 0U;
 static uint16_t transcript_metrics_handle = 0U;
 static uint16_t transcript_behavior_handle = 0U;
+static struct recorz_mvp_source_lexical_environment source_eval_environments[SOURCE_EVAL_ENV_LIMIT];
+static struct recorz_mvp_source_home_context source_eval_home_contexts[SOURCE_EVAL_HOME_CONTEXT_LIMIT];
+static struct recorz_mvp_runtime_block_state source_eval_block_states[SOURCE_EVAL_BLOCK_STATE_LIMIT];
 static uint16_t startup_hook_receiver_handle = 0U;
 static uint16_t startup_hook_selector_id = 0U;
 static uint32_t mono_bitmap_pool[MONO_BITMAP_LIMIT][MONO_BITMAP_MAX_HEIGHT];
@@ -907,6 +960,61 @@ static const struct recorz_mvp_live_method_source *live_method_source_for_select
     uint8_t selector_id,
     uint8_t argument_count
 );
+static uint8_t source_text_contains_block_literal(const char *source);
+static const char *source_parse_method_header(
+    const char *source,
+    char selector_name[METHOD_SOURCE_NAME_LIMIT],
+    char argument_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t *argument_count,
+    const char **body_cursor_out
+);
+static uint16_t allocate_placeholder_live_source_compiled_method(void);
+static struct recorz_mvp_source_eval_result source_eval_value_result(struct recorz_mvp_value value);
+static struct recorz_mvp_source_eval_result source_eval_return_result(struct recorz_mvp_value value);
+static int16_t source_allocate_lexical_environment(int16_t parent_index);
+static int16_t source_allocate_home_context(
+    const struct recorz_mvp_heap_object *defining_class,
+    struct recorz_mvp_value receiver,
+    int16_t lexical_environment_index
+);
+static void source_append_binding(
+    int16_t lexical_environment_index,
+    const char *name,
+    struct recorz_mvp_value value
+);
+static struct recorz_mvp_value *source_lookup_binding_cell(
+    int16_t lexical_environment_index,
+    const char *name
+);
+static struct recorz_mvp_source_eval_result source_execute_block_closure(
+    const struct recorz_mvp_heap_object *object,
+    uint16_t argument_count,
+    const struct recorz_mvp_value arguments[]
+);
+static struct recorz_mvp_source_eval_result source_evaluate_expression(
+    struct recorz_mvp_source_method_context *context,
+    const char *cursor,
+    const char **cursor_out
+);
+static struct recorz_mvp_source_eval_result source_evaluate_statement_sequence(
+    struct recorz_mvp_source_method_context *context,
+    const char *source,
+    uint8_t is_block
+);
+static void execute_live_source_method(
+    const struct recorz_mvp_heap_object *class_object,
+    struct recorz_mvp_value receiver,
+    uint16_t argument_count,
+    const struct recorz_mvp_value arguments[],
+    const char *source
+);
+static void perform_send(
+    struct recorz_mvp_value receiver,
+    uint8_t selector,
+    uint16_t send_argument_count,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+);
 
 static void source_copy_identifier(char destination[], uint32_t destination_size, const char *source) {
     uint32_t index = 0U;
@@ -1404,6 +1512,228 @@ static const char *source_parse_small_integer(
     return cursor;
 }
 
+static uint8_t source_text_contains_block_literal(const char *source) {
+    uint8_t in_string = 0U;
+
+    if (source == 0) {
+        return 0U;
+    }
+    while (*source != '\0') {
+        if (*source == '\'') {
+            in_string = (uint8_t)!in_string;
+        } else if (!in_string && *source == '[') {
+            return 1U;
+        }
+        ++source;
+    }
+    return 0U;
+}
+
+static const char *source_parse_method_header(
+    const char *source,
+    char selector_name[METHOD_SOURCE_NAME_LIMIT],
+    char argument_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t *argument_count,
+    const char **body_cursor_out
+) {
+    char header_line[METHOD_SOURCE_LINE_LIMIT];
+    char selector_part[METHOD_SOURCE_NAME_LIMIT];
+    const char *cursor = source;
+    const char *header_cursor;
+    uint32_t selector_length = 0U;
+    uint32_t part_length;
+
+    if (source_copy_trimmed_line(&cursor, header_line, sizeof(header_line)) == 0U) {
+        return 0;
+    }
+    header_cursor = source_parse_identifier(header_line, selector_name, METHOD_SOURCE_NAME_LIMIT);
+    if (header_cursor == 0) {
+        return 0;
+    }
+    while (selector_name[selector_length] != '\0') {
+        ++selector_length;
+    }
+    *argument_count = 0U;
+    header_cursor = source_skip_horizontal_space(header_cursor);
+    if (*header_cursor == ':') {
+        while (*header_cursor == ':') {
+            if (*argument_count >= MAX_SEND_ARGS) {
+                machine_panic("KernelInstaller source method has too many arguments");
+            }
+            if (selector_length + 1U >= METHOD_SOURCE_NAME_LIMIT) {
+                machine_panic("KernelInstaller source method selector exceeds buffer capacity");
+            }
+            selector_name[selector_length++] = ':';
+            selector_name[selector_length] = '\0';
+            ++header_cursor;
+            header_cursor = source_skip_horizontal_space(header_cursor);
+            header_cursor = source_parse_identifier(
+                header_cursor,
+                argument_names[*argument_count],
+                METHOD_SOURCE_NAME_LIMIT
+            );
+            if (header_cursor == 0) {
+                machine_panic("KernelInstaller source method keyword header is missing an argument name");
+            }
+            ++(*argument_count);
+            header_cursor = source_skip_horizontal_space(header_cursor);
+            if (*header_cursor == '\0') {
+                break;
+            }
+            header_cursor = source_parse_identifier(header_cursor, selector_part, sizeof(selector_part));
+            if (header_cursor == 0) {
+                machine_panic("KernelInstaller source method header has unexpected trailing text");
+            }
+            part_length = 0U;
+            while (selector_part[part_length] != '\0') {
+                if (selector_length + 1U >= METHOD_SOURCE_NAME_LIMIT) {
+                    machine_panic("KernelInstaller source method selector exceeds buffer capacity");
+                }
+                selector_name[selector_length++] = selector_part[part_length++];
+            }
+            selector_name[selector_length] = '\0';
+            header_cursor = source_skip_horizontal_space(header_cursor);
+        }
+    }
+    if (*header_cursor != '\0') {
+        machine_panic("KernelInstaller source method header has unexpected trailing text");
+    }
+    *body_cursor_out = cursor;
+    return cursor;
+}
+
+static uint16_t allocate_placeholder_live_source_compiled_method(void) {
+    uint32_t instruction_words[2];
+
+    instruction_words[0] = encode_compiled_method_word(COMPILED_METHOD_OP_PUSH_NIL, 0U, 0U);
+    instruction_words[1] = encode_compiled_method_word(COMPILED_METHOD_OP_RETURN_TOP, 0U, 0U);
+    return allocate_compiled_method_from_words(instruction_words, 2U);
+}
+
+static struct recorz_mvp_source_eval_result source_eval_value_result(struct recorz_mvp_value value) {
+    struct recorz_mvp_source_eval_result result;
+
+    result.kind = RECORZ_MVP_SOURCE_EVAL_VALUE;
+    result.value = value;
+    return result;
+}
+
+static struct recorz_mvp_source_eval_result source_eval_return_result(struct recorz_mvp_value value) {
+    struct recorz_mvp_source_eval_result result;
+
+    result.kind = RECORZ_MVP_SOURCE_EVAL_RETURN;
+    result.value = value;
+    return result;
+}
+
+static struct recorz_mvp_source_lexical_environment *source_lexical_environment_at(int16_t lexical_environment_index) {
+    if (lexical_environment_index < 0 ||
+        lexical_environment_index >= (int16_t)SOURCE_EVAL_ENV_LIMIT ||
+        !source_eval_environments[lexical_environment_index].in_use) {
+        machine_panic("source lexical environment index is invalid");
+    }
+    return &source_eval_environments[lexical_environment_index];
+}
+
+static struct recorz_mvp_source_home_context *source_home_context_at(int16_t home_context_index) {
+    if (home_context_index < 0 ||
+        home_context_index >= (int16_t)SOURCE_EVAL_HOME_CONTEXT_LIMIT ||
+        !source_eval_home_contexts[home_context_index].in_use) {
+        machine_panic("source home context index is invalid");
+    }
+    return &source_eval_home_contexts[home_context_index];
+}
+
+static int16_t source_allocate_lexical_environment(int16_t parent_index) {
+    uint16_t env_index;
+    struct recorz_mvp_source_lexical_environment *environment;
+    uint16_t binding_index;
+
+    for (env_index = 0U; env_index < SOURCE_EVAL_ENV_LIMIT; ++env_index) {
+        if (!source_eval_environments[env_index].in_use) {
+            environment = &source_eval_environments[env_index];
+            environment->in_use = 1U;
+            environment->binding_count = 0U;
+            environment->parent_index = parent_index;
+            for (binding_index = 0U; binding_index < SOURCE_EVAL_BINDING_LIMIT; ++binding_index) {
+                environment->bindings[binding_index].name[0] = '\0';
+                environment->bindings[binding_index].value = nil_value();
+            }
+            return (int16_t)env_index;
+        }
+    }
+    machine_panic("source lexical environment pool overflow");
+    return -1;
+}
+
+static int16_t source_allocate_home_context(
+    const struct recorz_mvp_heap_object *defining_class,
+    struct recorz_mvp_value receiver,
+    int16_t lexical_environment_index
+) {
+    uint16_t home_index;
+
+    for (home_index = 0U; home_index < SOURCE_EVAL_HOME_CONTEXT_LIMIT; ++home_index) {
+        if (!source_eval_home_contexts[home_index].in_use) {
+            source_eval_home_contexts[home_index].in_use = 1U;
+            source_eval_home_contexts[home_index].alive = 1U;
+            source_eval_home_contexts[home_index].defining_class = defining_class;
+            source_eval_home_contexts[home_index].receiver = receiver;
+            source_eval_home_contexts[home_index].lexical_environment_index = lexical_environment_index;
+            return (int16_t)home_index;
+        }
+    }
+    machine_panic("source home context pool overflow");
+    return -1;
+}
+
+static void source_append_binding(
+    int16_t lexical_environment_index,
+    const char *name,
+    struct recorz_mvp_value value
+) {
+    struct recorz_mvp_source_lexical_environment *environment = source_lexical_environment_at(lexical_environment_index);
+    uint16_t binding_index;
+
+    if (name == 0 || name[0] == '\0') {
+        machine_panic("source lexical binding name is empty");
+    }
+    for (binding_index = 0U; binding_index < environment->binding_count; ++binding_index) {
+        if (source_names_equal(environment->bindings[binding_index].name, name)) {
+            machine_panic("source lexical binding is duplicated");
+        }
+    }
+    if (environment->binding_count >= SOURCE_EVAL_BINDING_LIMIT) {
+        machine_panic("source lexical binding limit exceeded");
+    }
+    source_copy_identifier(
+        environment->bindings[environment->binding_count].name,
+        sizeof(environment->bindings[environment->binding_count].name),
+        name
+    );
+    environment->bindings[environment->binding_count].value = value;
+    ++environment->binding_count;
+}
+
+static struct recorz_mvp_value *source_lookup_binding_cell(
+    int16_t lexical_environment_index,
+    const char *name
+) {
+    while (lexical_environment_index >= 0) {
+        struct recorz_mvp_source_lexical_environment *environment =
+            source_lexical_environment_at(lexical_environment_index);
+        uint16_t binding_index;
+
+        for (binding_index = 0U; binding_index < environment->binding_count; ++binding_index) {
+            if (source_names_equal(environment->bindings[binding_index].name, name)) {
+                return &environment->bindings[binding_index].value;
+            }
+        }
+        lexical_environment_index = environment->parent_index;
+    }
+    return 0;
+}
+
 static uint8_t workspace_source_append_instruction(
     struct recorz_mvp_workspace_source_program *program,
     uint8_t opcode,
@@ -1489,10 +1819,6 @@ static void workspace_compile_statement(
     struct recorz_mvp_workspace_source_program *program
 );
 static void workspace_compile_inline_block(
-    const char *source,
-    struct recorz_mvp_workspace_source_program *program
-);
-static void build_workspace_block_program(
     const char *source,
     struct recorz_mvp_workspace_source_program *program
 );
@@ -1737,18 +2063,6 @@ static void workspace_compile_inline_block(
         if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_NIL, 0U, 0U)) {
             machine_panic("Workspace source exceeds instruction capacity");
         }
-    }
-}
-
-static void build_workspace_block_program(
-    const char *source,
-    struct recorz_mvp_workspace_source_program *program
-) {
-    program->instruction_count = 0U;
-    program->literal_count = 0U;
-    workspace_compile_inline_block(source, program);
-    if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_RETURN, 0U, 0U)) {
-        machine_panic("Workspace block source exceeds instruction capacity");
     }
 }
 
@@ -2227,6 +2541,48 @@ static uint16_t allocate_block_closure_from_source(
     heap_set_field(handle, BLOCK_CLOSURE_FIELD_LEXICAL0, nil_value());
     heap_set_field(handle, BLOCK_CLOSURE_FIELD_LEXICAL1, nil_value());
     return handle;
+}
+
+static void source_register_block_state(
+    uint16_t block_handle,
+    const struct recorz_mvp_heap_object *defining_class,
+    int16_t lexical_environment_index,
+    int16_t home_context_index
+) {
+    uint16_t state_index;
+
+    for (state_index = 0U; state_index < SOURCE_EVAL_BLOCK_STATE_LIMIT; ++state_index) {
+        if (source_eval_block_states[state_index].in_use &&
+            source_eval_block_states[state_index].block_handle == block_handle) {
+            source_eval_block_states[state_index].defining_class = defining_class;
+            source_eval_block_states[state_index].lexical_environment_index = lexical_environment_index;
+            source_eval_block_states[state_index].home_context_index = home_context_index;
+            return;
+        }
+    }
+    for (state_index = 0U; state_index < SOURCE_EVAL_BLOCK_STATE_LIMIT; ++state_index) {
+        if (!source_eval_block_states[state_index].in_use) {
+            source_eval_block_states[state_index].in_use = 1U;
+            source_eval_block_states[state_index].block_handle = block_handle;
+            source_eval_block_states[state_index].defining_class = defining_class;
+            source_eval_block_states[state_index].lexical_environment_index = lexical_environment_index;
+            source_eval_block_states[state_index].home_context_index = home_context_index;
+            return;
+        }
+    }
+    machine_panic("source block state pool overflow");
+}
+
+static const struct recorz_mvp_runtime_block_state *source_block_state_for_handle(uint16_t block_handle) {
+    uint16_t state_index;
+
+    for (state_index = 0U; state_index < SOURCE_EVAL_BLOCK_STATE_LIMIT; ++state_index) {
+        if (source_eval_block_states[state_index].in_use &&
+            source_eval_block_states[state_index].block_handle == block_handle) {
+            return &source_eval_block_states[state_index];
+        }
+    }
+    return 0;
 }
 
 static struct recorz_mvp_heap_object *heap_object(uint16_t handle) {
@@ -7186,6 +7542,27 @@ static uint16_t compile_source_method_and_allocate(
     if (source == 0 || *source == '\0') {
         machine_panic("KernelInstaller source method string is empty");
     }
+    if (source_text_contains_block_literal(source)) {
+        const char *body_cursor;
+
+        if (source_parse_method_header(
+                source,
+                selector_name_buffer,
+                argument_names,
+                &argument_count,
+                &body_cursor) == 0) {
+            machine_panic("KernelInstaller source method header is invalid");
+        }
+        (void)body_cursor;
+        selector_id = source_selector_id_for_name(selector_name_buffer);
+        if (selector_id == 0U) {
+            machine_panic("KernelInstaller source method uses an unknown selector");
+        }
+        *selector_id_out = selector_id;
+        *argument_count_out = argument_count;
+        forget_live_string_literals(heap_handle_for_object(class_object), selector_id, (uint8_t)argument_count);
+        return allocate_placeholder_live_source_compiled_method();
+    }
     for (argument_count = 0U; argument_count < MAX_SEND_ARGS; ++argument_count) {
         argument_names[argument_count][0] = '\0';
     }
@@ -7336,6 +7713,562 @@ static uint16_t compile_source_method_and_allocate(
     *selector_id_out = selector_id;
     *argument_count_out = argument_count;
     return allocate_compiled_method_from_words(instruction_words, instruction_count);
+}
+
+static uint8_t source_environment_has_local_binding(int16_t lexical_environment_index, const char *name) {
+    struct recorz_mvp_source_lexical_environment *environment = source_lexical_environment_at(lexical_environment_index);
+    uint16_t binding_index;
+
+    for (binding_index = 0U; binding_index < environment->binding_count; ++binding_index) {
+        if (source_names_equal(environment->bindings[binding_index].name, name)) {
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
+static struct recorz_mvp_value source_read_identifier(
+    struct recorz_mvp_source_method_context *context,
+    const char *name
+) {
+    struct recorz_mvp_value *binding_cell;
+    uint8_t field_index;
+    uint8_t global_id;
+
+    if (source_names_equal(name, "self")) {
+        return context->receiver;
+    }
+    if (source_names_equal(name, "nil")) {
+        return nil_value();
+    }
+    if (source_names_equal(name, "true")) {
+        return global_value(RECORZ_MVP_GLOBAL_TRUE);
+    }
+    if (source_names_equal(name, "false")) {
+        return global_value(RECORZ_MVP_GLOBAL_FALSE);
+    }
+    if (source_names_equal(name, "thisContext")) {
+        machine_panic("live source thisContext is not supported yet");
+    }
+    binding_cell = source_lookup_binding_cell(context->lexical_environment_index, name);
+    if (binding_cell != 0) {
+        return *binding_cell;
+    }
+    if (context->receiver.kind == RECORZ_MVP_VALUE_OBJECT &&
+        context->defining_class != 0 &&
+        class_field_index_for_name(context->defining_class, name, &field_index)) {
+        return heap_get_field(heap_object_for_value(context->receiver), field_index);
+    }
+    global_id = source_global_id_for_name(name);
+    if (global_id != 0U) {
+        return global_value(global_id);
+    }
+    machine_panic("live source identifier is unknown");
+    return nil_value();
+}
+
+static void source_write_identifier(
+    struct recorz_mvp_source_method_context *context,
+    const char *name,
+    struct recorz_mvp_value value
+) {
+    struct recorz_mvp_value *binding_cell = source_lookup_binding_cell(context->lexical_environment_index, name);
+    uint8_t field_index;
+
+    if (binding_cell != 0) {
+        *binding_cell = value;
+        return;
+    }
+    if (context->receiver.kind == RECORZ_MVP_VALUE_OBJECT &&
+        context->defining_class != 0 &&
+        class_field_index_for_name(context->defining_class, name, &field_index)) {
+        heap_set_field((uint16_t)context->receiver.integer, field_index, value);
+        return;
+    }
+    machine_panic("live source assignment target is unknown");
+}
+
+static const char *source_parse_temporary_declarations(
+    struct recorz_mvp_source_method_context *context,
+    const char *source
+) {
+    struct recorz_mvp_source_lexical_environment *environment =
+        source_lexical_environment_at(context->lexical_environment_index);
+    const char *cursor = source_skip_horizontal_space(source);
+
+    if (*cursor != '|') {
+        machine_panic("live source temporary declaration is invalid");
+    }
+    ++cursor;
+    cursor = source_skip_horizontal_space(cursor);
+    while (*cursor != '\0') {
+        char name[METHOD_SOURCE_NAME_LIMIT];
+        uint8_t field_index;
+
+        if (*cursor == '|') {
+            ++cursor;
+            return source_skip_statement_space(cursor);
+        }
+        cursor = source_parse_identifier(cursor, name, sizeof(name));
+        if (cursor == 0) {
+            machine_panic("live source temporary declaration is invalid");
+        }
+        if (source_environment_has_local_binding(context->lexical_environment_index, name)) {
+            machine_panic("live source temporary declaration repeats a local binding");
+        }
+        if (context->defining_class != 0 && class_field_index_for_name(context->defining_class, name, &field_index)) {
+            machine_panic("live source temporary declaration repeats an instance variable");
+        }
+        if (environment->binding_count >= SOURCE_EVAL_BINDING_LIMIT) {
+            machine_panic("live source temporary declaration exceeds binding capacity");
+        }
+        source_append_binding(context->lexical_environment_index, name, nil_value());
+        cursor = source_skip_horizontal_space(cursor);
+    }
+    machine_panic("live source temporary declaration is missing a closing '|'");
+    return 0;
+}
+
+static const char *source_parse_block_header(
+    const char *source,
+    char argument_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t *argument_count_out
+) {
+    const char *cursor = source_skip_statement_space(source);
+
+    *argument_count_out = 0U;
+    while (*cursor == ':') {
+        ++cursor;
+        cursor = source_parse_identifier(cursor, argument_names[*argument_count_out], METHOD_SOURCE_NAME_LIMIT);
+        if (cursor == 0) {
+            machine_panic("block parameter name is invalid");
+        }
+        ++(*argument_count_out);
+        if (*argument_count_out > MAX_SEND_ARGS) {
+            machine_panic("block parameter count exceeds send capacity");
+        }
+        cursor = source_skip_statement_space(cursor);
+    }
+    if (*argument_count_out != 0U) {
+        if (*cursor != '|') {
+            machine_panic("block parameter list is missing '|'");
+        }
+        ++cursor;
+    }
+    return cursor;
+}
+
+static struct recorz_mvp_source_eval_result source_send_message(
+    struct recorz_mvp_source_method_context *context,
+    struct recorz_mvp_value receiver,
+    const char *selector_name,
+    uint16_t argument_count,
+    const struct recorz_mvp_value arguments[]
+) {
+    uint8_t selector_id;
+
+    if (receiver.kind == RECORZ_MVP_VALUE_OBJECT &&
+        primitive_kind_for_heap_object(heap_object_for_value(receiver)) == RECORZ_MVP_OBJECT_BLOCK_CLOSURE &&
+        ((source_names_equal(selector_name, "value") && argument_count == 0U) ||
+         (source_names_equal(selector_name, "value:") && argument_count == 1U))) {
+        return source_execute_block_closure(heap_object_for_value(receiver), argument_count, arguments);
+    }
+    if ((source_names_equal(selector_name, "ifTrue:") && argument_count == 1U) ||
+        (source_names_equal(selector_name, "ifFalse:") && argument_count == 1U) ||
+        (source_names_equal(selector_name, "ifTrue:ifFalse:") && argument_count == 2U)) {
+        uint8_t condition_is_true = condition_value_is_true(receiver);
+        uint16_t chosen_index = 0xFFFFU;
+
+        if (source_names_equal(selector_name, "ifTrue:")) {
+            chosen_index = condition_is_true ? 0U : 0xFFFFU;
+        } else if (source_names_equal(selector_name, "ifFalse:")) {
+            chosen_index = condition_is_true ? 0xFFFFU : 0U;
+        } else {
+            chosen_index = condition_is_true ? 0U : 1U;
+        }
+        if (chosen_index == 0xFFFFU) {
+            return source_eval_value_result(nil_value());
+        }
+        if (arguments[chosen_index].kind != RECORZ_MVP_VALUE_OBJECT ||
+            primitive_kind_for_heap_object(heap_object_for_value(arguments[chosen_index])) != RECORZ_MVP_OBJECT_BLOCK_CLOSURE) {
+            machine_panic("conditional send expects a block closure argument");
+        }
+        return source_execute_block_closure(heap_object_for_value(arguments[chosen_index]), 0U, 0);
+    }
+    selector_id = source_selector_id_for_name(selector_name);
+    if (selector_id == 0U) {
+        machine_panic("live source send uses an unknown selector");
+    }
+    (void)context;
+    perform_send(receiver, selector_id, argument_count, arguments, 0);
+    return source_eval_value_result(pop_value());
+}
+
+static struct recorz_mvp_source_eval_result source_evaluate_primary_expression(
+    struct recorz_mvp_source_method_context *context,
+    const char *cursor,
+    const char **cursor_out
+) {
+    struct recorz_mvp_source_eval_result result;
+    const char *parsed_cursor;
+    char token[METHOD_SOURCE_NAME_LIMIT];
+    char block_source[METHOD_SOURCE_CHUNK_LIMIT];
+    int32_t small_integer;
+
+    cursor = source_skip_horizontal_space(cursor);
+    if (*cursor == '(') {
+        result = source_evaluate_expression(context, cursor + 1, &parsed_cursor);
+        if (result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
+            return result;
+        }
+        parsed_cursor = source_skip_horizontal_space(parsed_cursor);
+        if (*parsed_cursor != ')') {
+            machine_panic("live source parenthesized expression is missing ')'");
+        }
+        cursor = parsed_cursor + 1;
+    } else if (*cursor == '[') {
+        uint16_t block_handle;
+
+        parsed_cursor = source_copy_bracket_body(cursor, block_source, sizeof(block_source));
+        if (parsed_cursor == 0) {
+            machine_panic("live source block literal is invalid");
+        }
+        block_handle = allocate_block_closure_from_source(block_source, context->receiver);
+        source_register_block_state(
+            block_handle,
+            context->defining_class,
+            context->lexical_environment_index,
+            context->home_context_index
+        );
+        result = source_eval_value_result(object_value(block_handle));
+        cursor = parsed_cursor;
+    } else if (*cursor == '\'') {
+        char quoted_text[METHOD_SOURCE_CHUNK_LIMIT];
+
+        parsed_cursor = source_copy_single_quoted_text(cursor, quoted_text, sizeof(quoted_text));
+        if (parsed_cursor == 0) {
+            machine_panic("live source string literal is invalid");
+        }
+        result = source_eval_value_result(string_value(runtime_string_allocate_copy(quoted_text)));
+        cursor = parsed_cursor;
+    } else {
+        parsed_cursor = source_parse_small_integer(cursor, &small_integer);
+        if (parsed_cursor != 0) {
+            result = source_eval_value_result(small_integer_value(small_integer));
+            cursor = parsed_cursor;
+        } else {
+            parsed_cursor = source_parse_identifier(cursor, token, sizeof(token));
+            if (parsed_cursor == 0) {
+                machine_panic("live source primary expression is invalid");
+            }
+            result = source_eval_value_result(source_read_identifier(context, token));
+            cursor = parsed_cursor;
+        }
+    }
+
+    cursor = source_skip_horizontal_space(cursor);
+    while (source_char_is_identifier_start(*cursor)) {
+        char selector_name[METHOD_SOURCE_NAME_LIMIT];
+        const char *selector_cursor = source_parse_identifier(cursor, selector_name, sizeof(selector_name));
+        const char *after_selector;
+
+        if (selector_cursor == 0) {
+            break;
+        }
+        after_selector = source_skip_horizontal_space(selector_cursor);
+        if (*after_selector == ':') {
+            break;
+        }
+        result = source_send_message(context, result.value, selector_name, 0U, 0);
+        if (result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
+            return result;
+        }
+        cursor = after_selector;
+    }
+    *cursor_out = cursor;
+    return result;
+}
+
+static struct recorz_mvp_source_eval_result source_evaluate_binary_expression(
+    struct recorz_mvp_source_method_context *context,
+    const char *cursor,
+    const char **cursor_out
+) {
+    struct recorz_mvp_source_eval_result receiver_result;
+
+    receiver_result = source_evaluate_primary_expression(context, cursor, &cursor);
+    if (receiver_result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
+        return receiver_result;
+    }
+    cursor = source_skip_horizontal_space(cursor);
+    while (source_char_is_binary_selector(*cursor)) {
+        char selector_name[2];
+        struct recorz_mvp_source_eval_result argument_result;
+
+        selector_name[0] = *cursor++;
+        selector_name[1] = '\0';
+        argument_result = source_evaluate_primary_expression(context, cursor, &cursor);
+        if (argument_result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
+            return argument_result;
+        }
+        receiver_result = source_send_message(context, receiver_result.value, selector_name, 1U, &argument_result.value);
+        if (receiver_result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
+            return receiver_result;
+        }
+        cursor = source_skip_horizontal_space(cursor);
+    }
+    *cursor_out = cursor;
+    return receiver_result;
+}
+
+static struct recorz_mvp_source_eval_result source_evaluate_expression(
+    struct recorz_mvp_source_method_context *context,
+    const char *cursor,
+    const char **cursor_out
+) {
+    char selector_name[METHOD_SOURCE_NAME_LIMIT];
+    char selector_part[METHOD_SOURCE_NAME_LIMIT];
+    struct recorz_mvp_source_eval_result receiver_result;
+    struct recorz_mvp_value arguments[MAX_SEND_ARGS];
+    const char *part_cursor;
+    uint16_t argument_count = 0U;
+    uint32_t selector_length = 0U;
+
+    receiver_result = source_evaluate_binary_expression(context, cursor, &cursor);
+    if (receiver_result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
+        return receiver_result;
+    }
+    cursor = source_skip_horizontal_space(cursor);
+    part_cursor = source_parse_identifier(cursor, selector_part, sizeof(selector_part));
+    if (part_cursor == 0) {
+        *cursor_out = cursor;
+        return receiver_result;
+    }
+    part_cursor = source_skip_horizontal_space(part_cursor);
+    if (*part_cursor != ':') {
+        *cursor_out = cursor;
+        return receiver_result;
+    }
+    while (selector_part[selector_length] != '\0') {
+        selector_name[selector_length] = selector_part[selector_length];
+        ++selector_length;
+    }
+    selector_name[selector_length] = '\0';
+    do {
+        struct recorz_mvp_source_eval_result argument_result;
+        uint32_t part_index = 0U;
+
+        if (argument_count >= MAX_SEND_ARGS) {
+            machine_panic("live source send exceeds argument capacity");
+        }
+        if (selector_length + 1U >= sizeof(selector_name)) {
+            machine_panic("live source selector exceeds capacity");
+        }
+        selector_name[selector_length++] = ':';
+        selector_name[selector_length] = '\0';
+        argument_result = source_evaluate_binary_expression(context, part_cursor + 1, &cursor);
+        if (argument_result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
+            return argument_result;
+        }
+        arguments[argument_count++] = argument_result.value;
+        cursor = source_skip_horizontal_space(cursor);
+        part_cursor = source_parse_identifier(cursor, selector_part, sizeof(selector_part));
+        if (part_cursor == 0) {
+            break;
+        }
+        part_cursor = source_skip_horizontal_space(part_cursor);
+        if (*part_cursor != ':') {
+            break;
+        }
+        while (selector_part[part_index] != '\0') {
+            if (selector_length + 1U >= sizeof(selector_name)) {
+                machine_panic("live source selector exceeds capacity");
+            }
+            selector_name[selector_length++] = selector_part[part_index++];
+        }
+        selector_name[selector_length] = '\0';
+    } while (*part_cursor == ':');
+    *cursor_out = cursor;
+    return source_send_message(context, receiver_result.value, selector_name, argument_count, arguments);
+}
+
+static struct recorz_mvp_source_eval_result source_execute_block_closure(
+    const struct recorz_mvp_heap_object *object,
+    uint16_t argument_count,
+    const struct recorz_mvp_value arguments[]
+) {
+    const struct recorz_mvp_runtime_block_state *block_state;
+    const struct recorz_mvp_heap_object *defining_class = 0;
+    struct recorz_mvp_source_method_context context;
+    struct recorz_mvp_source_eval_result result;
+    struct recorz_mvp_value source_value;
+    struct recorz_mvp_value home_receiver;
+    char argument_names[MAX_SEND_ARGS][METHOD_SOURCE_NAME_LIMIT];
+    uint16_t parsed_argument_count = 0U;
+    const char *body_cursor;
+    int16_t lexical_environment_index;
+    uint16_t argument_index;
+
+    if (primitive_kind_for_heap_object(object) != RECORZ_MVP_OBJECT_BLOCK_CLOSURE) {
+        machine_panic("source block execution expects a block closure");
+    }
+    source_value = heap_get_field(object, BLOCK_CLOSURE_FIELD_SOURCE);
+    if (source_value.kind != RECORZ_MVP_VALUE_STRING || source_value.string == 0) {
+        machine_panic("block closure source field is invalid");
+    }
+    home_receiver = heap_get_field(object, BLOCK_CLOSURE_FIELD_HOME_RECEIVER);
+    block_state = source_block_state_for_handle(heap_handle_for_object(object));
+    if (block_state != 0) {
+        lexical_environment_index = source_allocate_lexical_environment(block_state->lexical_environment_index);
+        defining_class = block_state->defining_class;
+    } else {
+        lexical_environment_index = source_allocate_lexical_environment(-1);
+        if (home_receiver.kind == RECORZ_MVP_VALUE_OBJECT) {
+            defining_class = class_object_for_heap_object(heap_object_for_value(home_receiver));
+        } else {
+            defining_class = class_object_for_kind(RECORZ_MVP_OBJECT_OBJECT);
+        }
+    }
+    body_cursor = source_parse_block_header(source_value.string, argument_names, &parsed_argument_count);
+    if (parsed_argument_count != argument_count) {
+        machine_panic("block argument count does not match activation");
+    }
+    for (argument_index = 0U; argument_index < argument_count; ++argument_index) {
+        source_append_binding(lexical_environment_index, argument_names[argument_index], arguments[argument_index]);
+    }
+    context.defining_class = defining_class;
+    context.receiver = home_receiver;
+    context.lexical_environment_index = lexical_environment_index;
+    context.home_context_index = block_state == 0 ? -1 : block_state->home_context_index;
+    context.is_block = 1U;
+    result = source_evaluate_statement_sequence(&context, body_cursor, 1U);
+    if (result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
+        if (context.home_context_index < 0) {
+            machine_panic("block attempted a non-local return without a live home context");
+        }
+        if (!source_home_context_at(context.home_context_index)->alive) {
+            machine_panic("block attempted a non-local return to a dead home context");
+        }
+    }
+    return result;
+}
+
+static struct recorz_mvp_source_eval_result source_evaluate_statement_sequence(
+    struct recorz_mvp_source_method_context *context,
+    const char *source,
+    uint8_t is_block
+) {
+    const char *cursor = source_skip_statement_space(source);
+    char statement[METHOD_SOURCE_CHUNK_LIMIT];
+    struct recorz_mvp_source_eval_result last_result = source_eval_value_result(nil_value());
+    uint8_t saw_statement = 0U;
+
+    (void)is_block;
+    if (*cursor == '|') {
+        cursor = source_parse_temporary_declarations(context, cursor);
+    }
+    while (source_copy_next_statement(&cursor, statement, sizeof(statement)) != 0U) {
+        const char *trimmed = source_skip_statement_space(statement);
+
+        if (trimmed[0] == '\0') {
+            continue;
+        }
+        if (trimmed[0] == '^') {
+            const char *return_cursor;
+
+            last_result = source_evaluate_expression(context, trimmed + 1, &return_cursor);
+            if (last_result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
+                return last_result;
+            }
+            return_cursor = source_skip_horizontal_space(return_cursor);
+            if (*return_cursor != '\0') {
+                machine_panic("live source return has unexpected trailing text");
+            }
+            return source_eval_return_result(last_result.value);
+        }
+        {
+            char binding_name[METHOD_SOURCE_NAME_LIMIT];
+            const char *binding_cursor = source_parse_identifier(trimmed, binding_name, sizeof(binding_name));
+
+            if (binding_cursor != 0) {
+                binding_cursor = source_skip_horizontal_space(binding_cursor);
+                if (binding_cursor[0] == ':' && binding_cursor[1] == '=') {
+                    const char *expression_cursor;
+
+                    last_result = source_evaluate_expression(context, binding_cursor + 2, &expression_cursor);
+                    if (last_result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
+                        return last_result;
+                    }
+                    expression_cursor = source_skip_horizontal_space(expression_cursor);
+                    if (*expression_cursor != '\0') {
+                        machine_panic("live source assignment has unexpected trailing text");
+                    }
+                    source_write_identifier(context, binding_name, last_result.value);
+                    saw_statement = 1U;
+                    continue;
+                }
+            }
+        }
+        last_result = source_evaluate_expression(context, trimmed, &trimmed);
+        if (last_result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
+            return last_result;
+        }
+        trimmed = source_skip_horizontal_space(trimmed);
+        if (*trimmed != '\0') {
+            machine_panic("live source statement has unexpected trailing text");
+        }
+        saw_statement = 1U;
+    }
+    if (!saw_statement) {
+        return source_eval_value_result(nil_value());
+    }
+    return last_result;
+}
+
+static void execute_live_source_method(
+    const struct recorz_mvp_heap_object *class_object,
+    struct recorz_mvp_value receiver,
+    uint16_t argument_count,
+    const struct recorz_mvp_value arguments[],
+    const char *source
+) {
+    struct recorz_mvp_source_method_context context;
+    struct recorz_mvp_source_eval_result result;
+    char selector_name[METHOD_SOURCE_NAME_LIMIT];
+    char argument_names[MAX_SEND_ARGS][METHOD_SOURCE_NAME_LIMIT];
+    uint16_t parsed_argument_count;
+    const char *body_cursor;
+    int16_t lexical_environment_index;
+    int16_t home_context_index;
+    uint16_t argument_index;
+
+    if (source == 0 || source[0] == '\0') {
+        machine_panic("live source method is empty");
+    }
+    if (source_parse_method_header(
+            source,
+            selector_name,
+            argument_names,
+            &parsed_argument_count,
+            &body_cursor) == 0) {
+        machine_panic("live source method header is invalid");
+    }
+    if (parsed_argument_count != argument_count) {
+        machine_panic("live source method argument count does not match send");
+    }
+    lexical_environment_index = source_allocate_lexical_environment(-1);
+    for (argument_index = 0U; argument_index < argument_count; ++argument_index) {
+        source_append_binding(lexical_environment_index, argument_names[argument_index], arguments[argument_index]);
+    }
+    home_context_index = source_allocate_home_context(class_object, receiver, lexical_environment_index);
+    context.defining_class = class_object;
+    context.receiver = receiver;
+    context.lexical_environment_index = lexical_environment_index;
+    context.home_context_index = home_context_index;
+    context.is_block = 0U;
+    result = source_evaluate_statement_sequence(&context, body_cursor, 0U);
+    source_home_context_at(home_context_index)->alive = 0U;
+    push(result.value);
 }
 
 static void file_in_method_chunks_on_class(
@@ -9482,36 +10415,12 @@ static void workspace_evaluate_source(const char *source) {
 }
 
 static void execute_block_closure(const struct recorz_mvp_heap_object *object) {
-    struct recorz_mvp_workspace_source_program program;
-    struct recorz_mvp_executable executable = {
-        .instruction_source = program.instructions,
-        .read_instruction = read_program_instruction,
-        .instruction_count = 0U,
-        .literals = program.literals,
-        .literal_count = 0U,
-        .lexical_count = 0U,
-    };
-    struct recorz_mvp_value source_value;
-    struct recorz_mvp_value home_receiver;
-    const struct recorz_mvp_heap_object *home_receiver_object = 0;
+    struct recorz_mvp_source_eval_result result = source_execute_block_closure(object, 0U, 0);
 
-    if (primitive_kind_for_heap_object(object) != RECORZ_MVP_OBJECT_BLOCK_CLOSURE) {
-        machine_panic("block closure receiver has the wrong class");
+    if (result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
+        machine_panic("block non-local return requires a live source caller");
     }
-    source_value = heap_get_field(object, BLOCK_CLOSURE_FIELD_SOURCE);
-    home_receiver = heap_get_field(object, BLOCK_CLOSURE_FIELD_HOME_RECEIVER);
-    if (source_value.kind != RECORZ_MVP_VALUE_STRING || source_value.string == 0) {
-        machine_panic("block closure is missing source text");
-    }
-    if (home_receiver.kind == RECORZ_MVP_VALUE_OBJECT) {
-        home_receiver_object = heap_object_for_value(home_receiver);
-    } else if (home_receiver.kind == RECORZ_MVP_VALUE_NIL) {
-        home_receiver = nil_value();
-    }
-    build_workspace_block_program(source_value.string, &program);
-    executable.instruction_count = program.instruction_count;
-    executable.literal_count = program.literal_count;
-    execute_executable(&executable, home_receiver_object, home_receiver, 0U, 0);
+    push(result.value);
 }
 
 static void execute_compiled_method(
@@ -9736,6 +10645,36 @@ static void apply_method_update_payload(const uint8_t *blob, uint32_t size) {
     install_compiled_method_update(class_object, (uint8_t)selector, argument_count, compiled_method_handle);
 }
 
+static const struct recorz_mvp_live_method_source *live_method_source_for_class_chain(
+    const struct recorz_mvp_heap_object *class_object,
+    uint8_t selector_id,
+    uint8_t argument_count,
+    const struct recorz_mvp_heap_object **owner_class_out
+) {
+    const struct recorz_mvp_heap_object *lookup_class = class_object;
+    uint32_t depth = 0U;
+
+    while (lookup_class != 0) {
+        const struct recorz_mvp_live_method_source *source_record = live_method_source_for_selector_and_arity(
+            heap_handle_for_object(lookup_class),
+            selector_id,
+            argument_count
+        );
+
+        if (source_record != 0) {
+            if (owner_class_out != 0) {
+                *owner_class_out = lookup_class;
+            }
+            return source_record;
+        }
+        if (depth++ >= HEAP_LIMIT) {
+            machine_panic("class superclass chain is invalid");
+        }
+        lookup_class = class_superclass_object_or_null(lookup_class);
+    }
+    return 0;
+}
+
 static void dispatch_heap_object_send(
     const struct recorz_mvp_heap_object *object,
     uint8_t selector,
@@ -9748,6 +10687,8 @@ static void dispatch_heap_object_send(
     const struct recorz_mvp_heap_object *method_object;
     const struct recorz_mvp_heap_object *entry_object;
     const struct recorz_mvp_heap_object *implementation_object;
+    const struct recorz_mvp_heap_object *source_owner_class = 0;
+    const struct recorz_mvp_live_method_source *source_record;
     struct recorz_mvp_value implementation_value;
     recorz_mvp_method_entry_handler handler;
     uint32_t entry;
@@ -9765,6 +10706,22 @@ static void dispatch_heap_object_send(
         return;
     }
     class_object = class_object_for_heap_object(object);
+    source_record = live_method_source_for_class_chain(
+        class_object,
+        selector,
+        (uint8_t)argument_count,
+        &source_owner_class
+    );
+    if (source_record != 0 && source_text_contains_block_literal(live_method_source_text(source_record))) {
+        execute_live_source_method(
+            source_owner_class,
+            receiver,
+            argument_count,
+            arguments,
+            live_method_source_text(source_record)
+        );
+        return;
+    }
     method_object = lookup_builtin_method_descriptor(class_object, selector, argument_count);
     if (method_object == 0) {
         machine_panic("selector is not understood by receiver class");

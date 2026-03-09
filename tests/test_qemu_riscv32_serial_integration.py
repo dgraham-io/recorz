@@ -18,6 +18,10 @@ PACKAGE_COMMENT_ROUNDTRIP_EXAMPLE = ROOT / "examples" / "qemu_riscv_package_comm
 BINARY_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_binary_method_demo.rz"
 CONDITIONAL_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_conditional_method_demo.rz"
 WORKSPACE_BLOCK_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_block_demo.rz"
+METHOD_BLOCK_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_demo.rz"
+METHOD_BLOCK_CAPTURE_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_capture_demo.rz"
+METHOD_BLOCK_RETURN_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_return_demo.rz"
+METHOD_BLOCK_ARGUMENT_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_argument_demo.rz"
 PAREN_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_parenthesized_method_demo.rz"
 MULTIKEYWORD_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_multikeyword_method_demo.rz"
 EXPRESSION_KEYWORD_SEND_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_expression_keyword_send_demo.rz"
@@ -446,6 +450,180 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("VALUE", output)
             self.assertIn("NEST", output)
             self.assertIn("NIL", output)
+            self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
+
+    def test_in_image_methods_support_zero_argument_block_literals(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-method-block-source-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, METHOD_BLOCK_SOURCE_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("recorz qemu-riscv32 mvp: created class MethodBlockReporter", output)
+            self.assertIn("MBLOCK", output)
+            self.assertIn("METHOD", output)
+            self.assertIn("CAPTURED", output)
+            self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
+
+    def test_in_image_methods_support_lexical_capture_in_blocks(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-method-block-capture-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, METHOD_BLOCK_CAPTURE_SOURCE_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("recorz qemu-riscv32 mvp: created class MethodBlockCaptureReporter", output)
+            self.assertIn("MCAP", output)
+            self.assertIn("3", output)
+            self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
+
+    def test_in_image_methods_support_non_local_block_return(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-method-block-return-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, METHOD_BLOCK_RETURN_SOURCE_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("recorz qemu-riscv32 mvp: created class MethodBlockReturnReporter", output)
+            self.assertIn("MRET", output)
+            self.assertIn("EARLY", output)
+            self.assertNotIn("LATE", output)
+            self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
+
+    def test_in_image_methods_support_single_argument_blocks(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-method-block-argument-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, METHOD_BLOCK_ARGUMENT_SOURCE_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("recorz qemu-riscv32 mvp: created class MethodBlockArgumentReporter", output)
+            self.assertIn("MARG", output)
+            self.assertIn("7", output)
             self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
 
     def test_in_image_source_compiler_supports_parenthesized_method_expressions(self) -> None:

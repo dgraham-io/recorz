@@ -1,0 +1,21 @@
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #MethodBlockReporter superclass: #Object instanceVariableNames: ''value''
+!
+sum
+    ^[ ''METHOD'' ] value
+!
+truth
+    ^[ value ] value
+!
+setValue: newValue
+    value := newValue.
+    ^self
+!'.
+KernelInstaller rememberObject: ((KernelInstaller classNamed: 'MethodBlockReporter') new) named: 'methodBlockReporter'.
+(KernelInstaller objectNamed: 'methodBlockReporter') setValue: 'CAPTURED'.
+Transcript show: 'MBLOCK'.
+Transcript cr.
+Transcript show: ((KernelInstaller objectNamed: 'methodBlockReporter') sum).
+Transcript cr.
+Transcript show: ((KernelInstaller objectNamed: 'methodBlockReporter') truth).
+Transcript cr.

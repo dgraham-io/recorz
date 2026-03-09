@@ -1,0 +1,10 @@
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #MethodBlockArgumentReporter superclass: #Object instanceVariableNames: ''''
+!
+sum
+    ^[ :x | x + 4 ] value: 3
+!'.
+Transcript show: 'MARG'.
+Transcript cr.
+Transcript show: ((((KernelInstaller classNamed: 'MethodBlockArgumentReporter') new) sum) printString).
+Transcript cr.
