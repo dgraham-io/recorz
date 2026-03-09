@@ -1353,6 +1353,41 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
     return ordered_method_sources
 
 
+def kernel_chunk_is_runtime_file_in_chunk(chunk_source: str) -> bool:
+    stripped = chunk_source.lstrip()
+
+    return not (
+        stripped.startswith("RecorzKernelBootObject:") or
+        stripped.startswith("RecorzKernelRoot:") or
+        stripped.startswith("RecorzKernelGlyphBitmapFamily:") or
+        stripped.startswith("RecorzKernelSelector:")
+    )
+
+
+def load_kernel_canonical_class_sources() -> dict[str, str]:
+    canonical_sources_by_name: dict[str, str] = {}
+
+    for method_path in sorted(KERNEL_MVP_ROOT.glob("*.rz")):
+        relative_path = method_path.name
+        chunk_sources = split_kernel_method_chunks(method_path.read_text(encoding="utf-8"))
+        if not chunk_sources:
+            raise LoweringError(f"kernel MVP class file {relative_path} is empty")
+        class_header = parse_kernel_class_header(chunk_sources[0], relative_path)
+        canonical_chunks = [chunk_source for chunk_source in chunk_sources if kernel_chunk_is_runtime_file_in_chunk(chunk_source)]
+        if not canonical_chunks or not canonical_chunks[0].lstrip().startswith("RecorzKernelClass:"):
+            raise LoweringError(f"kernel MVP class file {relative_path} is missing a canonical class header chunk")
+        canonical_sources_by_name[class_header.class_name] = "\n!\n".join(canonical_chunks) + "\n!\n"
+
+    expected_class_names = set(KERNEL_CLASS_HEADERS_BY_NAME)
+    if set(canonical_sources_by_name) != expected_class_names:
+        missing_classes = sorted(expected_class_names - set(canonical_sources_by_name))
+        raise LoweringError(
+            "kernel MVP canonical source registry is missing classes: "
+            + ", ".join(missing_classes)
+        )
+    return canonical_sources_by_name
+
+
 def compile_kernel_method_program(class_name: str, instance_variables: list[str], source: str) -> list[int]:
     compiled = compile_method(source, class_name, instance_variables)
     arg_indices = {name: index for index, name in enumerate(compiled.arg_names)}
@@ -1495,6 +1530,7 @@ def build_method_update_manifest(class_name: str, source: str) -> bytes:
 
 
 KERNEL_METHOD_SOURCE_BY_ENTRY_NAME = load_kernel_method_sources()
+KERNEL_CANONICAL_CLASS_SOURCES_BY_NAME = load_kernel_canonical_class_sources()
 
 
 def validate_kernel_method_selectors(
@@ -1563,6 +1599,51 @@ COMPILED_METHOD_ENTRY_ORDER = [
 ]
 
 
+def append_generated_seed_class_source_registry(lines: list[str]) -> None:
+    lines.extend(
+        [
+            "struct recorz_mvp_seed_class_source_record {",
+            "    const char *class_name;",
+            "    const char *canonical_source;",
+            "    uint8_t descriptor_order;",
+            "    uint8_t object_kind_order;",
+            "    int16_t source_boot_order;",
+            "    uint8_t instance_variable_count;",
+            "    const char *instance_variable_names[4];",
+            "};",
+            "",
+            "static const struct recorz_mvp_seed_class_source_record recorz_mvp_generated_seed_class_sources[] = {",
+            "    {0, 0, 0, 0, -1, 0, {0, 0, 0, 0}},",
+        ]
+    )
+    for class_header in KERNEL_CLASS_HEADERS_IN_OBJECT_KIND_ORDER:
+        instance_variable_literals = [json.dumps(name) for name in class_header.instance_variables]
+        while len(instance_variable_literals) < 4:
+            instance_variable_literals.append("0")
+        source_boot_order = -1 if class_header.source_boot_order is None else class_header.source_boot_order
+        lines.append(
+            "    {"
+            + ", ".join(
+                [
+                    json.dumps(class_header.class_name),
+                    json.dumps(KERNEL_CANONICAL_CLASS_SOURCES_BY_NAME[class_header.class_name]),
+                    f"{class_header.descriptor_order}",
+                    f"{class_header.object_kind_order}",
+                    f"{source_boot_order}",
+                    f"{len(class_header.instance_variables)}",
+                    "{" + ", ".join(instance_variable_literals) + "}",
+                ]
+            )
+            + "},"
+        )
+    lines.extend(
+        [
+            "};",
+            "",
+        ]
+    )
+
+
 def render_generated_runtime_bindings_header() -> str:
     lines = [
         "/* Auto-generated from kernel MVP method and primitive declarations. */",
@@ -1628,6 +1709,7 @@ def render_generated_runtime_bindings_header() -> str:
     append_enum_definition(lines, "recorz_mvp_object_kind", OBJECT_KIND_DEFINITIONS)
     append_enum_definition(lines, "recorz_mvp_seed_field_kind", SEED_FIELD_KIND_DEFINITIONS)
     append_enum_definition(lines, "recorz_mvp_seed_root", SEED_ROOT_DEFINITIONS)
+    append_generated_seed_class_source_registry(lines)
     lines.append("enum recorz_mvp_method_entry {")
     for entry_name in METHOD_ENTRY_ORDER:
         lines.append(f"    {entry_name} = {METHOD_ENTRY_VALUES[entry_name]},")

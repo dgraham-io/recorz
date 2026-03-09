@@ -80,6 +80,10 @@ SNAPSHOT_PACKAGE_FILE_OUT_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-packa
 SNAPSHOT_PACKAGE_FILE_OUT_COLD_FILE_IN_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-package-file-out-cold-file-in-test"
 SNAPSHOT_PACKAGE_FILE_OUT_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "package-file-out-live-image.bin"
 SNAPSHOT_PACKAGE_FILE_OUT_EXTRACTED_SOURCE_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "package-file-out-current-source.rz"
+SNAPSHOT_KERNEL_CLASS_FILE_OUT_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-kernel-class-file-out-test"
+SNAPSHOT_KERNEL_CLASS_FILE_OUT_COLD_FILE_IN_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-kernel-class-file-out-cold-file-in-test"
+SNAPSHOT_KERNEL_CLASS_FILE_OUT_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "kernel-class-file-out-live-image.bin"
+SNAPSHOT_KERNEL_CLASS_FILE_OUT_EXTRACTED_SOURCE_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "kernel-class-file-out-current-source.rz"
 
 SNAPSHOT_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_save_demo.rz"
 SNAPSHOT_RELOAD_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_reload_demo.rz"
@@ -103,6 +107,8 @@ SNAPSHOT_CLASS_FILE_OUT_COLD_FILE_IN_DEMO_PATH = ROOT / "examples" / "qemu_riscv
 SNAPSHOT_PACKAGE_FILE_OUT_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_package_file_out_snapshot_save_demo.rz"
 SNAPSHOT_PACKAGE_FILE_OUT_RELOAD_DEMO_PATH = ROOT / "examples" / "qemu_riscv_package_file_out_snapshot_reload_demo.rz"
 SNAPSHOT_PACKAGE_FILE_OUT_COLD_FILE_IN_DEMO_PATH = ROOT / "examples" / "qemu_riscv_package_file_out_cold_file_in_demo.rz"
+SNAPSHOT_KERNEL_CLASS_FILE_OUT_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_kernel_class_file_out_snapshot_save_demo.rz"
+SNAPSHOT_KERNEL_CLASS_FILE_OUT_COLD_FILE_IN_DEMO_PATH = ROOT / "examples" / "qemu_riscv_kernel_class_file_out_cold_file_in_demo.rz"
 
 
 @unittest.skipUnless(
@@ -568,6 +574,41 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         self.assertIn("Shared utilities", flat_reload_log)
         self.assertIn("ROUNDTRIP", flat_reload_log)
         self.assertIn("TOOLS", flat_reload_log)
+        self.assertNotIn("panic:", reload_log)
+
+    def test_snapshot_extracted_seeded_kernel_class_source_cold_files_into_a_fresh_image(self) -> None:
+        save_log = self.save_snapshot(
+            build_dir=SNAPSHOT_KERNEL_CLASS_FILE_OUT_BUILD_DIR,
+            example_path=SNAPSHOT_KERNEL_CLASS_FILE_OUT_SAVE_DEMO_PATH,
+            snapshot_output=SNAPSHOT_KERNEL_CLASS_FILE_OUT_OUTPUT_PATH,
+        )
+        self.assertIn("recorz-snapshot-begin", save_log)
+        self.assertTrue(SNAPSHOT_KERNEL_CLASS_FILE_OUT_OUTPUT_PATH.exists())
+
+        extracted_source = self.extract_workspace_current_source(
+            snapshot_path=SNAPSHOT_KERNEL_CLASS_FILE_OUT_OUTPUT_PATH,
+            output_path=SNAPSHOT_KERNEL_CLASS_FILE_OUT_EXTRACTED_SOURCE_PATH,
+        )
+        self.assertIn("RecorzKernelClass: #Workspace", extracted_source)
+        self.assertIn(
+            "instanceVariableNames: 'currentViewKind currentTargetName currentSource lastSource'",
+            extracted_source,
+        )
+        self.assertIn("contents", extracted_source)
+        self.assertIn("<primitive: #workspaceContents>", extracted_source)
+
+        reload_log, width, height, _data = self.render_cold_file_in_demo(
+            build_dir=SNAPSHOT_KERNEL_CLASS_FILE_OUT_COLD_FILE_IN_BUILD_DIR,
+            example_path=SNAPSHOT_KERNEL_CLASS_FILE_OUT_COLD_FILE_IN_DEMO_PATH,
+            file_in_payload=SNAPSHOT_KERNEL_CLASS_FILE_OUT_EXTRACTED_SOURCE_PATH,
+        )
+        flat_reload_log = reload_log.replace("\r", "").replace("\n", "")
+        self.assertEqual((width, height), (1024, 768))
+        self.assertIn("recorz qemu-riscv32 mvp: applied external file-in", reload_log)
+        self.assertIn("RecorzKernelClass: #Workspace", flat_reload_log)
+        self.assertIn("currentViewKind currentTargetName currentSource lastSource", flat_reload_log)
+        self.assertIn("ROUNDTRIP", flat_reload_log)
+        self.assertIn("KERNEL", flat_reload_log)
         self.assertNotIn("panic:", reload_log)
 
     def test_snapshot_can_reopen_workspace_package_list_state_without_demo_specific_program(self) -> None:

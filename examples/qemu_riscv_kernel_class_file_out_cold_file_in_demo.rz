@@ -1,0 +1,10 @@
+Display clear.
+Transcript show: 'SOURCE'.
+Transcript cr.
+Workspace fileOutClassNamed: 'Workspace'.
+Transcript show: Workspace contents.
+Transcript cr.
+Workspace setContents: 'ROUNDTRIP'.
+Transcript show: Workspace contents.
+Transcript cr.
+Transcript show: 'KERNEL'.

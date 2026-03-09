@@ -1265,6 +1265,15 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
 
+    def test_loads_canonical_seed_class_sources_without_runtime_only_chunks(self) -> None:
+        workspace_source = mvp.KERNEL_CANONICAL_CLASS_SOURCES_BY_NAME["Workspace"]
+
+        self.assertIn("RecorzKernelClass: #Workspace", workspace_source)
+        self.assertIn("instanceVariableNames: 'currentViewKind currentTargetName currentSource lastSource'", workspace_source)
+        self.assertIn("contents", workspace_source)
+        self.assertNotIn("RecorzKernelBootObject:", workspace_source)
+        self.assertNotIn("RecorzKernelRoot:", workspace_source)
+
     def test_declares_glyph_bitmap_boot_specs(self) -> None:
         self.assertEqual(
             mvp.KERNEL_GLYPH_BITMAP_FAMILY_DECLARATION,
@@ -1985,6 +1994,9 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertIn("RECORZ_MVP_METHOD_ENTRY_TEST_RUNNER_RUN_CLASS_NAMED = 66,", header)
         self.assertIn("RECORZ_MVP_METHOD_ENTRY_TEST_RUNNER_LAST_LABEL = 71,", header)
         self.assertIn("RECORZ_MVP_METHOD_ENTRY_COUNT = 72,", header)
+        self.assertIn("struct recorz_mvp_seed_class_source_record {", header)
+        self.assertIn('"Workspace"', header)
+        self.assertIn("RecorzKernelClass: #Workspace", header)
         self.assertNotIn("RECORZ_MVP_GENERATED_METHOD_ENTRY_SPECS", header)
         self.assertIn("enum recorz_mvp_primitive_binding {", header)
         self.assertIn("RECORZ_MVP_PRIMITIVE_BITBLT_FILL_FORM_COLOR = 1,", header)

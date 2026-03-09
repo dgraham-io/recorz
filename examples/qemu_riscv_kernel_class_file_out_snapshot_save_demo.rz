@@ -1,0 +1,4 @@
+Display clear.
+Workspace fileOutClassNamed: 'Workspace'.
+KernelInstaller configureStartup: Workspace selectorNamed: 'reopen'.
+KernelInstaller saveSnapshot.
