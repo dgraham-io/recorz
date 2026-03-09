@@ -8,6 +8,7 @@
 
 void display_init(void);
 void display_form_fill_color(uint32_t color);
+void display_form_fill_rect(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color);
 void display_form_blit_mono_bitmap(
     uint32_t x,
     uint32_t y,

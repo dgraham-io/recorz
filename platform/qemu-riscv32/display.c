@@ -88,3 +88,15 @@ void display_init(void) {
 void display_form_fill_color(uint32_t color) {
     clear_to_color(color);
 }
+
+void display_form_fill_rect(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color) {
+    uint32_t row;
+
+    for (row = 0U; row < height; ++row) {
+        uint32_t col;
+
+        for (col = 0U; col < width; ++col) {
+            put_pixel(x + col, y + row, color);
+        }
+    }
+}

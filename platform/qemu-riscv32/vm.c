@@ -22,6 +22,7 @@
 #define METHOD_SOURCE_CHUNK_LIMIT 512U
 #define PACKAGE_SOURCE_BUFFER_LIMIT 16384U
 #define REGENERATED_SOURCE_BUFFER_LIMIT 65536U
+#define WORKSPACE_INPUT_MONITOR_CURSOR_STATE_LIMIT 32U
 #define WORKSPACE_SOURCE_INSTRUCTION_LIMIT 64U
 #define WORKSPACE_SOURCE_LITERAL_LIMIT 16U
 #define DYNAMIC_CLASS_LIMIT RECORZ_MVP_DYNAMIC_CLASS_LIMIT
@@ -345,6 +346,7 @@ static uint32_t cursor_y = 0U;
 static char print_buffer[PRINT_BUFFER_SIZE];
 static char workspace_target_buffer[METHOD_SOURCE_CHUNK_LIMIT];
 static char workspace_input_monitor_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
+static char workspace_input_monitor_cursor_state[WORKSPACE_INPUT_MONITOR_CURSOR_STATE_LIMIT];
 static char kernel_source_io_buffer[8193];
 static char package_source_io_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char regenerated_source_io_buffer[REGENERATED_SOURCE_BUFFER_LIMIT];
@@ -445,6 +447,28 @@ static const struct recorz_mvp_heap_object *default_form_object(void);
 static void form_clear(const struct recorz_mvp_heap_object *form);
 static void form_newline(const struct recorz_mvp_heap_object *form);
 static void form_write_string(const struct recorz_mvp_heap_object *form, const char *text);
+static uint32_t bitmap_storage_kind(const struct recorz_mvp_heap_object *bitmap);
+static uint32_t text_pixel_scale(void);
+static uint32_t text_foreground_color(void);
+static uint32_t workspace_input_monitor_cursor_index(const struct recorz_mvp_heap_object *workspace_object);
+static void workspace_input_monitor_cursor_line_and_column(
+    const char *text,
+    uint32_t cursor_index,
+    uint32_t *line_out,
+    uint32_t *column_out
+);
+static void workspace_store_input_monitor_cursor_index(
+    const struct recorz_mvp_heap_object *workspace_object,
+    uint32_t cursor_index
+);
+static void workspace_move_input_monitor_cursor_left(const struct recorz_mvp_heap_object *workspace_object);
+static void workspace_move_input_monitor_cursor_right(const struct recorz_mvp_heap_object *workspace_object);
+static void workspace_move_input_monitor_cursor_to_line_start(
+    const struct recorz_mvp_heap_object *workspace_object
+);
+static void workspace_move_input_monitor_cursor_to_line_end(
+    const struct recorz_mvp_heap_object *workspace_object
+);
 
 static void panic_put_u32(uint32_t value) {
     char digits[10];
@@ -955,6 +979,25 @@ static uint8_t source_starts_with(const char *text, const char *prefix) {
         }
         ++index;
     }
+    return 1U;
+}
+
+static uint8_t parse_decimal_u32(const char *text, uint32_t *value_out) {
+    uint32_t value = 0U;
+    uint32_t index = 0U;
+
+    if (text == 0 || text[0] == '\0') {
+        return 0U;
+    }
+    while (text[index] != '\0') {
+        char ch = text[index++];
+
+        if (ch < '0' || ch > '9') {
+            return 0U;
+        }
+        value = (value * 10U) + (uint32_t)(ch - '0');
+    }
+    *value_out = value;
     return 1U;
 }
 
@@ -3791,6 +3834,16 @@ static void workspace_remember_view(
     );
 }
 
+static void workspace_remember_input_monitor_view(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    heap_set_field(
+        heap_handle_for_object(workspace_object),
+        workspace_current_view_kind_field_index(workspace_object),
+        small_integer_value((int32_t)WORKSPACE_VIEW_INPUT_MONITOR)
+    );
+}
+
 static void workspace_remember_source(
     const struct recorz_mvp_heap_object *workspace_object,
     const char *source
@@ -4230,14 +4283,55 @@ static void workspace_write_text_line(
     workspace_newline();
 }
 
-static void workspace_write_raw_text_line(
-    const struct recorz_mvp_heap_object *form,
-    const char *text
+static void workspace_copy_raw_text(
+    char buffer[],
+    uint32_t buffer_size,
+    const char *text,
+    uint32_t max_columns
 ) {
+    uint32_t length = 0U;
+
+    while (text[length] != '\0' && length + 1U < buffer_size && length < max_columns) {
+        buffer[length] = text[length];
+        ++length;
+    }
+    buffer[length] = '\0';
+}
+
+static void workspace_draw_input_monitor_cursor(
+    const struct recorz_mvp_heap_object *form,
+    uint32_t column
+) {
+    const struct recorz_mvp_heap_object *bitmap = bitmap_for_form(form);
+
+    if (bitmap_storage_kind(bitmap) != BITMAP_STORAGE_FRAMEBUFFER) {
+        return;
+    }
+    display_form_fill_rect(
+        text_left_margin() + (column * char_width()),
+        cursor_y,
+        text_pixel_scale() + 1U,
+        char_height(),
+        text_foreground_color()
+    );
+}
+
+static void workspace_write_raw_input_monitor_line(
+    const struct recorz_mvp_heap_object *form,
+    const char *text,
+    uint32_t cursor_column,
+    uint8_t draw_cursor
+) {
+    char clipped_text[METHOD_SOURCE_CHUNK_LIMIT];
+
     if (!workspace_has_line_capacity(form)) {
         return;
     }
-    form_write_string(form, text);
+    workspace_copy_raw_text(clipped_text, sizeof(clipped_text), text, workspace_visible_columns(form));
+    form_write_string(form, clipped_text);
+    if (draw_cursor) {
+        workspace_draw_input_monitor_cursor(form, cursor_column);
+    }
     workspace_newline();
 }
 
@@ -4799,23 +4893,39 @@ static void workspace_render_input_monitor_browser(
     struct recorz_mvp_value source_value = workspace_current_source_value(workspace_object);
     const char *cursor;
     char line[METHOD_SOURCE_CHUNK_LIMIT];
+    uint32_t cursor_index;
+    uint32_t cursor_line = 0U;
+    uint32_t cursor_column = 0U;
+    uint32_t rendered_line_count = 0U;
     uint8_t wrote_line = 0U;
 
     form_clear(form);
     workspace_write_label_and_text(form, "VIEW", "INPUT");
     workspace_write_label_and_text(form, "INPUT", "SERIAL");
+    workspace_write_label_and_text(form, "MOVE", "ARROWS CTRL-B/F");
+    workspace_write_label_and_text(form, "HOME", "CTRL-A/E");
     workspace_write_label_and_text(form, "EXIT", "CTRL-D");
+    cursor_index = workspace_input_monitor_cursor_index(workspace_object);
+    workspace_input_monitor_cursor_line_and_column(
+        source_value.kind == RECORZ_MVP_VALUE_STRING ? source_value.string : 0,
+        cursor_index,
+        &cursor_line,
+        &cursor_column
+    );
+    workspace_write_label_and_integer(form, "LINE", cursor_line + 1U);
+    workspace_write_label_and_integer(form, "COL", cursor_column + 1U);
     if (source_value.kind != RECORZ_MVP_VALUE_STRING || source_value.string == 0) {
-        workspace_write_raw_text_line(form, "");
+        workspace_write_raw_input_monitor_line(form, "", 0U, cursor_line == 0U);
         return;
     }
     cursor = source_value.string;
     while (source_copy_raw_line(&cursor, line, sizeof(line))) {
-        workspace_write_raw_text_line(form, line);
+        workspace_write_raw_input_monitor_line(form, line, cursor_column, rendered_line_count == cursor_line);
         wrote_line = 1U;
+        ++rendered_line_count;
     }
-    if (!wrote_line) {
-        workspace_write_raw_text_line(form, "");
+    if (!wrote_line || rendered_line_count == cursor_line) {
+        workspace_write_raw_input_monitor_line(form, "", cursor_column, 1U);
     }
 }
 
@@ -4840,23 +4950,213 @@ static void workspace_bind_input_monitor_buffer(
     );
 }
 
-static void workspace_append_input_monitor_character(char ch) {
+static uint8_t workspace_parse_input_monitor_cursor_state(
+    const char *text,
+    uint32_t *cursor_index_out
+) {
+    if (!source_starts_with(text, "CURSOR:")) {
+        return 0U;
+    }
+    return parse_decimal_u32(text + 7U, cursor_index_out);
+}
+
+static void workspace_store_input_monitor_cursor_index(
+    const struct recorz_mvp_heap_object *workspace_object,
+    uint32_t cursor_index
+) {
+    uint16_t workspace_handle = heap_handle_for_object(workspace_object);
+    uint32_t offset = 0U;
     uint32_t length = text_length(workspace_input_monitor_buffer);
+
+    if (cursor_index > length) {
+        cursor_index = length;
+    }
+    workspace_input_monitor_cursor_state[0] = '\0';
+    append_text_checked(
+        workspace_input_monitor_cursor_state,
+        sizeof(workspace_input_monitor_cursor_state),
+        &offset,
+        "CURSOR:"
+    );
+    render_small_integer((int32_t)cursor_index);
+    append_text_checked(
+        workspace_input_monitor_cursor_state,
+        sizeof(workspace_input_monitor_cursor_state),
+        &offset,
+        print_buffer
+    );
+    heap_set_field(
+        workspace_handle,
+        workspace_current_target_name_field_index(workspace_object),
+        string_value(workspace_input_monitor_cursor_state)
+    );
+}
+
+static uint32_t workspace_input_monitor_cursor_index(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    struct recorz_mvp_value source_value = workspace_current_source_value(workspace_object);
+    struct recorz_mvp_value target_name_value = heap_get_field(
+        workspace_object,
+        workspace_current_target_name_field_index(workspace_object)
+    );
+    uint32_t source_length =
+        (source_value.kind == RECORZ_MVP_VALUE_STRING && source_value.string != 0)
+            ? text_length(source_value.string)
+            : 0U;
+    uint32_t cursor_index = source_length;
+
+    if (workspace_parse_input_monitor_cursor_state(
+            target_name_value.kind == RECORZ_MVP_VALUE_STRING ? target_name_value.string : 0,
+            &cursor_index) &&
+        cursor_index <= source_length) {
+        return cursor_index;
+    }
+    return source_length;
+}
+
+static void workspace_input_monitor_cursor_line_and_column(
+    const char *text,
+    uint32_t cursor_index,
+    uint32_t *line_out,
+    uint32_t *column_out
+) {
+    uint32_t line = 0U;
+    uint32_t column = 0U;
+    uint32_t index = 0U;
+
+    if (text == 0) {
+        *line_out = 0U;
+        *column_out = 0U;
+        return;
+    }
+    while (text[index] != '\0' && index < cursor_index) {
+        if (text[index] == '\n') {
+            ++line;
+            column = 0U;
+        } else {
+            ++column;
+        }
+        ++index;
+    }
+    *line_out = line;
+    *column_out = column;
+}
+
+static uint32_t workspace_input_monitor_line_start(const char *text, uint32_t cursor_index) {
+    while (cursor_index != 0U && text[cursor_index - 1U] != '\n') {
+        --cursor_index;
+    }
+    return cursor_index;
+}
+
+static uint32_t workspace_input_monitor_line_end(const char *text, uint32_t cursor_index) {
+    while (text[cursor_index] != '\0' && text[cursor_index] != '\n') {
+        ++cursor_index;
+    }
+    return cursor_index;
+}
+
+static void workspace_bind_input_monitor_cursor_state(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    struct recorz_mvp_value target_name_value = heap_get_field(
+        workspace_object,
+        workspace_current_target_name_field_index(workspace_object)
+    );
+    uint32_t cursor_index = 0U;
+
+    if (!workspace_parse_input_monitor_cursor_state(
+            target_name_value.kind == RECORZ_MVP_VALUE_STRING ? target_name_value.string : 0,
+            &cursor_index)) {
+        cursor_index = text_length(workspace_input_monitor_buffer);
+    }
+    workspace_store_input_monitor_cursor_index(workspace_object, cursor_index);
+}
+
+static void workspace_move_input_monitor_cursor_left(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    uint32_t cursor_index = workspace_input_monitor_cursor_index(workspace_object);
+
+    if (cursor_index != 0U) {
+        workspace_store_input_monitor_cursor_index(workspace_object, cursor_index - 1U);
+    }
+}
+
+static void workspace_move_input_monitor_cursor_right(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    uint32_t cursor_index = workspace_input_monitor_cursor_index(workspace_object);
+    uint32_t length = text_length(workspace_input_monitor_buffer);
+
+    if (cursor_index < length) {
+        workspace_store_input_monitor_cursor_index(workspace_object, cursor_index + 1U);
+    }
+}
+
+static void workspace_move_input_monitor_cursor_to_line_start(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    workspace_store_input_monitor_cursor_index(
+        workspace_object,
+        workspace_input_monitor_line_start(
+            workspace_input_monitor_buffer,
+            workspace_input_monitor_cursor_index(workspace_object)
+        )
+    );
+}
+
+static void workspace_move_input_monitor_cursor_to_line_end(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    workspace_store_input_monitor_cursor_index(
+        workspace_object,
+        workspace_input_monitor_line_end(
+            workspace_input_monitor_buffer,
+            workspace_input_monitor_cursor_index(workspace_object)
+        )
+    );
+}
+
+static void workspace_insert_input_monitor_character(
+    const struct recorz_mvp_heap_object *workspace_object,
+    char ch
+) {
+    uint32_t length = text_length(workspace_input_monitor_buffer);
+    uint32_t cursor_index = workspace_input_monitor_cursor_index(workspace_object);
+    uint32_t index;
 
     if (length + 1U >= sizeof(workspace_input_monitor_buffer)) {
         return;
     }
-    workspace_input_monitor_buffer[length] = ch;
-    workspace_input_monitor_buffer[length + 1U] = '\0';
+    if (cursor_index > length) {
+        cursor_index = length;
+    }
+    for (index = length + 1U; index > cursor_index; --index) {
+        workspace_input_monitor_buffer[index] = workspace_input_monitor_buffer[index - 1U];
+    }
+    workspace_input_monitor_buffer[cursor_index] = ch;
+    workspace_store_input_monitor_cursor_index(workspace_object, cursor_index + 1U);
 }
 
-static void workspace_backspace_input_monitor_character(void) {
+static void workspace_backspace_input_monitor_character(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
     uint32_t length = text_length(workspace_input_monitor_buffer);
+    uint32_t cursor_index = workspace_input_monitor_cursor_index(workspace_object);
+    uint32_t index;
 
-    if (length == 0U) {
+    if (length == 0U || cursor_index == 0U) {
         return;
     }
-    workspace_input_monitor_buffer[length - 1U] = '\0';
+    if (cursor_index > length) {
+        cursor_index = length;
+    }
+    for (index = cursor_index - 1U; index < length; ++index) {
+        workspace_input_monitor_buffer[index] = workspace_input_monitor_buffer[index + 1U];
+    }
+    workspace_store_input_monitor_cursor_index(workspace_object, cursor_index - 1U);
 }
 
 static void workspace_run_interactive_input_monitor(
@@ -4864,8 +5164,9 @@ static void workspace_run_interactive_input_monitor(
 ) {
     uint8_t saw_carriage_return = 0U;
 
+    workspace_remember_input_monitor_view(workspace_object);
     workspace_bind_input_monitor_buffer(workspace_object);
-    workspace_remember_view(workspace_object, WORKSPACE_VIEW_INPUT_MONITOR, 0);
+    workspace_bind_input_monitor_cursor_state(workspace_object);
     workspace_render_input_monitor_browser(workspace_object);
     while (1) {
         char ch = machine_wait_getc();
@@ -4875,7 +5176,7 @@ static void workspace_run_interactive_input_monitor(
         }
         if (ch == '\r') {
             saw_carriage_return = 1U;
-            workspace_append_input_monitor_character('\n');
+            workspace_insert_input_monitor_character(workspace_object, '\n');
             workspace_render_input_monitor_browser(workspace_object);
             continue;
         }
@@ -4884,20 +5185,69 @@ static void workspace_run_interactive_input_monitor(
                 saw_carriage_return = 0U;
                 continue;
             }
-            workspace_append_input_monitor_character('\n');
+            workspace_insert_input_monitor_character(workspace_object, '\n');
             workspace_render_input_monitor_browser(workspace_object);
             continue;
         }
         saw_carriage_return = 0U;
+        if (ch == 0x1b) {
+            char sequence_lead = machine_wait_getc();
+
+            if (sequence_lead == '[') {
+                char sequence_tail = machine_wait_getc();
+
+                if (sequence_tail == 'D') {
+                    workspace_move_input_monitor_cursor_left(workspace_object);
+                    workspace_render_input_monitor_browser(workspace_object);
+                    continue;
+                }
+                if (sequence_tail == 'C') {
+                    workspace_move_input_monitor_cursor_right(workspace_object);
+                    workspace_render_input_monitor_browser(workspace_object);
+                    continue;
+                }
+                if (sequence_tail == 'H') {
+                    workspace_move_input_monitor_cursor_to_line_start(workspace_object);
+                    workspace_render_input_monitor_browser(workspace_object);
+                    continue;
+                }
+                if (sequence_tail == 'F') {
+                    workspace_move_input_monitor_cursor_to_line_end(workspace_object);
+                    workspace_render_input_monitor_browser(workspace_object);
+                    continue;
+                }
+            }
+            continue;
+        }
+        if (ch == 0x01) {
+            workspace_move_input_monitor_cursor_to_line_start(workspace_object);
+            workspace_render_input_monitor_browser(workspace_object);
+            continue;
+        }
+        if (ch == 0x02) {
+            workspace_move_input_monitor_cursor_left(workspace_object);
+            workspace_render_input_monitor_browser(workspace_object);
+            continue;
+        }
+        if (ch == 0x05) {
+            workspace_move_input_monitor_cursor_to_line_end(workspace_object);
+            workspace_render_input_monitor_browser(workspace_object);
+            continue;
+        }
+        if (ch == 0x06) {
+            workspace_move_input_monitor_cursor_right(workspace_object);
+            workspace_render_input_monitor_browser(workspace_object);
+            continue;
+        }
         if (ch == 0x08 || ch == 0x7f) {
-            workspace_backspace_input_monitor_character();
+            workspace_backspace_input_monitor_character(workspace_object);
             workspace_render_input_monitor_browser(workspace_object);
             continue;
         }
         if ((uint8_t)ch < 32U || (uint8_t)ch > 126U) {
             continue;
         }
-        workspace_append_input_monitor_character(ch);
+        workspace_insert_input_monitor_character(workspace_object, ch);
         workspace_render_input_monitor_browser(workspace_object);
     }
 }
@@ -10010,6 +10360,18 @@ static void regenerated_boot_source_emit_view_restore(
         regenerated_boot_source_emit_text(emitter, "Workspace browsePackages.\n");
         return;
     }
+    if (view_kind_value.integer == WORKSPACE_VIEW_REGENERATED_BOOT_SOURCE) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browseRegeneratedBootSource.\n");
+        return;
+    }
+    if (view_kind_value.integer == WORKSPACE_VIEW_REGENERATED_KERNEL_SOURCE) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browseRegeneratedKernelSource.\n");
+        return;
+    }
+    if (view_kind_value.integer == WORKSPACE_VIEW_INPUT_MONITOR) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browseInteractiveInput.\n");
+        return;
+    }
     if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
         target_name_value.string == 0 ||
         target_name_value.string[0] == '\0') {
@@ -10068,18 +10430,6 @@ static void regenerated_boot_source_emit_view_restore(
         regenerated_boot_source_emit_text(emitter, "Workspace fileOutPackageNamed: '");
         regenerated_boot_source_emit_quoted_string(emitter, target_name_value.string);
         regenerated_boot_source_emit_text(emitter, "'.\n");
-        return;
-    }
-    if (view_kind_value.integer == WORKSPACE_VIEW_REGENERATED_BOOT_SOURCE) {
-        regenerated_boot_source_emit_text(emitter, "Workspace browseRegeneratedBootSource.\n");
-        return;
-    }
-    if (view_kind_value.integer == WORKSPACE_VIEW_REGENERATED_KERNEL_SOURCE) {
-        regenerated_boot_source_emit_text(emitter, "Workspace browseRegeneratedKernelSource.\n");
-        return;
-    }
-    if (view_kind_value.integer == WORKSPACE_VIEW_INPUT_MONITOR) {
-        regenerated_boot_source_emit_text(emitter, "Workspace browseInteractiveInput.\n");
         return;
     }
     if (view_kind_value.integer == WORKSPACE_VIEW_METHOD &&
@@ -11622,7 +11972,9 @@ static void execute_entry_workspace_browse_interactive_input(
 ) {
     (void)arguments;
     (void)text;
-    workspace_remember_view(object, WORKSPACE_VIEW_INPUT_MONITOR, 0);
+    workspace_remember_input_monitor_view(object);
+    workspace_bind_input_monitor_buffer(object);
+    workspace_bind_input_monitor_cursor_state(object);
     workspace_render_input_monitor_browser(object);
     push(receiver);
 }

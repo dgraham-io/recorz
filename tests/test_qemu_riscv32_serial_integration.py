@@ -235,7 +235,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("RecorzKernelClass: #Selector", output)
             self.assertNotIn("panic:", output)
 
-    def test_workspace_interactive_input_monitor_captures_serial_input_into_contents(self) -> None:
+    def test_workspace_interactive_input_monitor_supports_cursor_editing(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-input-monitor-") as temp_dir:
             build_dir = Path(temp_dir)
             elf_path = _build_elf(build_dir, WORKSPACE_INPUT_MONITOR_EXAMPLE)
@@ -269,7 +269,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 output = _read_until(process, "VIEW: INPUT", timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
-                process.stdin.write("ab\x08C\x04")
+                process.stdin.write("ab\x02C\x06D\x04")
                 process.stdin.flush()
                 time.sleep(1.0)
                 if process.poll() is None:
@@ -287,8 +287,10 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
 
             output = output.replace("\r", "")
             self.assertIn("VIEW: INPUT", output)
+            self.assertIn("MOVE: ARROWS CTRL-B/F", output)
+            self.assertIn("LINE: 1", output)
             self.assertIn("EXIT: CTRL-", output)
-            self.assertIn("BUFFER=aC", output.replace("\n", ""))
+            self.assertIn("BUFFER=aCbD", output.replace("\n", ""))
             self.assertNotIn("panic:", output)
 
     def test_memory_report_demo_prints_usage_within_budget(self) -> None:
