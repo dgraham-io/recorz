@@ -107,7 +107,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEST_RUNNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_TEST_FAIL
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_RECOVER_LAST_SOURCE
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_TEST_RUNNER
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -9246,6 +9246,89 @@ static void execute_entry_workspace_rerun(
         machine_panic("Workspace rerun has no remembered source");
     }
     workspace_evaluate_source(workspace_source_for_evaluation(source_value.string));
+    push(receiver);
+}
+
+static void execute_entry_workspace_save_and_reopen(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    startup_hook_receiver_handle = heap_handle_for_object(object);
+    startup_hook_selector_id = RECORZ_MVP_SELECTOR_REOPEN;
+    emit_live_snapshot();
+    push(receiver);
+}
+
+static void execute_entry_workspace_save_and_rerun(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    struct recorz_mvp_value source_value;
+
+    (void)arguments;
+    (void)text;
+    source_value = heap_get_field(object, workspace_last_source_field_index(object));
+    if (source_value.kind != RECORZ_MVP_VALUE_STRING ||
+        source_value.string == 0 ||
+        source_value.string[0] == '\0') {
+        machine_panic("Workspace saveAndRerun has no remembered source");
+    }
+    startup_hook_receiver_handle = heap_handle_for_object(object);
+    startup_hook_selector_id = RECORZ_MVP_SELECTOR_RERUN;
+    emit_live_snapshot();
+    push(receiver);
+}
+
+static void execute_entry_workspace_save_recovery_snapshot(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint16_t workspace_handle;
+
+    (void)arguments;
+    (void)text;
+    workspace_handle = heap_handle_for_object(object);
+    heap_set_field(
+        workspace_handle,
+        workspace_current_view_kind_field_index(object),
+        nil_value()
+    );
+    heap_set_field(
+        workspace_handle,
+        workspace_current_target_name_field_index(object),
+        nil_value()
+    );
+    startup_hook_receiver_handle = workspace_handle;
+    startup_hook_selector_id = RECORZ_MVP_SELECTOR_REOPEN;
+    emit_live_snapshot();
+    push(receiver);
+}
+
+static void execute_entry_workspace_recover_last_source(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    struct recorz_mvp_value source_value;
+
+    (void)arguments;
+    (void)text;
+    source_value = heap_get_field(object, workspace_last_source_field_index(object));
+    if (source_value.kind != RECORZ_MVP_VALUE_STRING ||
+        source_value.string == 0 ||
+        source_value.string[0] == '\0') {
+        machine_panic("Workspace recoverLastSource has no remembered source");
+    }
+    workspace_remember_current_source(object, source_value.string);
     push(receiver);
 }
 

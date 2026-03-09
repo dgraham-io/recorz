@@ -170,3 +170,11 @@ RecorzKernelSelector: #testPass order: 83
 !
 RecorzKernelSelector: #testFail order: 84
 !
+RecorzKernelSelector: #saveAndReopen order: 85
+!
+RecorzKernelSelector: #saveAndRerun order: 86
+!
+RecorzKernelSelector: #saveRecoverySnapshot order: 87
+!
+RecorzKernelSelector: #recoverLastSource order: 88
+!

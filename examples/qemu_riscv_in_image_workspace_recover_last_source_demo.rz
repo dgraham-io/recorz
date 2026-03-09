@@ -1,0 +1,6 @@
+Display clear.
+Workspace evaluate: 'Transcript show: ''SAFE''.'.
+Workspace setContents: 'BROKEN'.
+Workspace recoverLastSource.
+Transcript show: Workspace contents.
+Transcript cr.

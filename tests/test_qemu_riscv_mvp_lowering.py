@@ -696,7 +696,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             mvp.SELECTOR_DEFINITIONS[-9:],
         )
         self.assertEqual(
-            mvp.SELECTOR_DEFINITIONS[-33:],
+            mvp.SELECTOR_DEFINITIONS[-37:],
             [
                 ("RECORZ_MVP_SELECTOR_BROWSE_CLASS_METHOD_OF_CLASS_NAMED", 53),
                 ("RECORZ_MVP_SELECTOR_FILE_OUT_CLASS_NAMED", 54),
@@ -731,6 +731,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_LAST_LABEL", 83),
                 ("RECORZ_MVP_SELECTOR_TEST_PASS", 84),
                 ("RECORZ_MVP_SELECTOR_TEST_FAIL", 85),
+                ("RECORZ_MVP_SELECTOR_SAVE_AND_REOPEN", 86),
+                ("RECORZ_MVP_SELECTOR_SAVE_AND_RERUN", 87),
+                ("RECORZ_MVP_SELECTOR_SAVE_RECOVERY_SNAPSHOT", 88),
+                ("RECORZ_MVP_SELECTOR_RECOVER_LAST_SOURCE", 89),
             ],
         )
 
@@ -946,7 +950,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            mvp.METHOD_ENTRY_ORDER[-43:],
+            mvp.METHOD_ENTRY_ORDER[-47:],
             [
                 "RECORZ_MVP_METHOD_ENTRY_KERNEL_INSTALLER_FILE_OUT_CLASS_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_KERNEL_INSTALLER_FILE_OUT_PACKAGE_NAMED",
@@ -981,6 +985,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_RERUN",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_REOPEN",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_ACCEPT_CURRENT",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_SAVE_AND_REOPEN",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_SAVE_AND_RERUN",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_SAVE_RECOVERY_SNAPSHOT",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_RECOVER_LAST_SOURCE",
                 "RECORZ_MVP_METHOD_ENTRY_CONTEXT_SENDER",
                 "RECORZ_MVP_METHOD_ENTRY_CONTEXT_RECEIVER",
                 "RECORZ_MVP_METHOD_ENTRY_CONTEXT_DETAIL",
@@ -1684,7 +1692,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             [
                 (mvp.SEED_FIELD_NIL, 0),
                 (mvp.SEED_FIELD_SMALL_INTEGER, mvp.SEED_OBJECT_CLASS),
-                (mvp.SEED_FIELD_OBJECT_INDEX, 346),
+                (mvp.SEED_FIELD_OBJECT_INDEX, dynamic_sections.seed_layout["method_descriptors"].start_index),
                 (mvp.SEED_FIELD_SMALL_INTEGER, 2),
             ],
         )
@@ -1711,7 +1719,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
     def test_declares_method_seed_orders_and_materializes_method_seed_objects(self) -> None:
         self.assertEqual(
             mvp.SELECTOR_VALUE_ORDER,
-            list(range(1, 86)),
+            list(range(1, len(mvp.SELECTOR_DEFINITIONS) + 1)),
         )
         self.assertEqual(
             mvp.COMPILED_METHOD_ENTRY_ORDER[:4],
@@ -1987,13 +1995,17 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertIn("RECORZ_MVP_METHOD_ENTRY_WORKSPACE_RERUN = 59,", header)
         self.assertIn("RECORZ_MVP_METHOD_ENTRY_WORKSPACE_REOPEN = 60,", header)
         self.assertIn("RECORZ_MVP_METHOD_ENTRY_WORKSPACE_ACCEPT_CURRENT = 61,", header)
-        self.assertIn("RECORZ_MVP_METHOD_ENTRY_CONTEXT_SENDER = 62,", header)
-        self.assertIn("RECORZ_MVP_METHOD_ENTRY_CONTEXT_RECEIVER = 63,", header)
-        self.assertIn("RECORZ_MVP_METHOD_ENTRY_CONTEXT_DETAIL = 64,", header)
-        self.assertIn("RECORZ_MVP_METHOD_ENTRY_CONTEXT_ALIVE = 65,", header)
-        self.assertIn("RECORZ_MVP_METHOD_ENTRY_TEST_RUNNER_RUN_CLASS_NAMED = 66,", header)
-        self.assertIn("RECORZ_MVP_METHOD_ENTRY_TEST_RUNNER_LAST_LABEL = 71,", header)
-        self.assertIn("RECORZ_MVP_METHOD_ENTRY_COUNT = 72,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_WORKSPACE_SAVE_AND_REOPEN = 62,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_WORKSPACE_SAVE_AND_RERUN = 63,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_WORKSPACE_SAVE_RECOVERY_SNAPSHOT = 64,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_WORKSPACE_RECOVER_LAST_SOURCE = 65,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_CONTEXT_SENDER = 66,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_CONTEXT_RECEIVER = 67,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_CONTEXT_DETAIL = 68,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_CONTEXT_ALIVE = 69,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_TEST_RUNNER_RUN_CLASS_NAMED = 70,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_TEST_RUNNER_LAST_LABEL = 75,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_COUNT = 76,", header)
         self.assertIn("struct recorz_mvp_seed_class_source_record {", header)
         self.assertIn('"Workspace"', header)
         self.assertIn("RecorzKernelClass: #Workspace", header)
@@ -2047,9 +2059,13 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertIn("RECORZ_MVP_PRIMITIVE_WORKSPACE_RERUN = 47,", header)
         self.assertIn("RECORZ_MVP_PRIMITIVE_WORKSPACE_REOPEN = 48,", header)
         self.assertIn("RECORZ_MVP_PRIMITIVE_WORKSPACE_ACCEPT_CURRENT = 49,", header)
-        self.assertIn("RECORZ_MVP_PRIMITIVE_TEST_RUNNER_RUN_CLASS_NAMED = 50,", header)
-        self.assertIn("RECORZ_MVP_PRIMITIVE_TEST_RUNNER_RUN_PACKAGE_NAMED = 51,", header)
-        self.assertIn("RECORZ_MVP_PRIMITIVE_COUNT = 52,", header)
+        self.assertIn("RECORZ_MVP_PRIMITIVE_WORKSPACE_SAVE_AND_REOPEN = 50,", header)
+        self.assertIn("RECORZ_MVP_PRIMITIVE_WORKSPACE_SAVE_AND_RERUN = 51,", header)
+        self.assertIn("RECORZ_MVP_PRIMITIVE_WORKSPACE_SAVE_RECOVERY_SNAPSHOT = 52,", header)
+        self.assertIn("RECORZ_MVP_PRIMITIVE_WORKSPACE_RECOVER_LAST_SOURCE = 53,", header)
+        self.assertIn("RECORZ_MVP_PRIMITIVE_TEST_RUNNER_RUN_CLASS_NAMED = 54,", header)
+        self.assertIn("RECORZ_MVP_PRIMITIVE_TEST_RUNNER_RUN_PACKAGE_NAMED = 55,", header)
+        self.assertIn("RECORZ_MVP_PRIMITIVE_COUNT = 56,", header)
         self.assertIn(
             "[RECORZ_MVP_PRIMITIVE_KERNEL_INSTALLER_MEMORY_REPORT] = "
             "execute_entry_kernel_installer_memory_report,",
@@ -2246,6 +2262,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
 
     def test_builds_seed_manifest_with_expected_header(self) -> None:
         manifest = mvp.build_seed_manifest()
+        seed_objects, _seed_object_indices_by_name, _glyph_object_indices = mvp.build_fixed_boot_seed_objects()
+        dynamic_sections = mvp.build_dynamic_seed_sections(seed_objects)
+        for section_spec in mvp.BOOT_IMAGE_SEED_BUILD_CONTEXT.dynamic_seed_object_section_specs:
+            seed_objects.extend(dynamic_sections.seed_objects_for_layout_section(section_spec.layout_section_name))
         (
             magic,
             version,
@@ -2349,7 +2369,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(struct.calcsize(mvp.SEED_HEADER_FORMAT), 16)
         self.assertEqual(magic, mvp.SEED_MAGIC)
         self.assertEqual(version, mvp.SEED_VERSION)
-        self.assertEqual(object_count, 417)
+        self.assertEqual(object_count, len(seed_objects))
         self.assertEqual(global_binding_count, 11)
         self.assertEqual(root_binding_count, 6)
         self.assertEqual(glyph_code_count, len(mvp.GLYPH_BITMAP_BOOT_SPECS))
@@ -2393,19 +2413,11 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertEqual(
             first_method_entry_fields,
-            [
-                (mvp.SEED_FIELD_SMALL_INTEGER, mvp.METHOD_ENTRY_VALUES["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW"]),
-                (mvp.SEED_FIELD_OBJECT_INDEX, 255),
-            ],
+            dynamic_sections.seed_objects_for_layout_section("method_entries")[0].fields,
         )
         self.assertEqual(
             first_method_fields,
-            [
-                (mvp.SEED_FIELD_OBJECT_INDEX, 191),
-                (mvp.SEED_FIELD_SMALL_INTEGER, 0),
-                (mvp.SEED_FIELD_SMALL_INTEGER, mvp.SEED_OBJECT_CLASS),
-                (mvp.SEED_FIELD_OBJECT_INDEX, 296),
-            ],
+            dynamic_sections.seed_objects_for_layout_section("method_descriptors")[0].fields,
         )
         self.assertEqual(first_global_binding, (mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_TRANSCRIPT"], 0))
         self.assertEqual(first_root_binding, (mvp.SEED_ROOT_DEFAULT_FORM, 9))

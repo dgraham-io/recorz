@@ -74,3 +74,15 @@ reopen
 !
 acceptCurrent
     <primitive: #workspaceAcceptCurrent>
+!
+saveAndReopen
+    <primitive: #workspaceSaveAndReopen>
+!
+saveAndRerun
+    <primitive: #workspaceSaveAndRerun>
+!
+saveRecoverySnapshot
+    <primitive: #workspaceSaveRecoverySnapshot>
+!
+recoverLastSource
+    <primitive: #workspaceRecoverLastSource>
