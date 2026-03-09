@@ -1043,3 +1043,5 @@
 - Verified with `PYTHONPATH=src:tools:. python3 -m unittest discover -s tests -v`, plus clean RV32/RV64 target rebuilds through `make -C platform/qemu-riscv32 clean all inspect-image` and `make -C platform/qemu-riscv64 clean all inspect-image`.
 - Added keyword-send expressions to the live source compiler and workspace evaluator on both QEMU targets, so installed methods can now compile returns like `^form writeString: left` instead of being limited to statement-level keyword sends.
 - Added the RV32-first proof `/Users/david/repos/recorz/examples/qemu_riscv_in_image_expression_keyword_send_demo.rz` and serial integration coverage for keyword sends inside live method expressions.
+- Added `nil` expression support to the live source compiler on both QEMU targets by wiring `COMPILED_METHOD_OP_PUSH_NIL` into compiled-method validation and code generation, so installed methods can assign or return `nil` without falling back to host-built code.
+- Added the RV32-first proof `/Users/david/repos/recorz/examples/qemu_riscv_in_image_nil_method_demo.rz` and serial integration coverage for `nil` inside live method bodies.

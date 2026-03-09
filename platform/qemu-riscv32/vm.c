@@ -77,6 +77,7 @@
 #define COMPILED_METHOD_OP_PUSH_GLOBAL RECORZ_MVP_COMPILED_METHOD_OP_PUSH_GLOBAL
 #define COMPILED_METHOD_OP_PUSH_ROOT RECORZ_MVP_COMPILED_METHOD_OP_PUSH_ROOT
 #define COMPILED_METHOD_OP_PUSH_ARGUMENT RECORZ_MVP_COMPILED_METHOD_OP_PUSH_ARGUMENT
+#define COMPILED_METHOD_OP_PUSH_NIL RECORZ_MVP_COMPILED_METHOD_OP_PUSH_NIL
 #define COMPILED_METHOD_OP_PUSH_FIELD RECORZ_MVP_COMPILED_METHOD_OP_PUSH_FIELD
 #define COMPILED_METHOD_OP_SEND RECORZ_MVP_COMPILED_METHOD_OP_SEND
 #define COMPILED_METHOD_OP_POP RECORZ_MVP_COMPILED_METHOD_OP_POP
@@ -3432,6 +3433,9 @@ static void validate_compiled_method(
                 }
                 ++stack_depth;
                 break;
+            case COMPILED_METHOD_OP_PUSH_NIL:
+                ++stack_depth;
+                break;
             case COMPILED_METHOD_OP_PUSH_FIELD:
                 if (operand_a >= OBJECT_FIELD_LIMIT) {
                     machine_panic("compiled method pushField index is out of range");
@@ -5796,6 +5800,16 @@ static const char *compile_source_primary_push(
     token_cursor = source_parse_identifier(cursor, token, sizeof(token));
     if (token_cursor == 0) {
         return 0;
+    }
+    if (source_names_equal(token, "nil")) {
+        compile_source_append_instruction(
+            instruction_words,
+            instruction_count,
+            COMPILED_METHOD_OP_PUSH_NIL,
+            0U,
+            0U
+        );
+        return token_cursor;
     }
     if (!compile_source_operand_push(
             class_object,

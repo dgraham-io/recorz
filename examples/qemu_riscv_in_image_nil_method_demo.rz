@@ -1,0 +1,16 @@
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #NilReporter superclass: #Object instanceVariableNames: ''left right''
+!
+setLeft: ignoredValue right: keptValue
+    right := keptValue.
+    ^keptValue
+!
+sum
+    left := nil.
+    ^right
+!'.
+KernelInstaller rememberObject: ((KernelInstaller classNamed: 'NilReporter') new) named: 'nilReporter'.
+((KernelInstaller objectNamed: 'nilReporter') setLeft: 'IGNORED' right: 'KEPT').
+Transcript show: 'NIL'.
+Transcript cr.
+Transcript show: ((KernelInstaller objectNamed: 'nilReporter') sum).
