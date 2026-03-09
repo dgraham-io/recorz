@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 import unittest
 from collections import Counter
 from pathlib import Path
@@ -71,10 +72,14 @@ SNAPSHOT_WORKSPACE_PACKAGE_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-work
 SNAPSHOT_WORKSPACE_PACKAGE_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "workspace-package-live-image.bin"
 SNAPSHOT_CLASS_FILE_OUT_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-class-file-out-test"
 SNAPSHOT_CLASS_FILE_OUT_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-class-file-out-reload-test"
+SNAPSHOT_CLASS_FILE_OUT_COLD_FILE_IN_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-class-file-out-cold-file-in-test"
 SNAPSHOT_CLASS_FILE_OUT_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "class-file-out-live-image.bin"
+SNAPSHOT_CLASS_FILE_OUT_EXTRACTED_SOURCE_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "class-file-out-current-source.rz"
 SNAPSHOT_PACKAGE_FILE_OUT_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-package-file-out-test"
 SNAPSHOT_PACKAGE_FILE_OUT_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-package-file-out-reload-test"
+SNAPSHOT_PACKAGE_FILE_OUT_COLD_FILE_IN_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-package-file-out-cold-file-in-test"
 SNAPSHOT_PACKAGE_FILE_OUT_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "package-file-out-live-image.bin"
+SNAPSHOT_PACKAGE_FILE_OUT_EXTRACTED_SOURCE_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "package-file-out-current-source.rz"
 
 SNAPSHOT_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_save_demo.rz"
 SNAPSHOT_RELOAD_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_reload_demo.rz"
@@ -94,8 +99,10 @@ SNAPSHOT_WORKSPACE_PACKAGE_LIST_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv
 SNAPSHOT_WORKSPACE_PACKAGE_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_workspace_package_browser_save_demo.rz"
 SNAPSHOT_CLASS_FILE_OUT_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_class_file_out_snapshot_save_demo.rz"
 SNAPSHOT_CLASS_FILE_OUT_RELOAD_DEMO_PATH = ROOT / "examples" / "qemu_riscv_class_file_out_snapshot_reload_demo.rz"
+SNAPSHOT_CLASS_FILE_OUT_COLD_FILE_IN_DEMO_PATH = ROOT / "examples" / "qemu_riscv_class_file_out_cold_file_in_demo.rz"
 SNAPSHOT_PACKAGE_FILE_OUT_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_package_file_out_snapshot_save_demo.rz"
 SNAPSHOT_PACKAGE_FILE_OUT_RELOAD_DEMO_PATH = ROOT / "examples" / "qemu_riscv_package_file_out_snapshot_reload_demo.rz"
+SNAPSHOT_PACKAGE_FILE_OUT_COLD_FILE_IN_DEMO_PATH = ROOT / "examples" / "qemu_riscv_package_file_out_cold_file_in_demo.rz"
 
 
 @unittest.skipUnless(
@@ -141,6 +148,58 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
         if result.returncode != 0:
             self.fail(f"QEMU RV32 screenshot flow failed\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}")
+        qemu_log = qemu_log_path.read_text(encoding="utf-8")
+        width, height, data = _read_ppm(ppm_path)
+        return qemu_log, width, height, data
+
+    def extract_workspace_current_source(self, *, snapshot_path: Path, output_path: Path) -> str:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        if output_path.exists():
+            output_path.unlink()
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "tools" / "inspect_qemu_riscv_snapshot.py"),
+                str(snapshot_path),
+                "--extract-workspace-current-source",
+                str(output_path),
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            self.fail(
+                "workspace source extraction failed\n"
+                f"stdout:\n{result.stdout}\n"
+                f"stderr:\n{result.stderr}"
+            )
+        return output_path.read_text(encoding="utf-8")
+
+    def render_cold_file_in_demo(
+        self,
+        *,
+        build_dir: Path,
+        example_path: Path,
+        file_in_payload: Path,
+    ) -> tuple[str, int, int, bytes]:
+        ppm_path = build_dir / "recorz-qemu-riscv32-mvp.ppm"
+        qemu_log_path = build_dir / "qemu.log"
+        command = [
+            "make",
+            "-C",
+            str(PLATFORM_DIR),
+            f"BUILD_DIR={build_dir}",
+            f"EXAMPLE={example_path}",
+            f"FILE_IN_PAYLOAD={file_in_payload}",
+            "clean",
+            "screenshot",
+        ]
+        result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
+        if result.returncode != 0:
+            self.fail(
+                f"QEMU RV32 cold file-in screenshot flow failed\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+            )
         qemu_log = qemu_log_path.read_text(encoding="utf-8")
         width, height, data = _read_ppm(ppm_path)
         return qemu_log, width, height, data
@@ -448,6 +507,68 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         self.assertGreater(line_1[TEXT_FOREGROUND], 700)
         self.assertGreater(line_2[TEXT_FOREGROUND], 500)
         self.assertGreater(source_region[TEXT_FOREGROUND], 2500)
+
+    def test_snapshot_extracted_class_source_cold_files_into_a_fresh_image(self) -> None:
+        save_log = self.save_snapshot(
+            build_dir=SNAPSHOT_CLASS_FILE_OUT_BUILD_DIR,
+            example_path=SNAPSHOT_CLASS_FILE_OUT_SAVE_DEMO_PATH,
+            snapshot_output=SNAPSHOT_CLASS_FILE_OUT_OUTPUT_PATH,
+        )
+        self.assertIn("recorz-snapshot-begin", save_log)
+        self.assertTrue(SNAPSHOT_CLASS_FILE_OUT_OUTPUT_PATH.exists())
+
+        extracted_source = self.extract_workspace_current_source(
+            snapshot_path=SNAPSHOT_CLASS_FILE_OUT_OUTPUT_PATH,
+            output_path=SNAPSHOT_CLASS_FILE_OUT_EXTRACTED_SOURCE_PATH,
+        )
+        self.assertIn("RecorzKernelClass: #Exported", extracted_source)
+        self.assertIn("Snapshot export demo", extracted_source)
+        self.assertIn("setValue: text", extracted_source)
+
+        reload_log, width, height, _data = self.render_cold_file_in_demo(
+            build_dir=SNAPSHOT_CLASS_FILE_OUT_COLD_FILE_IN_BUILD_DIR,
+            example_path=SNAPSHOT_CLASS_FILE_OUT_COLD_FILE_IN_DEMO_PATH,
+            file_in_payload=SNAPSHOT_CLASS_FILE_OUT_EXTRACTED_SOURCE_PATH,
+        )
+        flat_reload_log = reload_log.replace("\r", "").replace("\n", "")
+        self.assertEqual((width, height), (1024, 768))
+        self.assertIn("recorz qemu-riscv32 mvp: applied external file-in", reload_log)
+        self.assertIn("RecorzKernelClass: #Exported", flat_reload_log)
+        self.assertIn("Snapshot export demo", flat_reload_log)
+        self.assertIn("ROUNDTRIP", flat_reload_log)
+        self.assertIn("COLD", flat_reload_log)
+        self.assertNotIn("panic:", reload_log)
+
+    def test_snapshot_extracted_package_source_cold_files_into_a_fresh_image(self) -> None:
+        save_log = self.save_snapshot(
+            build_dir=SNAPSHOT_PACKAGE_FILE_OUT_BUILD_DIR,
+            example_path=SNAPSHOT_PACKAGE_FILE_OUT_SAVE_DEMO_PATH,
+            snapshot_output=SNAPSHOT_PACKAGE_FILE_OUT_OUTPUT_PATH,
+        )
+        self.assertIn("recorz-snapshot-begin", save_log)
+        self.assertTrue(SNAPSHOT_PACKAGE_FILE_OUT_OUTPUT_PATH.exists())
+
+        extracted_source = self.extract_workspace_current_source(
+            snapshot_path=SNAPSHOT_PACKAGE_FILE_OUT_OUTPUT_PATH,
+            output_path=SNAPSHOT_PACKAGE_FILE_OUT_EXTRACTED_SOURCE_PATH,
+        )
+        self.assertIn("RecorzKernelPackage: 'Tools'", extracted_source)
+        self.assertIn("Shared utilities", extracted_source)
+        self.assertIn("RecorzKernelClass: #PackageEcho", extracted_source)
+
+        reload_log, width, height, _data = self.render_cold_file_in_demo(
+            build_dir=SNAPSHOT_PACKAGE_FILE_OUT_COLD_FILE_IN_BUILD_DIR,
+            example_path=SNAPSHOT_PACKAGE_FILE_OUT_COLD_FILE_IN_DEMO_PATH,
+            file_in_payload=SNAPSHOT_PACKAGE_FILE_OUT_EXTRACTED_SOURCE_PATH,
+        )
+        flat_reload_log = reload_log.replace("\r", "").replace("\n", "")
+        self.assertEqual((width, height), (1024, 768))
+        self.assertIn("recorz qemu-riscv32 mvp: applied external file-in", reload_log)
+        self.assertIn("RecorzKernelPackage: 'Tools'", flat_reload_log)
+        self.assertIn("Shared utilities", flat_reload_log)
+        self.assertIn("ROUNDTRIP", flat_reload_log)
+        self.assertIn("TOOLS", flat_reload_log)
+        self.assertNotIn("panic:", reload_log)
 
     def test_snapshot_can_reopen_workspace_package_list_state_without_demo_specific_program(self) -> None:
         save_log = self.save_snapshot(

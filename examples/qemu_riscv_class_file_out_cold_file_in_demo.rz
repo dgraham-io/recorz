@@ -1,0 +1,14 @@
+| exportedClass item |
+Display clear.
+Transcript show: 'SOURCE'.
+Transcript cr.
+Workspace fileOutClassNamed: 'Exported'.
+Transcript show: Workspace contents.
+Transcript cr.
+exportedClass := KernelInstaller classNamed: 'Exported'.
+item := exportedClass new.
+item setValue: 'ROUNDTRIP'.
+Transcript show: item value.
+Transcript cr.
+exportedClass cr.
+Transcript show: 'COLD'.
