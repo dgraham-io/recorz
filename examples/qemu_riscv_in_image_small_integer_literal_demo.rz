@@ -1,0 +1,18 @@
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #LiteralReporter superclass: #Object instanceVariableNames: ''value''
+!
+value
+    ^value
+!
+setValue: newValue
+    value := newValue.
+    ^self
+!
+sum
+    ^value + 1
+!'.
+KernelInstaller rememberObject: ((KernelInstaller classNamed: 'LiteralReporter') new) named: 'literalReporter'.
+((KernelInstaller objectNamed: 'literalReporter') setValue: 5).
+Transcript show: 'INT'.
+Transcript cr.
+Transcript show: (((KernelInstaller objectNamed: 'literalReporter') sum) printString).

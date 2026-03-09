@@ -130,6 +130,11 @@
         "name": "push_self",
         "constant": "RECORZ_MVP_OP_PUSH_SELF",
         "value": 15
+      },
+      {
+        "name": "push_small_integer",
+        "constant": "RECORZ_MVP_OP_PUSH_SMALL_INTEGER",
+        "value": 16
       }
   ],
   "literal_kinds": [
@@ -221,6 +226,11 @@
         "name": "push_self",
         "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_SELF",
         "value": 15
+      },
+      {
+        "name": "push_small_integer",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_SMALL_INTEGER",
+        "value": 16
       }
     ]
   },

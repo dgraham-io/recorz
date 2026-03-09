@@ -80,6 +80,7 @@
 #define COMPILED_METHOD_OP_PUSH_NIL RECORZ_MVP_COMPILED_METHOD_OP_PUSH_NIL
 #define COMPILED_METHOD_OP_PUSH_FIELD RECORZ_MVP_COMPILED_METHOD_OP_PUSH_FIELD
 #define COMPILED_METHOD_OP_PUSH_SELF RECORZ_MVP_COMPILED_METHOD_OP_PUSH_SELF
+#define COMPILED_METHOD_OP_PUSH_SMALL_INTEGER RECORZ_MVP_COMPILED_METHOD_OP_PUSH_SMALL_INTEGER
 #define COMPILED_METHOD_OP_SEND RECORZ_MVP_COMPILED_METHOD_OP_SEND
 #define COMPILED_METHOD_OP_POP RECORZ_MVP_COMPILED_METHOD_OP_POP
 #define COMPILED_METHOD_OP_RETURN_TOP RECORZ_MVP_COMPILED_METHOD_OP_RETURN_TOP
@@ -3439,6 +3440,9 @@ static void validate_compiled_method(
             case COMPILED_METHOD_OP_PUSH_SELF:
                 ++stack_depth;
                 break;
+            case COMPILED_METHOD_OP_PUSH_SMALL_INTEGER:
+                ++stack_depth;
+                break;
             case COMPILED_METHOD_OP_STORE_FIELD:
                 if (operand_a >= OBJECT_FIELD_LIMIT) {
                     machine_panic("compiled method storeField index is out of range");
@@ -5548,6 +5552,7 @@ static const char *compile_source_primary_push(
     uint32_t instruction_words[],
     uint8_t *instruction_count
 ) {
+    int32_t small_integer;
     char token[METHOD_SOURCE_NAME_LIMIT];
     const char *token_cursor;
     uint8_t selector_id;
@@ -5571,6 +5576,20 @@ static const char *compile_source_primary_push(
             machine_panic("KernelInstaller source method parenthesized expression is missing ')'");
         }
         return token_cursor + 1;
+    }
+    token_cursor = source_parse_small_integer(cursor, &small_integer);
+    if (token_cursor != 0) {
+        if (small_integer < -32768 || small_integer > 32767) {
+            machine_panic("KernelInstaller source method small integer literal is out of range");
+        }
+        compile_source_append_instruction(
+            instruction_words,
+            instruction_count,
+            COMPILED_METHOD_OP_PUSH_SMALL_INTEGER,
+            0U,
+            (uint16_t)(int16_t)small_integer
+        );
+        return token_cursor;
     }
     token_cursor = source_parse_identifier(cursor, token, sizeof(token));
     if (token_cursor == 0) {
@@ -7963,6 +7982,13 @@ static void execute_executable(
                 break;
             case RECORZ_MVP_OP_PUSH_SELF:
                 activation_push(activation_stack, &activation_stack_size, receiver);
+                break;
+            case RECORZ_MVP_OP_PUSH_SMALL_INTEGER:
+                activation_push(
+                    activation_stack,
+                    &activation_stack_size,
+                    small_integer_value((int16_t)instruction.operand_b)
+                );
                 break;
             case RECORZ_MVP_OP_STORE_FIELD:
                 if (receiver_object == 0) {
