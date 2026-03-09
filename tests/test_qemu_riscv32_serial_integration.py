@@ -34,6 +34,7 @@ WORKSPACE_ACCEPT_CURRENT_PACKAGE_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_risc
 WORKSPACE_RECOVER_LAST_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_recover_last_source_demo.rz"
 REGENERATED_KERNEL_SOURCE_BROWSER_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_regenerated_kernel_source_browser_demo.rz"
 WORKSPACE_INPUT_MONITOR_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_demo.rz"
+WORKSPACE_INPUT_MONITOR_EVALUATE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_evaluate_demo.rz"
 TEST_RUNNER_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_test_runner_demo.rz"
 METHOD_BLOCK_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_demo.rz"
 METHOD_BLOCK_CAPTURE_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_capture_demo.rz"
@@ -403,6 +404,65 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             output = output.replace("\r", "")
             self.assertIn("LINE: 41", output)
             self.assertRegex(output, r"TOP: ([2-9]|[1-9][0-9]+)")
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_interactive_input_monitor_can_evaluate_current_buffer(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-input-monitor-run-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_INPUT_MONITOR_EVALUATE_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "VIEW: INPUT", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("Transcript show: (1 + 2) printString.\x12!\x04")
+                process.stdin.flush()
+                time.sleep(1.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("RUN: CTRL-R", output)
+            self.assertIn(
+                "BUFFER=Transcript show: (1 + 2) printString.!",
+                output.replace("\n", ""),
+            )
+            self.assertIn("RERUN=3", output.replace("\n", ""))
             self.assertNotIn("panic:", output)
 
     def test_memory_report_demo_prints_usage_within_budget(self) -> None:

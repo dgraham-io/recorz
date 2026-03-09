@@ -4315,6 +4315,7 @@ static void workspace_render_input_monitor_browser(
     workspace_write_label_and_text(form, "INPUT", "SERIAL");
     workspace_write_label_and_text(form, "MOVE", "ARROWS CTRL-B/F/P/N");
     workspace_write_label_and_text(form, "HOME", "CTRL-A/E");
+    workspace_write_label_and_text(form, "RUN", "CTRL-R");
     workspace_write_label_and_text(form, "EXIT", "CTRL-D");
     cursor_index = workspace_input_monitor_cursor_index(workspace_object);
     workspace_input_monitor_cursor_line_and_column(
@@ -4717,6 +4718,44 @@ static void workspace_backspace_input_monitor_character(
     workspace_store_input_monitor_cursor_index(workspace_object, cursor_index - 1U);
 }
 
+static void workspace_evaluate_input_monitor_buffer(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    uint16_t workspace_handle = heap_handle_for_object(workspace_object);
+    struct recorz_mvp_value saved_view_kind = heap_get_field(
+        workspace_object,
+        workspace_current_view_kind_field_index(workspace_object)
+    );
+    struct recorz_mvp_value saved_target_name = heap_get_field(
+        workspace_object,
+        workspace_current_target_name_field_index(workspace_object)
+    );
+    const char *chunk_source;
+
+    if (workspace_input_monitor_buffer[0] == '\0') {
+        return;
+    }
+    chunk_source = workspace_normalize_do_it_source(workspace_input_monitor_buffer);
+    workspace_remember_source(workspace_object, chunk_source);
+    workspace_evaluate_source(workspace_source_for_evaluation(chunk_source));
+    heap_set_field(
+        workspace_handle,
+        workspace_current_view_kind_field_index(workspace_object),
+        saved_view_kind
+    );
+    heap_set_field(
+        workspace_handle,
+        workspace_current_target_name_field_index(workspace_object),
+        saved_target_name
+    );
+    heap_set_field(
+        workspace_handle,
+        workspace_current_source_field_index(workspace_object),
+        string_value(workspace_input_monitor_buffer)
+    );
+    workspace_remember_source(workspace_object, chunk_source);
+}
+
 static void workspace_run_interactive_input_monitor(
     const struct recorz_mvp_heap_object *workspace_object
 ) {
@@ -4799,6 +4838,11 @@ static void workspace_run_interactive_input_monitor(
         }
         if (ch == 0x10) {
             workspace_move_input_monitor_cursor_up(workspace_object);
+            workspace_render_input_monitor_browser(workspace_object);
+            continue;
+        }
+        if (ch == 0x12) {
+            workspace_evaluate_input_monitor_buffer(workspace_object);
             workspace_render_input_monitor_browser(workspace_object);
             continue;
         }

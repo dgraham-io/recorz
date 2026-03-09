@@ -1,0 +1,8 @@
+Display clear.
+Workspace setContents: ''.
+Workspace interactiveInputMonitor.
+Transcript show: 'BUFFER='.
+Transcript show: Workspace contents.
+Transcript cr.
+Transcript show: 'RERUN='.
+Workspace rerun.
