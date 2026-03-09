@@ -25,6 +25,7 @@ REGENERATED_BOOT_SOURCE_EXTRACT_TIMEOUT ?= 60
 REGENERATED_RUNTIME_BINDINGS_OUTPUT ?= $(BUILD_DIR)/recorz_mvp_regenerated_runtime_bindings.h
 REGENERATED_IMAGE_OUTPUT ?= $(BUILD_DIR)/regenerated_image.bin
 QEMU_EXTRA_ARGS ?=
+QEMU_WINDOW_INPUT_ARGS ?= -device virtio-keyboard-device
 comma := ,
 PYTHON_KERNEL_SOURCE_ENV := $(if $(KERNEL_SOURCE_BUNDLE),RECORZ_MVP_KERNEL_SOURCE_BUNDLE=$(KERNEL_SOURCE_BUNDLE))
 QEMU_UPDATE_ARGS := $(if $(UPDATE_PAYLOAD),-fw_cfg name=$(UPDATE_FW_CFG_NAME)$(comma)file=$(UPDATE_PAYLOAD))
@@ -114,10 +115,10 @@ $(ELF): $(OBJECTS) $(CURDIR)/linker.ld
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJECTS) -o $@
 
 run: $(ELF) $(QEMU_FILE_IN_DEP)
-	$(QEMU) -machine virt -m $(QEMU_MEMORY) -smp 1 -kernel $(ELF) -serial mon:stdio -device ramfb $(QEMU_RUN_ARGS)
+	$(QEMU) -machine virt -m $(QEMU_MEMORY) -smp 1 -kernel $(ELF) -serial mon:stdio -device ramfb $(QEMU_WINDOW_INPUT_ARGS) $(QEMU_RUN_ARGS)
 
 run-interactive: $(ELF) $(QEMU_FILE_IN_DEP)
-	$(QEMU) -machine virt -m $(QEMU_MEMORY) -smp 1 -kernel $(ELF) -serial stdio -monitor none -device ramfb $(QEMU_RUN_ARGS)
+	$(QEMU) -machine virt -m $(QEMU_MEMORY) -smp 1 -kernel $(ELF) -serial stdio -monitor none -device ramfb $(QEMU_WINDOW_INPUT_ARGS) $(QEMU_RUN_ARGS)
 
 run-headless: $(ELF) $(QEMU_FILE_IN_DEP)
 	$(QEMU) -machine virt -m $(QEMU_MEMORY) -smp 1 -kernel $(ELF) -serial stdio -display none -device ramfb $(QEMU_RUN_ARGS)

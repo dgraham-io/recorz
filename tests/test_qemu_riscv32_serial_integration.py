@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
 import shutil
 import select
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -103,11 +105,80 @@ def _read_until(process: subprocess.Popen[str], marker: str, *, timeout: float) 
     return output
 
 
+def _read_file_until(path: Path, marker: str, *, timeout: float) -> str:
+    deadline = time.monotonic() + timeout
+    output = ""
+    while marker not in output:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise AssertionError(f"timed out waiting for {marker!r}\ncurrent output:\n{output}")
+        if path.exists():
+            output = path.read_text(encoding="utf-8", errors="ignore")
+            if marker in output:
+                break
+        time.sleep(min(0.1, remaining))
+    return output
+
+
 @unittest.skipUnless(
     shutil.which("qemu-system-riscv32") and shutil.which("riscv64-unknown-elf-gcc"),
     "QEMU RV32 serial integration test requires qemu-system-riscv32 and riscv64-unknown-elf-gcc",
 )
 class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
+    @unittest.skipUnless(
+        sys.platform == "darwin" or os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"),
+        "QEMU keyboard-input integration test requires a graphical display backend",
+    )
+    def test_workspace_interactive_input_monitor_accepts_virtio_keyboard_input(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-input-monitor-kbd-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_INPUT_MONITOR_EXAMPLE)
+            log_path = build_dir / "qemu-keyboard.log"
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    f"file:{log_path}",
+                    "-monitor",
+                    "stdio",
+                    "-device",
+                    "ramfb",
+                    "-device",
+                    "virtio-keyboard-device",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                _read_file_until(log_path, "VIEW: INPUT", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("sendkey shift-a\n")
+                process.stdin.flush()
+                output = _read_file_until(log_path, "COL: 2", timeout=8.0).replace("\r", "")
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            self.assertIn("TOP: 1A", output)
+            self.assertNotIn("panic:", output)
+
     def test_default_demo_boots_and_prints_transcript_over_serial(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-serial-") as temp_dir:
             build_dir = Path(temp_dir)

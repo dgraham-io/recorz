@@ -30,9 +30,153 @@
 #define MAX_FDT_ALIAS_NAME 32U
 #define MAX_FDT_ALIASES 16U
 #define MAX_UART_CANDIDATES 8U
+#define MAX_VIRTIO_CANDIDATES 8U
 
 #define DRM_FORMAT_XRGB8888 0x34325258U
 #define MAX_FW_CFG_FILES 128U
+
+#define VIRTIO_MMIO_MAGIC_VALUE 0x74726976U
+#define VIRTIO_MMIO_VERSION_VALUE 2U
+#define VIRTIO_MMIO_DEVICE_ID_INPUT 18U
+#define VIRTIO_MMIO_REGISTER_MAGIC 0x000U
+#define VIRTIO_MMIO_REGISTER_VERSION 0x004U
+#define VIRTIO_MMIO_REGISTER_DEVICE_ID 0x008U
+#define VIRTIO_MMIO_REGISTER_DEVICE_FEATURES 0x010U
+#define VIRTIO_MMIO_REGISTER_DEVICE_FEATURES_SEL 0x014U
+#define VIRTIO_MMIO_REGISTER_DRIVER_FEATURES 0x020U
+#define VIRTIO_MMIO_REGISTER_DRIVER_FEATURES_SEL 0x024U
+#define VIRTIO_MMIO_REGISTER_GUEST_PAGE_SIZE 0x028U
+#define VIRTIO_MMIO_REGISTER_QUEUE_SEL 0x030U
+#define VIRTIO_MMIO_REGISTER_QUEUE_NUM_MAX 0x034U
+#define VIRTIO_MMIO_REGISTER_QUEUE_NUM 0x038U
+#define VIRTIO_MMIO_REGISTER_QUEUE_ALIGN 0x03cU
+#define VIRTIO_MMIO_REGISTER_QUEUE_PFN 0x040U
+#define VIRTIO_MMIO_REGISTER_QUEUE_READY 0x044U
+#define VIRTIO_MMIO_REGISTER_QUEUE_NOTIFY 0x050U
+#define VIRTIO_MMIO_REGISTER_INTERRUPT_STATUS 0x060U
+#define VIRTIO_MMIO_REGISTER_INTERRUPT_ACK 0x064U
+#define VIRTIO_MMIO_REGISTER_STATUS 0x070U
+#define VIRTIO_MMIO_REGISTER_QUEUE_DESC_LOW 0x080U
+#define VIRTIO_MMIO_REGISTER_QUEUE_DESC_HIGH 0x084U
+#define VIRTIO_MMIO_REGISTER_QUEUE_AVAIL_LOW 0x090U
+#define VIRTIO_MMIO_REGISTER_QUEUE_AVAIL_HIGH 0x094U
+#define VIRTIO_MMIO_REGISTER_QUEUE_USED_LOW 0x0a0U
+#define VIRTIO_MMIO_REGISTER_QUEUE_USED_HIGH 0x0a4U
+
+#define VIRTIO_STATUS_ACKNOWLEDGE 0x01U
+#define VIRTIO_STATUS_DRIVER 0x02U
+#define VIRTIO_STATUS_DRIVER_OK 0x04U
+#define VIRTIO_STATUS_FEATURES_OK 0x08U
+#define VIRTIO_STATUS_FAILED 0x80U
+#define VIRTIO_FEATURE_VERSION_1 32U
+
+#define VIRTQ_DESC_F_WRITE 0x02U
+#define VIRTIO_INPUT_EVENT_QUEUE_INDEX 0U
+#define VIRTIO_INPUT_QUEUE_SIZE 32U
+#define KEYBOARD_QUEUE_ALIGNMENT 4096U
+#define KEYBOARD_QUEUE_REGION_SIZE (KEYBOARD_QUEUE_ALIGNMENT * 2U)
+#define KEYBOARD_CHAR_QUEUE_SIZE 128U
+
+#define INPUT_EVENT_TYPE_SYN 0U
+#define INPUT_EVENT_TYPE_KEY 1U
+#define INPUT_EVENT_VALUE_RELEASE 0U
+#define INPUT_EVENT_VALUE_PRESS 1U
+#define INPUT_EVENT_VALUE_REPEAT 2U
+
+#define KEY_ESC 1U
+#define KEY_1 2U
+#define KEY_2 3U
+#define KEY_3 4U
+#define KEY_4 5U
+#define KEY_5 6U
+#define KEY_6 7U
+#define KEY_7 8U
+#define KEY_8 9U
+#define KEY_9 10U
+#define KEY_0 11U
+#define KEY_MINUS 12U
+#define KEY_EQUAL 13U
+#define KEY_BACKSPACE 14U
+#define KEY_TAB 15U
+#define KEY_Q 16U
+#define KEY_W 17U
+#define KEY_E 18U
+#define KEY_R 19U
+#define KEY_T 20U
+#define KEY_Y 21U
+#define KEY_U 22U
+#define KEY_I 23U
+#define KEY_O 24U
+#define KEY_P 25U
+#define KEY_LEFTBRACE 26U
+#define KEY_RIGHTBRACE 27U
+#define KEY_ENTER 28U
+#define KEY_LEFTCTRL 29U
+#define KEY_A 30U
+#define KEY_S 31U
+#define KEY_D 32U
+#define KEY_F 33U
+#define KEY_G 34U
+#define KEY_H 35U
+#define KEY_J 36U
+#define KEY_K 37U
+#define KEY_L 38U
+#define KEY_SEMICOLON 39U
+#define KEY_APOSTROPHE 40U
+#define KEY_GRAVE 41U
+#define KEY_LEFTSHIFT 42U
+#define KEY_BACKSLASH 43U
+#define KEY_Z 44U
+#define KEY_X 45U
+#define KEY_C 46U
+#define KEY_V 47U
+#define KEY_B 48U
+#define KEY_N 49U
+#define KEY_M 50U
+#define KEY_COMMA 51U
+#define KEY_DOT 52U
+#define KEY_SLASH 53U
+#define KEY_RIGHTSHIFT 54U
+#define KEY_SPACE 57U
+#define KEY_RIGHTCTRL 97U
+#define KEY_HOME 102U
+#define KEY_UP 103U
+#define KEY_LEFT 105U
+#define KEY_RIGHT 106U
+#define KEY_END 107U
+#define KEY_DOWN 108U
+
+struct virtq_desc {
+    uint64_t addr;
+    uint32_t len;
+    uint16_t flags;
+    uint16_t next;
+} __attribute__((packed, aligned(16)));
+
+struct virtq_used_elem {
+    uint32_t id;
+    uint32_t len;
+} __attribute__((packed));
+
+struct virtq_avail {
+    uint16_t flags;
+    uint16_t idx;
+    uint16_t ring[VIRTIO_INPUT_QUEUE_SIZE];
+    uint16_t used_event;
+} __attribute__((packed, aligned(2)));
+
+struct virtq_used {
+    uint16_t flags;
+    uint16_t idx;
+    struct virtq_used_elem ring[VIRTIO_INPUT_QUEUE_SIZE];
+    uint16_t avail_event;
+} __attribute__((packed, aligned(4)));
+
+struct virtio_input_event {
+    uint16_t type;
+    uint16_t code;
+    uint32_t value;
+} __attribute__((packed));
 
 struct fdt_header {
     uint32_t magic;
@@ -81,13 +225,16 @@ struct fdt_node_state {
     uint8_t has_reg;
     uint8_t uart_candidate;
     uint8_t fw_cfg_candidate;
+    uint8_t virtio_candidate;
 };
 
 struct discovered_devices {
     uint64_t uart_base;
     uint64_t fw_cfg_base;
+    uint64_t virtio_bases[MAX_VIRTIO_CANDIDATES];
     uint8_t have_uart;
     uint8_t have_fw_cfg;
+    uint8_t virtio_count;
 };
 
 struct alias_entry {
@@ -107,6 +254,20 @@ static machine_panic_hook current_panic_hook = 0;
 static struct fw_cfg_dma_access fw_cfg_dma_request;
 static struct fw_cfg_files fw_cfg_files;
 static struct ramfb_cfg ramfb;
+static uintptr_t keyboard_mmio_base = 0U;
+static uint16_t keyboard_queue_size = 0U;
+static uint16_t keyboard_used_index = 0U;
+static uint8_t keyboard_initialized = 0U;
+static uint8_t keyboard_shift_down = 0U;
+static uint8_t keyboard_ctrl_down = 0U;
+static uint16_t keyboard_char_head = 0U;
+static uint16_t keyboard_char_tail = 0U;
+static char keyboard_char_queue[KEYBOARD_CHAR_QUEUE_SIZE];
+static uint8_t keyboard_queue_region[KEYBOARD_QUEUE_REGION_SIZE] __attribute__((aligned(KEYBOARD_QUEUE_ALIGNMENT)));
+static struct virtq_desc *keyboard_desc = 0;
+static struct virtq_avail *keyboard_avail = 0;
+static volatile struct virtq_used *keyboard_used = 0;
+static struct virtio_input_event keyboard_events[VIRTIO_INPUT_QUEUE_SIZE];
 
 static uint16_t bswap16(uint16_t value) {
     return (uint16_t)((value >> 8) | (value << 8));
@@ -122,6 +283,34 @@ static uint32_t bswap32(uint32_t value) {
 static uint64_t bswap64(uint64_t value) {
     return ((uint64_t)bswap32((uint32_t)(value >> 32))) |
            ((uint64_t)bswap32((uint32_t)(value & 0xffffffffULL)) << 32);
+}
+
+static uint32_t mmio_read32(uintptr_t base, uintptr_t offset) {
+    return *(volatile uint32_t *)(base + offset);
+}
+
+static void mmio_write32(uintptr_t base, uintptr_t offset, uint32_t value) {
+    *(volatile uint32_t *)(base + offset) = value;
+}
+
+static uint16_t min_u16(uint16_t lhs, uint16_t rhs) {
+    return lhs < rhs ? lhs : rhs;
+}
+
+static uint16_t floor_power_of_two_u16(uint16_t value) {
+    uint16_t result = 1U;
+
+    if (value == 0U) {
+        return 0U;
+    }
+    while ((uint16_t)(result << 1U) != 0U && (uint16_t)(result << 1U) <= value) {
+        result = (uint16_t)(result << 1U);
+    }
+    return result;
+}
+
+static uintptr_t align_up(uintptr_t value, uintptr_t alignment) {
+    return (value + alignment - 1U) & ~(alignment - 1U);
 }
 
 static uint32_t read_be32(const void *buffer) {
@@ -328,6 +517,294 @@ static void remember_uart_candidate(
     ++(*uart_count);
 }
 
+static void remember_virtio_candidate(
+    struct discovered_devices *devices,
+    uint64_t base
+) {
+    if (devices->virtio_count >= MAX_VIRTIO_CANDIDATES) {
+        return;
+    }
+    devices->virtio_bases[devices->virtio_count++] = base;
+}
+
+static void keyboard_enqueue_byte(char ch) {
+    uint16_t next_tail = (uint16_t)((keyboard_char_tail + 1U) % KEYBOARD_CHAR_QUEUE_SIZE);
+
+    if (next_tail == keyboard_char_head) {
+        return;
+    }
+    keyboard_char_queue[keyboard_char_tail] = ch;
+    keyboard_char_tail = next_tail;
+}
+
+static void keyboard_enqueue_escape_sequence(const char *sequence) {
+    while (*sequence != '\0') {
+        keyboard_enqueue_byte(*sequence++);
+    }
+}
+
+static uint8_t keyboard_dequeue_byte(char *out) {
+    if (keyboard_char_head == keyboard_char_tail) {
+        return 0U;
+    }
+    if (out != 0) {
+        *out = keyboard_char_queue[keyboard_char_head];
+    }
+    keyboard_char_head = (uint16_t)((keyboard_char_head + 1U) % KEYBOARD_CHAR_QUEUE_SIZE);
+    return 1U;
+}
+
+static uint8_t keyboard_modifier_is_pressed(uint32_t value) {
+    return value == INPUT_EVENT_VALUE_PRESS || value == INPUT_EVENT_VALUE_REPEAT;
+}
+
+static char keyboard_ascii_for_letter(uint16_t code, uint8_t uppercase) {
+    if (code < KEY_A || code > KEY_Z) {
+        return '\0';
+    }
+    return (char)((uppercase ? 'A' : 'a') + (code - KEY_A));
+}
+
+static char keyboard_ascii_for_key(uint16_t code, uint8_t shifted) {
+    switch (code) {
+        case KEY_1: return shifted ? '!' : '1';
+        case KEY_2: return shifted ? '@' : '2';
+        case KEY_3: return shifted ? '#' : '3';
+        case KEY_4: return shifted ? '$' : '4';
+        case KEY_5: return shifted ? '%' : '5';
+        case KEY_6: return shifted ? '^' : '6';
+        case KEY_7: return shifted ? '&' : '7';
+        case KEY_8: return shifted ? '*' : '8';
+        case KEY_9: return shifted ? '(' : '9';
+        case KEY_0: return shifted ? ')' : '0';
+        case KEY_MINUS: return shifted ? '_' : '-';
+        case KEY_EQUAL: return shifted ? '+' : '=';
+        case KEY_TAB: return '\t';
+        case KEY_LEFTBRACE: return shifted ? '{' : '[';
+        case KEY_RIGHTBRACE: return shifted ? '}' : ']';
+        case KEY_SEMICOLON: return shifted ? ':' : ';';
+        case KEY_APOSTROPHE: return shifted ? '"' : '\'';
+        case KEY_GRAVE: return shifted ? '~' : '`';
+        case KEY_BACKSLASH: return shifted ? '|' : '\\';
+        case KEY_COMMA: return shifted ? '<' : ',';
+        case KEY_DOT: return shifted ? '>' : '.';
+        case KEY_SLASH: return shifted ? '?' : '/';
+        case KEY_SPACE: return ' ';
+        default:
+            return keyboard_ascii_for_letter(code, shifted);
+    }
+}
+
+static void keyboard_emit_key(uint16_t code) {
+    if (keyboard_ctrl_down && code >= KEY_A && code <= KEY_Z) {
+        keyboard_enqueue_byte((char)(code - KEY_A + 1U));
+        return;
+    }
+    switch (code) {
+        case KEY_ENTER:
+            keyboard_enqueue_byte('\r');
+            return;
+        case KEY_BACKSPACE:
+            keyboard_enqueue_byte('\b');
+            return;
+        case KEY_ESC:
+            keyboard_enqueue_byte(0x1b);
+            return;
+        case KEY_UP:
+            keyboard_enqueue_escape_sequence("\x1b[A");
+            return;
+        case KEY_DOWN:
+            keyboard_enqueue_escape_sequence("\x1b[B");
+            return;
+        case KEY_RIGHT:
+            keyboard_enqueue_escape_sequence("\x1b[C");
+            return;
+        case KEY_LEFT:
+            keyboard_enqueue_escape_sequence("\x1b[D");
+            return;
+        case KEY_HOME:
+            keyboard_enqueue_escape_sequence("\x1b[H");
+            return;
+        case KEY_END:
+            keyboard_enqueue_escape_sequence("\x1b[F");
+            return;
+        default: {
+            char ascii = keyboard_ascii_for_key(code, keyboard_shift_down);
+            if (ascii != '\0') {
+                keyboard_enqueue_byte(ascii);
+            }
+            return;
+        }
+    }
+}
+
+static void keyboard_handle_event(struct virtio_input_event event) {
+    if (event.type != INPUT_EVENT_TYPE_KEY) {
+        return;
+    }
+    if (event.code == KEY_LEFTSHIFT || event.code == KEY_RIGHTSHIFT) {
+        keyboard_shift_down = keyboard_modifier_is_pressed(event.value);
+        return;
+    }
+    if (event.code == KEY_LEFTCTRL || event.code == KEY_RIGHTCTRL) {
+        keyboard_ctrl_down = keyboard_modifier_is_pressed(event.value);
+        return;
+    }
+    if (event.value == INPUT_EVENT_VALUE_PRESS || event.value == INPUT_EVENT_VALUE_REPEAT) {
+        keyboard_emit_key(event.code);
+    }
+}
+
+static void keyboard_submit_descriptor(uint16_t descriptor_index) {
+    uint16_t ring_index;
+
+    if (keyboard_queue_size == 0U || keyboard_avail == 0) {
+        return;
+    }
+    ring_index = (uint16_t)(keyboard_avail->idx % keyboard_queue_size);
+    keyboard_avail->ring[ring_index] = descriptor_index;
+    __sync_synchronize();
+    keyboard_avail->idx = (uint16_t)(keyboard_avail->idx + 1U);
+    __sync_synchronize();
+    mmio_write32(keyboard_mmio_base, VIRTIO_MMIO_REGISTER_QUEUE_NOTIFY, VIRTIO_INPUT_EVENT_QUEUE_INDEX);
+}
+
+static void keyboard_poll_events(void) {
+    uint16_t used_idx;
+
+    if (!keyboard_initialized || keyboard_used == 0) {
+        return;
+    }
+    __sync_synchronize();
+    used_idx = keyboard_used->idx;
+    while (keyboard_used_index != used_idx) {
+        uint16_t used_slot = (uint16_t)(keyboard_used_index % keyboard_queue_size);
+        uint16_t descriptor_index = (uint16_t)keyboard_used->ring[used_slot].id;
+        struct virtio_input_event event = keyboard_events[descriptor_index];
+
+        if (descriptor_index < keyboard_queue_size) {
+            keyboard_handle_event(event);
+            keyboard_submit_descriptor(descriptor_index);
+        }
+        keyboard_used_index = (uint16_t)(keyboard_used_index + 1U);
+        __sync_synchronize();
+        used_idx = keyboard_used->idx;
+    }
+    {
+        uint32_t interrupt_status = mmio_read32(keyboard_mmio_base, VIRTIO_MMIO_REGISTER_INTERRUPT_STATUS);
+        if (interrupt_status != 0U) {
+            mmio_write32(keyboard_mmio_base, VIRTIO_MMIO_REGISTER_INTERRUPT_ACK, interrupt_status);
+        }
+    }
+}
+
+static uint8_t keyboard_init_transport(uintptr_t base) {
+    uint32_t version = mmio_read32(base, VIRTIO_MMIO_REGISTER_VERSION);
+    uint32_t device_features_high;
+    uint16_t queue_num_max;
+    uint16_t descriptor_index;
+    uintptr_t queue_region_base;
+    uintptr_t used_region_base;
+
+    if (mmio_read32(base, VIRTIO_MMIO_REGISTER_MAGIC) != VIRTIO_MMIO_MAGIC_VALUE) {
+        return 0U;
+    }
+    if (mmio_read32(base, VIRTIO_MMIO_REGISTER_DEVICE_ID) != VIRTIO_MMIO_DEVICE_ID_INPUT) {
+        return 0U;
+    }
+    if (version != 1U && version != VIRTIO_MMIO_VERSION_VALUE) {
+        return 0U;
+    }
+
+    mmio_write32(base, VIRTIO_MMIO_REGISTER_STATUS, 0U);
+    mmio_write32(base, VIRTIO_MMIO_REGISTER_STATUS, VIRTIO_STATUS_ACKNOWLEDGE);
+    mmio_write32(base, VIRTIO_MMIO_REGISTER_STATUS, VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER);
+
+    if (version == VIRTIO_MMIO_VERSION_VALUE) {
+        mmio_write32(base, VIRTIO_MMIO_REGISTER_DEVICE_FEATURES_SEL, 1U);
+        device_features_high = mmio_read32(base, VIRTIO_MMIO_REGISTER_DEVICE_FEATURES);
+        if ((device_features_high & 0x1U) == 0U) {
+            mmio_write32(base, VIRTIO_MMIO_REGISTER_STATUS, VIRTIO_STATUS_FAILED);
+            return 0U;
+        }
+        mmio_write32(base, VIRTIO_MMIO_REGISTER_DRIVER_FEATURES_SEL, 0U);
+        mmio_write32(base, VIRTIO_MMIO_REGISTER_DRIVER_FEATURES, 0U);
+        mmio_write32(base, VIRTIO_MMIO_REGISTER_DRIVER_FEATURES_SEL, 1U);
+        mmio_write32(base, VIRTIO_MMIO_REGISTER_DRIVER_FEATURES, 0x1U);
+        mmio_write32(
+            base,
+            VIRTIO_MMIO_REGISTER_STATUS,
+            VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER | VIRTIO_STATUS_FEATURES_OK
+        );
+        if ((mmio_read32(base, VIRTIO_MMIO_REGISTER_STATUS) & VIRTIO_STATUS_FEATURES_OK) == 0U) {
+            mmio_write32(base, VIRTIO_MMIO_REGISTER_STATUS, VIRTIO_STATUS_FAILED);
+            return 0U;
+        }
+    } else {
+        mmio_write32(base, VIRTIO_MMIO_REGISTER_DRIVER_FEATURES, 0U);
+    }
+
+    mmio_write32(base, VIRTIO_MMIO_REGISTER_QUEUE_SEL, VIRTIO_INPUT_EVENT_QUEUE_INDEX);
+    queue_num_max = (uint16_t)mmio_read32(base, VIRTIO_MMIO_REGISTER_QUEUE_NUM_MAX);
+    keyboard_queue_size = floor_power_of_two_u16(min_u16(queue_num_max, VIRTIO_INPUT_QUEUE_SIZE));
+    if (keyboard_queue_size == 0U) {
+        mmio_write32(base, VIRTIO_MMIO_REGISTER_STATUS, VIRTIO_STATUS_FAILED);
+        return 0U;
+    }
+
+    queue_region_base = (uintptr_t)keyboard_queue_region;
+    keyboard_desc = (struct virtq_desc *)queue_region_base;
+    keyboard_avail = (struct virtq_avail *)(queue_region_base + sizeof(struct virtq_desc) * VIRTIO_INPUT_QUEUE_SIZE);
+    used_region_base = align_up((uintptr_t)keyboard_avail + sizeof(struct virtq_avail), KEYBOARD_QUEUE_ALIGNMENT);
+    keyboard_used = (volatile struct virtq_used *)used_region_base;
+
+    for (descriptor_index = 0U; descriptor_index < keyboard_queue_size; ++descriptor_index) {
+        keyboard_desc[descriptor_index].addr = (uint64_t)(uintptr_t)&keyboard_events[descriptor_index];
+        keyboard_desc[descriptor_index].len = sizeof(struct virtio_input_event);
+        keyboard_desc[descriptor_index].flags = VIRTQ_DESC_F_WRITE;
+        keyboard_desc[descriptor_index].next = 0U;
+        keyboard_avail->ring[descriptor_index] = descriptor_index;
+    }
+    keyboard_avail->flags = 0U;
+    keyboard_avail->idx = keyboard_queue_size;
+    keyboard_avail->used_event = 0U;
+    keyboard_used->flags = 0U;
+    keyboard_used->idx = 0U;
+    keyboard_used->avail_event = 0U;
+    keyboard_used_index = 0U;
+    keyboard_char_head = 0U;
+    keyboard_char_tail = 0U;
+    keyboard_shift_down = 0U;
+    keyboard_ctrl_down = 0U;
+
+    mmio_write32(base, VIRTIO_MMIO_REGISTER_QUEUE_NUM, keyboard_queue_size);
+    if (version == VIRTIO_MMIO_VERSION_VALUE) {
+        mmio_write32(base, VIRTIO_MMIO_REGISTER_QUEUE_DESC_LOW, (uint32_t)(uintptr_t)keyboard_desc);
+        mmio_write32(base, VIRTIO_MMIO_REGISTER_QUEUE_DESC_HIGH, 0U);
+        mmio_write32(base, VIRTIO_MMIO_REGISTER_QUEUE_AVAIL_LOW, (uint32_t)(uintptr_t)keyboard_avail);
+        mmio_write32(base, VIRTIO_MMIO_REGISTER_QUEUE_AVAIL_HIGH, 0U);
+        mmio_write32(base, VIRTIO_MMIO_REGISTER_QUEUE_USED_LOW, (uint32_t)(uintptr_t)keyboard_used);
+        mmio_write32(base, VIRTIO_MMIO_REGISTER_QUEUE_USED_HIGH, 0U);
+        mmio_write32(base, VIRTIO_MMIO_REGISTER_QUEUE_READY, 1U);
+        mmio_write32(
+            base,
+            VIRTIO_MMIO_REGISTER_STATUS,
+            VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER | VIRTIO_STATUS_FEATURES_OK | VIRTIO_STATUS_DRIVER_OK
+        );
+    } else {
+        mmio_write32(base, VIRTIO_MMIO_REGISTER_GUEST_PAGE_SIZE, KEYBOARD_QUEUE_ALIGNMENT);
+        mmio_write32(base, VIRTIO_MMIO_REGISTER_QUEUE_ALIGN, KEYBOARD_QUEUE_ALIGNMENT);
+        mmio_write32(base, VIRTIO_MMIO_REGISTER_QUEUE_PFN, (uint32_t)(queue_region_base / KEYBOARD_QUEUE_ALIGNMENT));
+        mmio_write32(base, VIRTIO_MMIO_REGISTER_STATUS, VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER | VIRTIO_STATUS_DRIVER_OK);
+    }
+    __sync_synchronize();
+    mmio_write32(base, VIRTIO_MMIO_REGISTER_QUEUE_NOTIFY, VIRTIO_INPUT_EVENT_QUEUE_INDEX);
+
+    keyboard_mmio_base = base;
+    keyboard_initialized = 1U;
+    return 1U;
+}
+
 static int discover_devices_from_dtb(const void *fdt, struct discovered_devices *devices) {
     const struct fdt_header *header = (const struct fdt_header *)fdt;
     const uint8_t *bytes = (const uint8_t *)fdt;
@@ -365,6 +842,7 @@ static int discover_devices_from_dtb(const void *fdt, struct discovered_devices 
     devices->fw_cfg_base = 0U;
     devices->have_uart = 0U;
     devices->have_fw_cfg = 0U;
+    devices->virtio_count = 0U;
 
     while (structure < structure_end) {
         uint32_t token = read_be32(structure);
@@ -388,6 +866,7 @@ static int discover_devices_from_dtb(const void *fdt, struct discovered_devices 
             stack[depth].has_reg = 0U;
             stack[depth].uart_candidate = 0U;
             stack[depth].fw_cfg_candidate = 0U;
+            stack[depth].virtio_candidate = 0U;
             path_lengths[depth] = (uint16_t)path_length;
             if (depth == 0) {
                 path[0] = '\0';
@@ -415,6 +894,9 @@ static int discover_devices_from_dtb(const void *fdt, struct discovered_devices 
                 if (stack[depth].uart_candidate) {
                     remember_uart_candidate(uart_candidates, &uart_count, stack[depth].reg_base, path);
                 }
+                if (stack[depth].virtio_candidate) {
+                    remember_virtio_candidate(devices, stack[depth].reg_base);
+                }
             }
             path_length = path_lengths[depth];
             path[path_length] = '\0';
@@ -440,6 +922,9 @@ static int discover_devices_from_dtb(const void *fdt, struct discovered_devices 
                 }
                 if (string_list_contains((const char *)value, property_length, "qemu,fw-cfg-mmio")) {
                     stack[depth].fw_cfg_candidate = 1U;
+                }
+                if (string_list_contains((const char *)value, property_length, "virtio,mmio")) {
+                    stack[depth].virtio_candidate = 1U;
                 }
             } else if (ascii_equals(property_name, "reg")) {
                 uint32_t address_cells = depth == 0 ? FDT_DEFAULT_ADDRESS_CELLS : stack[depth - 1].address_cells;
@@ -496,6 +981,7 @@ static int discover_devices_from_dtb(const void *fdt, struct discovered_devices 
 
 void machine_init(const void *fdt) {
     struct discovered_devices devices;
+    uint32_t virtio_index;
 
     if (!discover_devices_from_dtb(fdt, &devices)) {
         machine_puts("warning: DTB parse failed, using QEMU virt MMIO defaults\n");
@@ -511,6 +997,14 @@ void machine_init(const void *fdt) {
     } else {
         machine_puts("warning: DTB missing fw_cfg, using QEMU virt default\n");
     }
+    keyboard_initialized = 0U;
+    keyboard_mmio_base = 0U;
+    keyboard_queue_size = 0U;
+    for (virtio_index = 0U; virtio_index < devices.virtio_count; ++virtio_index) {
+        if (keyboard_init_transport((uintptr_t)devices.virtio_bases[virtio_index])) {
+            break;
+        }
+    }
 }
 
 void machine_putc(char c) {
@@ -520,6 +1014,13 @@ void machine_putc(char c) {
 }
 
 uint8_t machine_try_getc(char *out) {
+    if (keyboard_dequeue_byte(out)) {
+        return 1U;
+    }
+    keyboard_poll_events();
+    if (keyboard_dequeue_byte(out)) {
+        return 1U;
+    }
     if ((*(volatile uint8_t *)(uart_base + UART_REGISTER_LINE_STATUS) & UART_LINE_STATUS_DATA_READY) == 0U) {
         return 0U;
     }
