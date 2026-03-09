@@ -2043,6 +2043,10 @@ static struct recorz_mvp_value global_value(uint8_t global_id) {
     return object_value(global_handles[global_id]);
 }
 
+static struct recorz_mvp_value top_level_receiver_value(void) {
+    return global_value(RECORZ_MVP_GLOBAL_WORKSPACE);
+}
+
 static struct recorz_mvp_value boolean_value(uint8_t condition) {
     return global_value(condition ? RECORZ_MVP_GLOBAL_TRUE : RECORZ_MVP_GLOBAL_FALSE);
 }
@@ -9679,6 +9683,8 @@ void recorz_mvp_vm_run(
         .literal_count = program->literal_count,
         .lexical_count = program->lexical_count,
     };
+    struct recorz_mvp_value top_level_receiver;
+    const struct recorz_mvp_heap_object *top_level_receiver_object;
 
     stack_size = 0U;
     panic_phase = "bootstrap";
@@ -9704,7 +9710,9 @@ void recorz_mvp_vm_run(
         machine_puts("recorz qemu-riscv64 mvp: applied external file-in\n");
     }
     run_startup_hook_if_configured();
-    execute_executable(&executable, 0, nil_value(), 0U, 0);
+    top_level_receiver = top_level_receiver_value();
+    top_level_receiver_object = heap_object_for_value(top_level_receiver);
+    execute_executable(&executable, top_level_receiver_object, top_level_receiver, 0U, 0);
     panic_phase = "return";
     machine_set_panic_hook(0);
 }

@@ -71,6 +71,19 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertIn(":x | x + 4", literal_strings)
         self.assertIn(":x | x + 5", literal_strings)
 
+    def test_lowers_top_level_self_as_a_real_receiver(self) -> None:
+        program = mvp.build_program("self contents")
+
+        self.assertEqual(
+            [instruction.opcode for instruction in program.instructions],
+            [
+                mvp.OP_PUSH_SELF,
+                mvp.OP_SEND,
+                mvp.OP_RETURN,
+            ],
+        )
+        self.assertEqual(program.instructions[1].operand_a, "RECORZ_MVP_SELECTOR_CONTENTS")
+
     def test_lowers_display_default_form_and_clear(self) -> None:
         program = mvp.build_program("| form | form := Display defaultForm. form clear. form writeString: 'HELLO'. form newline")
         selectors = [instruction.operand_a for instruction in program.instructions if instruction.opcode == mvp.OP_SEND]
@@ -2312,7 +2325,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
 
     def test_rejects_unsupported_compiler_features(self) -> None:
         with self.assertRaises(mvp.LoweringError):
-            mvp.build_program("self")
+            mvp.build_program("#unsupported")
 
 
 if __name__ == "__main__":

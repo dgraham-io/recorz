@@ -62,6 +62,7 @@ static void validate_instruction(
         case RECORZ_MVP_OP_POP:
         case RECORZ_MVP_OP_RETURN:
         case RECORZ_MVP_OP_PUSH_NIL:
+        case RECORZ_MVP_OP_PUSH_SELF:
             if (instruction->operand_a != 0U || instruction->operand_b != 0U) {
                 machine_panic("program manifest stack opcode carries unexpected operands");
             }

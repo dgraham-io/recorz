@@ -1,0 +1,8 @@
+Display clear.
+self setContents: 'TOP SELF'.
+Transcript show: self contents.
+Transcript cr.
+self = Workspace ifTrue: [ Transcript show: 'SELFWORK' ] ifFalse: [ Transcript show: 'BADSELF' ].
+Transcript cr.
+(thisContext receiver = Workspace) ifTrue: [ Transcript show: 'CTXWORK' ] ifFalse: [ Transcript show: 'BADCTX' ].
+Transcript cr.

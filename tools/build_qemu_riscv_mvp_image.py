@@ -128,6 +128,7 @@ OP_DUP = OPCODE_CONSTANT_NAMES["dup"]
 OP_POP = OPCODE_CONSTANT_NAMES["pop"]
 OP_RETURN = OPCODE_CONSTANT_NAMES["return"]
 OP_PUSH_NIL = OPCODE_CONSTANT_NAMES["push_nil"]
+OP_PUSH_SELF = OPCODE_CONSTANT_NAMES["push_self"]
 OP_PUSH_BLOCK_LITERAL = OPCODE_CONSTANT_NAMES["push_block_literal"]
 OP_PUSH_THIS_CONTEXT = OPCODE_CONSTANT_NAMES["push_this_context"]
 
@@ -1726,6 +1727,10 @@ class Lowerer:
 
         if opcode == "push_nil":
             self.instructions.append(Instruction(OP_PUSH_NIL))
+            return
+
+        if opcode == "push_self":
+            self.instructions.append(Instruction(OP_PUSH_SELF))
             return
 
         if opcode == "push_true":
