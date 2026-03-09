@@ -1045,3 +1045,5 @@
 - Added the RV32-first proof `/Users/david/repos/recorz/examples/qemu_riscv_in_image_expression_keyword_send_demo.rz` and serial integration coverage for keyword sends inside live method expressions.
 - Added `nil` expression support to the live source compiler on both QEMU targets by wiring `COMPILED_METHOD_OP_PUSH_NIL` into compiled-method validation and code generation, so installed methods can assign or return `nil` without falling back to host-built code.
 - Added the RV32-first proof `/Users/david/repos/recorz/examples/qemu_riscv_in_image_nil_method_demo.rz` and serial integration coverage for `nil` inside live method bodies.
+- Added `self` expression support to the live source compiler on both QEMU targets by extending the shared execution opcode set with `PUSH_SELF`, teaching compiled-method validation/execution about it, and allowing installed methods to send messages to the receiver from inside the running image.
+- Added the RV32-first proof `/Users/david/repos/recorz/examples/qemu_riscv_in_image_self_method_demo.rz` and serial integration coverage for `self` inside live method bodies.

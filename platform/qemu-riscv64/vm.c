@@ -79,6 +79,7 @@
 #define COMPILED_METHOD_OP_PUSH_ARGUMENT RECORZ_MVP_COMPILED_METHOD_OP_PUSH_ARGUMENT
 #define COMPILED_METHOD_OP_PUSH_NIL RECORZ_MVP_COMPILED_METHOD_OP_PUSH_NIL
 #define COMPILED_METHOD_OP_PUSH_FIELD RECORZ_MVP_COMPILED_METHOD_OP_PUSH_FIELD
+#define COMPILED_METHOD_OP_PUSH_SELF RECORZ_MVP_COMPILED_METHOD_OP_PUSH_SELF
 #define COMPILED_METHOD_OP_SEND RECORZ_MVP_COMPILED_METHOD_OP_SEND
 #define COMPILED_METHOD_OP_POP RECORZ_MVP_COMPILED_METHOD_OP_POP
 #define COMPILED_METHOD_OP_RETURN_TOP RECORZ_MVP_COMPILED_METHOD_OP_RETURN_TOP
@@ -3435,6 +3436,9 @@ static void validate_compiled_method(
                 }
                 ++stack_depth;
                 break;
+            case COMPILED_METHOD_OP_PUSH_SELF:
+                ++stack_depth;
+                break;
             case COMPILED_METHOD_OP_STORE_FIELD:
                 if (operand_a >= OBJECT_FIELD_LIMIT) {
                     machine_panic("compiled method storeField index is out of range");
@@ -5580,9 +5584,15 @@ static const char *compile_source_primary_push(
             0U,
             0U
         );
-        return token_cursor;
-    }
-    if (!compile_source_operand_push(
+    } else if (source_names_equal(token, "self")) {
+        compile_source_append_instruction(
+            instruction_words,
+            instruction_count,
+            COMPILED_METHOD_OP_PUSH_SELF,
+            0U,
+            0U
+        );
+    } else if (!compile_source_operand_push(
             class_object,
             token,
             argument_names,
@@ -7950,6 +7960,9 @@ static void execute_executable(
                     &activation_stack_size,
                     heap_get_field(receiver_object, instruction.operand_a)
                 );
+                break;
+            case RECORZ_MVP_OP_PUSH_SELF:
+                activation_push(activation_stack, &activation_stack_size, receiver);
                 break;
             case RECORZ_MVP_OP_STORE_FIELD:
                 if (receiver_object == 0) {

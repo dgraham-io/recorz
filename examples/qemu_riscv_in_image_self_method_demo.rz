@@ -1,0 +1,18 @@
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #SelfReporter superclass: #Object instanceVariableNames: ''value''
+!
+value
+    ^value
+!
+setValue: newValue
+    value := newValue.
+    ^self
+!
+sum
+    ^self value
+!'.
+KernelInstaller rememberObject: ((KernelInstaller classNamed: 'SelfReporter') new) named: 'selfReporter'.
+((KernelInstaller objectNamed: 'selfReporter') setValue: 'SELF').
+Transcript show: 'SELF'.
+Transcript cr.
+Transcript show: ((KernelInstaller objectNamed: 'selfReporter') sum).

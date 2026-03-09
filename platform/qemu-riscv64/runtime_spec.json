@@ -121,11 +121,16 @@
       "constant": "RECORZ_MVP_OP_RETURN_RECEIVER",
       "value": 13
     },
-    {
-      "name": "store_field",
-      "constant": "RECORZ_MVP_OP_STORE_FIELD",
-      "value": 14
-    }
+      {
+        "name": "store_field",
+        "constant": "RECORZ_MVP_OP_STORE_FIELD",
+        "value": 14
+      },
+      {
+        "name": "push_self",
+        "constant": "RECORZ_MVP_OP_PUSH_SELF",
+        "value": 15
+      }
   ],
   "literal_kinds": [
     {
@@ -211,6 +216,11 @@
         "name": "store_field",
         "constant": "RECORZ_MVP_COMPILED_METHOD_OP_STORE_FIELD",
         "value": 14
+      },
+      {
+        "name": "push_self",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_SELF",
+        "value": 15
       }
     ]
   },
