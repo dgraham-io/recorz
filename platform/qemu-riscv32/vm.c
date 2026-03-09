@@ -78,6 +78,10 @@
 #define BLOCK_CLOSURE_FIELD_HOME_RECEIVER RECORZ_MVP_BLOCK_CLOSURE_FIELD_HOME_RECEIVER
 #define BLOCK_CLOSURE_FIELD_LEXICAL0 RECORZ_MVP_BLOCK_CLOSURE_FIELD_LEXICAL0
 #define BLOCK_CLOSURE_FIELD_LEXICAL1 RECORZ_MVP_BLOCK_CLOSURE_FIELD_LEXICAL1
+#define CONTEXT_FIELD_SENDER RECORZ_MVP_CONTEXT_FIELD_SENDER
+#define CONTEXT_FIELD_RECEIVER RECORZ_MVP_CONTEXT_FIELD_RECEIVER
+#define CONTEXT_FIELD_DETAIL RECORZ_MVP_CONTEXT_FIELD_DETAIL
+#define CONTEXT_FIELD_ALIVE RECORZ_MVP_CONTEXT_FIELD_ALIVE
 #define COMPILED_METHOD_MAX_INSTRUCTIONS RECORZ_MVP_COMPILED_METHOD_MAX_INSTRUCTIONS
 
 #define COMPILED_METHOD_OP_PUSH_GLOBAL RECORZ_MVP_COMPILED_METHOD_OP_PUSH_GLOBAL
@@ -102,8 +106,8 @@
 #define BITMAP_STORAGE_FRAMEBUFFER RECORZ_MVP_BITMAP_STORAGE_FRAMEBUFFER
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
-#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_BLOCK_CLOSURE
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_GREATER_THAN
+#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CONTEXT
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_ALIVE
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_FALSE
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #define SOURCE_EVAL_ENV_LIMIT 32U
@@ -234,6 +238,7 @@ struct recorz_mvp_source_home_context {
     const struct recorz_mvp_heap_object *defining_class;
     struct recorz_mvp_value receiver;
     int16_t lexical_environment_index;
+    uint16_t context_handle;
 };
 
 struct recorz_mvp_source_method_context {
@@ -241,6 +246,7 @@ struct recorz_mvp_source_method_context {
     struct recorz_mvp_value receiver;
     int16_t lexical_environment_index;
     int16_t home_context_index;
+    uint16_t current_context_handle;
     uint8_t is_block;
 };
 
@@ -408,6 +414,10 @@ static const char *file_out_method_source_by_name(
 );
 static int compare_source_names(const char *left, const char *right);
 static const char *runtime_string_allocate_copy(const char *text);
+static struct recorz_mvp_value boolean_value(uint8_t condition);
+static struct recorz_mvp_value object_value(uint16_t handle);
+static struct recorz_mvp_value string_value(const char *text);
+static uint16_t heap_allocate_seeded_class(uint8_t kind);
 static void forget_live_string_literals(uint16_t class_handle, uint8_t selector_id, uint8_t argument_count);
 static void append_text_checked(
     char buffer[],
@@ -677,6 +687,12 @@ static const char *selector_name(uint8_t selector) {
             return "<";
         case RECORZ_MVP_SELECTOR_GREATER_THAN:
             return ">";
+        case RECORZ_MVP_SELECTOR_SENDER:
+            return "sender";
+        case RECORZ_MVP_SELECTOR_RECEIVER:
+            return "receiver";
+        case RECORZ_MVP_SELECTOR_ALIVE:
+            return "alive";
     }
     return "unknown";
 }
@@ -729,6 +745,8 @@ static const char *object_kind_name(uint8_t kind) {
             return "False";
         case RECORZ_MVP_OBJECT_BLOCK_CLOSURE:
             return "BlockClosure";
+        case RECORZ_MVP_OBJECT_CONTEXT:
+            return "Context";
     }
     return "UnknownObject";
 }
@@ -960,6 +978,12 @@ static const struct recorz_mvp_live_method_source *live_method_source_for_select
     uint8_t selector_id,
     uint8_t argument_count
 );
+static const struct recorz_mvp_live_method_source *live_method_source_for_class_chain(
+    const struct recorz_mvp_heap_object *class_object,
+    uint8_t selector_id,
+    uint8_t argument_count,
+    const struct recorz_mvp_heap_object **owner_class_out
+);
 static uint8_t source_text_contains_block_literal(const char *source);
 static const char *source_parse_method_header(
     const char *source,
@@ -975,7 +999,14 @@ static int16_t source_allocate_lexical_environment(int16_t parent_index);
 static int16_t source_allocate_home_context(
     const struct recorz_mvp_heap_object *defining_class,
     struct recorz_mvp_value receiver,
-    int16_t lexical_environment_index
+    int16_t lexical_environment_index,
+    uint16_t sender_context_handle,
+    const char *detail_text
+);
+static uint16_t allocate_source_context_object(
+    uint16_t sender_context_handle,
+    struct recorz_mvp_value receiver,
+    const char *detail_text
 );
 static void source_append_binding(
     int16_t lexical_environment_index,
@@ -989,7 +1020,8 @@ static struct recorz_mvp_value *source_lookup_binding_cell(
 static struct recorz_mvp_source_eval_result source_execute_block_closure(
     const struct recorz_mvp_heap_object *object,
     uint16_t argument_count,
-    const struct recorz_mvp_value arguments[]
+    const struct recorz_mvp_value arguments[],
+    uint16_t sender_context_handle
 );
 static struct recorz_mvp_source_eval_result source_evaluate_expression(
     struct recorz_mvp_source_method_context *context,
@@ -1001,12 +1033,13 @@ static struct recorz_mvp_source_eval_result source_evaluate_statement_sequence(
     const char *source,
     uint8_t is_block
 );
-static void execute_live_source_method(
+static void execute_live_source_method_with_sender(
     const struct recorz_mvp_heap_object *class_object,
     struct recorz_mvp_value receiver,
     uint16_t argument_count,
     const struct recorz_mvp_value arguments[],
-    const char *source
+    const char *source,
+    uint16_t sender_context_handle
 );
 static void perform_send(
     struct recorz_mvp_value receiver,
@@ -1529,6 +1562,43 @@ static uint8_t source_text_contains_block_literal(const char *source) {
     return 0U;
 }
 
+static uint8_t source_text_contains_identifier(const char *source, const char *identifier) {
+    uint8_t in_string = 0U;
+    char previous = '\0';
+
+    if (source == 0 || identifier == 0 || identifier[0] == '\0') {
+        return 0U;
+    }
+    while (*source != '\0') {
+        if (*source == '\'') {
+            in_string = (uint8_t)!in_string;
+            ++source;
+            continue;
+        }
+        if (!in_string &&
+            source_char_is_identifier_start(*source) &&
+            !source_char_is_identifier_char(previous)) {
+            char token[METHOD_SOURCE_NAME_LIMIT];
+            const char *token_cursor = source_parse_identifier(source, token, sizeof(token));
+
+            if (token_cursor != 0 && source_names_equal(token, identifier)) {
+                if (!source_char_is_identifier_char(*token_cursor)) {
+                    return 1U;
+                }
+            }
+        }
+        previous = *source++;
+    }
+    return 0U;
+}
+
+static uint8_t source_text_requires_live_evaluator(const char *source) {
+    return (uint8_t)(
+        source_text_contains_block_literal(source) ||
+        source_text_contains_identifier(source, "thisContext")
+    );
+}
+
 static const char *source_parse_method_header(
     const char *source,
     char selector_name[METHOD_SOURCE_NAME_LIMIT],
@@ -1669,7 +1739,9 @@ static int16_t source_allocate_lexical_environment(int16_t parent_index) {
 static int16_t source_allocate_home_context(
     const struct recorz_mvp_heap_object *defining_class,
     struct recorz_mvp_value receiver,
-    int16_t lexical_environment_index
+    int16_t lexical_environment_index,
+    uint16_t sender_context_handle,
+    const char *detail_text
 ) {
     uint16_t home_index;
 
@@ -1680,11 +1752,42 @@ static int16_t source_allocate_home_context(
             source_eval_home_contexts[home_index].defining_class = defining_class;
             source_eval_home_contexts[home_index].receiver = receiver;
             source_eval_home_contexts[home_index].lexical_environment_index = lexical_environment_index;
+            source_eval_home_contexts[home_index].context_handle = allocate_source_context_object(
+                sender_context_handle,
+                receiver,
+                detail_text
+            );
             return (int16_t)home_index;
         }
     }
     machine_panic("source home context pool overflow");
     return -1;
+}
+
+static uint16_t allocate_source_context_object(
+    uint16_t sender_context_handle,
+    struct recorz_mvp_value receiver,
+    const char *detail_text
+) {
+    uint16_t handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_CONTEXT);
+
+    heap_set_field(
+        handle,
+        CONTEXT_FIELD_SENDER,
+        sender_context_handle == 0U ? nil_value() : object_value(sender_context_handle)
+    );
+    heap_set_field(handle, CONTEXT_FIELD_RECEIVER, receiver);
+    if (detail_text == 0 || detail_text[0] == '\0') {
+        heap_set_field(handle, CONTEXT_FIELD_DETAIL, nil_value());
+    } else {
+        heap_set_field(
+            handle,
+            CONTEXT_FIELD_DETAIL,
+            string_value(runtime_string_allocate_copy(detail_text))
+        );
+    }
+    heap_set_field(handle, CONTEXT_FIELD_ALIVE, boolean_value(1U));
+    return handle;
 }
 
 static void source_append_binding(
@@ -7542,7 +7645,7 @@ static uint16_t compile_source_method_and_allocate(
     if (source == 0 || *source == '\0') {
         machine_panic("KernelInstaller source method string is empty");
     }
-    if (source_text_contains_block_literal(source)) {
+    if (source_text_requires_live_evaluator(source)) {
         const char *body_cursor;
 
         if (source_parse_method_header(
@@ -7748,7 +7851,10 @@ static struct recorz_mvp_value source_read_identifier(
         return global_value(RECORZ_MVP_GLOBAL_FALSE);
     }
     if (source_names_equal(name, "thisContext")) {
-        machine_panic("live source thisContext is not supported yet");
+        if (context->current_context_handle == 0U) {
+            machine_panic("live source thisContext has no active context object");
+        }
+        return object_value(context->current_context_handle);
     }
     binding_cell = source_lookup_binding_cell(context->lexical_environment_index, name);
     if (binding_cell != 0) {
@@ -7865,13 +7971,20 @@ static struct recorz_mvp_source_eval_result source_send_message(
     uint16_t argument_count,
     const struct recorz_mvp_value arguments[]
 ) {
+    const struct recorz_mvp_heap_object *source_owner_class = 0;
+    const struct recorz_mvp_live_method_source *source_record;
     uint8_t selector_id;
 
     if (receiver.kind == RECORZ_MVP_VALUE_OBJECT &&
         primitive_kind_for_heap_object(heap_object_for_value(receiver)) == RECORZ_MVP_OBJECT_BLOCK_CLOSURE &&
         ((source_names_equal(selector_name, "value") && argument_count == 0U) ||
          (source_names_equal(selector_name, "value:") && argument_count == 1U))) {
-        return source_execute_block_closure(heap_object_for_value(receiver), argument_count, arguments);
+        return source_execute_block_closure(
+            heap_object_for_value(receiver),
+            argument_count,
+            arguments,
+            context->current_context_handle
+        );
     }
     if ((source_names_equal(selector_name, "ifTrue:") && argument_count == 1U) ||
         (source_names_equal(selector_name, "ifFalse:") && argument_count == 1U) ||
@@ -7893,13 +8006,36 @@ static struct recorz_mvp_source_eval_result source_send_message(
             primitive_kind_for_heap_object(heap_object_for_value(arguments[chosen_index])) != RECORZ_MVP_OBJECT_BLOCK_CLOSURE) {
             machine_panic("conditional send expects a block closure argument");
         }
-        return source_execute_block_closure(heap_object_for_value(arguments[chosen_index]), 0U, 0);
+        return source_execute_block_closure(
+            heap_object_for_value(arguments[chosen_index]),
+            0U,
+            0,
+            context->current_context_handle
+        );
     }
     selector_id = source_selector_id_for_name(selector_name);
     if (selector_id == 0U) {
         machine_panic("live source send uses an unknown selector");
     }
-    (void)context;
+    if (receiver.kind == RECORZ_MVP_VALUE_OBJECT) {
+        source_record = live_method_source_for_class_chain(
+            class_object_for_heap_object(heap_object_for_value(receiver)),
+            selector_id,
+            (uint8_t)argument_count,
+            &source_owner_class
+        );
+        if (source_record != 0 && source_text_requires_live_evaluator(live_method_source_text(source_record))) {
+            execute_live_source_method_with_sender(
+                source_owner_class,
+                receiver,
+                argument_count,
+                arguments,
+                live_method_source_text(source_record),
+                context->current_context_handle
+            );
+            return source_eval_value_result(pop_value());
+        }
+    }
     perform_send(receiver, selector_id, argument_count, arguments, 0);
     return source_eval_value_result(pop_value());
 }
@@ -8095,7 +8231,8 @@ static struct recorz_mvp_source_eval_result source_evaluate_expression(
 static struct recorz_mvp_source_eval_result source_execute_block_closure(
     const struct recorz_mvp_heap_object *object,
     uint16_t argument_count,
-    const struct recorz_mvp_value arguments[]
+    const struct recorz_mvp_value arguments[],
+    uint16_t sender_context_handle
 ) {
     const struct recorz_mvp_runtime_block_state *block_state;
     const struct recorz_mvp_heap_object *defining_class = 0;
@@ -8140,8 +8277,14 @@ static struct recorz_mvp_source_eval_result source_execute_block_closure(
     context.receiver = home_receiver;
     context.lexical_environment_index = lexical_environment_index;
     context.home_context_index = block_state == 0 ? -1 : block_state->home_context_index;
+    context.current_context_handle = allocate_source_context_object(
+        sender_context_handle,
+        home_receiver,
+        "<block>"
+    );
     context.is_block = 1U;
     result = source_evaluate_statement_sequence(&context, body_cursor, 1U);
+    heap_set_field(context.current_context_handle, CONTEXT_FIELD_ALIVE, boolean_value(0U));
     if (result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
         if (context.home_context_index < 0) {
             machine_panic("block attempted a non-local return without a live home context");
@@ -8225,12 +8368,13 @@ static struct recorz_mvp_source_eval_result source_evaluate_statement_sequence(
     return last_result;
 }
 
-static void execute_live_source_method(
+static void execute_live_source_method_with_sender(
     const struct recorz_mvp_heap_object *class_object,
     struct recorz_mvp_value receiver,
     uint16_t argument_count,
     const struct recorz_mvp_value arguments[],
-    const char *source
+    const char *source,
+    uint16_t sender_context_handle
 ) {
     struct recorz_mvp_source_method_context context;
     struct recorz_mvp_source_eval_result result;
@@ -8260,14 +8404,22 @@ static void execute_live_source_method(
     for (argument_index = 0U; argument_index < argument_count; ++argument_index) {
         source_append_binding(lexical_environment_index, argument_names[argument_index], arguments[argument_index]);
     }
-    home_context_index = source_allocate_home_context(class_object, receiver, lexical_environment_index);
+    home_context_index = source_allocate_home_context(
+        class_object,
+        receiver,
+        lexical_environment_index,
+        sender_context_handle,
+        selector_name
+    );
     context.defining_class = class_object;
     context.receiver = receiver;
     context.lexical_environment_index = lexical_environment_index;
     context.home_context_index = home_context_index;
+    context.current_context_handle = source_home_context_at(home_context_index)->context_handle;
     context.is_block = 0U;
     result = source_evaluate_statement_sequence(&context, body_cursor, 0U);
     source_home_context_at(home_context_index)->alive = 0U;
+    heap_set_field(context.current_context_handle, CONTEXT_FIELD_ALIVE, boolean_value(0U));
     push(result.value);
 }
 
@@ -10415,7 +10567,7 @@ static void workspace_evaluate_source(const char *source) {
 }
 
 static void execute_block_closure(const struct recorz_mvp_heap_object *object) {
-    struct recorz_mvp_source_eval_result result = source_execute_block_closure(object, 0U, 0);
+    struct recorz_mvp_source_eval_result result = source_execute_block_closure(object, 0U, 0, 0U);
 
     if (result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
         machine_panic("block non-local return requires a live source caller");
@@ -10712,13 +10864,14 @@ static void dispatch_heap_object_send(
         (uint8_t)argument_count,
         &source_owner_class
     );
-    if (source_record != 0 && source_text_contains_block_literal(live_method_source_text(source_record))) {
-        execute_live_source_method(
+    if (source_record != 0 && source_text_requires_live_evaluator(live_method_source_text(source_record))) {
+        execute_live_source_method_with_sender(
             source_owner_class,
             receiver,
             argument_count,
             arguments,
-            live_method_source_text(source_record)
+            live_method_source_text(source_record),
+            0U
         );
         return;
     }

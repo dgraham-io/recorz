@@ -1,0 +1,29 @@
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #ContextReporter superclass: #Object instanceVariableNames: ''''
+!
+sum
+    ^thisContext detail
+!
+truth
+    thisContext.
+    ^self falsity
+!
+falsity
+    ^thisContext sender detail
+!
+detail
+    ^thisContext alive ifTrue: [ ''ALIVE'' ] ifFalse: [ ''DEAD'' ]
+!
+receiver
+    ^((thisContext receiver class) = (self class)) ifTrue: [ ''RCVR'' ] ifFalse: [ ''MISS'' ]
+!'.
+Transcript show: 'CTX'.
+Transcript cr.
+Transcript show: (((KernelInstaller classNamed: 'ContextReporter') new) sum).
+Transcript cr.
+Transcript show: (((KernelInstaller classNamed: 'ContextReporter') new) truth).
+Transcript cr.
+Transcript show: (((KernelInstaller classNamed: 'ContextReporter') new) detail).
+Transcript cr.
+Transcript show: (((KernelInstaller classNamed: 'ContextReporter') new) receiver).
+Transcript cr.

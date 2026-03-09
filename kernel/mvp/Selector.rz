@@ -144,3 +144,9 @@ RecorzKernelSelector: #< order: 70
 !
 RecorzKernelSelector: #> order: 71
 !
+RecorzKernelSelector: #sender order: 72
+!
+RecorzKernelSelector: #receiver order: 73
+!
+RecorzKernelSelector: #alive order: 74
+!

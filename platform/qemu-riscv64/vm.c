@@ -102,8 +102,8 @@
 #define BITMAP_STORAGE_FRAMEBUFFER RECORZ_MVP_BITMAP_STORAGE_FRAMEBUFFER
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
-#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_BLOCK_CLOSURE
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_GREATER_THAN
+#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CONTEXT
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_ALIVE
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_FALSE
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -615,6 +615,12 @@ static const char *selector_name(uint8_t selector) {
             return "<";
         case RECORZ_MVP_SELECTOR_GREATER_THAN:
             return ">";
+        case RECORZ_MVP_SELECTOR_SENDER:
+            return "sender";
+        case RECORZ_MVP_SELECTOR_RECEIVER:
+            return "receiver";
+        case RECORZ_MVP_SELECTOR_ALIVE:
+            return "alive";
     }
     return "unknown";
 }
@@ -667,6 +673,8 @@ static const char *object_kind_name(uint8_t kind) {
             return "False";
         case RECORZ_MVP_OBJECT_BLOCK_CLOSURE:
             return "BlockClosure";
+        case RECORZ_MVP_OBJECT_CONTEXT:
+            return "Context";
     }
     return "UnknownObject";
 }

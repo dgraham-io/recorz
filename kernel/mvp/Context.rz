@@ -1,0 +1,14 @@
+RecorzKernelClass: #Context descriptorOrder: 23 objectKindOrder: 23 sourceBootOrder: 14 instanceVariableNames: 'sender receiver detail alive'
+!
+sender
+    ^sender
+!
+receiver
+    ^receiver
+!
+detail
+    ^detail
+!
+alive
+    ^alive
+!
