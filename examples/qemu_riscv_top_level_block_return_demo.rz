@@ -1,0 +1,6 @@
+Display clear.
+Transcript show: 'TBRET'.
+Transcript cr.
+[ ^ 8 ] value.
+Transcript show: 'LATE'.
+Transcript cr.

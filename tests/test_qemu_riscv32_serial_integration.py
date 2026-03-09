@@ -18,11 +18,13 @@ PACKAGE_COMMENT_ROUNDTRIP_EXAMPLE = ROOT / "examples" / "qemu_riscv_package_comm
 BINARY_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_binary_method_demo.rz"
 CONDITIONAL_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_conditional_method_demo.rz"
 TOP_LEVEL_BLOCK_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_top_level_block_demo.rz"
+TOP_LEVEL_BLOCK_RETURN_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_top_level_block_return_demo.rz"
 TOP_LEVEL_SELF_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_top_level_self_demo.rz"
 TOP_LEVEL_SOURCE_BUFFER_EXAMPLE = ROOT / "examples" / "qemu_riscv_top_level_source_buffer_demo.rz"
 WORKSPACE_BLOCK_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_block_demo.rz"
 WORKSPACE_BLOCK_ARGUMENT_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_block_argument_demo.rz"
 WORKSPACE_BLOCK_CAPTURE_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_block_capture_demo.rz"
+WORKSPACE_BLOCK_RETURN_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_block_return_demo.rz"
 WORKSPACE_SELF_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_self_demo.rz"
 WORKSPACE_TEMPS_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_temps_demo.rz"
 METHOD_BLOCK_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_demo.rz"
@@ -509,6 +511,48 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("FCOND", output)
             self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
 
+    def test_top_level_block_non_local_return_exits_the_program_do_it(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-top-level-block-return-source-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, TOP_LEVEL_BLOCK_RETURN_SOURCE_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("TBRET", output)
+            self.assertNotIn("LATE", output)
+            self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
+
     def test_top_level_programs_use_workspace_as_the_receiver(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-top-level-self-source-") as temp_dir:
             build_dir = Path(temp_dir)
@@ -677,6 +721,50 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("WBCAP", output)
             self.assertIn("7", output)
             self.assertIn("6", output)
+            self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
+
+    def test_workspace_blocks_support_non_local_return_to_the_enclosing_do_it(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-block-return-source-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_BLOCK_RETURN_SOURCE_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("WBRET", output)
+            self.assertIn("INNER", output)
+            self.assertIn("AFTER", output)
+            self.assertNotIn("LATE", output)
             self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
 
     def test_workspace_evaluation_uses_workspace_as_the_receiver(self) -> None:

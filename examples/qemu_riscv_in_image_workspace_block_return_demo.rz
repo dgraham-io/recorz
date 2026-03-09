@@ -1,0 +1,6 @@
+Display clear.
+Transcript show: 'WBRET'.
+Transcript cr.
+Workspace evaluate: '[ Transcript show: ''INNER''. Transcript cr. ^ 5 ] value. Transcript show: ''LATE''. Transcript cr.'.
+Transcript show: 'AFTER'.
+Transcript cr.

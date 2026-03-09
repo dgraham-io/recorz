@@ -6630,6 +6630,7 @@ struct recorz_mvp_executable {
     uint16_t lexical_count;
     const char (*lexical_names)[METHOD_SOURCE_NAME_LIMIT];
     const struct recorz_mvp_heap_object *block_defining_class;
+    int16_t home_context_index;
 };
 
 static struct recorz_mvp_instruction read_program_instruction(
@@ -10709,13 +10710,13 @@ static void execute_executable(
                     if (shared_lexical_environment_index >= 0) {
                         shared_lexical_environment =
                             source_lexical_environment_at(shared_lexical_environment_index);
-                        source_register_block_state(
-                            block_handle,
-                            block_defining_class,
-                            shared_lexical_environment_index,
-                            -1
-                        );
                     }
+                    source_register_block_state(
+                        block_handle,
+                        block_defining_class,
+                        shared_lexical_environment_index,
+                        executable->home_context_index
+                    );
                 activation_push(
                     activation_stack,
                     &activation_stack_size,
@@ -10758,6 +10759,8 @@ static void execute_executable(
             case RECORZ_MVP_OP_SEND: {
                 struct recorz_mvp_value send_arguments[MAX_SEND_ARGS];
                 struct recorz_mvp_value send_receiver;
+                struct recorz_mvp_source_eval_result source_result;
+                const struct recorz_mvp_runtime_block_state *block_state = 0;
                 uint16_t send_index;
 
                 if (instruction.operand_b > MAX_SEND_ARGS) {
@@ -10772,6 +10775,71 @@ static void execute_executable(
                 send_receiver = activation_pop(activation_stack, &activation_stack_size);
                 panic_phase = "send";
                 remember_send_context(instruction.operand_a, instruction.operand_b, send_receiver, send_arguments);
+                if (send_receiver.kind == RECORZ_MVP_VALUE_OBJECT &&
+                    primitive_kind_for_heap_object(heap_object_for_value(send_receiver)) == RECORZ_MVP_OBJECT_BLOCK_CLOSURE &&
+                    ((instruction.operand_a == RECORZ_MVP_SELECTOR_VALUE && instruction.operand_b == 0U) ||
+                     (instruction.operand_a == RECORZ_MVP_SELECTOR_VALUE_ARG && instruction.operand_b == 1U))) {
+                    block_state = source_block_state_for_handle(heap_handle_for_object(heap_object_for_value(send_receiver)));
+                    source_result = source_execute_block_closure(
+                        heap_object_for_value(send_receiver),
+                        instruction.operand_b,
+                        send_arguments,
+                        current_context_handle
+                    );
+                    if (source_result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
+                        if (block_state == 0 ||
+                            block_state->home_context_index != executable->home_context_index ||
+                            executable->home_context_index < 0) {
+                            machine_panic("block non-local return crossed an unsupported executable boundary");
+                        }
+                        push(source_result.value);
+                        return;
+                    }
+                    activation_push(activation_stack, &activation_stack_size, source_result.value);
+                    break;
+                }
+                if ((instruction.operand_a == RECORZ_MVP_SELECTOR_IF_TRUE && instruction.operand_b == 1U) ||
+                    (instruction.operand_a == RECORZ_MVP_SELECTOR_IF_FALSE && instruction.operand_b == 1U) ||
+                    (instruction.operand_a == RECORZ_MVP_SELECTOR_IF_TRUE_IF_FALSE && instruction.operand_b == 2U)) {
+                    uint8_t condition_is_true = condition_value_is_true(send_receiver);
+                    uint16_t chosen_index = 0xFFFFU;
+
+                    if (instruction.operand_a == RECORZ_MVP_SELECTOR_IF_TRUE) {
+                        chosen_index = condition_is_true ? 0U : 0xFFFFU;
+                    } else if (instruction.operand_a == RECORZ_MVP_SELECTOR_IF_FALSE) {
+                        chosen_index = condition_is_true ? 0xFFFFU : 0U;
+                    } else {
+                        chosen_index = condition_is_true ? 0U : 1U;
+                    }
+                    if (chosen_index == 0xFFFFU) {
+                        activation_push(activation_stack, &activation_stack_size, nil_value());
+                        break;
+                    }
+                    if (send_arguments[chosen_index].kind != RECORZ_MVP_VALUE_OBJECT ||
+                        primitive_kind_for_heap_object(heap_object_for_value(send_arguments[chosen_index])) != RECORZ_MVP_OBJECT_BLOCK_CLOSURE) {
+                        machine_panic("conditional send expects a block closure argument");
+                    }
+                    block_state = source_block_state_for_handle(
+                        heap_handle_for_object(heap_object_for_value(send_arguments[chosen_index]))
+                    );
+                    source_result = source_execute_block_closure(
+                        heap_object_for_value(send_arguments[chosen_index]),
+                        0U,
+                        0,
+                        current_context_handle
+                    );
+                    if (source_result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
+                        if (block_state == 0 ||
+                            block_state->home_context_index != executable->home_context_index ||
+                            executable->home_context_index < 0) {
+                            machine_panic("block non-local return crossed an unsupported executable boundary");
+                        }
+                        push(source_result.value);
+                        return;
+                    }
+                    activation_push(activation_stack, &activation_stack_size, source_result.value);
+                    break;
+                }
                 perform_send_with_sender(
                     send_receiver,
                     instruction.operand_a,
@@ -10809,11 +10877,19 @@ static void workspace_evaluate_source(const char *source) {
         .literals = program.literals,
         .literal_count = 0U,
         .lexical_count = 0U,
+        .home_context_index = -1,
     };
     struct recorz_mvp_value workspace_receiver = top_level_receiver_value();
     const struct recorz_mvp_heap_object *workspace_receiver_object = heap_object_for_value(workspace_receiver);
     uint32_t stack_size_before = stack_size;
-    uint16_t context_handle = allocate_source_context_object(0U, workspace_receiver, "<workspace>");
+    int16_t home_context_index = source_allocate_home_context(
+        class_object_for_heap_object(workspace_receiver_object),
+        workspace_receiver,
+        -1,
+        0U,
+        "<workspace>"
+    );
+    uint16_t context_handle = source_home_context_at(home_context_index)->context_handle;
 
     build_workspace_source_program(source, &program);
     executable.instruction_count = program.instruction_count;
@@ -10821,7 +10897,9 @@ static void workspace_evaluate_source(const char *source) {
     executable.lexical_count = program.lexical_count;
     executable.lexical_names = program.temporary_names;
     executable.block_defining_class = class_object_for_heap_object(workspace_receiver_object);
+    executable.home_context_index = home_context_index;
     execute_executable(&executable, workspace_receiver_object, workspace_receiver, 0U, 0, context_handle);
+    source_home_context_at(home_context_index)->alive = 0U;
     mark_context_dead(context_handle);
     if (stack_size != stack_size_before + 1U) {
         machine_panic("Workspace source execution did not return exactly one value");
@@ -10894,6 +10972,7 @@ static void execute_compiled_method_with_sender(
         .literals = 0,
         .literal_count = 0U,
         .lexical_count = compiled_method_lexical_count(compiled_method),
+        .home_context_index = -1,
     };
     uint16_t context_handle;
 
@@ -11369,17 +11448,19 @@ void recorz_mvp_vm_run(
     const uint8_t *snapshot_blob,
     uint32_t snapshot_size
 ) {
-    const struct recorz_mvp_executable executable = {
+    struct recorz_mvp_executable executable = {
         .instruction_source = program->instructions,
         .read_instruction = read_program_instruction,
         .instruction_count = program->instruction_count,
         .literals = program->literals,
         .literal_count = program->literal_count,
         .lexical_count = program->lexical_count,
+        .home_context_index = -1,
     };
     struct recorz_mvp_value top_level_receiver;
     const struct recorz_mvp_heap_object *top_level_receiver_object;
     uint16_t context_handle;
+    int16_t home_context_index;
 
     stack_size = 0U;
     panic_phase = "bootstrap";
@@ -11407,8 +11488,18 @@ void recorz_mvp_vm_run(
     run_startup_hook_if_configured();
     top_level_receiver = top_level_receiver_value();
     top_level_receiver_object = heap_object_for_value(top_level_receiver);
-    context_handle = allocate_source_context_object(0U, top_level_receiver, "<program>");
+    home_context_index = source_allocate_home_context(
+        class_object_for_heap_object(top_level_receiver_object),
+        top_level_receiver,
+        -1,
+        0U,
+        "<program>"
+    );
+    context_handle = source_home_context_at(home_context_index)->context_handle;
+    executable.block_defining_class = class_object_for_heap_object(top_level_receiver_object);
+    executable.home_context_index = home_context_index;
     execute_executable(&executable, top_level_receiver_object, top_level_receiver, 0U, 0, context_handle);
+    source_home_context_at(home_context_index)->alive = 0U;
     mark_context_dead(context_handle);
     panic_phase = "return";
     machine_set_panic_hook(0);

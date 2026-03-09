@@ -1,5 +1,11 @@
 # Implementation Log
 
+## 2026-03-09 - Give RV32 Executables Real Home Contexts For Block Return
+- Extended the tiny RV32 executable model in [platform/qemu-riscv32/vm.c](/Users/david/repos/recorz/platform/qemu-riscv32/vm.c) with an explicit home-context index so block literals created by workspace and top-level do-its can register the same lexical/home metadata already used by the live-source evaluator.
+- Moved the workspace and top-level program paths onto real source home contexts instead of plain one-off context objects. That keeps `thisContext` behavior intact while finally giving block literals a legitimate non-local return target on those executable paths.
+- Taught `execute_executable()` to handle block activation and boolean block conditionals directly when the active executable owns the block home context. That lets a block `^` escape the enclosing workspace or top-level do-it without pretending the return belongs to a generic VM send.
+- Added focused RV32 proofs in [examples/qemu_riscv_in_image_workspace_block_return_demo.rz](/Users/david/repos/recorz/examples/qemu_riscv_in_image_workspace_block_return_demo.rz) and [examples/qemu_riscv_top_level_block_return_demo.rz](/Users/david/repos/recorz/examples/qemu_riscv_top_level_block_return_demo.rz), plus serial coverage in [tests/test_qemu_riscv32_serial_integration.py](/Users/david/repos/recorz/tests/test_qemu_riscv32_serial_integration.py), demonstrating non-local block return on both sides of the live-source / host-lowered do-it boundary.
+
 ## 2026-03-09 - Capture Workspace Temps In RV32 Block Literals
 - Finished the RV32 workspace block bridge in [platform/qemu-riscv32/vm.c](/Users/david/repos/recorz/platform/qemu-riscv32/vm.c) by wiring workspace temporary names and the `Workspace` defining class into the shared executable/block runtime.
 - Workspace bytecode execution now lazily lifts its temporary slots into a real source lexical environment the first time a block literal is created, then routes later temporary reads and writes through those same cells so workspace blocks see and mutate the outer bindings instead of a copied value snapshot.
