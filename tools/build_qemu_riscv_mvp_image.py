@@ -143,6 +143,8 @@ LITERAL_KIND_DEFINITIONS = build_constant_definitions_from_explicit_specs(LITERA
 PROGRAM_MAGIC = str(PROGRAM_RUNTIME_SPEC["magic"]).encode("ascii")
 PROGRAM_VERSION = int(PROGRAM_RUNTIME_SPEC["version"])
 PROGRAM_HEADER_FORMAT = str(PROGRAM_RUNTIME_SPEC["header_format"])
+PROGRAM_LEXICAL_LIMIT = int(PROGRAM_RUNTIME_SPEC["lexical_limit"])
+PROGRAM_LEXICAL_NAME_LIMIT = int(PROGRAM_RUNTIME_SPEC["lexical_name_limit"])
 PROGRAM_INSTRUCTION_FORMAT = str(PROGRAM_RUNTIME_SPEC["instruction_format"])
 PROGRAM_LITERAL_HEADER_FORMAT = str(PROGRAM_RUNTIME_SPEC["literal_header_format"])
 
@@ -212,6 +214,7 @@ class Program:
     literals: list[Literal]
     instructions: list[Instruction]
     lexical_count: int
+    lexical_names: list[str]
 
 
 @dataclass
@@ -1679,13 +1682,20 @@ class Lowerer:
 
     def build(self) -> Program:
         compiled = compile_do_it(self.source, "Object", [])
+        if len(compiled.temp_names) > PROGRAM_LEXICAL_LIMIT:
+            raise LoweringError("MVP program lexical count exceeds runtime capacity")
         self.lexical_map = {name: index for index, name in enumerate(compiled.temp_names)}
+        for name in compiled.temp_names:
+            encoded_name = name.encode("ascii")
+            if len(encoded_name) >= PROGRAM_LEXICAL_NAME_LIMIT:
+                raise LoweringError("MVP program lexical name exceeds runtime capacity")
         for instruction in compiled.instructions:
             self.lower_instruction(instruction.opcode, instruction.operand, compiled.literals)
         return Program(
             literals=self.literals,
             instructions=self.instructions,
             lexical_count=len(compiled.temp_names),
+            lexical_names=list(compiled.temp_names),
         )
 
     def lower_instruction(self, opcode: str, operand: object, compiled_literals: list[object]) -> None:
@@ -1826,6 +1836,7 @@ def build_boot_program(source: str) -> Program:
         literals=literals,
         instructions=prelude + list(program.instructions),
         lexical_count=program.lexical_count,
+        lexical_names=list(program.lexical_names),
     )
 
 
@@ -1870,6 +1881,12 @@ def build_program_manifest(program: Program) -> bytes:
             manifest.extend(struct.pack(PROGRAM_LITERAL_HEADER_FORMAT, LITERAL_VALUES[literal.kind], 0, 0, int(literal.value)))
             continue
         raise AssertionError(f"unknown literal kind {literal.kind}")
+    for name in program.lexical_names:
+        encoded_name = name.encode("ascii")
+        if len(encoded_name) >= PROGRAM_LEXICAL_NAME_LIMIT:
+            raise LoweringError("MVP program lexical name exceeds runtime capacity")
+        manifest.extend(encoded_name)
+        manifest.append(0)
     return bytes(manifest)
 
 

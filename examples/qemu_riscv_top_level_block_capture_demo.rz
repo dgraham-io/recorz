@@ -1,0 +1,10 @@
+| x |
+Display clear.
+Transcript show: 'TBCAP'.
+Transcript cr.
+x := 4.
+Transcript show: ([ x + 3 ] value) printString.
+Transcript cr.
+[ x := x + 2 ] value.
+Transcript show: x printString.
+Transcript cr.

@@ -39,6 +39,9 @@
 #define RECORZ_MVP_SNAPSHOT_BUFFER_LIMIT 24576U
 #endif
 
+#define RECORZ_MVP_PROGRAM_LEXICAL_LIMIT 32U
+#define RECORZ_MVP_PROGRAM_LEXICAL_NAME_LIMIT 64U
+
 struct recorz_mvp_instruction {
     uint8_t opcode;
     uint8_t operand_a;
@@ -57,6 +60,7 @@ struct recorz_mvp_program {
     const struct recorz_mvp_literal *literals;
     uint32_t literal_count;
     uint16_t lexical_count;
+    const char (*lexical_names)[RECORZ_MVP_PROGRAM_LEXICAL_NAME_LIMIT];
 };
 
 struct recorz_mvp_seed_field {

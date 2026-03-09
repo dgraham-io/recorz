@@ -40,12 +40,20 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
     def test_lowers_workspace_temporaries_and_integer_arithmetic(self) -> None:
         program = mvp.build_program("| pixels | pixels := 640 * 480. Transcript show: pixels printString")
         self.assertEqual(program.lexical_count, 1)
+        self.assertEqual(program.lexical_names, ["pixels"])
         self.assertIn((mvp.LITERAL_SMALL_INTEGER, 640), [(literal.kind, literal.value) for literal in program.literals])
         self.assertIn((mvp.LITERAL_SMALL_INTEGER, 480), [(literal.kind, literal.value) for literal in program.literals])
         self.assertIn(mvp.OP_STORE_LEXICAL, [instruction.opcode for instruction in program.instructions])
         self.assertIn(mvp.OP_PUSH_LEXICAL, [instruction.opcode for instruction in program.instructions])
         self.assertIn("RECORZ_MVP_SELECTOR_MULTIPLY", [instruction.operand_a for instruction in program.instructions if instruction.opcode == mvp.OP_SEND])
         self.assertIn("RECORZ_MVP_SELECTOR_PRINT_STRING", [instruction.operand_a for instruction in program.instructions if instruction.opcode == mvp.OP_SEND])
+
+    def test_builds_program_manifest_with_top_level_lexical_names(self) -> None:
+        program = mvp.build_program("| x | x := 4. [ x + 3 ] value")
+        manifest = mvp.build_program_manifest(program)
+
+        self.assertEqual(program.lexical_names, ["x"])
+        self.assertTrue(manifest.endswith(b"x\x00"))
 
     def test_lowers_this_context_in_workspace_programs(self) -> None:
         program = mvp.build_program("thisContext detail")

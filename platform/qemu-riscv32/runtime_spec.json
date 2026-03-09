@@ -1,8 +1,10 @@
 {
   "program": {
     "magic": "RCZP",
-    "version": 1,
+    "version": 2,
     "header_format": "<4sHHHH",
+    "lexical_limit": 32,
+    "lexical_name_limit": 64,
     "instruction_format": "<BBH",
     "literal_header_format": "<BBHi"
   },

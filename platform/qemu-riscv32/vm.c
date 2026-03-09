@@ -11455,6 +11455,7 @@ void recorz_mvp_vm_run(
         .literals = program->literals,
         .literal_count = program->literal_count,
         .lexical_count = program->lexical_count,
+        .lexical_names = program->lexical_names,
         .home_context_index = -1,
     };
     struct recorz_mvp_value top_level_receiver;

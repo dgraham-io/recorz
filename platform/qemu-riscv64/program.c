@@ -12,6 +12,7 @@
 
 static struct recorz_mvp_instruction loaded_instructions[RECORZ_MVP_PROGRAM_INSTRUCTION_LIMIT];
 static struct recorz_mvp_literal loaded_literals[RECORZ_MVP_PROGRAM_LITERAL_LIMIT];
+static char loaded_lexical_names[RECORZ_MVP_PROGRAM_LEXICAL_LIMIT][RECORZ_MVP_PROGRAM_LEXICAL_NAME_LIMIT];
 static struct recorz_mvp_program loaded_program;
 
 static uint16_t read_u16_le(const uint8_t *bytes) {
@@ -100,6 +101,9 @@ const struct recorz_mvp_program *recorz_mvp_program_load(const uint8_t *blob, ui
     if (literal_count > RECORZ_MVP_PROGRAM_LITERAL_LIMIT) {
         machine_panic("program manifest literal count exceeds capacity");
     }
+    if (lexical_count > RECORZ_MVP_PROGRAM_LEXICAL_LIMIT) {
+        machine_panic("program manifest lexical count exceeds capacity");
+    }
 
     offset = RECORZ_MVP_PROGRAM_HEADER_SIZE;
     if (size < offset + ((uint32_t)instruction_count * RECORZ_MVP_PROGRAM_INSTRUCTION_SIZE)) {
@@ -152,6 +156,28 @@ const struct recorz_mvp_program *recorz_mvp_program_load(const uint8_t *blob, ui
         }
         machine_panic("program manifest literal kind is unknown");
     }
+    for (literal_index = 0U; literal_index < lexical_count; ++literal_index) {
+        uint16_t lexical_name_length = 0U;
+
+        while (offset + lexical_name_length < size &&
+               blob[offset + lexical_name_length] != 0U) {
+            ++lexical_name_length;
+        }
+        if (offset + lexical_name_length >= size) {
+            machine_panic("program manifest lexical name is truncated");
+        }
+        if (lexical_name_length == 0U) {
+            machine_panic("program manifest lexical name is empty");
+        }
+        if (lexical_name_length >= RECORZ_MVP_PROGRAM_LEXICAL_NAME_LIMIT) {
+            machine_panic("program manifest lexical name exceeds capacity");
+        }
+        for (instruction_index = 0U; instruction_index < lexical_name_length; ++instruction_index) {
+            loaded_lexical_names[literal_index][instruction_index] = (char)blob[offset + instruction_index];
+        }
+        loaded_lexical_names[literal_index][lexical_name_length] = '\0';
+        offset += lexical_name_length + 1U;
+    }
 
     if (offset != size) {
         machine_panic("program manifest size mismatch");
@@ -162,5 +188,6 @@ const struct recorz_mvp_program *recorz_mvp_program_load(const uint8_t *blob, ui
     loaded_program.literals = loaded_literals;
     loaded_program.literal_count = literal_count;
     loaded_program.lexical_count = lexical_count;
+    loaded_program.lexical_names = lexical_count == 0U ? 0 : loaded_lexical_names;
     return &loaded_program;
 }
