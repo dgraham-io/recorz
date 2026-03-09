@@ -186,3 +186,7 @@ RecorzKernelSelector: #browseRegeneratedKernelSource order: 91
 !
 RecorzKernelSelector: #seedBootContents: order: 92
 !
+RecorzKernelSelector: #browseInteractiveInput order: 93
+!
+RecorzKernelSelector: #interactiveInputMonitor order: 94
+!

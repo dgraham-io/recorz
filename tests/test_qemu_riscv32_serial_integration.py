@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import shutil
+import select
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 import re
@@ -31,6 +33,7 @@ WORKSPACE_TEMPS_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_worksp
 WORKSPACE_ACCEPT_CURRENT_PACKAGE_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_accept_current_package_demo.rz"
 WORKSPACE_RECOVER_LAST_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_recover_last_source_demo.rz"
 REGENERATED_KERNEL_SOURCE_BROWSER_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_regenerated_kernel_source_browser_demo.rz"
+WORKSPACE_INPUT_MONITOR_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_demo.rz"
 TEST_RUNNER_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_test_runner_demo.rz"
 METHOD_BLOCK_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_demo.rz"
 METHOD_BLOCK_CAPTURE_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_capture_demo.rz"
@@ -75,6 +78,28 @@ def _build_elf(build_dir: Path, example_path: Path = DEFAULT_EXAMPLE, *, profile
             f"stderr:\n{result.stderr}"
         )
     return build_dir / "recorz-qemu-riscv32-mvp.elf"
+
+
+def _read_until(process: subprocess.Popen[str], marker: str, *, timeout: float) -> str:
+    if process.stdout is None:
+        raise AssertionError("QEMU process stdout is not available")
+
+    output = ""
+    deadline = time.monotonic() + timeout
+    while marker not in output:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise AssertionError(f"timed out waiting for {marker!r}\ncurrent output:\n{output}")
+        ready, _, _ = select.select([process.stdout], [], [], remaining)
+        if not ready:
+            continue
+        chunk = process.stdout.read(1)
+        if chunk == "":
+            break
+        output += chunk
+    if marker not in output:
+        raise AssertionError(f"did not observe {marker!r}\ncurrent output:\n{output}")
+    return output
 
 
 @unittest.skipUnless(
@@ -208,6 +233,62 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             output = output.replace("\r", "")
             self.assertIn("RecorzKernelClass: #Workspace", output)
             self.assertIn("RecorzKernelClass: #Selector", output)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_interactive_input_monitor_captures_serial_input_into_contents(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-input-monitor-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_INPUT_MONITOR_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "VIEW: INPUT", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("ab\x08C\x04")
+                process.stdin.flush()
+                time.sleep(1.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("VIEW: INPUT", output)
+            self.assertIn("EXIT: CTRL-", output)
+            self.assertIn("BUFFER=aC", output.replace("\n", ""))
             self.assertNotIn("panic:", output)
 
     def test_memory_report_demo_prints_usage_within_budget(self) -> None:

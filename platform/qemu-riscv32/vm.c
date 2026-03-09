@@ -114,7 +114,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEST_RUNNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_INTERACTIVE_INPUT_MONITOR
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_TEST_RUNNER
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #define SOURCE_EVAL_ENV_LIMIT 32U
@@ -139,6 +139,7 @@
 #define WORKSPACE_VIEW_PACKAGE 15U
 #define WORKSPACE_VIEW_REGENERATED_BOOT_SOURCE 16U
 #define WORKSPACE_VIEW_REGENERATED_KERNEL_SOURCE 17U
+#define WORKSPACE_VIEW_INPUT_MONITOR 18U
 
 enum recorz_mvp_value_kind {
     RECORZ_MVP_VALUE_NIL = 0,
@@ -343,6 +344,7 @@ static uint32_t cursor_x = 0U;
 static uint32_t cursor_y = 0U;
 static char print_buffer[PRINT_BUFFER_SIZE];
 static char workspace_target_buffer[METHOD_SOURCE_CHUNK_LIMIT];
+static char workspace_input_monitor_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char kernel_source_io_buffer[8193];
 static char package_source_io_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char regenerated_source_io_buffer[REGENERATED_SOURCE_BUFFER_LIMIT];
@@ -742,6 +744,10 @@ static const char *selector_name(uint8_t selector) {
             return "browseRegeneratedKernelSource";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
+        case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
+            return "browseInteractiveInput";
+        case RECORZ_MVP_SELECTOR_INTERACTIVE_INPUT_MONITOR:
+            return "interactiveInputMonitor";
     }
     return "unknown";
 }
@@ -983,6 +989,31 @@ static uint32_t source_copy_trimmed_line(const char **cursor_ref, char buffer[],
     cursor = (*end == '\n') ? end + 1 : end;
     *cursor_ref = cursor;
     return length;
+}
+
+static uint8_t source_copy_raw_line(const char **cursor_ref, char buffer[], uint32_t buffer_size) {
+    const char *cursor = *cursor_ref;
+    uint32_t length = 0U;
+
+    if (*cursor == '\0') {
+        buffer[0] = '\0';
+        return 0U;
+    }
+    while (*cursor != '\0' && *cursor != '\n' && *cursor != '\r') {
+        if (length + 1U >= buffer_size) {
+            break;
+        }
+        buffer[length++] = *cursor++;
+    }
+    buffer[length] = '\0';
+    if (*cursor == '\r') {
+        ++cursor;
+    }
+    if (*cursor == '\n') {
+        ++cursor;
+    }
+    *cursor_ref = cursor;
+    return 1U;
 }
 
 static uint32_t source_copy_next_chunk(const char **cursor_ref, char buffer[], uint32_t buffer_size) {
@@ -4199,6 +4230,17 @@ static void workspace_write_text_line(
     workspace_newline();
 }
 
+static void workspace_write_raw_text_line(
+    const struct recorz_mvp_heap_object *form,
+    const char *text
+) {
+    if (!workspace_has_line_capacity(form)) {
+        return;
+    }
+    form_write_string(form, text);
+    workspace_newline();
+}
+
 static void workspace_write_label_and_integer(
     const struct recorz_mvp_heap_object *form,
     const char *label,
@@ -4747,6 +4789,116 @@ static void workspace_render_regenerated_source_browser(
     }
     if (!wrote_line) {
         workspace_write_text_line(form, "EMPTY SOURCE");
+    }
+}
+
+static void workspace_render_input_monitor_browser(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    const struct recorz_mvp_heap_object *form = default_form_object();
+    struct recorz_mvp_value source_value = workspace_current_source_value(workspace_object);
+    const char *cursor;
+    char line[METHOD_SOURCE_CHUNK_LIMIT];
+    uint8_t wrote_line = 0U;
+
+    form_clear(form);
+    workspace_write_label_and_text(form, "VIEW", "INPUT");
+    workspace_write_label_and_text(form, "INPUT", "SERIAL");
+    workspace_write_label_and_text(form, "EXIT", "CTRL-D");
+    if (source_value.kind != RECORZ_MVP_VALUE_STRING || source_value.string == 0) {
+        workspace_write_raw_text_line(form, "");
+        return;
+    }
+    cursor = source_value.string;
+    while (source_copy_raw_line(&cursor, line, sizeof(line))) {
+        workspace_write_raw_text_line(form, line);
+        wrote_line = 1U;
+    }
+    if (!wrote_line) {
+        workspace_write_raw_text_line(form, "");
+    }
+}
+
+static void workspace_bind_input_monitor_buffer(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    struct recorz_mvp_value source_value = workspace_current_source_value(workspace_object);
+    uint32_t length = 0U;
+    uint16_t workspace_handle = heap_handle_for_object(workspace_object);
+
+    if (source_value.kind == RECORZ_MVP_VALUE_STRING && source_value.string != 0) {
+        while (source_value.string[length] != '\0' && length + 1U < sizeof(workspace_input_monitor_buffer)) {
+            workspace_input_monitor_buffer[length] = source_value.string[length];
+            ++length;
+        }
+    }
+    workspace_input_monitor_buffer[length] = '\0';
+    heap_set_field(
+        workspace_handle,
+        workspace_current_source_field_index(workspace_object),
+        string_value(workspace_input_monitor_buffer)
+    );
+}
+
+static void workspace_append_input_monitor_character(char ch) {
+    uint32_t length = text_length(workspace_input_monitor_buffer);
+
+    if (length + 1U >= sizeof(workspace_input_monitor_buffer)) {
+        return;
+    }
+    workspace_input_monitor_buffer[length] = ch;
+    workspace_input_monitor_buffer[length + 1U] = '\0';
+}
+
+static void workspace_backspace_input_monitor_character(void) {
+    uint32_t length = text_length(workspace_input_monitor_buffer);
+
+    if (length == 0U) {
+        return;
+    }
+    workspace_input_monitor_buffer[length - 1U] = '\0';
+}
+
+static void workspace_run_interactive_input_monitor(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    uint8_t saw_carriage_return = 0U;
+
+    workspace_bind_input_monitor_buffer(workspace_object);
+    workspace_remember_view(workspace_object, WORKSPACE_VIEW_INPUT_MONITOR, 0);
+    workspace_render_input_monitor_browser(workspace_object);
+    while (1) {
+        char ch = machine_wait_getc();
+
+        if (ch == 0x04) {
+            break;
+        }
+        if (ch == '\r') {
+            saw_carriage_return = 1U;
+            workspace_append_input_monitor_character('\n');
+            workspace_render_input_monitor_browser(workspace_object);
+            continue;
+        }
+        if (ch == '\n') {
+            if (saw_carriage_return) {
+                saw_carriage_return = 0U;
+                continue;
+            }
+            workspace_append_input_monitor_character('\n');
+            workspace_render_input_monitor_browser(workspace_object);
+            continue;
+        }
+        saw_carriage_return = 0U;
+        if (ch == 0x08 || ch == 0x7f) {
+            workspace_backspace_input_monitor_character();
+            workspace_render_input_monitor_browser(workspace_object);
+            continue;
+        }
+        if ((uint8_t)ch < 32U || (uint8_t)ch > 126U) {
+            continue;
+        }
+        workspace_append_input_monitor_character(ch);
+        workspace_render_input_monitor_browser(workspace_object);
     }
 }
 
@@ -9926,6 +10078,10 @@ static void regenerated_boot_source_emit_view_restore(
         regenerated_boot_source_emit_text(emitter, "Workspace browseRegeneratedKernelSource.\n");
         return;
     }
+    if (view_kind_value.integer == WORKSPACE_VIEW_INPUT_MONITOR) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browseInteractiveInput.\n");
+        return;
+    }
     if (view_kind_value.integer == WORKSPACE_VIEW_METHOD &&
         workspace_parse_method_target_name(
             target_name_value.string,
@@ -11458,6 +11614,31 @@ static void execute_entry_workspace_browse_regenerated_kernel_source(
     push(receiver);
 }
 
+static void execute_entry_workspace_browse_interactive_input(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    workspace_remember_view(object, WORKSPACE_VIEW_INPUT_MONITOR, 0);
+    workspace_render_input_monitor_browser(object);
+    push(receiver);
+}
+
+static void execute_entry_workspace_interactive_input_monitor(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    workspace_run_interactive_input_monitor(object);
+    push(receiver);
+}
+
 static void execute_entry_workspace_reopen(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -11663,6 +11844,11 @@ static void execute_entry_workspace_reopen(
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_REGENERATED_KERNEL_SOURCE) {
         workspace_render_regenerated_source_browser(object, "KERNEL");
+        push(receiver);
+        return;
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_INPUT_MONITOR) {
+        workspace_render_input_monitor_browser(object);
         push(receiver);
         return;
     }

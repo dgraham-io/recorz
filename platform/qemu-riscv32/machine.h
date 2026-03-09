@@ -7,6 +7,8 @@ typedef void (*machine_panic_hook)(const char *message);
 
 void machine_init(const void *fdt);
 void machine_putc(char c);
+uint8_t machine_try_getc(char *out);
+char machine_wait_getc(void);
 void machine_puts(const char *text);
 void machine_wait_forever(void);
 void machine_set_panic_hook(machine_panic_hook hook);

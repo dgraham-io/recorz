@@ -98,3 +98,9 @@ browseRegeneratedKernelSource
 !
 seedBootContents: source
     <primitive: #workspaceSeedBootContents>
+!
+browseInteractiveInput
+    <primitive: #workspaceBrowseInteractiveInput>
+!
+interactiveInputMonitor
+    <primitive: #workspaceInteractiveInputMonitor>

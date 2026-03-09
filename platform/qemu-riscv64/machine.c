@@ -5,6 +5,10 @@
 
 #define UART0_DEFAULT_BASE 0x10000000UL
 #define FW_CFG_DEFAULT_BASE 0x10100000UL
+#define UART_REGISTER_DATA 0x0U
+#define UART_REGISTER_LINE_STATUS 0x5U
+#define UART_LINE_STATUS_DATA_READY 0x01U
+#define UART_LINE_STATUS_TRANSMITTER_EMPTY 0x20U
 
 #define FW_CFG_FILE_DIR 0x0019U
 #define FW_CFG_DMA_CTL_ERROR 0x01U
@@ -510,7 +514,29 @@ void machine_init(const void *fdt) {
 }
 
 void machine_putc(char c) {
-    *(volatile uint8_t *)uart_base = (uint8_t)c;
+    while ((*(volatile uint8_t *)(uart_base + UART_REGISTER_LINE_STATUS) & UART_LINE_STATUS_TRANSMITTER_EMPTY) == 0U) {
+    }
+    *(volatile uint8_t *)(uart_base + UART_REGISTER_DATA) = (uint8_t)c;
+}
+
+uint8_t machine_try_getc(char *out) {
+    if ((*(volatile uint8_t *)(uart_base + UART_REGISTER_LINE_STATUS) & UART_LINE_STATUS_DATA_READY) == 0U) {
+        return 0U;
+    }
+    if (out != 0) {
+        *out = (char)(*(volatile uint8_t *)(uart_base + UART_REGISTER_DATA));
+    } else {
+        (void)*(volatile uint8_t *)(uart_base + UART_REGISTER_DATA);
+    }
+    return 1U;
+}
+
+char machine_wait_getc(void) {
+    char ch = '\0';
+
+    while (!machine_try_getc(&ch)) {
+    }
+    return ch;
 }
 
 void machine_puts(const char *text) {

@@ -69,7 +69,7 @@ OBJECTS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(filter %.c,$(SOURCES))) \
 	$(patsubst %.S,$(BUILD_DIR)/%.o,$(filter %.S,$(SOURCES))) \
 	$(GENERATED_IMAGE_OBJECT)
 
-.PHONY: all run run-headless screenshot save-snapshot continue-snapshot regenerate-boot-source regenerate-runtime-bindings regenerate-image dev-init dev-boot dev-screenshot dev-file-in inspect-image clean FORCE
+.PHONY: all run run-interactive run-headless screenshot save-snapshot continue-snapshot regenerate-boot-source regenerate-runtime-bindings regenerate-image dev-init dev-boot dev-screenshot dev-file-in inspect-image clean FORCE
 
 all: $(ELF)
 
@@ -115,6 +115,9 @@ $(ELF): $(OBJECTS) $(CURDIR)/linker.ld
 
 run: $(ELF) $(QEMU_FILE_IN_DEP)
 	$(QEMU) -machine virt -m $(QEMU_MEMORY) -smp 1 -kernel $(ELF) -serial mon:stdio -device ramfb $(QEMU_RUN_ARGS)
+
+run-interactive: $(ELF) $(QEMU_FILE_IN_DEP)
+	$(QEMU) -machine virt -m $(QEMU_MEMORY) -smp 1 -kernel $(ELF) -serial stdio -monitor none -device ramfb $(QEMU_RUN_ARGS)
 
 run-headless: $(ELF) $(QEMU_FILE_IN_DEP)
 	$(QEMU) -machine virt -m $(QEMU_MEMORY) -smp 1 -kernel $(ELF) -serial stdio -display none -device ramfb $(QEMU_RUN_ARGS)
