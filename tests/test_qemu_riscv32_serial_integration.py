@@ -23,6 +23,7 @@ METHOD_BLOCK_CAPTURE_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_m
 METHOD_BLOCK_RETURN_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_return_demo.rz"
 METHOD_BLOCK_ARGUMENT_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_argument_demo.rz"
 THIS_CONTEXT_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_this_context_demo.rz"
+COMPILED_CONTEXT_BRIDGE_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_compiled_context_bridge_demo.rz"
 PAREN_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_parenthesized_method_demo.rz"
 MULTIKEYWORD_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_multikeyword_method_demo.rz"
 EXPRESSION_KEYWORD_SEND_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_expression_keyword_send_demo.rz"
@@ -31,6 +32,9 @@ SELF_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_self_metho
 SMALL_INTEGER_LITERAL_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_small_integer_literal_demo.rz"
 STRING_LITERAL_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_string_literal_demo.rz"
 BOOLEAN_LITERAL_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_boolean_literal_demo.rz"
+COMPILED_METHOD_CONTEXT_UPDATE_DEMO = ROOT / "examples" / "qemu_riscv_compiled_method_context_update_demo.rz"
+COMPILED_METHOD_CONTEXT_UPDATE_SOURCE = ROOT / "examples" / "qemu_riscv_object_detail_sender_context_update.rz"
+UPDATE_TOOL = ROOT / "tools" / "build_qemu_riscv_method_update.py"
 
 
 def _build_elf(build_dir: Path, example_path: Path = DEFAULT_EXAMPLE, *, profile: str = "dev") -> Path:
@@ -671,6 +675,113 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("truth", output)
             self.assertIn("ALIVE", output)
             self.assertIn("RCVR", output)
+            self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
+
+    def test_compiled_program_contexts_bridge_into_live_methods(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-compiled-context-bridge-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, COMPILED_CONTEXT_BRIDGE_SOURCE_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("recorz qemu-riscv32 mvp: created class CompiledContextBridge", output)
+            self.assertIn("PCTX", output)
+            self.assertGreaterEqual(output.count("<program>"), 2)
+            self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
+
+    def test_compiled_method_updates_expose_sender_context_on_rv32(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-compiled-method-context-") as temp_dir:
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "build"
+            update_payload = temp_path / "object_detail_update.bin"
+            build_update = subprocess.run(
+                [
+                    "python3",
+                    str(UPDATE_TOOL),
+                    "Object",
+                    str(COMPILED_METHOD_CONTEXT_UPDATE_SOURCE),
+                    str(update_payload),
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if build_update.returncode != 0:
+                raise AssertionError(
+                    "compiled method update build failed\n"
+                    f"stdout:\n{build_update.stdout}\n"
+                    f"stderr:\n{build_update.stderr}"
+                )
+            elf_path = _build_elf(build_dir, COMPILED_METHOD_CONTEXT_UPDATE_DEMO)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                    "-fw_cfg",
+                    f"name=opt/recorz-method-update,file={update_payload}",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("recorz qemu-riscv32 mvp: applied method update", output)
+            self.assertIn("<program>", output)
             self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
 
     def test_in_image_source_compiler_supports_parenthesized_method_expressions(self) -> None:

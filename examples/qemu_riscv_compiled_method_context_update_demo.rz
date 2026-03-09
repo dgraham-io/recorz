@@ -1,0 +1,2 @@
+Transcript show: (((KernelInstaller classNamed: 'Object') new) detail).
+Transcript cr.

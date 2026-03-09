@@ -1,0 +1,12 @@
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #CompiledContextBridge superclass: #Object instanceVariableNames: ''''
+!
+sum
+    ^thisContext sender detail
+!'.
+Transcript show: 'PCTX'.
+Transcript cr.
+Transcript show: thisContext detail.
+Transcript cr.
+Transcript show: (((KernelInstaller classNamed: 'CompiledContextBridge') new) sum).
+Transcript cr.

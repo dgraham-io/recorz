@@ -160,6 +160,11 @@
       "name": "push_block_literal",
       "constant": "RECORZ_MVP_OP_PUSH_BLOCK_LITERAL",
       "value": 21
+    },
+    {
+      "name": "push_this_context",
+      "constant": "RECORZ_MVP_OP_PUSH_THIS_CONTEXT",
+      "value": 22
     }
   ],
   "literal_kinds": [
@@ -276,6 +281,11 @@
         "name": "jump_if_false",
         "constant": "RECORZ_MVP_COMPILED_METHOD_OP_JUMP_IF_FALSE",
         "value": 20
+      },
+      {
+        "name": "push_this_context",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_THIS_CONTEXT",
+        "value": 22
       }
     ]
   },

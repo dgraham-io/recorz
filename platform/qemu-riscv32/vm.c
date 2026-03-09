@@ -102,6 +102,7 @@
 #define COMPILED_METHOD_OP_JUMP RECORZ_MVP_COMPILED_METHOD_OP_JUMP
 #define COMPILED_METHOD_OP_JUMP_IF_TRUE RECORZ_MVP_COMPILED_METHOD_OP_JUMP_IF_TRUE
 #define COMPILED_METHOD_OP_JUMP_IF_FALSE RECORZ_MVP_COMPILED_METHOD_OP_JUMP_IF_FALSE
+#define COMPILED_METHOD_OP_PUSH_THIS_CONTEXT RECORZ_MVP_COMPILED_METHOD_OP_PUSH_THIS_CONTEXT
 
 #define BITMAP_STORAGE_FRAMEBUFFER RECORZ_MVP_BITMAP_STORAGE_FRAMEBUFFER
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
@@ -1040,6 +1041,14 @@ static void execute_live_source_method_with_sender(
     const struct recorz_mvp_value arguments[],
     const char *source,
     uint16_t sender_context_handle
+);
+static void perform_send_with_sender(
+    struct recorz_mvp_value receiver,
+    uint8_t selector,
+    uint16_t send_argument_count,
+    const struct recorz_mvp_value arguments[],
+    uint16_t sender_context_handle,
+    const char *text
 );
 static void perform_send(
     struct recorz_mvp_value receiver,
@@ -2024,6 +2033,10 @@ static const char *workspace_compile_operand_push(
             }
             if (source_names_equal(identifier, "nil")) {
                 if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_NIL, 0U, 0U)) {
+                    machine_panic("Workspace source exceeds instruction capacity");
+                }
+            } else if (source_names_equal(identifier, "thisContext")) {
+                if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_THIS_CONTEXT, 0U, 0U)) {
                     machine_panic("Workspace source exceeds instruction capacity");
                 }
             } else {
@@ -4320,6 +4333,9 @@ static void validate_compiled_method(
                 next_depth = (uint8_t)(stack_depth + 1U);
                 break;
             case COMPILED_METHOD_OP_PUSH_SELF:
+                next_depth = (uint8_t)(stack_depth + 1U);
+                break;
+            case COMPILED_METHOD_OP_PUSH_THIS_CONTEXT:
                 next_depth = (uint8_t)(stack_depth + 1U);
                 break;
             case COMPILED_METHOD_OP_PUSH_SMALL_INTEGER:
@@ -8036,7 +8052,14 @@ static struct recorz_mvp_source_eval_result source_send_message(
             return source_eval_value_result(pop_value());
         }
     }
-    perform_send(receiver, selector_id, argument_count, arguments, 0);
+    perform_send_with_sender(
+        receiver,
+        selector_id,
+        argument_count,
+        arguments,
+        context->current_context_handle,
+        0
+    );
     return source_eval_value_result(pop_value());
 }
 
@@ -10302,14 +10325,6 @@ static const recorz_mvp_method_entry_handler primitive_binding_handlers[RECORZ_M
     RECORZ_MVP_GENERATED_PRIMITIVE_BINDING_HANDLERS
 };
 
-static void perform_send(
-    struct recorz_mvp_value receiver,
-    uint8_t selector,
-    uint16_t send_argument_count,
-    const struct recorz_mvp_value arguments[],
-    const char *text
-);
-
 static void activation_push(
     struct recorz_mvp_value activation_stack[],
     uint32_t *activation_stack_size,
@@ -10341,12 +10356,45 @@ static struct recorz_mvp_value activation_peek(
     return activation_stack[activation_stack_size - 1U];
 }
 
+static uint8_t executable_uses_this_context(const struct recorz_mvp_executable *executable) {
+    uint32_t instruction_index;
+
+    for (instruction_index = 0U; instruction_index < executable->instruction_count; ++instruction_index) {
+        struct recorz_mvp_instruction instruction =
+            executable->read_instruction(executable->instruction_source, instruction_index);
+
+        if (instruction.opcode == RECORZ_MVP_OP_PUSH_THIS_CONTEXT) {
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
+static uint16_t allocate_compiled_activation_context_if_needed(
+    const struct recorz_mvp_executable *executable,
+    uint16_t sender_context_handle,
+    struct recorz_mvp_value receiver,
+    const char *detail_text
+) {
+    if (sender_context_handle == 0U && !executable_uses_this_context(executable)) {
+        return 0U;
+    }
+    return allocate_source_context_object(sender_context_handle, receiver, detail_text);
+}
+
+static void mark_context_dead(uint16_t context_handle) {
+    if (context_handle != 0U) {
+        heap_set_field(context_handle, CONTEXT_FIELD_ALIVE, boolean_value(0U));
+    }
+}
+
 static void execute_executable(
     const struct recorz_mvp_executable *executable,
     const struct recorz_mvp_heap_object *receiver_object,
     struct recorz_mvp_value receiver,
     uint16_t argument_count,
-    const struct recorz_mvp_value arguments[]
+    const struct recorz_mvp_value arguments[],
+    uint16_t current_context_handle
 ) {
     struct recorz_mvp_value activation_stack[STACK_LIMIT];
     struct recorz_mvp_value lexical[LEXICAL_LIMIT];
@@ -10436,6 +10484,12 @@ static void execute_executable(
             case RECORZ_MVP_OP_PUSH_SELF:
                 activation_push(activation_stack, &activation_stack_size, receiver);
                 break;
+            case RECORZ_MVP_OP_PUSH_THIS_CONTEXT:
+                if (current_context_handle == 0U) {
+                    machine_panic("thisContext requires an activation context");
+                }
+                activation_push(activation_stack, &activation_stack_size, object_value(current_context_handle));
+                break;
             case RECORZ_MVP_OP_PUSH_SMALL_INTEGER:
                 activation_push(
                     activation_stack,
@@ -10523,7 +10577,14 @@ static void execute_executable(
                 send_receiver = activation_pop(activation_stack, &activation_stack_size);
                 panic_phase = "send";
                 remember_send_context(instruction.operand_a, instruction.operand_b, send_receiver, send_arguments);
-                perform_send(send_receiver, instruction.operand_a, instruction.operand_b, send_arguments, 0);
+                perform_send_with_sender(
+                    send_receiver,
+                    instruction.operand_a,
+                    instruction.operand_b,
+                    send_arguments,
+                    current_context_handle,
+                    0
+                );
                 activation_push(activation_stack, &activation_stack_size, pop_value());
                 break;
             }
@@ -10555,19 +10616,24 @@ static void workspace_evaluate_source(const char *source) {
         .lexical_count = 0U,
     };
     uint32_t stack_size_before = stack_size;
+    uint16_t context_handle = allocate_source_context_object(0U, nil_value(), "<workspace>");
 
     build_workspace_source_program(source, &program);
     executable.instruction_count = program.instruction_count;
     executable.literal_count = program.literal_count;
-    execute_executable(&executable, 0, nil_value(), 0U, 0);
+    execute_executable(&executable, 0, nil_value(), 0U, 0, context_handle);
+    mark_context_dead(context_handle);
     if (stack_size != stack_size_before + 1U) {
         machine_panic("Workspace source execution did not return exactly one value");
     }
     (void)pop_value();
 }
 
-static void execute_block_closure(const struct recorz_mvp_heap_object *object) {
-    struct recorz_mvp_source_eval_result result = source_execute_block_closure(object, 0U, 0, 0U);
+static void execute_block_closure_with_sender(
+    const struct recorz_mvp_heap_object *object,
+    uint16_t sender_context_handle
+) {
+    struct recorz_mvp_source_eval_result result = source_execute_block_closure(object, 0U, 0, sender_context_handle);
 
     if (result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
         machine_panic("block non-local return requires a live source caller");
@@ -10575,11 +10641,13 @@ static void execute_block_closure(const struct recorz_mvp_heap_object *object) {
     push(result.value);
 }
 
-static void execute_compiled_method(
+static void execute_compiled_method_with_sender(
     const struct recorz_mvp_heap_object *receiver_object,
     struct recorz_mvp_value receiver,
     uint16_t argument_count,
     const struct recorz_mvp_value arguments[],
+    uint8_t selector,
+    uint16_t sender_context_handle,
     const struct recorz_mvp_heap_object *compiled_method
 ) {
     const struct recorz_mvp_executable executable = {
@@ -10590,11 +10658,19 @@ static void execute_compiled_method(
         .literal_count = 0U,
         .lexical_count = compiled_method_lexical_count(compiled_method),
     };
+    uint16_t context_handle;
 
     if (compiled_method->kind != RECORZ_MVP_OBJECT_COMPILED_METHOD) {
         machine_panic("method entry implementation is not a compiled method");
     }
-    execute_executable(&executable, receiver_object, receiver, argument_count, arguments);
+    context_handle = allocate_compiled_activation_context_if_needed(
+        &executable,
+        sender_context_handle,
+        receiver,
+        selector_name(selector)
+    );
+    execute_executable(&executable, receiver_object, receiver, argument_count, arguments, context_handle);
+    mark_context_dead(context_handle);
 }
 
 static uint16_t allocate_compiled_method_from_words(
@@ -10833,6 +10909,7 @@ static void dispatch_heap_object_send(
     uint16_t argument_count,
     struct recorz_mvp_value receiver,
     const struct recorz_mvp_value arguments[],
+    uint16_t sender_context_handle,
     const char *text
 ) {
     const struct recorz_mvp_heap_object *class_object;
@@ -10854,7 +10931,7 @@ static void dispatch_heap_object_send(
         if (selector != RECORZ_MVP_SELECTOR_VALUE || argument_count != 0U) {
             machine_panic("BlockClosure only understands value");
         }
-        execute_block_closure(object);
+        execute_block_closure_with_sender(object, sender_context_handle);
         return;
     }
     class_object = class_object_for_heap_object(object);
@@ -10871,7 +10948,7 @@ static void dispatch_heap_object_send(
             argument_count,
             arguments,
             live_method_source_text(source_record),
-            0U
+            sender_context_handle
         );
         return;
     }
@@ -10887,7 +10964,15 @@ static void dispatch_heap_object_send(
     }
     if (implementation_value.kind == RECORZ_MVP_VALUE_OBJECT) {
         implementation_object = heap_object_for_value(implementation_value);
-        execute_compiled_method(object, receiver, argument_count, arguments, implementation_object);
+        execute_compiled_method_with_sender(
+            object,
+            receiver,
+            argument_count,
+            arguments,
+            selector,
+            sender_context_handle,
+            implementation_object
+        );
         return;
     }
     if (implementation_value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
@@ -10904,11 +10989,12 @@ static void dispatch_heap_object_send(
     handler(object, receiver, arguments, text);
 }
 
-static void perform_send(
+static void perform_send_with_sender(
     struct recorz_mvp_value receiver,
     uint8_t selector,
     uint16_t send_argument_count,
     const struct recorz_mvp_value arguments[],
+    uint16_t sender_context_handle,
     const char *text
 ) {
     const struct recorz_mvp_heap_object *object = 0;
@@ -10944,7 +11030,15 @@ static void perform_send(
 
     if (receiver.kind == RECORZ_MVP_VALUE_OBJECT) {
         object = heap_object_for_value(receiver);
-        dispatch_heap_object_send(object, selector, send_argument_count, receiver, arguments, text);
+        dispatch_heap_object_send(
+            object,
+            selector,
+            send_argument_count,
+            receiver,
+            arguments,
+            sender_context_handle,
+            text
+        );
         return;
     }
 
@@ -10989,6 +11083,16 @@ static void perform_send(
     machine_panic("unsupported receiver in MVP VM");
 }
 
+static void perform_send(
+    struct recorz_mvp_value receiver,
+    uint8_t selector,
+    uint16_t send_argument_count,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    perform_send_with_sender(receiver, selector, send_argument_count, arguments, 0U, text);
+}
+
 static void run_startup_hook_if_configured(void) {
     struct recorz_mvp_value receiver;
 
@@ -11029,6 +11133,7 @@ void recorz_mvp_vm_run(
         .literal_count = program->literal_count,
         .lexical_count = program->lexical_count,
     };
+    uint16_t context_handle;
 
     stack_size = 0U;
     panic_phase = "bootstrap";
@@ -11054,7 +11159,9 @@ void recorz_mvp_vm_run(
         machine_puts("recorz qemu-riscv32 mvp: applied external file-in\n");
     }
     run_startup_hook_if_configured();
-    execute_executable(&executable, 0, nil_value(), 0U, 0);
+    context_handle = allocate_source_context_object(0U, nil_value(), "<program>");
+    execute_executable(&executable, 0, nil_value(), 0U, 0, context_handle);
+    mark_context_dead(context_handle);
     panic_phase = "return";
     machine_set_panic_hook(0);
 }

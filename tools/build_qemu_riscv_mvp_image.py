@@ -128,6 +128,7 @@ OP_DUP = OPCODE_CONSTANT_NAMES["dup"]
 OP_POP = OPCODE_CONSTANT_NAMES["pop"]
 OP_RETURN = OPCODE_CONSTANT_NAMES["return"]
 OP_PUSH_NIL = OPCODE_CONSTANT_NAMES["push_nil"]
+OP_PUSH_THIS_CONTEXT = OPCODE_CONSTANT_NAMES["push_this_context"]
 
 LITERAL_STRING = LITERAL_KIND_CONSTANT_NAMES["string"]
 LITERAL_SMALL_INTEGER = LITERAL_KIND_CONSTANT_NAMES["small_integer"]
@@ -572,6 +573,11 @@ COMPILED_METHOD_OP_RETURN_RECEIVER = constant_value(
     COMPILED_METHOD_OPCODE_IDS,
     COMPILED_METHOD_OPCODE_VALUES,
     "return_receiver",
+)
+COMPILED_METHOD_OP_PUSH_THIS_CONTEXT = constant_value(
+    COMPILED_METHOD_OPCODE_IDS,
+    COMPILED_METHOD_OPCODE_VALUES,
+    "push_this_context",
 )
 
 
@@ -1430,6 +1436,10 @@ def compile_kernel_method_program(class_name: str, instance_variables: list[str]
             )
             instruction_index += 1
             continue
+        if instruction.opcode == "push_this_context":
+            lowered.append(encode_compiled_method_instruction("push_this_context"))
+            instruction_index += 1
+            continue
         raise LoweringError(
             f"Kernel method {class_name}>>{compiled.selector} uses unsupported compiler opcode {instruction.opcode!r}"
         )
@@ -1702,6 +1712,10 @@ class Lowerer:
 
         if opcode == "push_nil":
             self.instructions.append(Instruction(OP_PUSH_NIL))
+            return
+
+        if opcode == "push_this_context":
+            self.instructions.append(Instruction(OP_PUSH_THIS_CONTEXT))
             return
 
         if opcode == "duplicate":

@@ -47,6 +47,18 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertIn("RECORZ_MVP_SELECTOR_MULTIPLY", [instruction.operand_a for instruction in program.instructions if instruction.opcode == mvp.OP_SEND])
         self.assertIn("RECORZ_MVP_SELECTOR_PRINT_STRING", [instruction.operand_a for instruction in program.instructions if instruction.opcode == mvp.OP_SEND])
 
+    def test_lowers_this_context_in_workspace_programs(self) -> None:
+        program = mvp.build_program("thisContext detail")
+        self.assertEqual(
+            [instruction.opcode for instruction in program.instructions],
+            [
+                mvp.OP_PUSH_THIS_CONTEXT,
+                mvp.OP_SEND,
+                mvp.OP_RETURN,
+            ],
+        )
+        self.assertEqual(program.instructions[1].operand_a, "RECORZ_MVP_SELECTOR_DETAIL")
+
     def test_lowers_display_default_form_and_clear(self) -> None:
         program = mvp.build_program("| form | form := Display defaultForm. form clear. form writeString: 'HELLO'. form newline")
         selectors = [instruction.operand_a for instruction in program.instructions if instruction.opcode == mvp.OP_SEND]
@@ -238,6 +250,22 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ),
             [
                 mvp.encode_compiled_method_instruction("push_root", mvp.SEED_ROOT_DEFAULT_FORM),
+                mvp.encode_compiled_method_instruction("return_top"),
+            ],
+        )
+        self.assertEqual(
+            mvp.compile_kernel_method_program(
+                "Object",
+                [],
+                "detail ^thisContext detail",
+            ),
+            [
+                mvp.encode_compiled_method_instruction("push_this_context"),
+                mvp.encode_compiled_method_instruction(
+                    "send",
+                    mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_DETAIL"],
+                    0,
+                ),
                 mvp.encode_compiled_method_instruction("return_top"),
             ],
         )
