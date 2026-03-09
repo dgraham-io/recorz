@@ -1,5 +1,11 @@
 # Implementation Log
 
+## 2026-03-09 - Document Potential Newspeak-Like Direction As Exploratory
+- Added [docs/recorz_potential_newspeak_direction.md](/Users/david/repos/recorz/docs/recorz_potential_newspeak_direction.md) to record a possible future Newspeak-inspired direction without changing the active architectural baseline.
+- Kept the note intentionally conservative: it explicitly preserves the current priority of bringing up a minimal Smalltalk/Strongtalk-like RV32-first VM before revisiting broader language-structure changes.
+- Captured the main guardrails for future compatibility, including keeping globals as an MVP convenience rather than a permanent semantic bedrock, preserving a path toward lexical/module structure, and avoiding punctuation-heavy syntax changes unless later justified.
+- No tests were run because this step is documentation-only.
+
 ## 2026-03-09 - Add RV32-First Workspace Block Closures
 - Added a seeded `BlockClosure` class in `kernel/mvp/BlockClosure.rz` with inspectable slots for `source`, `homeReceiver`, and two reserved lexical fields, which keeps the MVP aligned with the architecture docs’ requirement that blocks be real objects without overcommitting to the full closure/context model yet.
 - Extended the shared program/runtime opcode surface in `platform/qemu-riscv32/runtime_spec.json`, `platform/qemu-riscv64/runtime_spec.json`, `platform/qemu-riscv32/program.c`, `platform/qemu-riscv64/program.c`, `platform/qemu-riscv32/vm.c`, and `platform/qemu-riscv64/vm.c` with `push_block_literal`. The workspace compiler now recognizes zero-argument literal blocks (`[...]`) and pushes real `BlockClosure` objects instead of rejecting them.
