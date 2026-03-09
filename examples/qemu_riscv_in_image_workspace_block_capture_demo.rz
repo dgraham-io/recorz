@@ -1,0 +1,4 @@
+Display clear.
+Transcript show: 'WBCAP'.
+Transcript cr.
+Workspace evaluate: '| x | x := 4. Transcript show: ([ x + 3 ] value) printString. Transcript cr. [ x := x + 2 ] value. Transcript show: x printString. Transcript cr.'.

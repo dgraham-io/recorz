@@ -6628,6 +6628,8 @@ struct recorz_mvp_executable {
     const struct recorz_mvp_literal *literals;
     uint32_t literal_count;
     uint16_t lexical_count;
+    const char (*lexical_names)[METHOD_SOURCE_NAME_LIMIT];
+    const struct recorz_mvp_heap_object *block_defining_class;
 };
 
 static struct recorz_mvp_instruction read_program_instruction(
@@ -10511,6 +10513,29 @@ static uint16_t allocate_compiled_activation_context_if_needed(
     return allocate_source_context_object(sender_context_handle, receiver, detail_text);
 }
 
+static int16_t ensure_executable_lexical_environment(
+    const struct recorz_mvp_executable *executable,
+    const struct recorz_mvp_value lexical[],
+    int16_t lexical_environment_index
+) {
+    uint16_t lexical_index;
+
+    if (lexical_environment_index >= 0 ||
+        executable->lexical_names == 0 ||
+        executable->lexical_count == 0U) {
+        return lexical_environment_index;
+    }
+    lexical_environment_index = source_allocate_lexical_environment(-1);
+    for (lexical_index = 0U; lexical_index < executable->lexical_count; ++lexical_index) {
+        source_append_binding(
+            lexical_environment_index,
+            executable->lexical_names[lexical_index],
+            lexical[lexical_index]
+        );
+    }
+    return lexical_environment_index;
+}
+
 static void mark_context_dead(uint16_t context_handle) {
     if (context_handle != 0U) {
         heap_set_field(context_handle, CONTEXT_FIELD_ALIVE, boolean_value(0U));
@@ -10527,9 +10552,11 @@ static void execute_executable(
 ) {
     struct recorz_mvp_value activation_stack[STACK_LIMIT];
     struct recorz_mvp_value lexical[LEXICAL_LIMIT];
+    struct recorz_mvp_source_lexical_environment *shared_lexical_environment = 0;
     uint32_t activation_stack_size = 0U;
     uint32_t lexical_index;
     uint32_t pc = 0U;
+    int16_t shared_lexical_environment_index = -1;
 
     if (executable->lexical_count > LEXICAL_LIMIT) {
         machine_panic("too many lexical slots for MVP VM");
@@ -10569,13 +10596,26 @@ static void execute_executable(
                 if ((uint32_t)instruction.operand_b >= executable->lexical_count) {
                     machine_panic("lexical read out of range");
                 }
-                activation_push(activation_stack, &activation_stack_size, lexical[instruction.operand_b]);
+                if (shared_lexical_environment != 0) {
+                    activation_push(
+                        activation_stack,
+                        &activation_stack_size,
+                        shared_lexical_environment->bindings[instruction.operand_b].value
+                    );
+                } else {
+                    activation_push(activation_stack, &activation_stack_size, lexical[instruction.operand_b]);
+                }
                 break;
             case RECORZ_MVP_OP_STORE_LEXICAL:
                 if ((uint32_t)instruction.operand_b >= executable->lexical_count) {
                     machine_panic("lexical write out of range");
                 }
-                lexical[instruction.operand_b] = activation_pop(activation_stack, &activation_stack_size);
+                if (shared_lexical_environment != 0) {
+                    shared_lexical_environment->bindings[instruction.operand_b].value =
+                        activation_pop(activation_stack, &activation_stack_size);
+                } else {
+                    lexical[instruction.operand_b] = activation_pop(activation_stack, &activation_stack_size);
+                }
                 break;
             case RECORZ_MVP_OP_DUP:
                 activation_push(
@@ -10639,6 +10679,10 @@ static void execute_executable(
                 );
                 break;
             case RECORZ_MVP_OP_PUSH_BLOCK_LITERAL:
+                {
+                    uint16_t block_handle;
+                    const struct recorz_mvp_heap_object *block_defining_class = executable->block_defining_class;
+
                 if ((uint32_t)instruction.operand_b >= executable->literal_count) {
                     machine_panic("block literal is out of range");
                 }
@@ -10646,17 +10690,39 @@ static void execute_executable(
                     executable->literals[instruction.operand_b].string == 0) {
                     machine_panic("block literal source must be a string");
                 }
+                    block_handle = allocate_block_closure_from_source(
+                        executable->literals[instruction.operand_b].string,
+                        receiver
+                    );
+                    if (block_defining_class == 0) {
+                        if (receiver.kind == RECORZ_MVP_VALUE_OBJECT) {
+                            block_defining_class = class_object_for_heap_object(heap_object_for_value(receiver));
+                        } else {
+                            block_defining_class = class_object_for_kind(RECORZ_MVP_OBJECT_OBJECT);
+                        }
+                    }
+                    shared_lexical_environment_index = ensure_executable_lexical_environment(
+                        executable,
+                        lexical,
+                        shared_lexical_environment_index
+                    );
+                    if (shared_lexical_environment_index >= 0) {
+                        shared_lexical_environment =
+                            source_lexical_environment_at(shared_lexical_environment_index);
+                        source_register_block_state(
+                            block_handle,
+                            block_defining_class,
+                            shared_lexical_environment_index,
+                            -1
+                        );
+                    }
                 activation_push(
                     activation_stack,
                     &activation_stack_size,
-                    object_value(
-                        allocate_block_closure_from_source(
-                            executable->literals[instruction.operand_b].string,
-                            receiver
-                        )
-                    )
+                        object_value(block_handle)
                 );
                 break;
+                }
             case RECORZ_MVP_OP_JUMP:
                 if (instruction.operand_b >= executable->instruction_count) {
                     machine_panic("jump target is out of range");
@@ -10753,6 +10819,8 @@ static void workspace_evaluate_source(const char *source) {
     executable.instruction_count = program.instruction_count;
     executable.literal_count = program.literal_count;
     executable.lexical_count = program.lexical_count;
+    executable.lexical_names = program.temporary_names;
+    executable.block_defining_class = class_object_for_heap_object(workspace_receiver_object);
     execute_executable(&executable, workspace_receiver_object, workspace_receiver, 0U, 0, context_handle);
     mark_context_dead(context_handle);
     if (stack_size != stack_size_before + 1U) {

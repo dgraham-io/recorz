@@ -1,5 +1,11 @@
 # Implementation Log
 
+## 2026-03-09 - Capture Workspace Temps In RV32 Block Literals
+- Finished the RV32 workspace block bridge in [platform/qemu-riscv32/vm.c](/Users/david/repos/recorz/platform/qemu-riscv32/vm.c) by wiring workspace temporary names and the `Workspace` defining class into the shared executable/block runtime.
+- Workspace bytecode execution now lazily lifts its temporary slots into a real source lexical environment the first time a block literal is created, then routes later temporary reads and writes through those same cells so workspace blocks see and mutate the outer bindings instead of a copied value snapshot.
+- Added the focused proof in [examples/qemu_riscv_in_image_workspace_block_capture_demo.rz](/Users/david/repos/recorz/examples/qemu_riscv_in_image_workspace_block_capture_demo.rz) and serial coverage in [tests/test_qemu_riscv32_serial_integration.py](/Users/david/repos/recorz/tests/test_qemu_riscv32_serial_integration.py), demonstrating capture plus mutation of an outer workspace temporary.
+- This keeps milestone 3 on the Smalltalk path described in the docs: workspace blocks are now moving toward real lexical closures rather than remaining a separate toy evaluator.
+
 ## 2026-03-09 - Add Workspace Temporaries And Lexical Assignment On RV32
 - Extended the RV32 workspace do-it compiler in [platform/qemu-riscv32/vm.c](/Users/david/repos/recorz/platform/qemu-riscv32/vm.c) so `Workspace evaluate:` now understands leading Smalltalk-style temporary declarations (`| x y |`), resolves those names as lexicals during expression compilation, and supports lexical assignment with `:=`.
 - Reused the existing tiny executable model instead of inventing a separate workspace-only variable store: the workspace source program now carries a lexical count plus temporary names during compilation, lowers temporary reads/writes to `push_lexical` / `store_lexical`, and then runs through the same `execute_executable()` lexical slot machinery already used by host-lowered top-level programs.
