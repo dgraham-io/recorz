@@ -154,3 +154,19 @@ RecorzKernelSelector: #value: order: 75
 !
 RecorzKernelSelector: #acceptCurrent order: 76
 !
+RecorzKernelSelector: #runClassNamed: order: 77
+!
+RecorzKernelSelector: #runPackageNamed: order: 78
+!
+RecorzKernelSelector: #passed order: 79
+!
+RecorzKernelSelector: #failed order: 80
+!
+RecorzKernelSelector: #total order: 81
+!
+RecorzKernelSelector: #lastLabel order: 82
+!
+RecorzKernelSelector: #testPass order: 83
+!
+RecorzKernelSelector: #testFail order: 84
+!

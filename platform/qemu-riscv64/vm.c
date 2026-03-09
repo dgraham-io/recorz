@@ -78,6 +78,10 @@
 #define BLOCK_CLOSURE_FIELD_HOME_RECEIVER RECORZ_MVP_BLOCK_CLOSURE_FIELD_HOME_RECEIVER
 #define BLOCK_CLOSURE_FIELD_LEXICAL0 RECORZ_MVP_BLOCK_CLOSURE_FIELD_LEXICAL0
 #define BLOCK_CLOSURE_FIELD_LEXICAL1 RECORZ_MVP_BLOCK_CLOSURE_FIELD_LEXICAL1
+#define TEST_RUNNER_FIELD_PASSED RECORZ_MVP_TEST_RUNNER_FIELD_PASSED
+#define TEST_RUNNER_FIELD_FAILED RECORZ_MVP_TEST_RUNNER_FIELD_FAILED
+#define TEST_RUNNER_FIELD_TOTAL RECORZ_MVP_TEST_RUNNER_FIELD_TOTAL
+#define TEST_RUNNER_FIELD_LAST_LABEL RECORZ_MVP_TEST_RUNNER_FIELD_LAST_LABEL
 #define COMPILED_METHOD_MAX_INSTRUCTIONS RECORZ_MVP_COMPILED_METHOD_MAX_INSTRUCTIONS
 
 #define COMPILED_METHOD_OP_PUSH_GLOBAL RECORZ_MVP_COMPILED_METHOD_OP_PUSH_GLOBAL
@@ -102,9 +106,9 @@
 #define BITMAP_STORAGE_FRAMEBUFFER RECORZ_MVP_BITMAP_STORAGE_FRAMEBUFFER
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
-#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CONTEXT
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_ACCEPT_CURRENT
-#define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_FALSE
+#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEST_RUNNER
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_TEST_FAIL
+#define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_TEST_RUNNER
 
 #define WORKSPACE_VIEW_NONE 0U
 #define WORKSPACE_VIEW_CLASSES 1U
@@ -625,6 +629,22 @@ static const char *selector_name(uint8_t selector) {
             return "value:";
         case RECORZ_MVP_SELECTOR_ACCEPT_CURRENT:
             return "acceptCurrent";
+        case RECORZ_MVP_SELECTOR_RUN_CLASS_NAMED:
+            return "runClassNamed:";
+        case RECORZ_MVP_SELECTOR_RUN_PACKAGE_NAMED:
+            return "runPackageNamed:";
+        case RECORZ_MVP_SELECTOR_PASSED:
+            return "passed";
+        case RECORZ_MVP_SELECTOR_FAILED:
+            return "failed";
+        case RECORZ_MVP_SELECTOR_TOTAL:
+            return "total";
+        case RECORZ_MVP_SELECTOR_LAST_LABEL:
+            return "lastLabel";
+        case RECORZ_MVP_SELECTOR_TEST_PASS:
+            return "testPass";
+        case RECORZ_MVP_SELECTOR_TEST_FAIL:
+            return "testFail";
     }
     return "unknown";
 }
@@ -679,6 +699,8 @@ static const char *object_kind_name(uint8_t kind) {
             return "BlockClosure";
         case RECORZ_MVP_OBJECT_CONTEXT:
             return "Context";
+        case RECORZ_MVP_OBJECT_TEST_RUNNER:
+            return "TestRunner";
     }
     return "UnknownObject";
 }
@@ -2728,6 +2750,313 @@ static uint8_t workspace_last_source_field_index(
 ) {
     validate_workspace_receiver(workspace_object);
     return RECORZ_MVP_WORKSPACE_FIELD_LAST_SOURCE;
+}
+
+static void validate_test_runner_receiver(const struct recorz_mvp_heap_object *test_runner_object) {
+    const struct recorz_mvp_heap_object *test_runner_class = class_object_for_heap_object(test_runner_object);
+
+    if (class_instance_kind(test_runner_class) != RECORZ_MVP_OBJECT_TEST_RUNNER) {
+        machine_panic("TestRunner receiver class is invalid");
+    }
+}
+
+static void test_runner_append_text(
+    char buffer[],
+    uint32_t buffer_size,
+    uint32_t *offset,
+    const char *text
+) {
+    uint32_t index = 0U;
+
+    while (text[index] != '\0') {
+        if (*offset + 1U >= buffer_size) {
+            machine_panic("TestRunner text exceeds buffer capacity");
+        }
+        buffer[(*offset)++] = text[index++];
+    }
+    buffer[*offset] = '\0';
+}
+
+static void test_runner_append_small_integer(
+    char buffer[],
+    uint32_t buffer_size,
+    uint32_t *offset,
+    int32_t value
+) {
+    render_small_integer(value);
+    test_runner_append_text(buffer, buffer_size, offset, print_buffer);
+}
+
+static void test_runner_write_line(const char *text) {
+    const struct recorz_mvp_heap_object *form = default_form_object();
+
+    form_write_string(form, text);
+    form_newline(form);
+}
+
+static void perform_send(
+    struct recorz_mvp_value receiver,
+    uint8_t selector,
+    uint16_t send_argument_count,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+);
+
+static struct recorz_mvp_value perform_send_and_pop_result(
+    struct recorz_mvp_value receiver,
+    uint8_t selector,
+    uint16_t send_argument_count,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint16_t baseline_stack_size = stack_size;
+
+    perform_send(receiver, selector, send_argument_count, arguments, text);
+    if (stack_size != (uint16_t)(baseline_stack_size + 1U)) {
+        machine_panic("send did not leave exactly one result on the stack");
+    }
+    return stack[--stack_size];
+}
+
+static void test_runner_reset_state(const struct recorz_mvp_heap_object *test_runner_object) {
+    uint16_t test_runner_handle = heap_handle_for_object(test_runner_object);
+
+    validate_test_runner_receiver(test_runner_object);
+    heap_set_field(test_runner_handle, TEST_RUNNER_FIELD_PASSED, small_integer_value(0));
+    heap_set_field(test_runner_handle, TEST_RUNNER_FIELD_FAILED, small_integer_value(0));
+    heap_set_field(test_runner_handle, TEST_RUNNER_FIELD_TOTAL, small_integer_value(0));
+    heap_set_field(test_runner_handle, TEST_RUNNER_FIELD_LAST_LABEL, string_value(""));
+}
+
+static uint32_t test_runner_counter_value(
+    const struct recorz_mvp_heap_object *test_runner_object,
+    uint8_t field_index,
+    const char *error_text
+) {
+    validate_test_runner_receiver(test_runner_object);
+    return small_integer_u32(heap_get_field(test_runner_object, field_index), error_text);
+}
+
+static void test_runner_set_counter(
+    const struct recorz_mvp_heap_object *test_runner_object,
+    uint8_t field_index,
+    uint32_t value
+) {
+    validate_test_runner_receiver(test_runner_object);
+    heap_set_field(
+        heap_handle_for_object(test_runner_object),
+        field_index,
+        small_integer_value((int32_t)value)
+    );
+}
+
+static void test_runner_set_last_label(
+    const struct recorz_mvp_heap_object *test_runner_object,
+    const char *label
+) {
+    validate_test_runner_receiver(test_runner_object);
+    heap_set_field(
+        heap_handle_for_object(test_runner_object),
+        TEST_RUNNER_FIELD_LAST_LABEL,
+        string_value(label == 0 ? "" : runtime_string_allocate_copy(label))
+    );
+}
+
+static uint8_t selector_name_has_test_prefix(const char *name) {
+    return name != 0 &&
+           name[0] == 't' &&
+           name[1] == 'e' &&
+           name[2] == 's' &&
+           name[3] == 't';
+}
+
+static uint8_t test_runner_result_is_pass(struct recorz_mvp_value value) {
+    return value.kind == RECORZ_MVP_VALUE_OBJECT &&
+           (uint16_t)value.integer == global_handles[RECORZ_MVP_GLOBAL_TRUE];
+}
+
+static void test_runner_write_result_line(
+    const char *status,
+    const char *class_name,
+    const char *selector_text
+) {
+    char line[METHOD_SOURCE_CHUNK_LIMIT];
+    uint32_t offset = 0U;
+
+    line[0] = '\0';
+    test_runner_append_text(line, sizeof(line), &offset, status);
+    test_runner_append_text(line, sizeof(line), &offset, " ");
+    test_runner_append_text(line, sizeof(line), &offset, class_name);
+    test_runner_append_text(line, sizeof(line), &offset, ">>");
+    test_runner_append_text(line, sizeof(line), &offset, selector_text);
+    test_runner_write_line(line);
+}
+
+static void test_runner_write_summary(
+    const char *scope_label,
+    uint32_t passed_count,
+    uint32_t failed_count,
+    uint32_t total_count
+) {
+    char line[METHOD_SOURCE_CHUNK_LIMIT];
+    uint32_t offset = 0U;
+
+    line[0] = '\0';
+    test_runner_append_text(line, sizeof(line), &offset, "SUMMARY ");
+    test_runner_append_text(line, sizeof(line), &offset, scope_label);
+    test_runner_append_text(line, sizeof(line), &offset, " P=");
+    test_runner_append_small_integer(line, sizeof(line), &offset, (int32_t)passed_count);
+    test_runner_append_text(line, sizeof(line), &offset, " F=");
+    test_runner_append_small_integer(line, sizeof(line), &offset, (int32_t)failed_count);
+    test_runner_append_text(line, sizeof(line), &offset, " T=");
+    test_runner_append_small_integer(line, sizeof(line), &offset, (int32_t)total_count);
+    test_runner_write_line(line);
+}
+
+static void test_runner_build_label(
+    char buffer[],
+    uint32_t buffer_size,
+    const char *class_name,
+    const char *selector_text
+) {
+    uint32_t offset = 0U;
+
+    buffer[0] = '\0';
+    test_runner_append_text(buffer, buffer_size, &offset, class_name);
+    test_runner_append_text(buffer, buffer_size, &offset, ">>");
+    test_runner_append_text(buffer, buffer_size, &offset, selector_text);
+}
+
+static void test_runner_run_class(
+    const struct recorz_mvp_heap_object *test_runner_object,
+    const struct recorz_mvp_heap_object *class_object,
+    const char *class_name
+) {
+    const struct recorz_mvp_heap_object *method_start_object = class_method_start_object(class_object);
+    uint32_t method_count = class_method_count(class_object);
+    uint32_t method_index;
+    uint32_t passed_count;
+    uint32_t failed_count;
+    uint32_t total_count;
+
+    test_runner_reset_state(test_runner_object);
+    passed_count = 0U;
+    failed_count = 0U;
+    total_count = 0U;
+    if (method_start_object != 0) {
+        for (method_index = 0U; method_index < method_count; ++method_index) {
+            const struct recorz_mvp_heap_object *method_object = (const struct recorz_mvp_heap_object *)heap_object(
+                (uint16_t)(heap_handle_for_object(method_start_object) + method_index)
+            );
+            const char *selector_text = selector_name((uint8_t)method_descriptor_selector(method_object));
+            struct recorz_mvp_value test_instance;
+            struct recorz_mvp_value test_result;
+            char label[METHOD_SOURCE_CHUNK_LIMIT];
+
+            if (method_descriptor_argument_count(method_object) != 0U ||
+                !selector_name_has_test_prefix(selector_text)) {
+                continue;
+            }
+            ++total_count;
+            test_runner_build_label(label, sizeof(label), class_name, selector_text);
+            test_runner_set_last_label(test_runner_object, label);
+            test_instance = perform_send_and_pop_result(
+                object_value(heap_handle_for_object(class_object)),
+                RECORZ_MVP_SELECTOR_NEW,
+                0U,
+                0,
+                "new"
+            );
+            test_result = perform_send_and_pop_result(
+                test_instance,
+                (uint8_t)method_descriptor_selector(method_object),
+                0U,
+                0,
+                selector_text
+            );
+            if (test_runner_result_is_pass(test_result)) {
+                ++passed_count;
+                test_runner_write_result_line("PASS", class_name, selector_text);
+            } else {
+                ++failed_count;
+                test_runner_write_result_line("FAIL", class_name, selector_text);
+            }
+        }
+    }
+    test_runner_set_counter(test_runner_object, TEST_RUNNER_FIELD_PASSED, passed_count);
+    test_runner_set_counter(test_runner_object, TEST_RUNNER_FIELD_FAILED, failed_count);
+    test_runner_set_counter(test_runner_object, TEST_RUNNER_FIELD_TOTAL, total_count);
+    test_runner_write_summary(class_name, passed_count, failed_count, total_count);
+}
+
+static void test_runner_accumulate_class(
+    const struct recorz_mvp_heap_object *test_runner_object,
+    const struct recorz_mvp_heap_object *class_object,
+    const char *class_name
+) {
+    const struct recorz_mvp_heap_object *method_start_object = class_method_start_object(class_object);
+    uint32_t method_count = class_method_count(class_object);
+    uint32_t method_index;
+    uint32_t passed_count = test_runner_counter_value(
+        test_runner_object,
+        TEST_RUNNER_FIELD_PASSED,
+        "TestRunner passed counter is invalid"
+    );
+    uint32_t failed_count = test_runner_counter_value(
+        test_runner_object,
+        TEST_RUNNER_FIELD_FAILED,
+        "TestRunner failed counter is invalid"
+    );
+    uint32_t total_count = test_runner_counter_value(
+        test_runner_object,
+        TEST_RUNNER_FIELD_TOTAL,
+        "TestRunner total counter is invalid"
+    );
+
+    if (method_start_object == 0) {
+        return;
+    }
+    for (method_index = 0U; method_index < method_count; ++method_index) {
+        const struct recorz_mvp_heap_object *method_object = (const struct recorz_mvp_heap_object *)heap_object(
+            (uint16_t)(heap_handle_for_object(method_start_object) + method_index)
+        );
+        const char *selector_text = selector_name((uint8_t)method_descriptor_selector(method_object));
+        struct recorz_mvp_value test_instance;
+        struct recorz_mvp_value test_result;
+        char label[METHOD_SOURCE_CHUNK_LIMIT];
+
+        if (method_descriptor_argument_count(method_object) != 0U ||
+            !selector_name_has_test_prefix(selector_text)) {
+            continue;
+        }
+        ++total_count;
+        test_runner_build_label(label, sizeof(label), class_name, selector_text);
+        test_runner_set_last_label(test_runner_object, label);
+        test_instance = perform_send_and_pop_result(
+            object_value(heap_handle_for_object(class_object)),
+            RECORZ_MVP_SELECTOR_NEW,
+            0U,
+            0,
+            "new"
+        );
+        test_result = perform_send_and_pop_result(
+            test_instance,
+            (uint8_t)method_descriptor_selector(method_object),
+            0U,
+            0,
+            selector_text
+        );
+        if (test_runner_result_is_pass(test_result)) {
+            ++passed_count;
+            test_runner_write_result_line("PASS", class_name, selector_text);
+        } else {
+            ++failed_count;
+            test_runner_write_result_line("FAIL", class_name, selector_text);
+        }
+    }
+    test_runner_set_counter(test_runner_object, TEST_RUNNER_FIELD_PASSED, passed_count);
+    test_runner_set_counter(test_runner_object, TEST_RUNNER_FIELD_FAILED, failed_count);
+    test_runner_set_counter(test_runner_object, TEST_RUNNER_FIELD_TOTAL, total_count);
 }
 
 static void workspace_remember_view(
@@ -8063,6 +8392,66 @@ static void execute_entry_kernel_installer_clear_startup(
     (void)text;
     startup_hook_receiver_handle = 0U;
     startup_hook_selector_id = 0U;
+    push(receiver);
+}
+
+static void execute_entry_test_runner_run_class_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const struct recorz_mvp_heap_object *class_object;
+
+    (void)text;
+    validate_test_runner_receiver(object);
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("TestRunner runClassNamed: expects a class name string");
+    }
+    class_object = lookup_class_by_name(arguments[0].string);
+    if (class_object == 0) {
+        machine_panic("TestRunner runClassNamed: could not resolve class");
+    }
+    test_runner_run_class(object, class_object, arguments[0].string);
+    push(receiver);
+}
+
+static void execute_entry_test_runner_run_package_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint16_t dynamic_index;
+
+    (void)text;
+    validate_test_runner_receiver(object);
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("TestRunner runPackageNamed: expects a package name string");
+    }
+    if (package_definition_for_name(arguments[0].string) == 0) {
+        machine_panic("TestRunner runPackageNamed: could not resolve package");
+    }
+    test_runner_reset_state(object);
+    for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
+        const struct recorz_mvp_dynamic_class_definition *definition = &dynamic_classes[dynamic_index];
+        const struct recorz_mvp_heap_object *class_object;
+
+        if (!source_names_equal(definition->package_name, arguments[0].string)) {
+            continue;
+        }
+        class_object = lookup_class_by_name(definition->class_name);
+        if (class_object == 0) {
+            machine_panic("TestRunner package contains an unresolved class");
+        }
+        test_runner_accumulate_class(object, class_object, definition->class_name);
+    }
+    test_runner_write_summary(
+        arguments[0].string,
+        test_runner_counter_value(object, TEST_RUNNER_FIELD_PASSED, "TestRunner passed counter is invalid"),
+        test_runner_counter_value(object, TEST_RUNNER_FIELD_FAILED, "TestRunner failed counter is invalid"),
+        test_runner_counter_value(object, TEST_RUNNER_FIELD_TOTAL, "TestRunner total counter is invalid")
+    );
     push(receiver);
 }
 

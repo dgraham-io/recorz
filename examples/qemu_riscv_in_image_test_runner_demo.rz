@@ -1,0 +1,45 @@
+Display clear.
+Workspace fileIn: 'RecorzKernelPackage: ''Tests'' comment: ''In-image regression fixtures''
+!
+RecorzKernelClass: #TinySpec superclass: #Object package: ''Tests'' instanceVariableNames: ''''
+!
+testPass
+    ^true
+!
+testFail
+    ^false
+!
+detail
+    ^''IGNORED''
+!
+RecorzKernelClass: #SecondSpec superclass: #Object package: ''Tests'' instanceVariableNames: ''''
+!
+testPass
+    ^true
+!'.
+Transcript show: 'CLASS'.
+Transcript cr.
+TestRunner runClassNamed: 'TinySpec'.
+Transcript show: 'COUNTS '.
+Transcript show: TestRunner passed printString.
+Transcript show: ' '.
+Transcript show: TestRunner failed printString.
+Transcript show: ' '.
+Transcript show: TestRunner total printString.
+Transcript cr.
+Transcript show: 'LAST '.
+Transcript show: TestRunner lastLabel.
+Transcript cr.
+Transcript show: 'PACKAGE'.
+Transcript cr.
+TestRunner runPackageNamed: 'Tests'.
+Transcript show: 'COUNTS '.
+Transcript show: TestRunner passed printString.
+Transcript show: ' '.
+Transcript show: TestRunner failed printString.
+Transcript show: ' '.
+Transcript show: TestRunner total printString.
+Transcript cr.
+Transcript show: 'LAST '.
+Transcript show: TestRunner lastLabel.
+Transcript cr.

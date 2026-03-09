@@ -1,0 +1,22 @@
+RecorzKernelClass: #TestRunner descriptorOrder: 24 objectKindOrder: 24 sourceBootOrder: 15 instanceVariableNames: 'passed failed total lastLabel'
+!
+RecorzKernelBootObject: #TestRunner family: #beforeGlyphs order: 14 class: #TestRunner
+globalExports: 'TestRunner'
+!
+runClassNamed: className
+    <primitive: #testRunnerRunClassNamed>
+!
+runPackageNamed: packageName
+    <primitive: #testRunnerRunPackageNamed>
+!
+passed
+    ^passed
+!
+failed
+    ^failed
+!
+total
+    ^total
+!
+lastLabel
+    ^lastLabel
