@@ -1,5 +1,11 @@
 # Implementation Log
 
+## 2026-03-09 - Add A Host-Side RV32 Snapshot Inspector For Workspace Source
+- Added [tools/inspect_qemu_riscv_snapshot.py](/Users/david/repos/recorz/tools/inspect_qemu_riscv_snapshot.py), a small host-side inspector for the RV32 live snapshot format. It validates the snapshot header, object table, global table, and string section closely enough to recover the image-visible `Workspace` state, especially the current source buffer.
+- Kept the scope intentionally narrow and milestone-focused. The tool does not try to become a full VM debugger; it exposes just enough structure to make source-owned round-trip testable from the host side, which is the cleanest next step toward trustworthy class/package file-out and fresh-image file-in.
+- Added focused unit coverage in [tests/test_qemu_riscv_snapshot_inspector.py](/Users/david/repos/recorz/tests/test_qemu_riscv_snapshot_inspector.py), alongside the existing serial-log snapshot extraction tests in [tests/test_qemu_riscv_snapshot_extractor.py](/Users/david/repos/recorz/tests/test_qemu_riscv_snapshot_extractor.py), proving that the new inspector can recover `Workspace` browser state and the current source text from a structurally valid snapshot blob.
+- Verified with `python3 -m unittest tests.test_qemu_riscv_snapshot_inspector tests.test_qemu_riscv_snapshot_extractor -v` and `python3 tools/inspect_qemu_riscv_snapshot.py --help`.
+
 ## 2026-03-09 - Accept Canonical Package Source In The In-Image Workspace
 - Extended `Workspace acceptCurrent` in [platform/qemu-riscv32/vm.c](/Users/david/repos/recorz/platform/qemu-riscv32/vm.c) and [platform/qemu-riscv64/vm.c](/Users/david/repos/recorz/platform/qemu-riscv64/vm.c) so it now accepts canonical package source from a `WORKSPACE_VIEW_PACKAGE_SOURCE` browser, files that chunk stream back into the image, canonicalizes it again with `file_out_package_source_by_name`, and stays in the package source browser.
 - This is the first clean package-centered in-image editing step. The workspace surface already had package browsing and package file-out; this change closes the loop so a package can now be the editable source unit in the image rather than just a browsable/exportable one.
