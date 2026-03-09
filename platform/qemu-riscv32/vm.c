@@ -485,6 +485,12 @@ static void workspace_accept_current_in_place(
 static void workspace_accept_input_monitor_buffer(
     const struct recorz_mvp_heap_object *workspace_object
 );
+static void workspace_reopen_in_place(
+    const struct recorz_mvp_heap_object *object
+);
+static uint8_t workspace_browse_input_monitor_context(
+    const struct recorz_mvp_heap_object *workspace_object
+);
 
 static void panic_put_u32(uint32_t value) {
     char digits[10];
@@ -5115,6 +5121,7 @@ static void workspace_render_input_monitor_browser(
     workspace_write_label_and_text(form, "MOVE", "ARROWS CTRL-B/F/P/N");
     workspace_write_label_and_text(form, "HOME", "CTRL-A/E");
     workspace_write_label_and_text(form, "RUN", "CTRL-R");
+    workspace_write_label_and_text(form, "BROWSE", "CTRL-O");
     workspace_write_label_and_text(form, "ACCEPT", "CTRL-X");
     workspace_write_label_and_text(form, "EXIT", "CTRL-D");
     cursor_index = workspace_input_monitor_cursor_index(workspace_object);
@@ -5843,6 +5850,35 @@ static void workspace_accept_input_monitor_buffer(
     workspace_input_monitor_set_status("ACCEPT OK");
 }
 
+static uint8_t workspace_browse_input_monitor_context(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    uint16_t workspace_handle = heap_handle_for_object(workspace_object);
+    uint32_t browse_view_kind = WORKSPACE_VIEW_NONE;
+    char browse_target_name[METHOD_SOURCE_CHUNK_LIMIT];
+
+    browse_target_name[0] = '\0';
+    if (!workspace_input_monitor_accept_context(
+            workspace_object,
+            &browse_view_kind,
+            browse_target_name,
+            sizeof(browse_target_name))) {
+        return 0U;
+    }
+    heap_set_field(
+        workspace_handle,
+        workspace_current_view_kind_field_index(workspace_object),
+        small_integer_value((int32_t)browse_view_kind)
+    );
+    heap_set_field(
+        workspace_handle,
+        workspace_current_target_name_field_index(workspace_object),
+        browse_target_name[0] == '\0' ? nil_value() : string_value(browse_target_name)
+    );
+    workspace_reopen_in_place(workspace_object);
+    return 1U;
+}
+
 static void workspace_run_interactive_input_monitor(
     const struct recorz_mvp_heap_object *workspace_object
 ) {
@@ -5932,6 +5968,14 @@ static void workspace_run_interactive_input_monitor(
             workspace_evaluate_input_monitor_buffer(workspace_object);
             workspace_render_input_monitor_browser(workspace_object);
             continue;
+        }
+        if (ch == 0x0f) {
+            if (!workspace_browse_input_monitor_context(workspace_object)) {
+                workspace_input_monitor_set_status("BROWSE NEEDS BROWSER");
+                workspace_render_input_monitor_browser(workspace_object);
+                continue;
+            }
+            break;
         }
         if (ch == 0x18) {
             workspace_accept_input_monitor_buffer(workspace_object);
@@ -12650,35 +12694,27 @@ static void execute_entry_workspace_interactive_input_monitor(
     push(receiver);
 }
 
-static void execute_entry_workspace_reopen(
-    const struct recorz_mvp_heap_object *object,
-    struct recorz_mvp_value receiver,
-    const struct recorz_mvp_value arguments[],
-    const char *text
+static void workspace_reopen_in_place(
+    const struct recorz_mvp_heap_object *object
 ) {
     struct recorz_mvp_value view_kind_value;
     struct recorz_mvp_value target_name_value;
     const struct recorz_mvp_heap_object *form = default_form_object();
     const struct recorz_mvp_heap_object *class_object;
 
-    (void)arguments;
-    (void)text;
     view_kind_value = heap_get_field(object, workspace_current_view_kind_field_index(object));
     if (view_kind_value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
         form_clear(form);
         form_write_string(form, "WORKSPACE");
         form_newline(form);
-        push(receiver);
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASSES) {
         workspace_render_class_list_browser(object);
-        push(receiver);
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PACKAGES) {
         workspace_render_package_list_browser(object);
-        push(receiver);
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_METHODS) {
@@ -12693,7 +12729,6 @@ static void execute_entry_workspace_reopen(
             machine_panic("Workspace reopen could not resolve the remembered method-list class");
         }
         workspace_render_method_list_browser(object, class_object, target_name_value.string, "INST");
-        push(receiver);
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PROTOCOLS) {
@@ -12708,7 +12743,6 @@ static void execute_entry_workspace_reopen(
             machine_panic("Workspace reopen could not resolve the remembered protocol-list class");
         }
         workspace_render_protocol_list_browser(object, class_object, target_name_value.string, "INST");
-        push(receiver);
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PROTOCOL) {
@@ -12734,7 +12768,6 @@ static void execute_entry_workspace_reopen(
             machine_panic("Workspace reopen could not resolve the remembered protocol class");
         }
         workspace_render_protocol_method_list_browser(object, class_object, class_name, "INST", protocol_name);
-        push(receiver);
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_METHODS) {
@@ -12754,7 +12787,6 @@ static void execute_entry_workspace_reopen(
             target_name_value.string,
             "CLASS"
         );
-        push(receiver);
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_PROTOCOLS) {
@@ -12774,7 +12806,6 @@ static void execute_entry_workspace_reopen(
             target_name_value.string,
             "CLASS"
         );
-        push(receiver);
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_PROTOCOL) {
@@ -12806,7 +12837,6 @@ static void execute_entry_workspace_reopen(
             "CLASS",
             protocol_name
         );
-        push(receiver);
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_OBJECT) {
@@ -12823,7 +12853,6 @@ static void execute_entry_workspace_reopen(
             machine_panic("Workspace reopen could not resolve the remembered object");
         }
         workspace_render_object_browser(object, target_name_value.string, heap_object(object_handle));
-        push(receiver);
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_SOURCE) {
@@ -12834,7 +12863,6 @@ static void execute_entry_workspace_reopen(
             machine_panic("Workspace reopen is missing the remembered class source target");
         }
         workspace_render_class_source_browser(object, target_name_value.string);
-        push(receiver);
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PACKAGE_SOURCE) {
@@ -12845,22 +12873,18 @@ static void execute_entry_workspace_reopen(
             machine_panic("Workspace reopen is missing the remembered package source target");
         }
         workspace_render_package_source_browser(object, target_name_value.string);
-        push(receiver);
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_REGENERATED_BOOT_SOURCE) {
         workspace_render_regenerated_source_browser(object, "BOOT");
-        push(receiver);
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_REGENERATED_KERNEL_SOURCE) {
         workspace_render_regenerated_source_browser(object, "KERNEL");
-        push(receiver);
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_INPUT_MONITOR) {
         workspace_render_input_monitor_browser(object);
-        push(receiver);
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PACKAGE) {
@@ -12874,7 +12898,6 @@ static void execute_entry_workspace_reopen(
             machine_panic("Workspace reopen could not resolve the remembered package");
         }
         workspace_render_package_browser(object, target_name_value.string);
-        push(receiver);
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_METHOD) {
@@ -12896,7 +12919,6 @@ static void execute_entry_workspace_reopen(
             machine_panic("Workspace reopen remembered method target is invalid");
         }
         workspace_render_method_browser(object, class_name, selector_name_text, "INST");
-        push(receiver);
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_METHOD) {
@@ -12918,7 +12940,6 @@ static void execute_entry_workspace_reopen(
             machine_panic("Workspace reopen remembered class-side method target is invalid");
         }
         workspace_render_method_browser(object, class_name, selector_name_text, "CLASS");
-        push(receiver);
         return;
     }
     target_name_value = heap_get_field(object, workspace_current_target_name_field_index(object));
@@ -12929,7 +12950,6 @@ static void execute_entry_workspace_reopen(
         form_clear(form);
         form_write_string(form, "WORKSPACE");
         form_newline(form);
-        push(receiver);
         return;
     }
     class_object = lookup_class_by_name(target_name_value.string);
@@ -12937,6 +12957,17 @@ static void execute_entry_workspace_reopen(
         machine_panic("Workspace reopen could not resolve the remembered class");
     }
     workspace_render_class_browser(object, class_object, target_name_value.string);
+}
+
+static void execute_entry_workspace_reopen(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    workspace_reopen_in_place(object);
     push(receiver);
 }
 
