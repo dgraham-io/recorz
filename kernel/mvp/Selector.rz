@@ -180,3 +180,9 @@ RecorzKernelSelector: #recoverLastSource order: 88
 !
 RecorzKernelSelector: #emitRegeneratedBootSource order: 89
 !
+RecorzKernelSelector: #browseRegeneratedBootSource order: 90
+!
+RecorzKernelSelector: #browseRegeneratedKernelSource order: 91
+!
+RecorzKernelSelector: #seedBootContents: order: 92
+!

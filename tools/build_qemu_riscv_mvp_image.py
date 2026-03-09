@@ -1972,7 +1972,7 @@ def build_boot_program(source: str) -> Program:
     prelude = [
         Instruction(OP_PUSH_SELF),
         Instruction(OP_PUSH_LITERAL, operand_b=source_literal_index),
-        Instruction(OP_SEND, "RECORZ_MVP_SELECTOR_SET_CONTENTS", 1),
+        Instruction(OP_SEND, "RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS", 1),
         Instruction(OP_POP),
     ]
     return Program(

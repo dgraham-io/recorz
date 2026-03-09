@@ -21,6 +21,7 @@
 #define PACKAGE_COMMENT_LIMIT CLASS_COMMENT_LIMIT
 #define METHOD_SOURCE_CHUNK_LIMIT 512U
 #define PACKAGE_SOURCE_BUFFER_LIMIT 16384U
+#define REGENERATED_SOURCE_BUFFER_LIMIT 65536U
 #define WORKSPACE_SOURCE_INSTRUCTION_LIMIT 64U
 #define WORKSPACE_SOURCE_LITERAL_LIMIT 16U
 #define DYNAMIC_CLASS_LIMIT 16U
@@ -108,7 +109,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEST_RUNNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_EMIT_REGENERATED_BOOT_SOURCE
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_TEST_RUNNER
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -127,6 +128,8 @@
 #define WORKSPACE_VIEW_PACKAGE_SOURCE 13U
 #define WORKSPACE_VIEW_PACKAGES 14U
 #define WORKSPACE_VIEW_PACKAGE 15U
+#define WORKSPACE_VIEW_REGENERATED_BOOT_SOURCE 16U
+#define WORKSPACE_VIEW_REGENERATED_KERNEL_SOURCE 17U
 
 enum recorz_mvp_value_kind {
     RECORZ_MVP_VALUE_NIL = 0,
@@ -277,10 +280,12 @@ static char print_buffer[PRINT_BUFFER_SIZE];
 static char workspace_target_buffer[METHOD_SOURCE_CHUNK_LIMIT];
 static char kernel_source_io_buffer[8193];
 static char package_source_io_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
+static char regenerated_source_io_buffer[REGENERATED_SOURCE_BUFFER_LIMIT];
 static char runtime_string_pool[RUNTIME_STRING_POOL_LIMIT];
 static uint32_t runtime_string_pool_offset = 0U;
 static char snapshot_string_pool[SNAPSHOT_STRING_LIMIT];
 static uint8_t snapshot_buffer[SNAPSHOT_BUFFER_LIMIT];
+static uint8_t booted_from_snapshot = 0U;
 
 static uint16_t seeded_handles[HEAP_LIMIT];
 static const char *panic_phase = "idle";
@@ -353,6 +358,8 @@ static const char *file_out_class_source_text(const char *class_name, char buffe
 static const char *file_out_class_source_by_name(const char *class_name);
 static const char *file_out_package_source_text(const char *package_name, char buffer[], uint32_t buffer_size);
 static const char *file_out_package_source_by_name(const char *package_name);
+static const char *regenerated_boot_source_text(const struct recorz_mvp_heap_object *workspace_object);
+static const char *regenerated_kernel_source_text(void);
 static int compare_source_names(const char *left, const char *right);
 static const char *runtime_string_allocate_copy(const char *text);
 static void forget_live_string_literals(uint16_t class_handle, uint8_t selector_id, uint8_t argument_count);
@@ -660,6 +667,12 @@ static const char *selector_name(uint8_t selector) {
             return "recoverLastSource";
         case RECORZ_MVP_SELECTOR_EMIT_REGENERATED_BOOT_SOURCE:
             return "emitRegeneratedBootSource";
+        case RECORZ_MVP_SELECTOR_BROWSE_REGENERATED_BOOT_SOURCE:
+            return "browseRegeneratedBootSource";
+        case RECORZ_MVP_SELECTOR_BROWSE_REGENERATED_KERNEL_SOURCE:
+            return "browseRegeneratedKernelSource";
+        case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
+            return "seedBootContents:";
     }
     return "unknown";
 }
@@ -3175,11 +3188,32 @@ static struct recorz_mvp_value workspace_current_source_value(
     const struct recorz_mvp_heap_object *workspace_object
 ) {
     uint8_t field_index = workspace_current_source_field_index(workspace_object);
+    struct recorz_mvp_value source_value;
+    struct recorz_mvp_value view_kind_value;
 
     if (workspace_object->field_count <= field_index) {
         return nil_value();
     }
-    return heap_get_field(workspace_object, field_index);
+    source_value = heap_get_field(workspace_object, field_index);
+    if (source_value.kind == RECORZ_MVP_VALUE_STRING &&
+        source_value.string != 0 &&
+        source_value.string[0] != '\0') {
+        return source_value;
+    }
+    if (workspace_object->field_count <= workspace_current_view_kind_field_index(workspace_object)) {
+        return source_value;
+    }
+    view_kind_value = heap_get_field(workspace_object, workspace_current_view_kind_field_index(workspace_object));
+    if (view_kind_value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+        return source_value;
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_REGENERATED_BOOT_SOURCE) {
+        return string_value(regenerated_boot_source_text(workspace_object));
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_REGENERATED_KERNEL_SOURCE) {
+        return string_value(regenerated_kernel_source_text());
+    }
+    return source_value;
 }
 
 static const struct recorz_mvp_heap_object *workspace_target_class_for_file_in(
@@ -4070,6 +4104,35 @@ static void workspace_render_package_source_browser(
     }
 }
 
+static void workspace_render_regenerated_source_browser(
+    const struct recorz_mvp_heap_object *workspace_object,
+    const char *source_name
+) {
+    const struct recorz_mvp_heap_object *form = default_form_object();
+    struct recorz_mvp_value source_value = workspace_current_source_value(workspace_object);
+    const char *cursor;
+    char line[METHOD_SOURCE_LINE_LIMIT];
+    uint8_t wrote_line = 0U;
+
+    form_clear(form);
+    workspace_write_label_and_text(form, "VIEW", "REGEN");
+    workspace_write_label_and_text(form, "SOURCE", source_name);
+    if (source_value.kind != RECORZ_MVP_VALUE_STRING ||
+        source_value.string == 0 ||
+        source_value.string[0] == '\0') {
+        workspace_write_text_line(form, "NO SOURCE BUFFER");
+        return;
+    }
+    cursor = source_value.string;
+    while (source_copy_trimmed_line(&cursor, line, sizeof(line)) != 0U) {
+        workspace_write_text_line(form, line);
+        wrote_line = 1U;
+    }
+    if (!wrote_line) {
+        workspace_write_text_line(form, "EMPTY SOURCE");
+    }
+}
+
 static void workspace_render_dynamic_object_fields(
     const struct recorz_mvp_heap_object *form,
     const struct recorz_mvp_heap_object *class_object,
@@ -4568,6 +4631,7 @@ static void reset_runtime_state(void) {
     runtime_string_pool_offset = 0U;
     runtime_string_pool[0] = '\0';
     snapshot_string_pool[0] = '\0';
+    booted_from_snapshot = 0U;
     for (global_index = 0U; global_index <= MAX_GLOBAL_ID; ++global_index) {
         global_handles[global_index] = 0U;
     }
@@ -8252,6 +8316,8 @@ struct recorz_mvp_regenerated_boot_source_emitter {
     uint8_t line_open;
     uint8_t line_bytes;
     const char *data_label;
+    char *buffer;
+    uint32_t buffer_capacity;
 };
 
 static void emit_regenerated_boot_source_hex_byte(uint8_t value) {
@@ -8265,6 +8331,13 @@ static void regenerated_boot_source_emit_byte(
     struct recorz_mvp_regenerated_boot_source_emitter *emitter,
     char ch
 ) {
+    if (emitter->buffer != 0) {
+        if (emitter->emitted_size + 1U >= emitter->buffer_capacity) {
+            machine_panic("regenerated source exceeds buffer capacity");
+        }
+        emitter->buffer[emitter->emitted_size] = ch;
+        emitter->buffer[emitter->emitted_size + 1U] = '\0';
+    }
     if (emitter->serial_mode) {
         if (!emitter->line_open) {
             machine_puts(emitter->data_label);
@@ -8390,6 +8463,14 @@ static void regenerated_boot_source_emit_view_restore(
         regenerated_boot_source_emit_text(emitter, "Workspace fileOutPackageNamed: '");
         regenerated_boot_source_emit_quoted_string(emitter, target_name_value.string);
         regenerated_boot_source_emit_text(emitter, "'.\n");
+        return;
+    }
+    if (view_kind_value.integer == WORKSPACE_VIEW_REGENERATED_BOOT_SOURCE) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browseRegeneratedBootSource.\n");
+        return;
+    }
+    if (view_kind_value.integer == WORKSPACE_VIEW_REGENERATED_KERNEL_SOURCE) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browseRegeneratedKernelSource.\n");
         return;
     }
     if (view_kind_value.integer == WORKSPACE_VIEW_METHOD &&
@@ -8614,7 +8695,11 @@ static void regenerated_boot_source_emit_program(
     struct recorz_mvp_regenerated_boot_source_emitter *emitter,
     const struct recorz_mvp_heap_object *workspace_object
 ) {
-    struct recorz_mvp_value current_source_value = workspace_current_source_value(workspace_object);
+    struct recorz_mvp_value current_source_value = nil_value();
+
+    if (workspace_object->field_count > workspace_current_source_field_index(workspace_object)) {
+        current_source_value = heap_get_field(workspace_object, workspace_current_source_field_index(workspace_object));
+    }
 
     regenerated_boot_source_emit_text(emitter, "Workspace fileIn: '");
     regenerated_boot_source_emit_system_source(emitter);
@@ -8633,10 +8718,10 @@ static void emit_regenerated_boot_source(
     const struct recorz_mvp_heap_object *workspace_object
 ) {
     struct recorz_mvp_regenerated_boot_source_emitter counter = {
-        0U, 0U, 0U, 0U, "recorz-regenerated-boot-source-data "
+        0U, 0U, 0U, 0U, "recorz-regenerated-boot-source-data ", 0, 0U
     };
     struct recorz_mvp_regenerated_boot_source_emitter emitter = {
-        0U, 1U, 0U, 0U, "recorz-regenerated-boot-source-data "
+        0U, 1U, 0U, 0U, "recorz-regenerated-boot-source-data ", 0, 0U
     };
 
     regenerated_boot_source_emit_program(&counter, workspace_object);
@@ -8655,10 +8740,10 @@ static void emit_regenerated_boot_source(
 
 static void emit_regenerated_kernel_source(void) {
     struct recorz_mvp_regenerated_boot_source_emitter counter = {
-        0U, 0U, 0U, 0U, "recorz-regenerated-kernel-source-data "
+        0U, 0U, 0U, 0U, "recorz-regenerated-kernel-source-data ", 0, 0U
     };
     struct recorz_mvp_regenerated_boot_source_emitter emitter = {
-        0U, 1U, 0U, 0U, "recorz-regenerated-kernel-source-data "
+        0U, 1U, 0U, 0U, "recorz-regenerated-kernel-source-data ", 0, 0U
     };
 
     regenerated_boot_source_emit_kernel_source(&counter, 0U);
@@ -8673,6 +8758,40 @@ static void emit_regenerated_kernel_source(void) {
         machine_panic("regenerated kernel source size mismatch");
     }
     machine_puts("recorz-regenerated-kernel-source-end\n");
+}
+
+static const char *regenerated_boot_source_text(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    struct recorz_mvp_regenerated_boot_source_emitter emitter = {
+        0U,
+        0U,
+        0U,
+        0U,
+        0,
+        regenerated_source_io_buffer,
+        sizeof(regenerated_source_io_buffer)
+    };
+
+    regenerated_source_io_buffer[0] = '\0';
+    regenerated_boot_source_emit_program(&emitter, workspace_object);
+    return regenerated_source_io_buffer;
+}
+
+static const char *regenerated_kernel_source_text(void) {
+    struct recorz_mvp_regenerated_boot_source_emitter emitter = {
+        0U,
+        0U,
+        0U,
+        0U,
+        0,
+        regenerated_source_io_buffer,
+        sizeof(regenerated_source_io_buffer)
+    };
+
+    regenerated_source_io_buffer[0] = '\0';
+    regenerated_boot_source_emit_kernel_source(&emitter, 0U);
+    return regenerated_source_io_buffer;
 }
 
 static void execute_entry_kernel_installer_compiled_method_word0_word1_word2_word3_instruction_count(
@@ -9197,6 +9316,22 @@ static void execute_entry_workspace_set_contents(
         machine_panic("Workspace setContents: expects a source string");
     }
     workspace_remember_current_source(object, arguments[0].string);
+    push(receiver);
+}
+
+static void execute_entry_workspace_seed_boot_contents(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace seedBootContents: expects a source string");
+    }
+    if (!booted_from_snapshot) {
+        workspace_remember_current_source(object, arguments[0].string);
+    }
     push(receiver);
 }
 
@@ -9811,6 +9946,34 @@ static void execute_entry_workspace_emit_regenerated_boot_source(
     push(receiver);
 }
 
+static void execute_entry_workspace_browse_regenerated_boot_source(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    workspace_remember_current_source(object, 0);
+    workspace_remember_view(object, WORKSPACE_VIEW_REGENERATED_BOOT_SOURCE, 0);
+    workspace_render_regenerated_source_browser(object, "BOOT");
+    push(receiver);
+}
+
+static void execute_entry_workspace_browse_regenerated_kernel_source(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    workspace_remember_current_source(object, 0);
+    workspace_remember_view(object, WORKSPACE_VIEW_REGENERATED_KERNEL_SOURCE, 0);
+    workspace_render_regenerated_source_browser(object, "KERNEL");
+    push(receiver);
+}
+
 static void execute_entry_workspace_reopen(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -10006,6 +10169,16 @@ static void execute_entry_workspace_reopen(
             machine_panic("Workspace reopen is missing the remembered package source target");
         }
         workspace_render_package_source_browser(object, target_name_value.string);
+        push(receiver);
+        return;
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_REGENERATED_BOOT_SOURCE) {
+        workspace_render_regenerated_source_browser(object, "BOOT");
+        push(receiver);
+        return;
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_REGENERATED_KERNEL_SOURCE) {
+        workspace_render_regenerated_source_browser(object, "KERNEL");
         push(receiver);
         return;
     }
@@ -10838,6 +11011,7 @@ void recorz_mvp_vm_run(
     if (snapshot_blob != 0 && snapshot_size != 0U) {
         panic_phase = "snapshot";
         load_snapshot_state(snapshot_blob, snapshot_size);
+        booted_from_snapshot = 1U;
         machine_puts("recorz qemu-riscv64 mvp: loaded snapshot\n");
     } else {
         initialize_roots(seed);

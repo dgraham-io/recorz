@@ -93,6 +93,9 @@ SNAPSHOT_WORKSPACE_SAVE_AND_RERUN_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-sn
 SNAPSHOT_WORKSPACE_RECOVERY_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-workspace-recovery-test"
 SNAPSHOT_WORKSPACE_RECOVERY_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-workspace-recovery-reload-test"
 SNAPSHOT_WORKSPACE_RECOVERY_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "workspace-recovery-live-image.bin"
+SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-workspace-regenerated-boot-source-test"
+SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-workspace-regenerated-boot-source-reload-test"
+SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "workspace-regenerated-boot-source-live-image.bin"
 
 SNAPSHOT_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_save_demo.rz"
 SNAPSHOT_RELOAD_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_reload_demo.rz"
@@ -121,6 +124,7 @@ SNAPSHOT_KERNEL_CLASS_FILE_OUT_COLD_FILE_IN_DEMO_PATH = ROOT / "examples" / "qem
 SNAPSHOT_WORKSPACE_SAVE_AND_REOPEN_DEMO_PATH = ROOT / "examples" / "qemu_riscv_workspace_save_and_reopen_demo.rz"
 SNAPSHOT_WORKSPACE_SAVE_AND_RERUN_DEMO_PATH = ROOT / "examples" / "qemu_riscv_workspace_save_and_rerun_demo.rz"
 SNAPSHOT_WORKSPACE_SAVE_RECOVERY_DEMO_PATH = ROOT / "examples" / "qemu_riscv_workspace_save_recovery_snapshot_demo.rz"
+SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_workspace_regenerated_boot_source_save_demo.rz"
 
 
 @unittest.skipUnless(
@@ -547,6 +551,33 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         source_region = _region_histogram(data, width, 24, 92, 900, 260)
 
         self.assertGreater(line_1[TEXT_FOREGROUND], 700)
+        self.assertGreater(line_2[TEXT_FOREGROUND], 500)
+        self.assertGreater(source_region[TEXT_FOREGROUND], 2500)
+
+    def test_snapshot_can_reopen_workspace_regenerated_boot_source_browser_state_without_demo_specific_program(self) -> None:
+        save_log = self.save_snapshot(
+            build_dir=SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_BUILD_DIR,
+            example_path=SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_SAVE_DEMO_PATH,
+            snapshot_output=SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_OUTPUT_PATH,
+        )
+        self.assertIn("recorz-snapshot-begin", save_log)
+        self.assertTrue(SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_OUTPUT_PATH.exists())
+
+        reload_log, width, height, data = self.render_demo(
+            build_dir=SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_RELOAD_BUILD_DIR,
+            example_path=SNAPSHOT_WORKSPACE_IDLE_DEMO_PATH,
+            snapshot_payload=SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_OUTPUT_PATH,
+        )
+        self.assertEqual((width, height), (1024, 768))
+        self.assertIn("recorz qemu-riscv32 mvp: loaded snapshot", reload_log)
+        self.assertIn("recorz qemu-riscv32 mvp: rendered", reload_log)
+        self.assertNotIn("panic:", reload_log)
+
+        line_1 = _region_histogram(data, width, 24, 24, 360, 56)
+        line_2 = _region_histogram(data, width, 24, 58, 360, 90)
+        source_region = _region_histogram(data, width, 24, 92, 900, 260)
+
+        self.assertGreater(line_1[TEXT_FOREGROUND], 500)
         self.assertGreater(line_2[TEXT_FOREGROUND], 500)
         self.assertGreater(source_region[TEXT_FOREGROUND], 2500)
 

@@ -89,3 +89,12 @@ recoverLastSource
 !
 emitRegeneratedBootSource
     <primitive: #workspaceEmitRegeneratedBootSource>
+!
+browseRegeneratedBootSource
+    <primitive: #workspaceBrowseRegeneratedBootSource>
+!
+browseRegeneratedKernelSource
+    <primitive: #workspaceBrowseRegeneratedKernelSource>
+!
+seedBootContents: source
+    <primitive: #workspaceSeedBootContents>

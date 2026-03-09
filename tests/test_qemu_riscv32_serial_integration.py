@@ -30,6 +30,7 @@ WORKSPACE_SELF_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspa
 WORKSPACE_TEMPS_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_temps_demo.rz"
 WORKSPACE_ACCEPT_CURRENT_PACKAGE_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_accept_current_package_demo.rz"
 WORKSPACE_RECOVER_LAST_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_recover_last_source_demo.rz"
+REGENERATED_KERNEL_SOURCE_BROWSER_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_regenerated_kernel_source_browser_demo.rz"
 TEST_RUNNER_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_test_runner_demo.rz"
 METHOD_BLOCK_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_demo.rz"
 METHOD_BLOCK_CAPTURE_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_capture_demo.rz"
@@ -165,6 +166,48 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             output = output.replace("\r", "")
             self.assertIn("SAFE", output)
             self.assertIn("Transcript show: 'SAFE'.", output)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_can_browse_regenerated_kernel_source_inside_the_image(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-regenerated-kernel-source-browser-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, REGENERATED_KERNEL_SOURCE_BROWSER_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=10.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("RecorzKernelClass: #Workspace", output)
+            self.assertIn("RecorzKernelClass: #Selector", output)
             self.assertNotIn("panic:", output)
 
     def test_memory_report_demo_prints_usage_within_budget(self) -> None:

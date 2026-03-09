@@ -203,11 +203,11 @@ class QemuRiscv32RegenerationIntegrationTests(unittest.TestCase):
                 image_output_path=image_output,
             )
 
-            self.assertIn("RECORZ_MVP_SELECTOR_EMIT_REGENERATED_BOOT_SOURCE = 90", header_text)
+            self.assertIn("RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS = 93", header_text)
             self.assertIn("struct recorz_mvp_seed_class_source_record {", header_text)
             self.assertIn("profile: RV64MVP1", inspect_output)
-            self.assertIn("selector_objects=90", inspect_output)
-            self.assertIn("method_entries=76", inspect_output)
+            self.assertIn("selector_objects=93", inspect_output)
+            self.assertIn("method_entries=79", inspect_output)
 
 
 if __name__ == "__main__":
