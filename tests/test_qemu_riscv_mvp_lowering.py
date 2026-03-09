@@ -59,6 +59,18 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertEqual(program.instructions[1].operand_a, "RECORZ_MVP_SELECTOR_DETAIL")
 
+    def test_lowers_top_level_block_literals_and_boolean_globals(self) -> None:
+        program = mvp.build_program("true ifTrue: [ :x | x + 4 ] ifFalse: [ :x | x + 5 ]")
+        literal_strings = [literal.value.strip() for literal in program.literals if literal.kind == mvp.LITERAL_STRING]
+        selectors = [instruction.operand_a for instruction in program.instructions if instruction.opcode == mvp.OP_SEND]
+        globals_used = [instruction.operand_a for instruction in program.instructions if instruction.opcode == mvp.OP_PUSH_GLOBAL]
+
+        self.assertIn("RECORZ_MVP_GLOBAL_TRUE", globals_used)
+        self.assertIn(mvp.OP_PUSH_BLOCK_LITERAL, [instruction.opcode for instruction in program.instructions])
+        self.assertIn("RECORZ_MVP_SELECTOR_IF_TRUE_IF_FALSE", selectors)
+        self.assertIn(":x | x + 4", literal_strings)
+        self.assertIn(":x | x + 5", literal_strings)
+
     def test_lowers_display_default_form_and_clear(self) -> None:
         program = mvp.build_program("| form | form := Display defaultForm. form clear. form writeString: 'HELLO'. form newline")
         selectors = [instruction.operand_a for instruction in program.instructions if instruction.opcode == mvp.OP_SEND]
@@ -2300,7 +2312,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
 
     def test_rejects_unsupported_compiler_features(self) -> None:
         with self.assertRaises(mvp.LoweringError):
-            mvp.build_program("[ 1 ] value")
+            mvp.build_program("self")
 
 
 if __name__ == "__main__":

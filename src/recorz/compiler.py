@@ -46,8 +46,10 @@ class Compiler:
     def __init__(self, class_name: str, instance_variables: list[str]):
         self.class_name = class_name
         self.instance_variables = set(instance_variables)
+        self.current_source = ""
 
     def compile_method(self, source: str) -> CompiledMethod:
+        self.current_source = source
         method_definition = parse_method(source)
         emitter = _Emitter()
         scope = _Scope(
@@ -69,6 +71,7 @@ class Compiler:
         )
 
     def compile_do_it(self, source: str) -> CompiledMethod:
+        self.current_source = source
         do_it = parse_do_it(source)
         emitter = _Emitter()
         scope = _Scope(lexical_names=set(do_it.temporaries), instance_variables=self.instance_variables)
@@ -217,6 +220,8 @@ class Compiler:
         return BindingRef("global", name)
 
     def _source_for(self, node: object) -> str:
+        if isinstance(node, ast.Block):
+            return self.current_source[node.span.start + 1 : node.span.end - 1]
         return ""
 
 

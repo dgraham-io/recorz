@@ -10646,6 +10646,40 @@ static void execute_block_closure_with_sender(
     push(result.value);
 }
 
+static void dispatch_conditional_block_send_with_sender(
+    uint8_t selector,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    uint16_t sender_context_handle
+) {
+    uint8_t condition_is_true = condition_value_is_true(receiver);
+    uint16_t chosen_index = 0xFFFFU;
+
+    if (selector == RECORZ_MVP_SELECTOR_IF_TRUE) {
+        chosen_index = condition_is_true ? 0U : 0xFFFFU;
+    } else if (selector == RECORZ_MVP_SELECTOR_IF_FALSE) {
+        chosen_index = condition_is_true ? 0xFFFFU : 0U;
+    } else if (selector == RECORZ_MVP_SELECTOR_IF_TRUE_IF_FALSE) {
+        chosen_index = condition_is_true ? 0U : 1U;
+    } else {
+        machine_panic("conditional dispatch received an unknown selector");
+    }
+    if (chosen_index == 0xFFFFU) {
+        push(nil_value());
+        return;
+    }
+    if (arguments[chosen_index].kind != RECORZ_MVP_VALUE_OBJECT ||
+        primitive_kind_for_heap_object(heap_object_for_value(arguments[chosen_index])) != RECORZ_MVP_OBJECT_BLOCK_CLOSURE) {
+        machine_panic("conditional send expects a block closure argument");
+    }
+    execute_block_closure_with_sender(
+        heap_object_for_value(arguments[chosen_index]),
+        0U,
+        0,
+        sender_context_handle
+    );
+}
+
 static void execute_compiled_method_with_sender(
     const struct recorz_mvp_heap_object *receiver_object,
     struct recorz_mvp_value receiver,
@@ -10930,6 +10964,12 @@ static void dispatch_heap_object_send(
 
     if (selector == RECORZ_MVP_SELECTOR_CLASS) {
         push(object_value(object->class_handle));
+        return;
+    }
+    if ((selector == RECORZ_MVP_SELECTOR_IF_TRUE && argument_count == 1U) ||
+        (selector == RECORZ_MVP_SELECTOR_IF_FALSE && argument_count == 1U) ||
+        (selector == RECORZ_MVP_SELECTOR_IF_TRUE_IF_FALSE && argument_count == 2U)) {
+        dispatch_conditional_block_send_with_sender(selector, receiver, arguments, sender_context_handle);
         return;
     }
     if (primitive_kind_for_heap_object(object) == RECORZ_MVP_OBJECT_BLOCK_CLOSURE) {

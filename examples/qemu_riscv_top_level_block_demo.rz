@@ -1,0 +1,11 @@
+Display clear.
+Transcript show: 'TBLOCK'.
+Transcript cr.
+Transcript show: ([ :x | x + 4 ] value: 3) printString.
+Transcript cr.
+Transcript show: ([ :x | [ :y | x + y ] value: 6 ] value: 5) printString.
+Transcript cr.
+true ifTrue: [ Transcript show: 'TCOND' ] ifFalse: [ Transcript show: 'BAD' ].
+Transcript cr.
+false ifFalse: [ Transcript show: 'FCOND' ].
+Transcript cr.

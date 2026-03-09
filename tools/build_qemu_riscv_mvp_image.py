@@ -20,7 +20,7 @@ if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
 from recorz.compiler import compile_do_it, compile_method  # noqa: E402
-from recorz.model import BindingRef, SendSite, SymbolAtom  # noqa: E402
+from recorz.model import BindingRef, CompiledBlock, SendSite, SymbolAtom  # noqa: E402
 
 
 def load_runtime_spec() -> dict[str, object]:
@@ -128,6 +128,7 @@ OP_DUP = OPCODE_CONSTANT_NAMES["dup"]
 OP_POP = OPCODE_CONSTANT_NAMES["pop"]
 OP_RETURN = OPCODE_CONSTANT_NAMES["return"]
 OP_PUSH_NIL = OPCODE_CONSTANT_NAMES["push_nil"]
+OP_PUSH_BLOCK_LITERAL = OPCODE_CONSTANT_NAMES["push_block_literal"]
 OP_PUSH_THIS_CONTEXT = OPCODE_CONSTANT_NAMES["push_this_context"]
 
 LITERAL_STRING = LITERAL_KIND_CONSTANT_NAMES["string"]
@@ -1712,8 +1713,27 @@ class Lowerer:
             self.instructions.append(Instruction(OP_PUSH_LITERAL, operand_b=self.literal_index(literal)))
             return
 
+        if opcode == "make_block":
+            compiled_block = compiled_literals[int(operand)]
+            if not isinstance(compiled_block, CompiledBlock):
+                raise LoweringError(f"Expected a compiled block literal, found {compiled_block!r}")
+            if not compiled_block.source.strip():
+                raise LoweringError("The MVP target requires block literals to preserve their source")
+            self.instructions.append(
+                Instruction(OP_PUSH_BLOCK_LITERAL, operand_b=self.literal_index(compiled_block.source))
+            )
+            return
+
         if opcode == "push_nil":
             self.instructions.append(Instruction(OP_PUSH_NIL))
+            return
+
+        if opcode == "push_true":
+            self.instructions.append(Instruction(OP_PUSH_GLOBAL, GLOBAL_IDS["true"]))
+            return
+
+        if opcode == "push_false":
+            self.instructions.append(Instruction(OP_PUSH_GLOBAL, GLOBAL_IDS["false"]))
             return
 
         if opcode == "push_this_context":

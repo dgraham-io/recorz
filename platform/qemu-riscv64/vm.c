@@ -9240,6 +9240,34 @@ static void execute_block_closure(const struct recorz_mvp_heap_object *object) {
     execute_executable(&executable, home_receiver_object, home_receiver, 0U, 0);
 }
 
+static void dispatch_conditional_block_send(
+    uint8_t selector,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[]
+) {
+    uint8_t condition_is_true = condition_value_is_true(receiver);
+    uint16_t chosen_index = 0xFFFFU;
+
+    if (selector == RECORZ_MVP_SELECTOR_IF_TRUE) {
+        chosen_index = condition_is_true ? 0U : 0xFFFFU;
+    } else if (selector == RECORZ_MVP_SELECTOR_IF_FALSE) {
+        chosen_index = condition_is_true ? 0xFFFFU : 0U;
+    } else if (selector == RECORZ_MVP_SELECTOR_IF_TRUE_IF_FALSE) {
+        chosen_index = condition_is_true ? 0U : 1U;
+    } else {
+        machine_panic("conditional dispatch received an unknown selector");
+    }
+    if (chosen_index == 0xFFFFU) {
+        push(nil_value());
+        return;
+    }
+    if (arguments[chosen_index].kind != RECORZ_MVP_VALUE_OBJECT ||
+        primitive_kind_for_heap_object(heap_object_for_value(arguments[chosen_index])) != RECORZ_MVP_OBJECT_BLOCK_CLOSURE) {
+        machine_panic("conditional send expects a block closure argument");
+    }
+    execute_block_closure(heap_object_for_value(arguments[chosen_index]));
+}
+
 static void execute_compiled_method(
     const struct recorz_mvp_heap_object *receiver_object,
     struct recorz_mvp_value receiver,
@@ -9481,6 +9509,12 @@ static void dispatch_heap_object_send(
 
     if (selector == RECORZ_MVP_SELECTOR_CLASS) {
         push(object_value(object->class_handle));
+        return;
+    }
+    if ((selector == RECORZ_MVP_SELECTOR_IF_TRUE && argument_count == 1U) ||
+        (selector == RECORZ_MVP_SELECTOR_IF_FALSE && argument_count == 1U) ||
+        (selector == RECORZ_MVP_SELECTOR_IF_TRUE_IF_FALSE && argument_count == 2U)) {
+        dispatch_conditional_block_send(selector, receiver, arguments);
         return;
     }
     if (primitive_kind_for_heap_object(object) == RECORZ_MVP_OBJECT_BLOCK_CLOSURE) {
