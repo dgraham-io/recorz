@@ -36,6 +36,7 @@ static void validate_instruction(
             }
             return;
         case RECORZ_MVP_OP_PUSH_LITERAL:
+        case RECORZ_MVP_OP_PUSH_BLOCK_LITERAL:
             if (instruction->operand_a != 0U || instruction->operand_b >= literal_count) {
                 machine_panic("program manifest literal operand is invalid");
             }

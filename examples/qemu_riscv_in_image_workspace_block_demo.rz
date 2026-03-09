@@ -1,0 +1,6 @@
+Display clear.
+Transcript show: 'BLOCK'.
+Transcript cr.
+Workspace evaluate: '[ Transcript show: ''VALUE'' ] value. Transcript cr.'.
+Workspace evaluate: '[ [ Transcript show: ''NEST'' ] value ] value. Transcript cr.'.
+Workspace evaluate: '[] value = nil ifTrue: [ Transcript show: ''NIL'' ]. Transcript cr.'.

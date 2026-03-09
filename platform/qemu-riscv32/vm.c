@@ -74,6 +74,10 @@
 #define METHOD_ENTRY_FIELD_EXECUTION_ID RECORZ_MVP_METHOD_ENTRY_FIELD_EXECUTION_ID
 #define METHOD_ENTRY_FIELD_IMPLEMENTATION RECORZ_MVP_METHOD_ENTRY_FIELD_IMPLEMENTATION
 #define SELECTOR_FIELD_SELECTOR_ID RECORZ_MVP_SELECTOR_FIELD_VALUE
+#define BLOCK_CLOSURE_FIELD_SOURCE RECORZ_MVP_BLOCK_CLOSURE_FIELD_SOURCE
+#define BLOCK_CLOSURE_FIELD_HOME_RECEIVER RECORZ_MVP_BLOCK_CLOSURE_FIELD_HOME_RECEIVER
+#define BLOCK_CLOSURE_FIELD_LEXICAL0 RECORZ_MVP_BLOCK_CLOSURE_FIELD_LEXICAL0
+#define BLOCK_CLOSURE_FIELD_LEXICAL1 RECORZ_MVP_BLOCK_CLOSURE_FIELD_LEXICAL1
 #define COMPILED_METHOD_MAX_INSTRUCTIONS RECORZ_MVP_COMPILED_METHOD_MAX_INSTRUCTIONS
 
 #define COMPILED_METHOD_OP_PUSH_GLOBAL RECORZ_MVP_COMPILED_METHOD_OP_PUSH_GLOBAL
@@ -98,7 +102,7 @@
 #define BITMAP_STORAGE_FRAMEBUFFER RECORZ_MVP_BITMAP_STORAGE_FRAMEBUFFER
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
-#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE
+#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_BLOCK_CLOSURE
 #define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_GREATER_THAN
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_FALSE
 
@@ -288,6 +292,7 @@ static struct recorz_mvp_value panic_send_arguments[MAX_SEND_ARGS];
 
 static struct recorz_mvp_value nil_value(void);
 static uint32_t small_integer_u32(struct recorz_mvp_value value, const char *message);
+static void heap_set_field(uint16_t handle, uint8_t index, struct recorz_mvp_value value);
 static void heap_set_class(uint16_t handle, uint16_t class_handle);
 static uint32_t compiled_method_instruction_word(const struct recorz_mvp_heap_object *compiled_method, uint8_t index);
 static uint16_t compiled_method_lexical_count(const struct recorz_mvp_heap_object *compiled_method);
@@ -467,6 +472,8 @@ static const char *opcode_name(uint8_t opcode) {
             return "jumpIfTrue";
         case RECORZ_MVP_OP_JUMP_IF_FALSE:
             return "jumpIfFalse";
+        case RECORZ_MVP_OP_PUSH_BLOCK_LITERAL:
+            return "pushBlockLiteral";
     }
     return "unknown";
 }
@@ -667,6 +674,8 @@ static const char *object_kind_name(uint8_t kind) {
             return "True";
         case RECORZ_MVP_OBJECT_FALSE:
             return "False";
+        case RECORZ_MVP_OBJECT_BLOCK_CLOSURE:
+            return "BlockClosure";
     }
     return "UnknownObject";
 }
@@ -1483,6 +1492,10 @@ static void workspace_compile_inline_block(
     const char *source,
     struct recorz_mvp_workspace_source_program *program
 );
+static void build_workspace_block_program(
+    const char *source,
+    struct recorz_mvp_workspace_source_program *program
+);
 static const char *workspace_compile_conditional_expression_push(
     const char *cursor,
     struct recorz_mvp_workspace_source_program *program
@@ -1525,6 +1538,7 @@ static const char *workspace_compile_operand_push(
     struct recorz_mvp_workspace_source_program *program
 ) {
     char identifier[METHOD_SOURCE_NAME_LIMIT];
+    char block_text[METHOD_SOURCE_CHUNK_LIMIT];
     char quoted_text[METHOD_SOURCE_CHUNK_LIMIT];
     int32_t small_integer = 0;
     const char *parsed_cursor;
@@ -1546,6 +1560,16 @@ static const char *workspace_compile_operand_push(
             machine_panic("Workspace parenthesized expression is missing ')'");
         }
         cursor = parsed_cursor + 1;
+    } else if (*cursor == '[') {
+        parsed_cursor = source_copy_bracket_body(cursor, block_text, sizeof(block_text));
+        if (parsed_cursor == 0) {
+            machine_panic("Workspace source block literal is invalid");
+        }
+        literal_index = workspace_source_append_string_literal(program, block_text);
+        if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_BLOCK_LITERAL, 0U, literal_index)) {
+            machine_panic("Workspace source exceeds instruction capacity");
+        }
+        cursor = parsed_cursor;
     } else if (*cursor == '\'') {
         parsed_cursor = source_copy_single_quoted_text(cursor, quoted_text, sizeof(quoted_text));
         if (parsed_cursor == 0) {
@@ -1692,13 +1716,13 @@ static void workspace_compile_inline_block(
     uint8_t pending_value = 0U;
 
     if (*source_skip_statement_space(source) == ':') {
-        machine_panic("Workspace conditional blocks do not support block arguments yet");
+        machine_panic("Workspace blocks do not support block arguments yet");
     }
     while (source_copy_next_statement(&cursor, statement, sizeof(statement)) != 0U) {
         const char *trimmed = source_skip_statement_space(statement);
 
         if (trimmed[0] == '^') {
-            machine_panic("Workspace conditional blocks do not support return yet");
+            machine_panic("Workspace blocks do not support return yet");
         }
         if (pending_value) {
             if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_POP, 0U, 0U)) {
@@ -1713,6 +1737,18 @@ static void workspace_compile_inline_block(
         if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_NIL, 0U, 0U)) {
             machine_panic("Workspace source exceeds instruction capacity");
         }
+    }
+}
+
+static void build_workspace_block_program(
+    const char *source,
+    struct recorz_mvp_workspace_source_program *program
+) {
+    program->instruction_count = 0U;
+    program->literal_count = 0U;
+    workspace_compile_inline_block(source, program);
+    if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_RETURN, 0U, 0U)) {
+        machine_panic("Workspace block source exceeds instruction capacity");
     }
 }
 
@@ -2169,6 +2205,27 @@ static uint16_t heap_allocate_seeded_class(uint8_t kind) {
     if (kind <= MAX_OBJECT_KIND && class_handles_by_kind[kind] != 0U) {
         heap_set_class(handle, class_handles_by_kind[kind]);
     }
+    return handle;
+}
+
+static uint16_t allocate_block_closure_from_source(
+    const char *source_text,
+    struct recorz_mvp_value home_receiver
+) {
+    uint16_t handle;
+
+    if (source_text == 0) {
+        machine_panic("block closure source is null");
+    }
+    handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_BLOCK_CLOSURE);
+    heap_set_field(
+        handle,
+        BLOCK_CLOSURE_FIELD_SOURCE,
+        string_value(runtime_string_allocate_copy(source_text))
+    );
+    heap_set_field(handle, BLOCK_CLOSURE_FIELD_HOME_RECEIVER, home_receiver);
+    heap_set_field(handle, BLOCK_CLOSURE_FIELD_LEXICAL0, nil_value());
+    heap_set_field(handle, BLOCK_CLOSURE_FIELD_LEXICAL1, nil_value());
     return handle;
 }
 
@@ -9313,6 +9370,25 @@ static void execute_executable(
                     string_value(live_string_literals[instruction.operand_b - 1U].text)
                 );
                 break;
+            case RECORZ_MVP_OP_PUSH_BLOCK_LITERAL:
+                if ((uint32_t)instruction.operand_b >= executable->literal_count) {
+                    machine_panic("block literal is out of range");
+                }
+                if (executable->literals[instruction.operand_b].kind != RECORZ_MVP_LITERAL_STRING ||
+                    executable->literals[instruction.operand_b].string == 0) {
+                    machine_panic("block literal source must be a string");
+                }
+                activation_push(
+                    activation_stack,
+                    &activation_stack_size,
+                    object_value(
+                        allocate_block_closure_from_source(
+                            executable->literals[instruction.operand_b].string,
+                            receiver
+                        )
+                    )
+                );
+                break;
             case RECORZ_MVP_OP_JUMP:
                 if (instruction.operand_b >= executable->instruction_count) {
                     machine_panic("jump target is out of range");
@@ -9403,6 +9479,39 @@ static void workspace_evaluate_source(const char *source) {
         machine_panic("Workspace source execution did not return exactly one value");
     }
     (void)pop_value();
+}
+
+static void execute_block_closure(const struct recorz_mvp_heap_object *object) {
+    struct recorz_mvp_workspace_source_program program;
+    struct recorz_mvp_executable executable = {
+        .instruction_source = program.instructions,
+        .read_instruction = read_program_instruction,
+        .instruction_count = 0U,
+        .literals = program.literals,
+        .literal_count = 0U,
+        .lexical_count = 0U,
+    };
+    struct recorz_mvp_value source_value;
+    struct recorz_mvp_value home_receiver;
+    const struct recorz_mvp_heap_object *home_receiver_object = 0;
+
+    if (primitive_kind_for_heap_object(object) != RECORZ_MVP_OBJECT_BLOCK_CLOSURE) {
+        machine_panic("block closure receiver has the wrong class");
+    }
+    source_value = heap_get_field(object, BLOCK_CLOSURE_FIELD_SOURCE);
+    home_receiver = heap_get_field(object, BLOCK_CLOSURE_FIELD_HOME_RECEIVER);
+    if (source_value.kind != RECORZ_MVP_VALUE_STRING || source_value.string == 0) {
+        machine_panic("block closure is missing source text");
+    }
+    if (home_receiver.kind == RECORZ_MVP_VALUE_OBJECT) {
+        home_receiver_object = heap_object_for_value(home_receiver);
+    } else if (home_receiver.kind == RECORZ_MVP_VALUE_NIL) {
+        home_receiver = nil_value();
+    }
+    build_workspace_block_program(source_value.string, &program);
+    executable.instruction_count = program.instruction_count;
+    executable.literal_count = program.literal_count;
+    execute_executable(&executable, home_receiver_object, home_receiver, 0U, 0);
 }
 
 static void execute_compiled_method(
@@ -9646,6 +9755,13 @@ static void dispatch_heap_object_send(
 
     if (selector == RECORZ_MVP_SELECTOR_CLASS) {
         push(object_value(object->class_handle));
+        return;
+    }
+    if (primitive_kind_for_heap_object(object) == RECORZ_MVP_OBJECT_BLOCK_CLOSURE) {
+        if (selector != RECORZ_MVP_SELECTOR_VALUE || argument_count != 0U) {
+            machine_panic("BlockClosure only understands value");
+        }
+        execute_block_closure(object);
         return;
     }
     class_object = class_object_for_heap_object(object);

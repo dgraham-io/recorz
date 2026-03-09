@@ -151,11 +151,16 @@
         "constant": "RECORZ_MVP_OP_JUMP_IF_TRUE",
         "value": 19
       },
-      {
-        "name": "jump_if_false",
-        "constant": "RECORZ_MVP_OP_JUMP_IF_FALSE",
-        "value": 20
-      }
+    {
+      "name": "jump_if_false",
+      "constant": "RECORZ_MVP_OP_JUMP_IF_FALSE",
+      "value": 20
+    },
+    {
+      "name": "push_block_literal",
+      "constant": "RECORZ_MVP_OP_PUSH_BLOCK_LITERAL",
+      "value": 21
+    }
   ],
   "literal_kinds": [
     {
