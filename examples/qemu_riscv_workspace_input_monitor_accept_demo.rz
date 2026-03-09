@@ -1,0 +1,9 @@
+Display clear.
+Workspace browseClassNamed: 'Display'.
+Workspace browseMethod: 'newline' ofClassNamed: 'Display'.
+Workspace setContents: 'newline
+    Transcript show: ''ACC''.
+    Transcript cr.
+    ^self'.
+Workspace interactiveInputMonitor.
+Display newline.
