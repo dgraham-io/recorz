@@ -125,6 +125,36 @@
       "name": "store_field",
       "constant": "RECORZ_MVP_OP_STORE_FIELD",
       "value": 14
+    },
+    {
+      "name": "push_self",
+      "constant": "RECORZ_MVP_OP_PUSH_SELF",
+      "value": 15
+    },
+    {
+      "name": "push_small_integer",
+      "constant": "RECORZ_MVP_OP_PUSH_SMALL_INTEGER",
+      "value": 16
+    },
+    {
+      "name": "push_string_literal",
+      "constant": "RECORZ_MVP_OP_PUSH_STRING_LITERAL",
+      "value": 17
+    },
+    {
+      "name": "jump",
+      "constant": "RECORZ_MVP_OP_JUMP",
+      "value": 18
+    },
+    {
+      "name": "jump_if_true",
+      "constant": "RECORZ_MVP_OP_JUMP_IF_TRUE",
+      "value": 19
+    },
+    {
+      "name": "jump_if_false",
+      "constant": "RECORZ_MVP_OP_JUMP_IF_FALSE",
+      "value": 20
     }
   ],
   "literal_kinds": [
@@ -211,6 +241,36 @@
         "name": "store_field",
         "constant": "RECORZ_MVP_COMPILED_METHOD_OP_STORE_FIELD",
         "value": 14
+      },
+      {
+        "name": "push_self",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_SELF",
+        "value": 15
+      },
+      {
+        "name": "push_small_integer",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_SMALL_INTEGER",
+        "value": 16
+      },
+      {
+        "name": "push_string_literal",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_STRING_LITERAL",
+        "value": 17
+      },
+      {
+        "name": "jump",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_JUMP",
+        "value": 18
+      },
+      {
+        "name": "jump_if_true",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_JUMP_IF_TRUE",
+        "value": 19
+      },
+      {
+        "name": "jump_if_false",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_JUMP_IF_FALSE",
+        "value": 20
       }
     ]
   },

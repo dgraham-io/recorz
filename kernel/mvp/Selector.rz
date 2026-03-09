@@ -132,3 +132,15 @@ RecorzKernelSelector: #truth order: 64
 !
 RecorzKernelSelector: #falsity order: 65
 !
+RecorzKernelSelector: #ifTrue: order: 66
+!
+RecorzKernelSelector: #ifFalse: order: 67
+!
+RecorzKernelSelector: #ifTrue:ifFalse: order: 68
+!
+RecorzKernelSelector: #= order: 69
+!
+RecorzKernelSelector: #< order: 70
+!
+RecorzKernelSelector: #> order: 71
+!

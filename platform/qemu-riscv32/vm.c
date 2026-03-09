@@ -91,12 +91,15 @@
 #define COMPILED_METHOD_OP_RETURN_RECEIVER RECORZ_MVP_COMPILED_METHOD_OP_RETURN_RECEIVER
 #define COMPILED_METHOD_OP_STORE_LEXICAL RECORZ_MVP_COMPILED_METHOD_OP_STORE_LEXICAL
 #define COMPILED_METHOD_OP_STORE_FIELD RECORZ_MVP_COMPILED_METHOD_OP_STORE_FIELD
+#define COMPILED_METHOD_OP_JUMP RECORZ_MVP_COMPILED_METHOD_OP_JUMP
+#define COMPILED_METHOD_OP_JUMP_IF_TRUE RECORZ_MVP_COMPILED_METHOD_OP_JUMP_IF_TRUE
+#define COMPILED_METHOD_OP_JUMP_IF_FALSE RECORZ_MVP_COMPILED_METHOD_OP_JUMP_IF_FALSE
 
 #define BITMAP_STORAGE_FRAMEBUFFER RECORZ_MVP_BITMAP_STORAGE_FRAMEBUFFER
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_FALSITY
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_GREATER_THAN
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_FALSE
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -452,6 +455,18 @@ static const char *opcode_name(uint8_t opcode) {
             return "returnReceiver";
         case RECORZ_MVP_OP_STORE_FIELD:
             return "storeField";
+        case RECORZ_MVP_OP_PUSH_SELF:
+            return "pushSelf";
+        case RECORZ_MVP_OP_PUSH_SMALL_INTEGER:
+            return "pushSmallInteger";
+        case RECORZ_MVP_OP_PUSH_STRING_LITERAL:
+            return "pushStringLiteral";
+        case RECORZ_MVP_OP_JUMP:
+            return "jump";
+        case RECORZ_MVP_OP_JUMP_IF_TRUE:
+            return "jumpIfTrue";
+        case RECORZ_MVP_OP_JUMP_IF_FALSE:
+            return "jumpIfFalse";
     }
     return "unknown";
 }
@@ -590,6 +605,18 @@ static const char *selector_name(uint8_t selector) {
             return "truth";
         case RECORZ_MVP_SELECTOR_FALSITY:
             return "falsity";
+        case RECORZ_MVP_SELECTOR_IF_TRUE:
+            return "ifTrue:";
+        case RECORZ_MVP_SELECTOR_IF_FALSE:
+            return "ifFalse:";
+        case RECORZ_MVP_SELECTOR_IF_TRUE_IF_FALSE:
+            return "ifTrue:ifFalse:";
+        case RECORZ_MVP_SELECTOR_EQUAL:
+            return "=";
+        case RECORZ_MVP_SELECTOR_LESS_THAN:
+            return "<";
+        case RECORZ_MVP_SELECTOR_GREATER_THAN:
+            return ">";
     }
     return "unknown";
 }
@@ -745,7 +772,7 @@ static uint8_t source_char_is_identifier_char(char ch) {
 }
 
 static uint8_t source_char_is_binary_selector(char ch) {
-    return (uint8_t)(ch == '+' || ch == '-' || ch == '*');
+    return (uint8_t)(ch == '+' || ch == '-' || ch == '*' || ch == '=' || ch == '<' || ch == '>');
 }
 
 static uint8_t source_names_equal(const char *left, const char *right) {
@@ -1244,6 +1271,7 @@ static uint32_t source_copy_next_statement(const char **cursor_ref, char buffer[
     const char *trimmed_end;
     uint32_t length = 0U;
     uint8_t in_string = 0U;
+    uint32_t block_depth = 0U;
 
     while (*cursor == '.') {
         ++cursor;
@@ -1261,13 +1289,29 @@ static uint32_t source_copy_next_statement(const char **cursor_ref, char buffer[
             ++cursor;
             continue;
         }
-        if (*cursor == '.' && !in_string) {
+        if (!in_string && *cursor == '[') {
+            ++block_depth;
+            ++cursor;
+            continue;
+        }
+        if (!in_string && *cursor == ']') {
+            if (block_depth == 0U) {
+                machine_panic("Workspace source statement has an unexpected ']'");
+            }
+            --block_depth;
+            ++cursor;
+            continue;
+        }
+        if (*cursor == '.' && !in_string && block_depth == 0U) {
             break;
         }
         ++cursor;
     }
     if (in_string) {
         machine_panic("Workspace source statement contains an unterminated string");
+    }
+    if (block_depth != 0U) {
+        machine_panic("Workspace source statement contains an unterminated block");
     }
     trimmed_end = cursor;
     while (
@@ -1290,6 +1334,43 @@ static uint32_t source_copy_next_statement(const char **cursor_ref, char buffer[
     }
     *cursor_ref = cursor;
     return length;
+}
+
+static const char *source_copy_bracket_body(
+    const char *cursor,
+    char buffer[],
+    uint32_t buffer_size
+) {
+    uint32_t length = 0U;
+    uint32_t block_depth = 1U;
+    uint8_t in_string = 0U;
+
+    cursor = source_skip_statement_space(cursor);
+    if (*cursor != '[') {
+        return 0;
+    }
+    ++cursor;
+    while (*cursor != '\0') {
+        char ch = *cursor++;
+
+        if (ch == '\'') {
+            in_string = (uint8_t)!in_string;
+        } else if (!in_string && ch == '[') {
+            ++block_depth;
+        } else if (!in_string && ch == ']') {
+            --block_depth;
+            if (block_depth == 0U) {
+                buffer[length] = '\0';
+                return cursor;
+            }
+        }
+        if (length + 1U >= buffer_size) {
+            machine_panic("KernelInstaller block source exceeds buffer capacity");
+        }
+        buffer[length++] = ch;
+    }
+    machine_panic("KernelInstaller block source is missing ']'");
+    return 0;
 }
 
 static const char *source_parse_small_integer(
@@ -1371,11 +1452,38 @@ static uint16_t workspace_source_append_small_integer_literal(
     return (uint16_t)index;
 }
 
+static void workspace_source_patch_instruction(
+    struct recorz_mvp_workspace_source_program *program,
+    uint16_t instruction_index,
+    uint8_t opcode,
+    uint8_t operand_a,
+    uint16_t operand_b
+) {
+    if (instruction_index >= program->instruction_count) {
+        machine_panic("Workspace source instruction patch is out of range");
+    }
+    program->instructions[instruction_index].opcode = opcode;
+    program->instructions[instruction_index].operand_a = operand_a;
+    program->instructions[instruction_index].operand_b = operand_b;
+}
+
 static const char *workspace_compile_expression_push(
     const char *cursor,
     struct recorz_mvp_workspace_source_program *program
 );
 static const char *workspace_compile_operand_push(
+    const char *cursor,
+    struct recorz_mvp_workspace_source_program *program
+);
+static void workspace_compile_statement(
+    const char *statement,
+    struct recorz_mvp_workspace_source_program *program
+);
+static void workspace_compile_inline_block(
+    const char *source,
+    struct recorz_mvp_workspace_source_program *program
+);
+static const char *workspace_compile_conditional_expression_push(
     const char *cursor,
     struct recorz_mvp_workspace_source_program *program
 );
@@ -1437,9 +1545,8 @@ static const char *workspace_compile_operand_push(
         if (*parsed_cursor != ')') {
             machine_panic("Workspace parenthesized expression is missing ')'");
         }
-        return parsed_cursor + 1;
-    }
-    if (*cursor == '\'') {
+        cursor = parsed_cursor + 1;
+    } else if (*cursor == '\'') {
         parsed_cursor = source_copy_single_quoted_text(cursor, quoted_text, sizeof(quoted_text));
         if (parsed_cursor == 0) {
             machine_panic("Workspace source string literal is invalid");
@@ -1448,34 +1555,37 @@ static const char *workspace_compile_operand_push(
         if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_LITERAL, 0U, literal_index)) {
             machine_panic("Workspace source exceeds instruction capacity");
         }
-        return parsed_cursor;
-    }
-    parsed_cursor = source_parse_small_integer(cursor, &small_integer);
-    if (parsed_cursor != 0) {
-        literal_index = workspace_source_append_small_integer_literal(program, small_integer);
-        if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_LITERAL, 0U, literal_index)) {
-            machine_panic("Workspace source exceeds instruction capacity");
+        cursor = parsed_cursor;
+    } else {
+        parsed_cursor = source_parse_small_integer(cursor, &small_integer);
+        if (parsed_cursor != 0) {
+            literal_index = workspace_source_append_small_integer_literal(program, small_integer);
+            if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_LITERAL, 0U, literal_index)) {
+                machine_panic("Workspace source exceeds instruction capacity");
+            }
+            cursor = parsed_cursor;
+        } else {
+            parsed_cursor = source_parse_identifier(cursor, identifier, sizeof(identifier));
+            if (parsed_cursor == 0) {
+                return 0;
+            }
+            if (source_names_equal(identifier, "nil")) {
+                if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_NIL, 0U, 0U)) {
+                    machine_panic("Workspace source exceeds instruction capacity");
+                }
+            } else {
+                global_id = source_global_id_for_name(identifier);
+                if (global_id == 0U) {
+                    machine_panic("Workspace source uses an unknown global operand");
+                }
+                if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_GLOBAL, global_id, 0U)) {
+                    machine_panic("Workspace source exceeds instruction capacity");
+                }
+            }
+            cursor = parsed_cursor;
         }
-        return parsed_cursor;
     }
-    parsed_cursor = source_parse_identifier(cursor, identifier, sizeof(identifier));
-    if (parsed_cursor == 0) {
-        return 0;
-    }
-    if (source_names_equal(identifier, "nil")) {
-        if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_NIL, 0U, 0U)) {
-            machine_panic("Workspace source exceeds instruction capacity");
-        }
-        return parsed_cursor;
-    }
-    global_id = source_global_id_for_name(identifier);
-    if (global_id == 0U) {
-        machine_panic("Workspace source uses an unknown global operand");
-    }
-    if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_GLOBAL, global_id, 0U)) {
-        machine_panic("Workspace source exceeds instruction capacity");
-    }
-    cursor = source_skip_statement_space(parsed_cursor);
+    cursor = source_skip_statement_space(cursor);
     while (source_char_is_identifier_start(*cursor)) {
         selector_cursor = source_parse_identifier(cursor, identifier, sizeof(identifier));
         if (selector_cursor == 0) {
@@ -1522,6 +1632,9 @@ static const char *workspace_compile_expression_push(
     if (*part_cursor != ':') {
         return cursor;
     }
+    if (source_names_equal(selector_part, "ifTrue") || source_names_equal(selector_part, "ifFalse")) {
+        return workspace_compile_conditional_expression_push(cursor, program);
+    }
     while (selector_part[selector_length] != '\0') {
         selector_buffer[selector_length] = selector_part[selector_length];
         ++selector_length;
@@ -1566,6 +1679,115 @@ static const char *workspace_compile_expression_push(
     if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_SEND, selector_id, argument_count)) {
         machine_panic("Workspace source exceeds instruction capacity");
     }
+    return cursor;
+}
+
+static void workspace_compile_inline_block(
+    const char *source,
+    struct recorz_mvp_workspace_source_program *program
+) {
+    const char *cursor = source;
+    char statement[METHOD_SOURCE_CHUNK_LIMIT];
+    uint8_t statement_count = 0U;
+    uint8_t pending_value = 0U;
+
+    if (*source_skip_statement_space(source) == ':') {
+        machine_panic("Workspace conditional blocks do not support block arguments yet");
+    }
+    while (source_copy_next_statement(&cursor, statement, sizeof(statement)) != 0U) {
+        const char *trimmed = source_skip_statement_space(statement);
+
+        if (trimmed[0] == '^') {
+            machine_panic("Workspace conditional blocks do not support return yet");
+        }
+        if (pending_value) {
+            if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_POP, 0U, 0U)) {
+                machine_panic("Workspace source exceeds instruction capacity");
+            }
+        }
+        workspace_compile_statement(statement, program);
+        pending_value = 1U;
+        ++statement_count;
+    }
+    if (statement_count == 0U) {
+        if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_NIL, 0U, 0U)) {
+            machine_panic("Workspace source exceeds instruction capacity");
+        }
+    }
+}
+
+static const char *workspace_compile_conditional_expression_push(
+    const char *cursor,
+    struct recorz_mvp_workspace_source_program *program
+) {
+    char first_selector[METHOD_SOURCE_NAME_LIMIT];
+    char second_selector[METHOD_SOURCE_NAME_LIMIT];
+    char first_block[METHOD_SOURCE_CHUNK_LIMIT];
+    char second_block[METHOD_SOURCE_CHUNK_LIMIT];
+    const char *part_cursor;
+    const char *after_selector;
+    const char *after_first_block;
+    const char *after_second_block;
+    uint16_t branch_index;
+    uint16_t jump_index;
+    uint8_t first_is_true;
+    uint8_t has_second_clause = 0U;
+
+    part_cursor = source_parse_identifier(cursor, first_selector, sizeof(first_selector));
+    if (part_cursor == 0) {
+        machine_panic("Workspace conditional expression is missing a selector");
+    }
+    after_selector = source_skip_statement_space(part_cursor);
+    if (*after_selector != ':') {
+        machine_panic("Workspace conditional expression is missing ':'");
+    }
+    after_first_block = source_copy_bracket_body(after_selector + 1, first_block, sizeof(first_block));
+    if (after_first_block == 0) {
+        machine_panic("Workspace conditional expression is missing a block argument");
+    }
+    cursor = source_skip_statement_space(after_first_block);
+    part_cursor = source_parse_identifier(cursor, second_selector, sizeof(second_selector));
+    if (part_cursor != 0) {
+        after_selector = source_skip_statement_space(part_cursor);
+        if (*after_selector == ':' &&
+            ((source_names_equal(first_selector, "ifTrue") && source_names_equal(second_selector, "ifFalse")) ||
+             (source_names_equal(first_selector, "ifFalse") && source_names_equal(second_selector, "ifTrue")))) {
+            after_second_block = source_copy_bracket_body(after_selector + 1, second_block, sizeof(second_block));
+            if (after_second_block == 0) {
+                machine_panic("Workspace conditional expression is missing a matching block argument");
+            }
+            cursor = after_second_block;
+            has_second_clause = 1U;
+        }
+    }
+
+    first_is_true = (uint8_t)source_names_equal(first_selector, "ifTrue");
+    branch_index = program->instruction_count;
+    if (!workspace_source_append_instruction(
+            program,
+            first_is_true ? RECORZ_MVP_OP_JUMP_IF_FALSE : RECORZ_MVP_OP_JUMP_IF_TRUE,
+            0U,
+            0U)) {
+        machine_panic("Workspace source exceeds instruction capacity");
+    }
+    workspace_compile_inline_block(first_block, program);
+    jump_index = program->instruction_count;
+    if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_JUMP, 0U, 0U)) {
+        machine_panic("Workspace source exceeds instruction capacity");
+    }
+    workspace_source_patch_instruction(
+        program,
+        branch_index,
+        first_is_true ? RECORZ_MVP_OP_JUMP_IF_FALSE : RECORZ_MVP_OP_JUMP_IF_TRUE,
+        0U,
+        program->instruction_count
+    );
+    if (has_second_clause) {
+        workspace_compile_inline_block(second_block, program);
+    } else if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_NIL, 0U, 0U)) {
+        machine_panic("Workspace source exceeds instruction capacity");
+    }
+    workspace_source_patch_instruction(program, jump_index, RECORZ_MVP_OP_JUMP, 0U, program->instruction_count);
     return cursor;
 }
 
@@ -1783,6 +2005,10 @@ static struct recorz_mvp_value global_value(uint8_t global_id) {
     return object_value(global_handles[global_id]);
 }
 
+static struct recorz_mvp_value boolean_value(uint8_t condition) {
+    return global_value(condition ? RECORZ_MVP_GLOBAL_TRUE : RECORZ_MVP_GLOBAL_FALSE);
+}
+
 static struct recorz_mvp_value seed_root_value(uint32_t root_id) {
     switch (root_id) {
         case RECORZ_MVP_SEED_ROOT_DEFAULT_FORM:
@@ -1808,6 +2034,40 @@ static struct recorz_mvp_value string_value(const char *text) {
 
 static struct recorz_mvp_value small_integer_value(int32_t integer) {
     return (struct recorz_mvp_value){RECORZ_MVP_VALUE_SMALL_INTEGER, integer, 0};
+}
+
+static uint8_t condition_value_is_true(struct recorz_mvp_value value) {
+    if (value.kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("conditional branch expects a boolean object");
+    }
+    if ((uint16_t)value.integer == global_handles[RECORZ_MVP_GLOBAL_TRUE]) {
+        return 1U;
+    }
+    if ((uint16_t)value.integer == global_handles[RECORZ_MVP_GLOBAL_FALSE]) {
+        return 0U;
+    }
+    machine_panic("conditional branch expects true or false");
+    return 0U;
+}
+
+static uint8_t value_equals(struct recorz_mvp_value left, struct recorz_mvp_value right) {
+    if (left.kind != right.kind) {
+        return 0U;
+    }
+    switch (left.kind) {
+        case RECORZ_MVP_VALUE_NIL:
+            return 1U;
+        case RECORZ_MVP_VALUE_SMALL_INTEGER:
+        case RECORZ_MVP_VALUE_OBJECT:
+            return (uint8_t)(left.integer == right.integer);
+        case RECORZ_MVP_VALUE_STRING:
+            if (left.string == 0 || right.string == 0) {
+                return (uint8_t)(left.string == right.string);
+            }
+            return source_names_equal(left.string, right.string);
+    }
+    machine_panic("unsupported value kind in equality check");
+    return 0U;
 }
 
 static void render_small_integer(int32_t value) {
@@ -3473,8 +3733,12 @@ static void validate_compiled_method(
     const struct recorz_mvp_heap_object *compiled_method,
     uint32_t argument_count
 ) {
+    uint8_t discovered_stack_depth[COMPILED_METHOD_MAX_INSTRUCTIONS];
+    uint8_t pending_instruction_indices[COMPILED_METHOD_MAX_INSTRUCTIONS];
+    uint8_t pending_count = 0U;
+    uint8_t saw_return = 0U;
+    uint8_t instruction_count;
     uint8_t instruction_index;
-    uint32_t stack_depth = 0U;
 
     if (compiled_method->kind != RECORZ_MVP_OBJECT_COMPILED_METHOD) {
         machine_panic("compiled method entry implementation is not a compiled method");
@@ -3482,63 +3746,74 @@ static void validate_compiled_method(
     if (compiled_method->field_count == 0U || compiled_method->field_count > COMPILED_METHOD_MAX_INSTRUCTIONS) {
         machine_panic("compiled method field count is invalid");
     }
-    for (instruction_index = 0U; instruction_index < compiled_method->field_count; ++instruction_index) {
-        uint32_t instruction = compiled_method_instruction_word(compiled_method, instruction_index);
-        uint8_t opcode = compiled_method_instruction_opcode(instruction);
-        uint8_t operand_a = compiled_method_instruction_operand_a(instruction);
-        uint16_t operand_b = compiled_method_instruction_operand_b(instruction);
+    instruction_count = compiled_method->field_count;
+    for (instruction_index = 0U; instruction_index < instruction_count; ++instruction_index) {
+        discovered_stack_depth[instruction_index] = 0xFFU;
+    }
+    discovered_stack_depth[0] = 0U;
+    pending_instruction_indices[pending_count++] = 0U;
+    while (pending_count != 0U) {
+        uint32_t instruction;
+        uint8_t opcode;
+        uint8_t operand_a;
+        uint16_t operand_b;
         uint32_t send_count;
+        uint8_t stack_depth;
+        uint8_t next_depth = 0U;
+        uint16_t target_pc;
 
-        if (instruction_index + 1U < compiled_method->field_count &&
-            (opcode == COMPILED_METHOD_OP_RETURN_TOP || opcode == COMPILED_METHOD_OP_RETURN_RECEIVER)) {
-            machine_panic("compiled method returns before the final instruction");
-        }
+        instruction_index = pending_instruction_indices[--pending_count];
+        stack_depth = discovered_stack_depth[instruction_index];
+        instruction = compiled_method_instruction_word(compiled_method, instruction_index);
+        opcode = compiled_method_instruction_opcode(instruction);
+        operand_a = compiled_method_instruction_operand_a(instruction);
+        operand_b = compiled_method_instruction_operand_b(instruction);
         switch (opcode) {
             case COMPILED_METHOD_OP_PUSH_GLOBAL:
                 if (operand_a < RECORZ_MVP_GLOBAL_TRANSCRIPT || operand_a > MAX_GLOBAL_ID) {
                     machine_panic("compiled method pushGlobal global id is out of range");
                 }
-                ++stack_depth;
+                next_depth = (uint8_t)(stack_depth + 1U);
                 break;
             case COMPILED_METHOD_OP_PUSH_ROOT:
                 if (operand_a < RECORZ_MVP_SEED_ROOT_DEFAULT_FORM ||
                     operand_a > RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS) {
                     machine_panic("compiled method pushRoot root id is out of range");
                 }
-                ++stack_depth;
+                next_depth = (uint8_t)(stack_depth + 1U);
                 break;
             case COMPILED_METHOD_OP_PUSH_ARGUMENT:
                 if (operand_a >= argument_count) {
                     machine_panic("compiled method pushArgument index is out of range");
                 }
-                ++stack_depth;
+                next_depth = (uint8_t)(stack_depth + 1U);
                 break;
             case COMPILED_METHOD_OP_PUSH_LEXICAL:
                 if (operand_b >= LEXICAL_LIMIT) {
                     machine_panic("compiled method pushLexical index is out of range");
                 }
-                ++stack_depth;
+                next_depth = (uint8_t)(stack_depth + 1U);
                 break;
             case COMPILED_METHOD_OP_PUSH_NIL:
-                ++stack_depth;
+                next_depth = (uint8_t)(stack_depth + 1U);
                 break;
             case COMPILED_METHOD_OP_PUSH_FIELD:
                 if (operand_a >= OBJECT_FIELD_LIMIT) {
                     machine_panic("compiled method pushField index is out of range");
                 }
-                ++stack_depth;
+                next_depth = (uint8_t)(stack_depth + 1U);
                 break;
             case COMPILED_METHOD_OP_PUSH_SELF:
-                ++stack_depth;
+                next_depth = (uint8_t)(stack_depth + 1U);
                 break;
             case COMPILED_METHOD_OP_PUSH_SMALL_INTEGER:
-                ++stack_depth;
+                next_depth = (uint8_t)(stack_depth + 1U);
                 break;
             case COMPILED_METHOD_OP_PUSH_STRING_LITERAL:
                 if (operand_b == 0U || operand_b > LIVE_STRING_LITERAL_LIMIT) {
                     machine_panic("compiled method pushStringLiteral slot is out of range");
                 }
-                ++stack_depth;
+                next_depth = (uint8_t)(stack_depth + 1U);
                 break;
             case COMPILED_METHOD_OP_STORE_LEXICAL:
                 if (operand_b >= LEXICAL_LIMIT) {
@@ -3547,7 +3822,7 @@ static void validate_compiled_method(
                 if (stack_depth == 0U) {
                     machine_panic("compiled method storeLexical stack underflow");
                 }
-                --stack_depth;
+                next_depth = (uint8_t)(stack_depth - 1U);
                 break;
             case COMPILED_METHOD_OP_STORE_FIELD:
                 if (operand_a >= OBJECT_FIELD_LIMIT) {
@@ -3556,13 +3831,13 @@ static void validate_compiled_method(
                 if (stack_depth == 0U) {
                     machine_panic("compiled method storeField stack underflow");
                 }
-                --stack_depth;
+                next_depth = (uint8_t)(stack_depth - 1U);
                 break;
             case COMPILED_METHOD_OP_POP:
                 if (stack_depth == 0U) {
                     machine_panic("compiled method pop stack underflow");
                 }
-                --stack_depth;
+                next_depth = (uint8_t)(stack_depth - 1U);
                 break;
             case COMPILED_METHOD_OP_SEND:
                 if (operand_a < RECORZ_MVP_SELECTOR_SHOW ||
@@ -3576,26 +3851,61 @@ static void validate_compiled_method(
                 if (stack_depth < send_count + 1U) {
                     machine_panic("compiled method send stack underflow");
                 }
-                stack_depth -= send_count;
+                next_depth = (uint8_t)(stack_depth - send_count);
+                break;
+            case COMPILED_METHOD_OP_JUMP:
+                target_pc = operand_b;
+                if (target_pc >= instruction_count) {
+                    machine_panic("compiled method jump target is out of range");
+                }
+                if (discovered_stack_depth[target_pc] == 0xFFU) {
+                    discovered_stack_depth[target_pc] = stack_depth;
+                    pending_instruction_indices[pending_count++] = (uint8_t)target_pc;
+                } else if (discovered_stack_depth[target_pc] != stack_depth) {
+                    machine_panic("compiled method jump stack depth mismatch");
+                }
+                continue;
+            case COMPILED_METHOD_OP_JUMP_IF_TRUE:
+            case COMPILED_METHOD_OP_JUMP_IF_FALSE:
+                if (stack_depth == 0U) {
+                    machine_panic("compiled method conditional jump stack underflow");
+                }
+                target_pc = operand_b;
+                if (target_pc >= instruction_count) {
+                    machine_panic("compiled method conditional jump target is out of range");
+                }
+                next_depth = (uint8_t)(stack_depth - 1U);
+                if (discovered_stack_depth[target_pc] == 0xFFU) {
+                    discovered_stack_depth[target_pc] = next_depth;
+                    pending_instruction_indices[pending_count++] = (uint8_t)target_pc;
+                } else if (discovered_stack_depth[target_pc] != next_depth) {
+                    machine_panic("compiled method conditional jump stack depth mismatch");
+                }
                 break;
             case COMPILED_METHOD_OP_RETURN_TOP:
                 if (stack_depth == 0U) {
                     machine_panic("compiled method returnTop stack underflow");
                 }
-                break;
+                saw_return = 1U;
+                continue;
             case COMPILED_METHOD_OP_RETURN_RECEIVER:
-                break;
+                saw_return = 1U;
+                continue;
             default:
                 machine_panic("compiled method opcode is unknown");
         }
+        if ((uint8_t)(instruction_index + 1U) >= instruction_count) {
+            machine_panic("compiled method falls through without returning");
+        }
+        if (discovered_stack_depth[instruction_index + 1U] == 0xFFU) {
+            discovered_stack_depth[instruction_index + 1U] = next_depth;
+            pending_instruction_indices[pending_count++] = (uint8_t)(instruction_index + 1U);
+        } else if (discovered_stack_depth[instruction_index + 1U] != next_depth) {
+            machine_panic("compiled method control flow stack depth mismatch");
+        }
     }
-    if (compiled_method_instruction_opcode(
-            compiled_method_instruction_word(compiled_method, (uint8_t)(compiled_method->field_count - 1U))
-        ) != COMPILED_METHOD_OP_RETURN_TOP &&
-        compiled_method_instruction_opcode(
-            compiled_method_instruction_word(compiled_method, (uint8_t)(compiled_method->field_count - 1U))
-        ) != COMPILED_METHOD_OP_RETURN_RECEIVER) {
-        machine_panic("compiled method is missing a final return");
+    if (!saw_return) {
+        machine_panic("compiled method has no reachable return");
     }
 }
 
@@ -6012,7 +6322,62 @@ static void compile_source_append_instruction(
     instruction_words[(*instruction_count)++] = encode_compiled_method_word(opcode, operand_a, operand_b);
 }
 
+static void compile_source_patch_instruction(
+    uint32_t instruction_words[],
+    uint8_t instruction_count,
+    uint8_t instruction_index,
+    uint8_t opcode,
+    uint8_t operand_a,
+    uint16_t operand_b
+) {
+    if (instruction_index >= instruction_count) {
+        machine_panic("KernelInstaller source method patch is out of range");
+    }
+    instruction_words[instruction_index] = encode_compiled_method_word(opcode, operand_a, operand_b);
+}
+
 static const char *compile_source_expression_push(
+    const struct recorz_mvp_heap_object *class_object,
+    const char *cursor,
+    const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t argument_count,
+    const char temporary_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t temporary_count,
+    uint32_t instruction_words[],
+    uint8_t *instruction_count
+);
+static uint8_t compile_source_statement_line(
+    const struct recorz_mvp_heap_object *class_object,
+    const char *line,
+    const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t argument_count,
+    const char temporary_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t temporary_count,
+    uint32_t instruction_words[],
+    uint8_t *instruction_count,
+    uint8_t *produces_value
+);
+static void compile_source_return_line(
+    const struct recorz_mvp_heap_object *class_object,
+    const char *line,
+    const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t argument_count,
+    const char temporary_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t temporary_count,
+    uint32_t instruction_words[],
+    uint8_t *instruction_count
+);
+static void compile_source_inline_block(
+    const struct recorz_mvp_heap_object *class_object,
+    const char *source,
+    const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t argument_count,
+    const char temporary_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t temporary_count,
+    uint32_t instruction_words[],
+    uint8_t *instruction_count
+);
+static const char *compile_source_conditional_expression_push(
     const struct recorz_mvp_heap_object *class_object,
     const char *cursor,
     const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
@@ -6129,9 +6494,8 @@ static const char *compile_source_primary_push(
         if (*token_cursor != ')') {
             machine_panic("KernelInstaller source method parenthesized expression is missing ')'");
         }
-        return token_cursor + 1;
-    }
-    if (*cursor == '\'') {
+        cursor = token_cursor + 1;
+    } else if (*cursor == '\'') {
         uint16_t literal_slot;
 
         token_cursor = source_copy_single_quoted_text(cursor, quoted_text, sizeof(quoted_text));
@@ -6154,54 +6518,57 @@ static const char *compile_source_primary_push(
             0U,
             literal_slot
         );
-        return token_cursor;
-    }
-    token_cursor = source_parse_small_integer(cursor, &small_integer);
-    if (token_cursor != 0) {
-        if (small_integer < -32768 || small_integer > 32767) {
-            machine_panic("KernelInstaller source method small integer literal is out of range");
+        cursor = token_cursor;
+    } else {
+        token_cursor = source_parse_small_integer(cursor, &small_integer);
+        if (token_cursor != 0) {
+            if (small_integer < -32768 || small_integer > 32767) {
+                machine_panic("KernelInstaller source method small integer literal is out of range");
+            }
+            compile_source_append_instruction(
+                instruction_words,
+                instruction_count,
+                COMPILED_METHOD_OP_PUSH_SMALL_INTEGER,
+                0U,
+                (uint16_t)(int16_t)small_integer
+            );
+            cursor = token_cursor;
+        } else {
+            token_cursor = source_parse_identifier(cursor, token, sizeof(token));
+            if (token_cursor == 0) {
+                return 0;
+            }
+            if (source_names_equal(token, "nil")) {
+                compile_source_append_instruction(
+                    instruction_words,
+                    instruction_count,
+                    COMPILED_METHOD_OP_PUSH_NIL,
+                    0U,
+                    0U
+                );
+            } else if (source_names_equal(token, "self")) {
+                compile_source_append_instruction(
+                    instruction_words,
+                    instruction_count,
+                    COMPILED_METHOD_OP_PUSH_SELF,
+                    0U,
+                    0U
+                );
+            } else if (!compile_source_operand_push(
+                    class_object,
+                    token,
+                    argument_names,
+                    argument_count,
+                    temporary_names,
+                    temporary_count,
+                    instruction_words,
+                    instruction_count)) {
+                return 0;
+            }
+            cursor = token_cursor;
         }
-        compile_source_append_instruction(
-            instruction_words,
-            instruction_count,
-            COMPILED_METHOD_OP_PUSH_SMALL_INTEGER,
-            0U,
-            (uint16_t)(int16_t)small_integer
-        );
-        return token_cursor;
     }
-    token_cursor = source_parse_identifier(cursor, token, sizeof(token));
-    if (token_cursor == 0) {
-        return 0;
-    }
-    if (source_names_equal(token, "nil")) {
-        compile_source_append_instruction(
-            instruction_words,
-            instruction_count,
-            COMPILED_METHOD_OP_PUSH_NIL,
-            0U,
-            0U
-        );
-    } else if (source_names_equal(token, "self")) {
-        compile_source_append_instruction(
-            instruction_words,
-            instruction_count,
-            COMPILED_METHOD_OP_PUSH_SELF,
-            0U,
-            0U
-        );
-    } else if (!compile_source_operand_push(
-            class_object,
-            token,
-            argument_names,
-            argument_count,
-            temporary_names,
-            temporary_count,
-            instruction_words,
-            instruction_count)) {
-        return 0;
-    }
-    cursor = source_skip_horizontal_space(token_cursor);
+    cursor = source_skip_horizontal_space(cursor);
     while (source_char_is_identifier_start(*cursor)) {
         const char *selector_cursor = source_parse_identifier(cursor, token, sizeof(token));
         const char *after_selector;
@@ -6269,6 +6636,18 @@ static const char *compile_source_expression_push(
     if (*part_cursor != ':') {
         return cursor;
     }
+    if (source_names_equal(selector_part, "ifTrue") || source_names_equal(selector_part, "ifFalse")) {
+        return compile_source_conditional_expression_push(
+            class_object,
+            cursor,
+            argument_names,
+            argument_count,
+            temporary_names,
+            temporary_count,
+            instruction_words,
+            instruction_count
+        );
+    }
     while (selector_part[selector_length] != '\0') {
         selector_name_buffer[selector_length] = selector_part[selector_length];
         ++selector_length;
@@ -6329,6 +6708,198 @@ static const char *compile_source_expression_push(
     return cursor;
 }
 
+static void compile_source_inline_block(
+    const struct recorz_mvp_heap_object *class_object,
+    const char *source,
+    const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t argument_count,
+    const char temporary_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t temporary_count,
+    uint32_t instruction_words[],
+    uint8_t *instruction_count
+) {
+    const char *cursor = source;
+    char statement[METHOD_SOURCE_CHUNK_LIMIT];
+    uint8_t statement_count = 0U;
+    uint8_t pending_statement_value = 0U;
+
+    if (*source_skip_horizontal_space(source) == ':') {
+        machine_panic("KernelInstaller conditional blocks do not support block arguments yet");
+    }
+    while (source_copy_next_statement(&cursor, statement, sizeof(statement)) != 0U) {
+        uint8_t produces_value = 0U;
+        const char *trimmed = source_skip_horizontal_space(statement);
+
+        if (pending_statement_value) {
+            compile_source_append_instruction(
+                instruction_words,
+                instruction_count,
+                COMPILED_METHOD_OP_POP,
+                0U,
+                0U
+            );
+            pending_statement_value = 0U;
+        }
+        if (trimmed[0] == '^') {
+            compile_source_return_line(
+                class_object,
+                statement,
+                argument_names,
+                argument_count,
+                temporary_names,
+                temporary_count,
+                instruction_words,
+                instruction_count
+            );
+            if (source_copy_next_statement(&cursor, statement, sizeof(statement)) != 0U) {
+                machine_panic("KernelInstaller conditional block has unexpected trailing statements after a return");
+            }
+            return;
+        }
+        if (!compile_source_statement_line(
+                class_object,
+                statement,
+                argument_names,
+                argument_count,
+                temporary_names,
+                temporary_count,
+                instruction_words,
+                instruction_count,
+                &produces_value
+            )) {
+            machine_panic("KernelInstaller conditional block statement is unsupported");
+        }
+        pending_statement_value = produces_value;
+        ++statement_count;
+    }
+    if (statement_count == 0U || !pending_statement_value) {
+        compile_source_append_instruction(
+            instruction_words,
+            instruction_count,
+            COMPILED_METHOD_OP_PUSH_NIL,
+            0U,
+            0U
+        );
+    }
+}
+
+static const char *compile_source_conditional_expression_push(
+    const struct recorz_mvp_heap_object *class_object,
+    const char *cursor,
+    const char argument_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t argument_count,
+    const char temporary_names[][METHOD_SOURCE_NAME_LIMIT],
+    uint16_t temporary_count,
+    uint32_t instruction_words[],
+    uint8_t *instruction_count
+) {
+    char first_selector[METHOD_SOURCE_NAME_LIMIT];
+    char second_selector[METHOD_SOURCE_NAME_LIMIT];
+    char first_block[METHOD_SOURCE_CHUNK_LIMIT];
+    char second_block[METHOD_SOURCE_CHUNK_LIMIT];
+    const char *part_cursor;
+    const char *after_selector;
+    const char *after_first_block;
+    const char *after_second_block;
+    uint8_t first_is_true;
+    uint8_t branch_instruction_index;
+    uint8_t jump_instruction_index;
+    uint8_t has_second_clause = 0U;
+
+    part_cursor = source_parse_identifier(cursor, first_selector, sizeof(first_selector));
+    if (part_cursor == 0) {
+        machine_panic("KernelInstaller conditional expression is missing a selector");
+    }
+    after_selector = source_skip_horizontal_space(part_cursor);
+    if (*after_selector != ':') {
+        machine_panic("KernelInstaller conditional expression is missing ':'");
+    }
+    after_first_block = source_copy_bracket_body(after_selector + 1, first_block, sizeof(first_block));
+    if (after_first_block == 0) {
+        machine_panic("KernelInstaller conditional expression is missing a block argument");
+    }
+    cursor = source_skip_horizontal_space(after_first_block);
+    part_cursor = source_parse_identifier(cursor, second_selector, sizeof(second_selector));
+    if (part_cursor != 0) {
+        after_selector = source_skip_horizontal_space(part_cursor);
+        if (*after_selector == ':' &&
+            ((source_names_equal(first_selector, "ifTrue") && source_names_equal(second_selector, "ifFalse")) ||
+             (source_names_equal(first_selector, "ifFalse") && source_names_equal(second_selector, "ifTrue")))) {
+            after_second_block = source_copy_bracket_body(after_selector + 1, second_block, sizeof(second_block));
+            if (after_second_block == 0) {
+                machine_panic("KernelInstaller conditional expression is missing a matching block argument");
+            }
+            cursor = after_second_block;
+            has_second_clause = 1U;
+        }
+    }
+
+    first_is_true = (uint8_t)source_names_equal(first_selector, "ifTrue");
+    branch_instruction_index = *instruction_count;
+    compile_source_append_instruction(
+        instruction_words,
+        instruction_count,
+        first_is_true ? COMPILED_METHOD_OP_JUMP_IF_FALSE : COMPILED_METHOD_OP_JUMP_IF_TRUE,
+        0U,
+        0U
+    );
+    compile_source_inline_block(
+        class_object,
+        first_block,
+        argument_names,
+        argument_count,
+        temporary_names,
+        temporary_count,
+        instruction_words,
+        instruction_count
+    );
+    jump_instruction_index = *instruction_count;
+    compile_source_append_instruction(
+        instruction_words,
+        instruction_count,
+        COMPILED_METHOD_OP_JUMP,
+        0U,
+        0U
+    );
+    compile_source_patch_instruction(
+        instruction_words,
+        *instruction_count,
+        branch_instruction_index,
+        first_is_true ? COMPILED_METHOD_OP_JUMP_IF_FALSE : COMPILED_METHOD_OP_JUMP_IF_TRUE,
+        0U,
+        *instruction_count
+    );
+    if (has_second_clause) {
+        compile_source_inline_block(
+            class_object,
+            second_block,
+            argument_names,
+            argument_count,
+            temporary_names,
+            temporary_count,
+            instruction_words,
+            instruction_count
+        );
+    } else {
+        compile_source_append_instruction(
+            instruction_words,
+            instruction_count,
+            COMPILED_METHOD_OP_PUSH_NIL,
+            0U,
+            0U
+        );
+    }
+    compile_source_patch_instruction(
+        instruction_words,
+        *instruction_count,
+        jump_instruction_index,
+        COMPILED_METHOD_OP_JUMP,
+        0U,
+        *instruction_count
+    );
+    return cursor;
+}
+
 static uint8_t compile_source_statement_line(
     const struct recorz_mvp_heap_object *class_object,
     const char *line,
@@ -6349,11 +6920,10 @@ static uint8_t compile_source_statement_line(
         return 1U;
     }
     cursor = source_parse_identifier(cursor, receiver_name, sizeof(receiver_name));
-    if (cursor == 0) {
-        return 0U;
+    if (cursor != 0) {
+        cursor = source_skip_horizontal_space(cursor);
     }
-    cursor = source_skip_horizontal_space(cursor);
-    if (cursor[0] == ':' && cursor[1] == '=') {
+    if (cursor != 0 && cursor[0] == ':' && cursor[1] == '=') {
         uint8_t field_index;
         uint16_t temporary_index;
 
@@ -8743,6 +9313,28 @@ static void execute_executable(
                     string_value(live_string_literals[instruction.operand_b - 1U].text)
                 );
                 break;
+            case RECORZ_MVP_OP_JUMP:
+                if (instruction.operand_b >= executable->instruction_count) {
+                    machine_panic("jump target is out of range");
+                }
+                pc = instruction.operand_b;
+                break;
+            case RECORZ_MVP_OP_JUMP_IF_TRUE:
+            case RECORZ_MVP_OP_JUMP_IF_FALSE: {
+                uint8_t condition_is_true;
+
+                if (instruction.operand_b >= executable->instruction_count) {
+                    machine_panic("conditional jump target is out of range");
+                }
+                condition_is_true = condition_value_is_true(
+                    activation_pop(activation_stack, &activation_stack_size)
+                );
+                if ((instruction.opcode == RECORZ_MVP_OP_JUMP_IF_TRUE && condition_is_true) ||
+                    (instruction.opcode == RECORZ_MVP_OP_JUMP_IF_FALSE && !condition_is_true)) {
+                    pc = instruction.operand_b;
+                }
+                break;
+            }
             case RECORZ_MVP_OP_STORE_FIELD:
                 if (receiver_object == 0) {
                     machine_panic("storeField requires a receiver object");
@@ -9095,6 +9687,28 @@ static void perform_send(
 ) {
     const struct recorz_mvp_heap_object *object = 0;
 
+    if (selector == RECORZ_MVP_SELECTOR_EQUAL) {
+        if (send_argument_count != 1U) {
+            machine_panic("= expects one argument");
+        }
+        push(boolean_value(value_equals(receiver, arguments[0])));
+        return;
+    }
+    if (selector == RECORZ_MVP_SELECTOR_LESS_THAN || selector == RECORZ_MVP_SELECTOR_GREATER_THAN) {
+        if (send_argument_count != 1U) {
+            machine_panic("comparison expects one argument");
+        }
+        if (receiver.kind != RECORZ_MVP_VALUE_SMALL_INTEGER ||
+            arguments[0].kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+            machine_panic("comparison expects small integer operands");
+        }
+        push(boolean_value(
+            selector == RECORZ_MVP_SELECTOR_LESS_THAN
+                ? (receiver.integer < arguments[0].integer)
+                : (receiver.integer > arguments[0].integer)
+        ));
+        return;
+    }
     if (selector == RECORZ_MVP_SELECTOR_SHOW || selector == RECORZ_MVP_SELECTOR_WRITE_STRING) {
         if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
             machine_panic("text send expects a string literal");

@@ -1114,6 +1114,12 @@ def kernel_selector_constant_stem(selector: str) -> str:
         return "SUBTRACT"
     if selector == "*":
         return "MULTIPLY"
+    if selector == "=":
+        return "EQUAL"
+    if selector == "<":
+        return "LESS_THAN"
+    if selector == ">":
+        return "GREATER_THAN"
     raise LoweringError(f"kernel MVP selector {selector!r} cannot be converted into a constant stem")
 
 

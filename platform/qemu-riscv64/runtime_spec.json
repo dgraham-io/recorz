@@ -140,6 +140,21 @@
         "name": "push_string_literal",
         "constant": "RECORZ_MVP_OP_PUSH_STRING_LITERAL",
         "value": 17
+      },
+      {
+        "name": "jump",
+        "constant": "RECORZ_MVP_OP_JUMP",
+        "value": 18
+      },
+      {
+        "name": "jump_if_true",
+        "constant": "RECORZ_MVP_OP_JUMP_IF_TRUE",
+        "value": 19
+      },
+      {
+        "name": "jump_if_false",
+        "constant": "RECORZ_MVP_OP_JUMP_IF_FALSE",
+        "value": 20
       }
   ],
   "literal_kinds": [
@@ -241,6 +256,21 @@
         "name": "push_string_literal",
         "constant": "RECORZ_MVP_COMPILED_METHOD_OP_PUSH_STRING_LITERAL",
         "value": 17
+      },
+      {
+        "name": "jump",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_JUMP",
+        "value": 18
+      },
+      {
+        "name": "jump_if_true",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_JUMP_IF_TRUE",
+        "value": 19
+      },
+      {
+        "name": "jump_if_false",
+        "constant": "RECORZ_MVP_COMPILED_METHOD_OP_JUMP_IF_FALSE",
+        "value": 20
       }
     ]
   },

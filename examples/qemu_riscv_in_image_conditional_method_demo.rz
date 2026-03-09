@@ -1,0 +1,20 @@
+Display clear.
+KernelInstaller fileInClassChunks: 'RecorzKernelClass: #ConditionalReporter superclass: #Object instanceVariableNames: ''value''
+!
+sum
+    ^value < 10
+!
+setValue: number
+    value := number.
+    ^self
+!'.
+KernelInstaller rememberObject: ((KernelInstaller classNamed: 'ConditionalReporter') new) named: 'conditionalReporter'.
+(KernelInstaller objectNamed: 'conditionalReporter') setValue: 9.
+Transcript show: 'COND'.
+Transcript cr.
+Workspace evaluate: '(KernelInstaller objectNamed: ''conditionalReporter'') sum ifTrue: [ Transcript show: ''LT'' ] ifFalse: [ Transcript show: ''GE'' ]. Transcript cr.'.
+(KernelInstaller objectNamed: 'conditionalReporter') setValue: 11.
+Workspace evaluate: '(KernelInstaller objectNamed: ''conditionalReporter'') sum ifTrue: [ Transcript show: ''LT'' ] ifFalse: [ Transcript show: ''GE'' ]. Transcript cr.'.
+Workspace evaluate: '10 = 10 ifTrue: [ Transcript show: ''EQ'' ] ifFalse: [ Transcript show: ''NE'' ]. Transcript cr.'.
+Workspace evaluate: '5 < 3 ifFalse: [ Transcript show: ''IFFALSE'' ]. Transcript cr.'.
+Workspace evaluate: '11 > 10 ifTrue: [ Transcript show: ''GT'' ]. Transcript cr.'.
