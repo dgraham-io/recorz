@@ -17,7 +17,7 @@ Reference:
 - [x] `Form>>beDisplay`-class primitive path to bind a `Form` to the real framebuffer
 - [x] `Cursor>>beCursor`-class primitive path to install a cursor image
 - [x] `CharacterScanner`-class text scan primitive for glyph placement and stop conditions
-- [ ] line/shape primitive support comparable to `drawLoop` / line drawing support where useful
+- [x] line/shape primitive support comparable to `drawLoop` / line drawing support where useful
 - [x] keyboard and serial event delivery as raw input primitives, not UI policy
 - [x] snapshot/load/save and boot glue kept below the image
 - [x] emergency panic/debug output kept below the image
@@ -31,7 +31,7 @@ Reference:
 - [x] Image-visible font, metrics, style, layout, cursor, and selection objects
 - [x] First image-side text renderer slice
 - [x] Shared `Form` string path can delegate to image-side rendering on RV32
-- [ ] Display/input primitive boundary cleaned up around the Smalltalk-80 model
+- [x] Display/input primitive boundary cleaned up around the Smalltalk-80 model
 - [ ] Image-owned workspace/browser rendering
 - [ ] Real native tool surfaces in the image
 
@@ -129,7 +129,7 @@ Reference:
 - [ ] Evaluate whether the first native UI should stay Smalltalk-pane-like or move toward a declarative surface after the primitive layer is proven
 
 ## Milestones To Watch
-- [ ] Milestone A: Smalltalk-80-style primitive boundary documented and implemented
+- [x] Milestone A: Smalltalk-80-style primitive boundary documented and implemented
 - [ ] Milestone B: image-owned text composition and rendering for the workspace
 - [ ] Milestone C: image-owned workspace and browser replacing the C renderer
 - [ ] Milestone D: native workspace and browser survive snapshot/reboot

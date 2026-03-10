@@ -16,6 +16,7 @@ IMAGE_SIDE_FORM_WRITER_EXAMPLE = ROOT / "examples" / "qemu_riscv_image_side_form
 IMAGE_SIDE_FORM_WRITER_FILE_IN = ROOT / "examples" / "qemu_riscv_image_side_form_writer_file_in.rz"
 CHARACTER_SCANNER_RENDERER_EXAMPLE = ROOT / "examples" / "qemu_riscv_character_scanner_renderer_demo.rz"
 CHARACTER_SCANNER_RENDERER_FILE_IN = ROOT / "examples" / "qemu_riscv_character_scanner_renderer_file_in.rz"
+BITBLT_DRAW_LINE_EXAMPLE = ROOT / "examples" / "qemu_riscv_bitblt_draw_line_demo.rz"
 
 
 def _read_ppm(path: Path) -> tuple[int, int, bytes]:
@@ -142,6 +143,18 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         text_histogram = _region_histogram(data, width, 24, 24, 420, 220)
         self.assertGreater(text_histogram[(31, 41, 51)], 1800)
         self.assertGreater(text_histogram[(247, 243, 232)], 1800)
+
+    def test_bitblt_line_primitive_draws_horizontal_vertical_and_diagonal_segments(self) -> None:
+        qemu_log, width, height, data = self.render_example(BITBLT_DRAW_LINE_EXAMPLE)
+
+        normalized_log = qemu_log.replace("\r", "")
+        self.assertIn("LINE PRIMITIVE", normalized_log)
+        self.assertEqual((width, height), (1024, 768))
+        self.assertEqual(_pixel(data, width, 120, 80), (0, 0, 255))
+        self.assertEqual(_pixel(data, width, 64, 140), (0, 255, 0))
+        self.assertEqual(_pixel(data, width, 160, 208), (255, 0, 0))
+        self.assertEqual(_pixel(data, width, 224, 140), (255, 0, 255))
+        self.assertEqual(_pixel(data, width, 360, 136), (255, 136, 0))
 
 
 if __name__ == "__main__":

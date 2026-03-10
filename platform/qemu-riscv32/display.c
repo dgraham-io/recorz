@@ -16,6 +16,13 @@ static void put_pixel(uint32_t x, uint32_t y, uint32_t color) {
     framebuffer[(y * RECORZ_DISPLAY_WIDTH) + x] = color;
 }
 
+static void put_pixel_i32(int32_t x, int32_t y, uint32_t color) {
+    if (x < 0 || y < 0) {
+        return;
+    }
+    put_pixel((uint32_t)x, (uint32_t)y, color);
+}
+
 /* Generic 1bpp blit used as the first copy-based rendering path. */
 void display_form_blit_mono_bitmap(
     uint32_t x,
@@ -97,6 +104,29 @@ void display_form_fill_rect(uint32_t x, uint32_t y, uint32_t width, uint32_t hei
 
         for (col = 0U; col < width; ++col) {
             put_pixel(x + col, y + row, color);
+        }
+    }
+}
+
+void display_form_draw_line(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint32_t color) {
+    int32_t dx = (x0 < x1) ? (x1 - x0) : (x0 - x1);
+    int32_t sx = (x0 < x1) ? 1 : -1;
+    int32_t dy = (y0 < y1) ? (y0 - y1) : (y1 - y0);
+    int32_t sy = (y0 < y1) ? 1 : -1;
+    int32_t err = dx + dy;
+
+    for (;;) {
+        put_pixel_i32(x0, y0, color);
+        if (x0 == x1 && y0 == y1) {
+            return;
+        }
+        if ((err * 2) >= dy) {
+            err += dy;
+            x0 += sx;
+        }
+        if ((err * 2) <= dx) {
+            err += dx;
+            y0 += sy;
         }
     }
 }

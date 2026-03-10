@@ -612,23 +612,28 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             "RECORZ_MVP_METHOD_ENTRY_BITBLT_COPY_BITMAP_TO_FORM_X_Y_SCALE",
         )
         self.assertEqual(
+            mvp.kernel_method_entry_name("BitBlt", "drawLineOnForm:fromX:fromY:toX:toY:color:"),
+            "RECORZ_MVP_METHOD_ENTRY_BITBLT_DRAW_LINE_ON_FORM_FROM_X_FROM_Y_TO_X_TO_Y_COLOR",
+        )
+        self.assertEqual(
             mvp.kernel_method_entry_name("FormFactory", "fromBits:"),
             "RECORZ_MVP_METHOD_ENTRY_FORM_FACTORY_FROM_BITS",
         )
 
     def test_derives_primitive_binding_ids_from_kernel_sources(self) -> None:
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["bitbltFillFormColor"], 1)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["glyphsAt"], 5)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formClear"], 8)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formWriteCodePointColor"], 11)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formNewline"], 12)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formBeDisplay"], 13)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["bitbltDrawLineOnFormFromXFromYToXToYColor"], 5)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["glyphsAt"], 6)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formClear"], 9)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formWriteCodePointColor"], 12)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formNewline"], 13)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formBeDisplay"], 14)
         self.assertEqual(
             mvp.PRIMITIVE_BINDING_VALUES["kernelInstallerInstallCompiledMethodOnClassSelectorIdArgumentCount"],
-            16,
+            17,
         )
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formWriteStyledText"], 10)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 73)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formWriteStyledText"], 11)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 74)
         self.assertEqual(
             mvp.PRIMITIVE_BINDING_BY_ENTRY_NAME["RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING"],
             mvp.PRIMITIVE_BINDING_VALUES["formWriteString"],
@@ -870,6 +875,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_STOP", 168),
                 ("RECORZ_MVP_SELECTOR_X", 169),
                 ("RECORZ_MVP_SELECTOR_Y", 170),
+                ("RECORZ_MVP_SELECTOR_DRAW_LINE_ON_FORM_FROM_X_FROM_Y_TO_X_TO_Y_COLOR", 171),
             ],
         )
 
@@ -2072,7 +2078,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 (mvp.SEED_FIELD_OBJECT_INDEX, 191),
                 (mvp.SEED_FIELD_SMALL_INTEGER, 0),
                 (mvp.SEED_FIELD_SMALL_INTEGER, mvp.SEED_OBJECT_CLASS),
-                (mvp.SEED_FIELD_OBJECT_INDEX, 303),
+                (mvp.SEED_FIELD_OBJECT_INDEX, 304),
             ],
         )
 
@@ -2196,6 +2202,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertIn("enum recorz_mvp_primitive_binding {", header)
         for symbol in (
             "bitbltFillFormColor",
+            "bitbltDrawLineOnFormFromXFromYToXToYColor",
             "characterScannerScan",
             "formBeDisplay",
             "formNewline",
@@ -2322,6 +2329,11 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertIn(
             "[RECORZ_MVP_PRIMITIVE_BITBLT_COPY_BITMAP_REGION_TO_FORM_X_Y_SCALE_COLOR] = "
             "execute_entry_bitblt_copy_bitmap_region_to_form_x_y_scale_color,",
+            header,
+        )
+        self.assertIn(
+            "[RECORZ_MVP_PRIMITIVE_BITBLT_DRAW_LINE_ON_FORM_FROM_X_FROM_Y_TO_X_TO_Y_COLOR] = "
+            "execute_entry_bitblt_draw_line_on_form_from_x_from_y_to_x_to_y_color,",
             header,
         )
         self.assertIn(

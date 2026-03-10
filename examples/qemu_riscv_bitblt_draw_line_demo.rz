@@ -1,0 +1,10 @@
+| form |
+form := Display defaultForm.
+Display clear.
+BitBlt drawLineOnForm: form fromX: 64 fromY: 80 toX: 224 toY: 80 color: 255.
+BitBlt drawLineOnForm: form fromX: 64 fromY: 80 toX: 64 toY: 208 color: 65280.
+BitBlt drawLineOnForm: form fromX: 64 fromY: 208 toX: 224 toY: 208 color: 16711680.
+BitBlt drawLineOnForm: form fromX: 224 fromY: 80 toX: 224 toY: 208 color: 16711935.
+BitBlt drawLineOnForm: form fromX: 320 fromY: 96 toX: 400 toY: 176 color: 16746496.
+Transcript show: 'LINE PRIMITIVE'.
+Transcript cr.

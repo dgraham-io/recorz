@@ -155,7 +155,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CHARACTER_SCANNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_Y
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_DRAW_LINE_ON_FORM_FROM_X_FROM_Y_TO_X_TO_Y_COLOR
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -424,6 +424,14 @@ static void form_fill_rect_color(
     uint32_t height,
     uint32_t color
 );
+static void form_draw_line_color(
+    const struct recorz_mvp_heap_object *form,
+    int32_t x0,
+    int32_t y0,
+    int32_t x1,
+    int32_t y1,
+    uint32_t color
+);
 static void form_write_code_point_with_colors(
     const struct recorz_mvp_heap_object *form,
     uint8_t code_point,
@@ -431,18 +439,18 @@ static void form_write_code_point_with_colors(
     uint32_t background_color
 );
 static void bitblt_copy_mono_bitmap_to_form(
-    const struct recorz_mvp_heap_object *bitmap,
-    const struct recorz_mvp_heap_object *form,
-    uint32_t src_x,
-    uint32_t src_y,
-    uint32_t width,
-    uint32_t height,
+    const struct recorz_mvp_heap_object *source_bitmap,
+    const struct recorz_mvp_heap_object *dest_form,
+    uint32_t source_x,
+    uint32_t source_y,
+    uint32_t copy_width,
+    uint32_t copy_height,
     uint32_t dest_x,
     uint32_t dest_y,
-    uint32_t clip_x,
-    uint32_t clip_y,
-    uint32_t clip_width,
-    uint8_t apply_color
+    uint32_t scale,
+    uint32_t one_color,
+    uint32_t zero_color,
+    uint8_t transfer_rule
 );
 static void active_cursor_move_to(uint32_t x, uint32_t y);
 static void active_cursor_set_visible(uint8_t visible);
@@ -963,6 +971,8 @@ static const char *selector_name(uint8_t selector) {
             return "x";
         case RECORZ_MVP_SELECTOR_Y:
             return "y";
+        case RECORZ_MVP_SELECTOR_DRAW_LINE_ON_FORM_FROM_X_FROM_Y_TO_X_TO_Y_COLOR:
+            return "drawLineOnForm:fromX:fromY:toX:toY:color:";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -7712,6 +7722,13 @@ static uint32_t small_integer_u32(struct recorz_mvp_value value, const char *mes
     return (uint32_t)value.integer;
 }
 
+static int32_t small_integer_i32(struct recorz_mvp_value value, const char *message) {
+    if (value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+        machine_panic(message);
+    }
+    return value.integer;
+}
+
 static const struct recorz_mvp_heap_object *transcript_layout_object(void) {
     const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(transcript_layout_handle);
 
@@ -8198,6 +8215,60 @@ static void fill_mono_bitmap_rect(
     }
 }
 
+static void set_mono_bitmap_pixel(
+    struct recorz_mvp_heap_object *bitmap,
+    uint32_t x,
+    uint32_t y,
+    uint8_t bit_value
+) {
+    uint32_t *rows = mutable_mono_bitmap_rows(bitmap);
+    uint32_t bitmap_width_value = bitmap_width(bitmap);
+    uint32_t bitmap_height_value = bitmap_height(bitmap);
+    uint32_t mask;
+
+    if (x >= bitmap_width_value || y >= bitmap_height_value) {
+        return;
+    }
+    mask = 1U << (bitmap_width_value - x - 1U);
+    if (bit_value) {
+        rows[y] |= mask;
+    } else {
+        rows[y] &= ~mask;
+    }
+}
+
+static void draw_mono_bitmap_line(
+    struct recorz_mvp_heap_object *bitmap,
+    int32_t x0,
+    int32_t y0,
+    int32_t x1,
+    int32_t y1,
+    uint8_t bit_value
+) {
+    int32_t dx = (x0 < x1) ? (x1 - x0) : (x0 - x1);
+    int32_t sx = (x0 < x1) ? 1 : -1;
+    int32_t dy = (y0 < y1) ? (y0 - y1) : (y1 - y0);
+    int32_t sy = (y0 < y1) ? 1 : -1;
+    int32_t err = dx + dy;
+
+    for (;;) {
+        if (x0 >= 0 && y0 >= 0) {
+            set_mono_bitmap_pixel(bitmap, (uint32_t)x0, (uint32_t)y0, bit_value);
+        }
+        if (x0 == x1 && y0 == y1) {
+            return;
+        }
+        if ((err * 2) >= dy) {
+            err += dy;
+            x0 += sx;
+        }
+        if ((err * 2) <= dx) {
+            err += dx;
+            y0 += sy;
+        }
+    }
+}
+
 static uint8_t bitblt_transfer_rule_uses_transparent_zero(uint8_t transfer_rule) {
     switch (transfer_rule) {
         case RECORZ_MVP_TRANSFER_RULE_COPY:
@@ -8411,6 +8482,28 @@ static void form_fill_rect_color(
         return;
     }
     machine_panic("fill expects a framebuffer or heap monochrome form");
+}
+
+static void form_draw_line_color(
+    const struct recorz_mvp_heap_object *form,
+    int32_t x0,
+    int32_t y0,
+    int32_t x1,
+    int32_t y1,
+    uint32_t color
+) {
+    const struct recorz_mvp_heap_object *bitmap = bitmap_for_form(form);
+    uint32_t storage_kind = bitmap_storage_kind(bitmap);
+
+    if (storage_kind == BITMAP_STORAGE_FRAMEBUFFER) {
+        display_form_draw_line(x0, y0, x1, y1, color);
+        return;
+    }
+    if (storage_kind == BITMAP_STORAGE_HEAP_MONO) {
+        draw_mono_bitmap_line(mutable_bitmap_for_form(form), x0, y0, x1, y1, (uint8_t)(color != 0U));
+        return;
+    }
+    machine_panic("line draw expects a framebuffer or heap monochrome form");
 }
 
 static void form_clear(const struct recorz_mvp_heap_object *form) {
@@ -9972,6 +10065,35 @@ static void execute_entry_bitblt_copy_bitmap_region_to_form_x_y_scale_color(
         RECORZ_MVP_TRANSFER_RULE_OVER
     );
     push(arguments[5]);
+}
+
+static void execute_entry_bitblt_draw_line_on_form_from_x_from_y_to_x_to_y_color(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const struct recorz_mvp_heap_object *form;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("BitBlt drawLineOnForm:fromX:fromY:toX:toY:color: expects a form");
+    }
+    form = heap_object_for_value(arguments[0]);
+    if (primitive_kind_for_heap_object(form) != RECORZ_MVP_OBJECT_FORM) {
+        machine_panic("BitBlt drawLineOnForm:fromX:fromY:toX:toY:color: expects a form");
+    }
+    form_draw_line_color(
+        form,
+        small_integer_i32(arguments[1], "BitBlt drawLineOnForm:fromX:fromY:toX:toY:color: expects a small integer fromX"),
+        small_integer_i32(arguments[2], "BitBlt drawLineOnForm:fromX:fromY:toX:toY:color: expects a small integer fromY"),
+        small_integer_i32(arguments[3], "BitBlt drawLineOnForm:fromX:fromY:toX:toY:color: expects a small integer toX"),
+        small_integer_i32(arguments[4], "BitBlt drawLineOnForm:fromX:fromY:toX:toY:color: expects a small integer toY"),
+        small_integer_u32(arguments[5], "BitBlt drawLineOnForm:fromX:fromY:toX:toY:color: expects a non-negative small integer color")
+    );
+    push(arguments[0]);
 }
 
 static void execute_entry_glyphs_at(
