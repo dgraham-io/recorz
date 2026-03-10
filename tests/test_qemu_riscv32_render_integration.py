@@ -11,6 +11,7 @@ BUILD_DIR = ROOT / "misc" / "qemu-riscv32-dev-mvp"
 PPM_PATH = BUILD_DIR / "recorz-qemu-riscv32-mvp.ppm"
 QEMU_LOG_PATH = BUILD_DIR / "qemu.log"
 GLYPH_EXAMPLE = ROOT / "examples" / "qemu_riscv_source_glyph_demo.rz"
+IMAGE_SIDE_TEXT_RENDERER_EXAMPLE = ROOT / "examples" / "qemu_riscv_image_side_text_renderer_demo.rz"
 
 
 def _read_ppm(path: Path) -> tuple[int, int, bytes]:
@@ -89,6 +90,17 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         text_histogram = _region_histogram(data, width, 24, 24, 420, 100)
         self.assertGreater(text_histogram[(31, 41, 51)], 1500)
         self.assertGreater(text_histogram[(247, 243, 232)], 1500)
+
+    def test_image_side_text_renderer_draws_pixels_via_live_source(self) -> None:
+        qemu_log, width, height, data = self.render_example(IMAGE_SIDE_TEXT_RENDERER_EXAMPLE)
+
+        normalized_log = qemu_log.replace("\r", "")
+        self.assertIn("IMAGE RENDERER", normalized_log)
+        self.assertEqual((width, height), (1024, 768))
+
+        text_histogram = _region_histogram(data, width, 24, 24, 360, 140)
+        self.assertGreater(text_histogram[(31, 41, 51)], 1800)
+        self.assertGreater(text_histogram[(247, 243, 232)], 1800)
 
 
 if __name__ == "__main__":

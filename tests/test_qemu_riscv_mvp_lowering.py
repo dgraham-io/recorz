@@ -821,6 +821,14 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_END_LINE", 142),
                 ("RECORZ_MVP_SELECTOR_END_COLUMN", 143),
                 ("RECORZ_MVP_SELECTOR_SIZE", 144),
+                ("RECORZ_MVP_SELECTOR_DRAW_STYLED_TEXT_ON_FORM", 145),
+                ("RECORZ_MVP_SELECTOR_TEXT_INDEX_X_Y_STYLE_ON_FORM", 146),
+                ("RECORZ_MVP_SELECTOR_CA", 147),
+                ("RECORZ_MVP_SELECTOR_LA", 148),
+                ("RECORZ_MVP_SELECTOR_TA", 149),
+                ("RECORZ_MVP_SELECTOR_LM", 150),
+                ("RECORZ_MVP_SELECTOR_W", 151),
+                ("RECORZ_MVP_SELECTOR_D_X_Y_S_F", 152),
             ],
         )
 

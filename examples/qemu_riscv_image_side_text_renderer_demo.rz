@@ -1,0 +1,43 @@
+| rendererClass renderer styled |
+Display clear.
+rendererClass := KernelInstaller fileInClassChunks: 'RecorzKernelClass: #TextRenderer superclass: #Object instanceVariableNames: '''''.
+KernelInstaller installMethodSource: 'drawStyledText: styledText onForm: form
+    | text style |
+    text := styledText text.
+    style := styledText style.
+    ^self text: text index: 1 x: self lm y: Display layout margins top style: style onForm: form' onClass: rendererClass.
+KernelInstaller installMethodSource: 'text: t index: i x: x y: y style: s onForm: f
+    | c n |
+    i > t size ifTrue: [^f].
+    c := t at: i.
+    c = 10 ifTrue: [^self text: t index: i + 1 x: self lm y: y + self la style: s onForm: f].
+    c = 9 ifTrue: [^self text: t index: i + 1 x: x + self ta y: y style: s onForm: f].
+    self d: c x: x y: y s: s f: f.
+    n := x + self ca.
+    n > (self w: f) ifTrue: [^self text: t index: i + 1 x: self lm y: y + self la style: s onForm: f].
+    ^self text: t index: i + 1 x: n y: y style: s onForm: f' onClass: rendererClass.
+KernelInstaller installMethodSource: 'ca
+    Display layout scale.
+    ^Display font metrics cellWidth * Display layout scale' onClass: rendererClass.
+KernelInstaller installMethodSource: 'la
+    Display layout scale.
+    ^Display font metrics lineHeight * Display layout scale' onClass: rendererClass.
+KernelInstaller installMethodSource: 'ta
+    self ca.
+    ^self ca * Display layout flow tabWidth' onClass: rendererClass.
+KernelInstaller installMethodSource: 'lm
+    Display layout margins.
+    ^Display layout margins left' onClass: rendererClass.
+KernelInstaller installMethodSource: 'w: f
+    f width.
+    ^(f width - Display layout margins right) - self ca' onClass: rendererClass.
+KernelInstaller installMethodSource: 'd: c x: x y: y s: s f: f
+    | g |
+    g := Display font glyphs at: c.
+    BitBlt copyBitmap: g toForm: f x: x y: y scale: Display layout scale color: s foregroundColor.
+    ^f' onClass: rendererClass.
+renderer := rendererClass new.
+styled := Display style withText: 'IT'.
+renderer drawStyledText: styled onForm: Display defaultForm.
+Transcript show: 'IMAGE RENDERER'.
+Transcript cr.

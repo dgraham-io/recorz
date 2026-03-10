@@ -36,7 +36,7 @@ Get Recorz to the point where text rendering and the main development UI are own
 - [ ] Keep the C VM limited to primitive bitmap and input support while layout decisions move upward
 
 ## Phase 3 - Build Image-Side Text Rendering
-- [ ] Add a Smalltalk-shaped text renderer that draws glyphs onto `Form`/`Bitmap` using existing primitives
+- [x] Add a Smalltalk-shaped text renderer that draws glyphs onto `Form`/`Bitmap` using existing primitives
 - [ ] Move string drawing policy out of the ad hoc C workspace/browser renderer
 - [ ] Render cursor, selection, status lines, and simple highlighted regions from image code
 - [ ] Make the first comfortable development font target a readable 16-point size for the framebuffer workspace/browser

@@ -288,3 +288,19 @@ RecorzKernelSelector: #endColumn order: 142
 !
 RecorzKernelSelector: #size order: 143
 !
+RecorzKernelSelector: #drawStyledText:onForm: order: 144
+!
+RecorzKernelSelector: #text:index:x:y:style:onForm: order: 145
+!
+RecorzKernelSelector: #ca order: 146
+!
+RecorzKernelSelector: #la order: 147
+!
+RecorzKernelSelector: #ta order: 148
+!
+RecorzKernelSelector: #lm order: 149
+!
+RecorzKernelSelector: #w: order: 150
+!
+RecorzKernelSelector: #d:x:y:s:f: order: 151
+!

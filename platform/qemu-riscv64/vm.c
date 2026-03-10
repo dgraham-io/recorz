@@ -139,7 +139,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEXT_SELECTION
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SIZE
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_D_X_Y_S_F
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -858,6 +858,22 @@ static const char *selector_name(uint8_t selector) {
             return "endColumn";
         case RECORZ_MVP_SELECTOR_SIZE:
             return "size";
+        case RECORZ_MVP_SELECTOR_DRAW_STYLED_TEXT_ON_FORM:
+            return "drawStyledText:onForm:";
+        case RECORZ_MVP_SELECTOR_TEXT_INDEX_X_Y_STYLE_ON_FORM:
+            return "text:index:x:y:style:onForm:";
+        case RECORZ_MVP_SELECTOR_CA:
+            return "ca";
+        case RECORZ_MVP_SELECTOR_LA:
+            return "la";
+        case RECORZ_MVP_SELECTOR_TA:
+            return "ta";
+        case RECORZ_MVP_SELECTOR_LM:
+            return "lm";
+        case RECORZ_MVP_SELECTOR_W:
+            return "w:";
+        case RECORZ_MVP_SELECTOR_D_X_Y_S_F:
+            return "d:x:y:s:f:";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
