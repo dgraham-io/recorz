@@ -936,6 +936,62 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertGreaterEqual(output.count("METHOD: NEWLINE"), 1)
             self.assertNotIn("panic:", output)
 
+    def test_workspace_edit_method_entry_loads_seeded_method_source_and_accepts_without_panic(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-edit-method-seeded-source-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_EDIT_METHOD_ENTRY_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "Display defaultForm newline.", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("\x12\x18\x04")
+                process.stdin.flush()
+                time.sleep(1.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("Display defaultForm newline.", output)
+            self.assertIn("STATUS: RUN USE CTRL-X", output)
+            self.assertIn("STATUS: ACCEPT OK", output)
+            self.assertNotIn("panic:", output)
+
     def test_workspace_edit_package_entry_opens_the_interactive_editor_from_package_source(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-edit-package-entry-") as temp_dir:
             build_dir = Path(temp_dir)

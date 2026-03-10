@@ -1122,6 +1122,11 @@ static uint32_t source_copy_next_chunk(const char **cursor_ref, char buffer[], u
 static const char *source_parse_identifier(const char *cursor, char buffer[], uint32_t buffer_size);
 static const struct recorz_mvp_dynamic_class_definition *dynamic_class_definition_for_name(const char *class_name);
 static struct recorz_mvp_dynamic_class_definition *mutable_dynamic_class_definition_for_handle(uint16_t class_handle);
+static const struct recorz_mvp_live_method_source *live_method_source_for(
+    uint16_t class_handle,
+    uint8_t selector_id
+);
+static const char *live_method_source_text(const struct recorz_mvp_live_method_source *source_record);
 static const struct recorz_mvp_live_method_source *live_method_source_for_selector_and_arity(
     uint16_t class_handle,
     uint8_t selector_id,
@@ -3484,6 +3489,63 @@ static const struct recorz_mvp_seed_class_source_record *seed_class_source_recor
 
         if (seed_source->class_name != 0 && source_names_equal(class_name, seed_source->class_name)) {
             return seed_source;
+        }
+    }
+    return 0;
+}
+
+static const char *workspace_method_source_text_for_browser_target(
+    const struct recorz_mvp_heap_object *method_owner_class_object,
+    const char *class_name,
+    const char *selector_name_text,
+    uint8_t class_side
+) {
+    const struct recorz_mvp_live_method_source *source_record;
+    const struct recorz_mvp_seed_class_source_record *seed_source;
+    const char *cursor;
+    uint8_t selector_id;
+    uint8_t scanning_class_side = 0U;
+    char chunk[METHOD_SOURCE_CHUNK_LIMIT];
+    char parsed_selector_name[METHOD_SOURCE_NAME_LIMIT];
+    char argument_names[MAX_SEND_ARGS][METHOD_SOURCE_NAME_LIMIT];
+    const char *body_cursor = 0;
+    uint16_t argument_count = 0U;
+
+    selector_id = source_selector_id_for_name(selector_name_text);
+    if (selector_id == 0U) {
+        machine_panic("Workspace method source target uses an unknown selector");
+    }
+    source_record = live_method_source_for(heap_handle_for_object(method_owner_class_object), selector_id);
+    if (source_record != 0) {
+        return live_method_source_text(source_record);
+    }
+    seed_source = seed_class_source_record_for_name(class_name);
+    if (seed_source == 0 || seed_source->canonical_source == 0) {
+        return 0;
+    }
+    cursor = seed_source->canonical_source;
+    while (source_copy_next_chunk(&cursor, chunk, sizeof(chunk)) != 0U) {
+        if (source_starts_with(chunk, "RecorzKernelClass:")) {
+            scanning_class_side = 0U;
+            continue;
+        }
+        if (source_starts_with(chunk, "RecorzKernelClassSide:")) {
+            scanning_class_side = 1U;
+            continue;
+        }
+        if (scanning_class_side != class_side) {
+            continue;
+        }
+        if (source_parse_method_header(
+                chunk,
+                parsed_selector_name,
+                argument_names,
+                &argument_count,
+                &body_cursor) == 0) {
+            continue;
+        }
+        if (source_names_equal(parsed_selector_name, selector_name_text)) {
+            return runtime_string_allocate_copy(chunk);
         }
     }
     return 0;
@@ -12395,7 +12457,7 @@ static void execute_entry_workspace_browse_method_of_class_named(
     const char *text
 ) {
     const struct recorz_mvp_heap_object *class_object;
-    const struct recorz_mvp_live_method_source *source_record;
+    const char *method_source;
     uint8_t selector_id;
 
     (void)text;
@@ -12417,13 +12479,13 @@ static void execute_entry_workspace_browse_method_of_class_named(
         lookup_builtin_method_descriptor(class_object, selector_id, 1U) == 0) {
         machine_panic("Workspace browseMethod:ofClassNamed: could not resolve method");
     }
-    source_record = live_method_source_for(heap_handle_for_object(class_object), selector_id);
-    if (source_record != 0) {
-        workspace_remember_current_source(
-            object,
-            live_method_source_text(source_record)
-        );
-    }
+    method_source = workspace_method_source_text_for_browser_target(
+        class_object,
+        arguments[1].string,
+        arguments[0].string,
+        0U
+    );
+    workspace_remember_current_source(object, method_source);
     workspace_remember_view(
         object,
         WORKSPACE_VIEW_METHOD,
@@ -12440,7 +12502,7 @@ static void execute_entry_workspace_edit_method_of_class_named(
     const char *text
 ) {
     const struct recorz_mvp_heap_object *class_object;
-    const struct recorz_mvp_live_method_source *source_record;
+    const char *method_source;
     uint8_t selector_id;
 
     (void)text;
@@ -12462,13 +12524,13 @@ static void execute_entry_workspace_edit_method_of_class_named(
         lookup_builtin_method_descriptor(class_object, selector_id, 1U) == 0) {
         machine_panic("Workspace editMethod:ofClassNamed: could not resolve method");
     }
-    source_record = live_method_source_for(heap_handle_for_object(class_object), selector_id);
-    if (source_record != 0) {
-        workspace_remember_current_source(
-            object,
-            live_method_source_text(source_record)
-        );
-    }
+    method_source = workspace_method_source_text_for_browser_target(
+        class_object,
+        arguments[1].string,
+        arguments[0].string,
+        0U
+    );
+    workspace_remember_current_source(object, method_source);
     workspace_remember_view(
         object,
         WORKSPACE_VIEW_METHOD,
@@ -12573,7 +12635,7 @@ static void execute_entry_workspace_browse_class_method_of_class_named(
 ) {
     const struct recorz_mvp_heap_object *class_object;
     const struct recorz_mvp_heap_object *metaclass_object;
-    const struct recorz_mvp_live_method_source *source_record;
+    const char *method_source;
     uint8_t selector_id;
 
     (void)text;
@@ -12596,13 +12658,13 @@ static void execute_entry_workspace_browse_class_method_of_class_named(
         lookup_builtin_method_descriptor(metaclass_object, selector_id, 1U) == 0) {
         machine_panic("Workspace browseClassMethod:ofClassNamed: could not resolve class-side method");
     }
-    source_record = live_method_source_for(heap_handle_for_object(metaclass_object), selector_id);
-    if (source_record != 0) {
-        workspace_remember_current_source(
-            object,
-            live_method_source_text(source_record)
-        );
-    }
+    method_source = workspace_method_source_text_for_browser_target(
+        metaclass_object,
+        arguments[1].string,
+        arguments[0].string,
+        1U
+    );
+    workspace_remember_current_source(object, method_source);
     workspace_remember_view(
         object,
         WORKSPACE_VIEW_CLASS_METHOD,
