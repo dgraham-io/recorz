@@ -97,8 +97,10 @@ class QemuRiscv32MakefileTests(unittest.TestCase):
                 )
 
             temp_snapshot_path = f"{snapshot_path}.tmp"
+            backup_snapshot_path = f"{snapshot_path}.bak"
             self.assertIn("extract_qemu_riscv_snapshot.py --timeout", result.stdout)
             self.assertIn(f"{build_dir / 'qemu.log'} {temp_snapshot_path}", result.stdout)
+            self.assertIn(f"cp \"{snapshot_path}\" \"{backup_snapshot_path}\"", result.stdout)
             self.assertIn(f"mv {temp_snapshot_path} {snapshot_path}", result.stdout)
             self.assertNotIn(f"rm -f {snapshot_path}", result.stdout)
 
@@ -129,6 +131,7 @@ class QemuRiscv32MakefileTests(unittest.TestCase):
                 )
 
             temp_snapshot_path = f"{snapshot_path}.tmp"
+            backup_snapshot_path = f"{snapshot_path}.bak"
             self.assertIn(
                 f"-chardev stdio,id=recorzio,signal=off,logfile={build_dir / 'qemu.log'},logappend=off",
                 result.stdout,
@@ -136,6 +139,7 @@ class QemuRiscv32MakefileTests(unittest.TestCase):
             self.assertIn("-serial chardev:recorzio -monitor none", result.stdout)
             self.assertIn("grep -q 'recorz-snapshot-end' ", result.stdout)
             self.assertIn("extract_qemu_riscv_snapshot.py --timeout 1", result.stdout)
+            self.assertIn(f"cp \"{snapshot_path}\" \"{backup_snapshot_path}\"", result.stdout)
             self.assertIn(f"{build_dir / 'qemu.log'} {temp_snapshot_path}", result.stdout)
             self.assertIn(f"mv {temp_snapshot_path} {snapshot_path}", result.stdout)
 
@@ -202,6 +206,64 @@ class QemuRiscv32MakefileTests(unittest.TestCase):
             self.assertIn(f"DEV_SNAPSHOT={snapshot_path}", result.stdout)
             self.assertIn(f"SNAPSHOT_PAYLOAD={snapshot_path}", result.stdout)
             self.assertIn("continue-snapshot-interactive", result.stdout)
+
+    @unittest.skipUnless(shutil.which("make"), "make is required for QEMU RISC-V Makefile tests")
+    def test_dev_reset_reinitializes_the_default_snapshot_and_clears_backup(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-makefile-dev-reset-") as temp_dir:
+            build_dir = Path(temp_dir)
+            snapshot_path = build_dir / "dev" / "live.bin"
+            result = subprocess.run(
+                [
+                    "make",
+                    "-n",
+                    "-C",
+                    str(PLATFORM_DIR),
+                    f"BUILD_DIR={build_dir}",
+                    f"DEV_SNAPSHOT={snapshot_path}",
+                    "dev-reset",
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    "make -n dev-reset failed\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            self.assertIn(f"rm -f \"{snapshot_path}\" \"{snapshot_path}.bak\"", result.stdout)
+            self.assertIn("dev-init", result.stdout)
+
+    @unittest.skipUnless(shutil.which("make"), "make is required for QEMU RISC-V Makefile tests")
+    def test_dev_restore_restores_the_previous_snapshot_backup(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-makefile-dev-restore-") as temp_dir:
+            build_dir = Path(temp_dir)
+            snapshot_path = build_dir / "dev" / "live.bin"
+            result = subprocess.run(
+                [
+                    "make",
+                    "-n",
+                    "-C",
+                    str(PLATFORM_DIR),
+                    f"BUILD_DIR={build_dir}",
+                    f"DEV_SNAPSHOT={snapshot_path}",
+                    "dev-restore",
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    "make -n dev-restore failed\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            self.assertIn(f"test -f \"{snapshot_path}.bak\"", result.stdout)
+            self.assertIn(f"cp \"{snapshot_path}.bak\" \"{snapshot_path}\"", result.stdout)
 
     @unittest.skipUnless(shutil.which("make"), "make is required for QEMU RISC-V Makefile tests")
     def test_regenerate_boot_source_uses_a_temporary_output_before_replacing_final_source(self) -> None:

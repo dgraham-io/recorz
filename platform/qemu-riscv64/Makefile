@@ -26,8 +26,10 @@ QEMU_SNAPSHOT_ARGS := $(if $(SNAPSHOT_PAYLOAD),-fw_cfg name=$(SNAPSHOT_FW_CFG_NA
 QEMU_RUN_ARGS := $(QEMU_UPDATE_ARGS) $(QEMU_FILE_IN_ARGS) $(QEMU_SNAPSHOT_ARGS) $(QEMU_EXTRA_ARGS)
 CONTINUE_SNAPSHOT_OUTPUT := $(SNAPSHOT_PAYLOAD)
 CONTINUE_SNAPSHOT_TEMP_OUTPUT := $(CONTINUE_SNAPSHOT_OUTPUT).tmp
+CONTINUE_SNAPSHOT_BACKUP_OUTPUT := $(CONTINUE_SNAPSHOT_OUTPUT).bak
 QEMU_FILE_IN_DEP := $(if $(strip $(FILE_IN_PAYLOADS)),$(GENERATED_FILE_IN_PAYLOAD))
 DEV_SNAPSHOT ?= $(ROOT)/misc/qemu-riscv64-dev/live.bin
+DEV_SNAPSHOT_BACKUP ?= $(DEV_SNAPSHOT).bak
 DEV_BOOT_EXAMPLE ?= $(ROOT)/examples/qemu_riscv_image_first_boot.rz
 DEV_SAVE_EXAMPLE ?= $(ROOT)/examples/qemu_riscv_image_first_save.rz
 
@@ -54,7 +56,7 @@ OBJECTS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(filter %.c,$(SOURCES))) \
 	$(patsubst %.S,$(BUILD_DIR)/%.o,$(filter %.S,$(SOURCES))) \
 	$(GENERATED_IMAGE_OBJECT)
 
-.PHONY: all run run-headless screenshot save-snapshot continue-snapshot continue-snapshot-interactive dev-init dev-boot dev-interactive dev-screenshot dev-file-in inspect-image clean FORCE
+.PHONY: all run run-headless screenshot save-snapshot continue-snapshot continue-snapshot-interactive dev-init dev-boot dev-interactive dev-screenshot dev-file-in dev-reset dev-restore inspect-image clean FORCE
 
 all: $(ELF)
 
@@ -127,6 +129,7 @@ continue-snapshot: $(ELF) $(QEMU_FILE_IN_DEP)
 	$(PYTHON) $(ROOT)/tools/extract_qemu_riscv_snapshot.py $(BUILD_DIR)/qemu.log $(CONTINUE_SNAPSHOT_TEMP_OUTPUT)
 	@PID=$$(cat $(QEMU_PID)); kill $$PID >/dev/null 2>&1 || true
 	@mkdir -p $(dir $(CONTINUE_SNAPSHOT_OUTPUT))
+	@if [ -f "$(CONTINUE_SNAPSHOT_OUTPUT)" ]; then cp "$(CONTINUE_SNAPSHOT_OUTPUT)" "$(CONTINUE_SNAPSHOT_BACKUP_OUTPUT)"; echo "backed up $(CONTINUE_SNAPSHOT_BACKUP_OUTPUT)"; fi
 	@mv $(CONTINUE_SNAPSHOT_TEMP_OUTPUT) $(CONTINUE_SNAPSHOT_OUTPUT)
 	@echo "wrote $(CONTINUE_SNAPSHOT_OUTPUT)"
 
@@ -138,6 +141,7 @@ continue-snapshot-interactive: $(ELF) $(QEMU_FILE_IN_DEP)
 	if grep -q 'recorz-snapshot-end' $(QEMU_LOG); then \
 		$(PYTHON) $(ROOT)/tools/extract_qemu_riscv_snapshot.py --timeout 1 $(QEMU_LOG) $(CONTINUE_SNAPSHOT_TEMP_OUTPUT); \
 		mkdir -p $(dir $(CONTINUE_SNAPSHOT_OUTPUT)); \
+		if [ -f "$(CONTINUE_SNAPSHOT_OUTPUT)" ]; then cp "$(CONTINUE_SNAPSHOT_OUTPUT)" "$(CONTINUE_SNAPSHOT_BACKUP_OUTPUT)"; echo "backed up $(CONTINUE_SNAPSHOT_BACKUP_OUTPUT)"; fi; \
 		mv $(CONTINUE_SNAPSHOT_TEMP_OUTPUT) $(CONTINUE_SNAPSHOT_OUTPUT); \
 		echo "wrote $(CONTINUE_SNAPSHOT_OUTPUT)"; \
 	else \
@@ -166,6 +170,16 @@ dev-file-in:
 	@test -f "$(DEV_SNAPSHOT)" || (echo "DEV_SNAPSHOT does not exist; run dev-init first" >&2; exit 1)
 	@test -n "$(strip $(FILE_IN_PAYLOAD) $(FILE_IN_PAYLOADS))" || (echo "FILE_IN_PAYLOAD or FILE_IN_PAYLOADS is required for dev-file-in" >&2; exit 1)
 	@$(MAKE) -C $(CURDIR) BUILD_DIR=$(BUILD_DIR) EXAMPLE=$(DEV_SAVE_EXAMPLE) SNAPSHOT_PAYLOAD=$(DEV_SNAPSHOT) $(if $(FILE_IN_PAYLOAD),FILE_IN_PAYLOAD=$(FILE_IN_PAYLOAD)) $(if $(strip $(FILE_IN_PAYLOADS)),FILE_IN_PAYLOADS="$(FILE_IN_PAYLOADS)") continue-snapshot
+
+dev-reset:
+	@rm -f "$(DEV_SNAPSHOT)" "$(DEV_SNAPSHOT_BACKUP)"
+	@$(MAKE) -C $(CURDIR) BUILD_DIR=$(BUILD_DIR) DEV_SNAPSHOT=$(DEV_SNAPSHOT) dev-init
+
+dev-restore:
+	@test -f "$(DEV_SNAPSHOT_BACKUP)" || (echo "DEV_SNAPSHOT_BACKUP does not exist; save at least one continued snapshot first" >&2; exit 1)
+	@mkdir -p $(dir $(DEV_SNAPSHOT))
+	@cp "$(DEV_SNAPSHOT_BACKUP)" "$(DEV_SNAPSHOT)"
+	@echo "restored $(DEV_SNAPSHOT) from $(DEV_SNAPSHOT_BACKUP)"
 
 inspect-image: $(GENERATED_IMAGE)
 	$(PYTHON) $(ROOT)/tools/inspect_qemu_riscv_mvp_image.py $(GENERATED_IMAGE)
