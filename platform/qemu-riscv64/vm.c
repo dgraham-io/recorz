@@ -138,6 +138,8 @@
 #define BITMAP_STORAGE_FRAMEBUFFER RECORZ_MVP_BITMAP_STORAGE_FRAMEBUFFER
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
+#define RECORZ_MVP_TRANSFER_RULE_COPY 0U
+#define RECORZ_MVP_TRANSFER_RULE_OVER 1U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEXT_SELECTION
 #define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_TEXT_INDEX_STYLE_ON_FORM
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
@@ -395,6 +397,14 @@ static const struct recorz_mvp_heap_object *default_form_object(void);
 static void form_clear(const struct recorz_mvp_heap_object *form);
 static void form_newline(const struct recorz_mvp_heap_object *form);
 static void form_write_string(const struct recorz_mvp_heap_object *form, const char *text);
+static void form_fill_rect_color(
+    const struct recorz_mvp_heap_object *form,
+    uint32_t x,
+    uint32_t y,
+    uint32_t width,
+    uint32_t height,
+    uint32_t color
+);
 static void form_write_code_point_with_colors(
     const struct recorz_mvp_heap_object *form,
     uint8_t code_point,
@@ -4146,12 +4156,8 @@ static void workspace_draw_input_monitor_cursor(
     const struct recorz_mvp_heap_object *form,
     uint32_t column
 ) {
-    const struct recorz_mvp_heap_object *bitmap = bitmap_for_form(form);
-
-    if (bitmap_storage_kind(bitmap) != BITMAP_STORAGE_FRAMEBUFFER) {
-        return;
-    }
-    display_form_fill_rect(
+    form_fill_rect_color(
+        form,
         text_left_margin() + (column * char_width()),
         cursor_y,
         text_pixel_scale() + 1U,
@@ -8068,14 +8074,53 @@ static struct recorz_mvp_value glyph_bitmap_value_for_code(uint32_t code) {
     return object_value(glyph_bitmap_handles[code]);
 }
 
-static void fill_mono_bitmap(const struct recorz_mvp_heap_object *bitmap, uint8_t bit_value) {
+static void fill_mono_bitmap_rect(
+    struct recorz_mvp_heap_object *bitmap,
+    uint32_t x,
+    uint32_t y,
+    uint32_t width,
+    uint32_t height,
+    uint8_t bit_value
+) {
     uint32_t *rows = mutable_mono_bitmap_rows(bitmap);
+    uint32_t bitmap_width_value = bitmap_width(bitmap);
+    uint32_t bitmap_height_value = bitmap_height(bitmap);
     uint32_t row;
-    uint32_t height = bitmap_height(bitmap);
-    uint32_t mask = bit_value ? bitmap_row_mask(bitmap_width(bitmap)) : 0U;
+
+    if (width == 0U || height == 0U || x >= bitmap_width_value || y >= bitmap_height_value) {
+        return;
+    }
+    if (width > bitmap_width_value - x) {
+        width = bitmap_width_value - x;
+    }
+    if (height > bitmap_height_value - y) {
+        height = bitmap_height_value - y;
+    }
 
     for (row = 0U; row < height; ++row) {
-        rows[row] = mask;
+        uint32_t target_y = y + row;
+        uint32_t col;
+        for (col = 0U; col < width; ++col) {
+            uint32_t target_x = x + col;
+            uint32_t mask = 1U << (bitmap_width_value - target_x - 1U);
+            if (bit_value) {
+                rows[target_y] |= mask;
+            } else {
+                rows[target_y] &= ~mask;
+            }
+        }
+    }
+}
+
+static uint8_t bitblt_transfer_rule_uses_transparent_zero(uint8_t transfer_rule) {
+    switch (transfer_rule) {
+        case RECORZ_MVP_TRANSFER_RULE_COPY:
+            return 0U;
+        case RECORZ_MVP_TRANSFER_RULE_OVER:
+            return 1U;
+        default:
+            machine_panic("BitBlt transfer rule is unsupported");
+            return 0U;
     }
 }
 
@@ -8089,7 +8134,7 @@ static void bitblt_copy_mono_bitmap_to_mono_bitmap(
     uint32_t x,
     uint32_t y,
     uint32_t scale,
-    uint8_t transparent_zero
+    uint8_t transfer_rule
 ) {
     const uint32_t *source_rows = mono_bitmap_rows(source_bitmap);
     uint32_t *dest_rows = mutable_mono_bitmap_rows(dest_bitmap);
@@ -8097,6 +8142,7 @@ static void bitblt_copy_mono_bitmap_to_mono_bitmap(
     uint32_t dest_width = bitmap_width(dest_bitmap);
     uint32_t dest_height = bitmap_height(dest_bitmap);
     uint32_t source_row_offset;
+    uint8_t transparent_zero = bitblt_transfer_rule_uses_transparent_zero(transfer_rule);
 
     if (scale == 0U) {
         machine_panic("BitBlt copy scale must be non-zero");
@@ -8173,10 +8219,11 @@ static void bitblt_copy_mono_bitmap_to_form(
     uint32_t scale,
     uint32_t one_color,
     uint32_t zero_color,
-    uint8_t transparent_zero
+    uint8_t transfer_rule
 ) {
     const struct recorz_mvp_heap_object *dest_bitmap = bitmap_for_form(dest_form);
     uint32_t storage_kind = bitmap_storage_kind(dest_bitmap);
+    uint8_t transparent_zero = bitblt_transfer_rule_uses_transparent_zero(transfer_rule);
 
     if (scale == 0U) {
         machine_panic("BitBlt copy scale must be non-zero");
@@ -8214,7 +8261,7 @@ static void bitblt_copy_mono_bitmap_to_form(
             x,
             y,
             scale,
-            transparent_zero
+            transfer_rule
         );
         return;
     }
@@ -8245,16 +8292,36 @@ static void require_bitblt_copy_operands_at(
 }
 
 static void fill_form_color(const struct recorz_mvp_heap_object *form, uint32_t color) {
+    form_fill_rect_color(
+        form,
+        0U,
+        0U,
+        bitmap_width(bitmap_for_form(form)),
+        bitmap_height(bitmap_for_form(form)),
+        color
+    );
+    if (bitmap_storage_kind(bitmap_for_form(form)) == BITMAP_STORAGE_FRAMEBUFFER) {
+        reset_text_cursor();
+    }
+}
+
+static void form_fill_rect_color(
+    const struct recorz_mvp_heap_object *form,
+    uint32_t x,
+    uint32_t y,
+    uint32_t width,
+    uint32_t height,
+    uint32_t color
+) {
     const struct recorz_mvp_heap_object *bitmap = bitmap_for_form(form);
     uint32_t storage_kind = bitmap_storage_kind(bitmap);
 
     if (storage_kind == BITMAP_STORAGE_FRAMEBUFFER) {
-        display_form_fill_color(color);
-        reset_text_cursor();
+        display_form_fill_rect(x, y, width, height, color);
         return;
     }
     if (storage_kind == BITMAP_STORAGE_HEAP_MONO) {
-        fill_mono_bitmap(bitmap, (uint8_t)(color != 0U));
+        fill_mono_bitmap_rect(mutable_bitmap_for_form(form), x, y, width, height, (uint8_t)(color != 0U));
         return;
     }
     machine_panic("fill expects a framebuffer or heap monochrome form");
@@ -8351,7 +8418,7 @@ static void form_write_code_point_with_colors(
             text_pixel_scale(),
             foreground_color,
             background_color,
-            0U
+            RECORZ_MVP_TRANSFER_RULE_COPY
         );
     }
     cursor_x += char_width();
@@ -8366,22 +8433,6 @@ static void form_write_string_with_colors(
     uint32_t foreground_color,
     uint32_t background_color
 ) {
-    uint32_t form_width = bitmap_width(bitmap_for_form(form));
-    uint32_t left_margin = text_left_margin();
-    uint32_t right_margin = text_right_margin();
-    uint32_t wrap_width = text_wrap_width();
-    uint32_t wrap_limit_x = 0U;
-
-    if (form_width > right_margin) {
-        wrap_limit_x = form_width - right_margin;
-    }
-    if (wrap_width != 0U) {
-        uint32_t configured_limit_x = left_margin + (wrap_width * char_width());
-        if (wrap_limit_x == 0U || configured_limit_x < wrap_limit_x) {
-            wrap_limit_x = configured_limit_x;
-        }
-    }
-
     while (*text != '\0') {
         form_write_code_point_with_colors(form, (uint8_t)*text, foreground_color, background_color);
         ++text;
@@ -9585,7 +9636,7 @@ static void execute_entry_bitblt_copy_bitmap_to_form_x_y_scale(
         small_integer_u32(arguments[4], "BitBlt copy scale must be a non-negative small integer"),
         text_foreground_color(),
         0U,
-        1U
+        RECORZ_MVP_TRANSFER_RULE_OVER
     );
     push(arguments[1]);
 }
@@ -9615,7 +9666,7 @@ static void execute_entry_bitblt_copy_bitmap_to_form_x_y_scale_color(
         small_integer_u32(arguments[4], "BitBlt copy scale must be a non-negative small integer"),
         small_integer_u32(arguments[5], "BitBlt copy color must be a non-negative small integer"),
         0U,
-        1U
+        RECORZ_MVP_TRANSFER_RULE_OVER
     );
     push(arguments[1]);
 }
@@ -9645,7 +9696,7 @@ static void execute_entry_bitblt_copy_bitmap_region_to_form_x_y_scale_color(
         small_integer_u32(arguments[8], "BitBlt copy scale must be a non-negative small integer"),
         small_integer_u32(arguments[9], "BitBlt copy color must be a non-negative small integer"),
         0U,
-        1U
+        RECORZ_MVP_TRANSFER_RULE_OVER
     );
     push(arguments[5]);
 }

@@ -42,7 +42,7 @@ Reference:
   `copyBits`, display binding, cursor binding, text scan, input delivery, snapshot/persistence, panic/debug
 - [x] Audit current C-side text/UI helpers and classify each one as:
   primitive to keep, temporary scaffold to replace, or behavior that should move into the image immediately
-- [ ] Normalize existing bitmap/form operations so the future image-side renderer uses one coherent primitive path instead of multiple ad hoc text helpers
+- [x] Normalize existing bitmap/form operations so the future image-side renderer uses one coherent primitive path instead of multiple ad hoc text helpers
 - [x] Add explicit clipping and transfer-mode decisions to the bitmap copy surface
 - [x] Define how glyph blitting relates to `copyBits` so text rendering stays Smalltalk-shaped rather than hard-wired as a special VM text API
 - [x] Document the RV32 performance assumptions for this primitive set
