@@ -59,10 +59,17 @@
 #define BITMAP_FIELD_HEIGHT RECORZ_MVP_BITMAP_FIELD_HEIGHT
 #define BITMAP_FIELD_STORAGE_KIND RECORZ_MVP_BITMAP_FIELD_STORAGE_KIND
 #define BITMAP_FIELD_STORAGE_ID RECORZ_MVP_BITMAP_FIELD_STORAGE_ID
-#define TEXT_LAYOUT_FIELD_LEFT_MARGIN RECORZ_MVP_TEXT_LAYOUT_FIELD_LEFT
-#define TEXT_LAYOUT_FIELD_TOP_MARGIN RECORZ_MVP_TEXT_LAYOUT_FIELD_TOP
-#define TEXT_LAYOUT_FIELD_LINE_SPACING RECORZ_MVP_TEXT_LAYOUT_FIELD_LINE_SPACING
+#define TEXT_LAYOUT_FIELD_MARGINS RECORZ_MVP_TEXT_LAYOUT_FIELD_MARGINS
 #define TEXT_LAYOUT_FIELD_PIXEL_SCALE RECORZ_MVP_TEXT_LAYOUT_FIELD_SCALE
+#define TEXT_LAYOUT_FIELD_LINE_SPACING RECORZ_MVP_TEXT_LAYOUT_FIELD_LINE_SPACING
+#define TEXT_LAYOUT_FIELD_FLOW RECORZ_MVP_TEXT_LAYOUT_FIELD_FLOW
+#define TEXT_MARGINS_FIELD_LEFT RECORZ_MVP_TEXT_MARGINS_FIELD_LEFT
+#define TEXT_MARGINS_FIELD_TOP RECORZ_MVP_TEXT_MARGINS_FIELD_TOP
+#define TEXT_MARGINS_FIELD_RIGHT RECORZ_MVP_TEXT_MARGINS_FIELD_RIGHT
+#define TEXT_MARGINS_FIELD_BOTTOM RECORZ_MVP_TEXT_MARGINS_FIELD_BOTTOM
+#define TEXT_FLOW_FIELD_WRAP_WIDTH RECORZ_MVP_TEXT_FLOW_FIELD_WRAP_WIDTH
+#define TEXT_FLOW_FIELD_TAB_WIDTH RECORZ_MVP_TEXT_FLOW_FIELD_TAB_WIDTH
+#define TEXT_FLOW_FIELD_LINE_BREAK_MODE RECORZ_MVP_TEXT_FLOW_FIELD_LINE_BREAK_MODE
 #define TEXT_STYLE_FIELD_BACKGROUND_COLOR RECORZ_MVP_TEXT_STYLE_FIELD_BACKGROUND_COLOR
 #define TEXT_STYLE_FIELD_FOREGROUND_COLOR RECORZ_MVP_TEXT_STYLE_FIELD_FOREGROUND_COLOR
 #define STYLED_TEXT_FIELD_TEXT RECORZ_MVP_STYLED_TEXT_FIELD_TEXT
@@ -123,8 +130,8 @@
 #define BITMAP_STORAGE_FRAMEBUFFER RECORZ_MVP_BITMAP_STORAGE_FRAMEBUFFER
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
-#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_STYLED_TEXT
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_WRITE_STYLED_TEXT
+#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEXT_FLOW
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_LINE_BREAK_MODE
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_TEST_RUNNER
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -297,6 +304,9 @@ static uint32_t compiled_method_instruction_word(const struct recorz_mvp_heap_ob
 static uint16_t compiled_method_lexical_count(const struct recorz_mvp_heap_object *compiled_method);
 static uint32_t text_length(const char *text);
 static uint32_t text_left_margin(void);
+static uint32_t text_right_margin(void);
+static uint32_t text_bottom_margin(void);
+static uint32_t text_wrap_width(void);
 static uint32_t char_width(void);
 static uint32_t char_height(void);
 static uint32_t text_line_spacing(void);
@@ -789,6 +799,30 @@ static const char *selector_name(uint8_t selector) {
             return "style";
         case RECORZ_MVP_SELECTOR_WRITE_STYLED_TEXT:
             return "writeStyledText:";
+        case RECORZ_MVP_SELECTOR_LAYOUT:
+            return "layout";
+        case RECORZ_MVP_SELECTOR_MARGINS:
+            return "margins";
+        case RECORZ_MVP_SELECTOR_FLOW:
+            return "flow";
+        case RECORZ_MVP_SELECTOR_LEFT:
+            return "left";
+        case RECORZ_MVP_SELECTOR_TOP:
+            return "top";
+        case RECORZ_MVP_SELECTOR_RIGHT:
+            return "right";
+        case RECORZ_MVP_SELECTOR_BOTTOM:
+            return "bottom";
+        case RECORZ_MVP_SELECTOR_SCALE:
+            return "scale";
+        case RECORZ_MVP_SELECTOR_LINE_SPACING:
+            return "lineSpacing";
+        case RECORZ_MVP_SELECTOR_WRAP_WIDTH:
+            return "wrapWidth";
+        case RECORZ_MVP_SELECTOR_TAB_WIDTH:
+            return "tabWidth";
+        case RECORZ_MVP_SELECTOR_LINE_BREAK_MODE:
+            return "lineBreakMode";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -837,6 +871,10 @@ static const char *object_kind_name(uint8_t kind) {
             return "TextVerticalMetrics";
         case RECORZ_MVP_OBJECT_STYLED_TEXT:
             return "StyledText";
+        case RECORZ_MVP_OBJECT_TEXT_MARGINS:
+            return "TextMargins";
+        case RECORZ_MVP_OBJECT_TEXT_FLOW:
+            return "TextFlow";
         case RECORZ_MVP_OBJECT_TEXT_BEHAVIOR:
             return "TextBehavior";
         case RECORZ_MVP_OBJECT_CLASS:
@@ -3916,18 +3954,29 @@ static uint8_t workspace_parse_protocol_target_name(
 
 static uint32_t workspace_visible_columns(const struct recorz_mvp_heap_object *form) {
     uint32_t left_margin = text_left_margin();
+    uint32_t right_margin = text_right_margin();
     uint32_t width = bitmap_width(bitmap_for_form(form));
     uint32_t char_columns;
+    uint32_t wrap_width = text_wrap_width();
 
-    if (width <= left_margin || char_width() == 0U) {
+    if (width <= left_margin + right_margin || char_width() == 0U) {
         return 1U;
     }
-    char_columns = (width - left_margin) / char_width();
+    char_columns = (width - left_margin - right_margin) / char_width();
+    if (wrap_width != 0U && wrap_width < char_columns) {
+        char_columns = wrap_width;
+    }
     return char_columns == 0U ? 1U : char_columns;
 }
 
 static uint8_t workspace_has_line_capacity(const struct recorz_mvp_heap_object *form) {
-    return cursor_y + char_height() < bitmap_height(bitmap_for_form(form));
+    uint32_t form_height = bitmap_height(bitmap_for_form(form));
+    uint32_t bottom_margin = text_bottom_margin();
+
+    if (form_height <= bottom_margin) {
+        return 0U;
+    }
+    return cursor_y + char_height() < form_height - bottom_margin;
 }
 
 static void workspace_newline(void) {
@@ -4069,11 +4118,15 @@ static uint32_t workspace_input_monitor_visible_line_capacity(
     const struct recorz_mvp_heap_object *form
 ) {
     uint32_t form_height = bitmap_height(bitmap_for_form(form));
+    uint32_t bottom_margin = text_bottom_margin();
     uint32_t line_y = cursor_y;
     uint32_t line_step = text_line_height();
     uint32_t count = 0U;
 
-    while (line_y + char_height() < form_height) {
+    if (form_height <= bottom_margin) {
+        return 0U;
+    }
+    while (line_y + char_height() < form_height - bottom_margin) {
         ++count;
         line_y += line_step;
     }
@@ -7444,16 +7497,66 @@ static const struct recorz_mvp_heap_object *transcript_layout_object(void) {
     return object;
 }
 
-static uint32_t transcript_layout_u32(uint8_t index, const char *message) {
-    return small_integer_u32(heap_get_field(transcript_layout_object(), index), message);
+static const struct recorz_mvp_heap_object *transcript_layout_reference_object(
+    uint8_t field_index,
+    uint8_t expected_kind,
+    const char *message
+) {
+    struct recorz_mvp_value reference_value = heap_get_field(transcript_layout_object(), field_index);
+    const struct recorz_mvp_heap_object *reference_object;
+
+    if (reference_value.kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic(message);
+    }
+    reference_object = heap_object_for_value(reference_value);
+    if (reference_object->kind != expected_kind) {
+        machine_panic(message);
+    }
+    return reference_object;
+}
+
+static uint32_t transcript_layout_u32(uint8_t field_index, const char *message) {
+    return small_integer_u32(heap_get_field(transcript_layout_object(), field_index), message);
+}
+
+static const struct recorz_mvp_heap_object *transcript_margins_object(void) {
+    return transcript_layout_reference_object(
+        TEXT_LAYOUT_FIELD_MARGINS,
+        RECORZ_MVP_OBJECT_TEXT_MARGINS,
+        "text layout margins is not a text margins object"
+    );
+}
+
+static uint32_t transcript_margins_u32(uint8_t field_index, const char *message) {
+    return small_integer_u32(heap_get_field(transcript_margins_object(), field_index), message);
+}
+
+static const struct recorz_mvp_heap_object *transcript_flow_object(void) {
+    return transcript_layout_reference_object(
+        TEXT_LAYOUT_FIELD_FLOW,
+        RECORZ_MVP_OBJECT_TEXT_FLOW,
+        "text layout flow is not a text flow object"
+    );
+}
+
+static uint32_t transcript_flow_u32(uint8_t field_index, const char *message) {
+    return small_integer_u32(heap_get_field(transcript_flow_object(), field_index), message);
 }
 
 static uint32_t text_left_margin(void) {
-    return transcript_layout_u32(TEXT_LAYOUT_FIELD_LEFT_MARGIN, "text layout left margin is not a small integer");
+    return transcript_margins_u32(TEXT_MARGINS_FIELD_LEFT, "text margins left is not a small integer");
 }
 
 static uint32_t text_top_margin(void) {
-    return transcript_layout_u32(TEXT_LAYOUT_FIELD_TOP_MARGIN, "text layout top margin is not a small integer");
+    return transcript_margins_u32(TEXT_MARGINS_FIELD_TOP, "text margins top is not a small integer");
+}
+
+static uint32_t text_right_margin(void) {
+    return transcript_margins_u32(TEXT_MARGINS_FIELD_RIGHT, "text margins right is not a small integer");
+}
+
+static uint32_t text_bottom_margin(void) {
+    return transcript_margins_u32(TEXT_MARGINS_FIELD_BOTTOM, "text margins bottom is not a small integer");
 }
 
 static uint32_t text_line_spacing(void) {
@@ -7467,6 +7570,26 @@ static uint32_t text_pixel_scale(void) {
         machine_panic("text layout pixel scale must be non-zero");
     }
     return scale;
+}
+
+static uint32_t text_wrap_width(void) {
+    return transcript_flow_u32(TEXT_FLOW_FIELD_WRAP_WIDTH, "text flow wrapWidth is not a small integer");
+}
+
+static uint32_t text_tab_width(void) {
+    uint32_t width = transcript_flow_u32(TEXT_FLOW_FIELD_TAB_WIDTH, "text flow tabWidth is not a small integer");
+
+    if (width == 0U) {
+        machine_panic("text flow tabWidth must be non-zero");
+    }
+    return width;
+}
+
+static uint32_t text_line_break_mode(void) {
+    return transcript_flow_u32(
+        TEXT_FLOW_FIELD_LINE_BREAK_MODE,
+        "text flow lineBreakMode is not a small integer"
+    );
 }
 
 static const struct recorz_mvp_heap_object *transcript_font_object(void) {
@@ -8010,13 +8133,17 @@ static void form_clear(const struct recorz_mvp_heap_object *form) {
 }
 
 static void form_newline(const struct recorz_mvp_heap_object *form) {
+    uint32_t form_height = bitmap_height(bitmap_for_form(form));
+    uint32_t bottom_margin = text_bottom_margin();
     uint8_t capture_feedback =
         (uint8_t)(workspace_input_monitor_capture_enabled &&
                   heap_handle_for_object(form) == default_form_handle);
 
     cursor_x = text_left_margin();
     cursor_y += text_line_height();
-    if (transcript_clear_on_overflow() && cursor_y + char_height() >= bitmap_height(bitmap_for_form(form))) {
+    if (transcript_clear_on_overflow() &&
+        form_height > bottom_margin &&
+        cursor_y + char_height() >= form_height - bottom_margin) {
         form_clear(form);
     }
     if (capture_feedback) {
@@ -8031,9 +8158,23 @@ static void form_write_string_with_colors(
     uint32_t background_color
 ) {
     uint32_t form_width = bitmap_width(bitmap_for_form(form));
+    uint32_t left_margin = text_left_margin();
+    uint32_t right_margin = text_right_margin();
+    uint32_t wrap_width = text_wrap_width();
+    uint32_t wrap_limit_x = 0U;
     uint8_t capture_feedback =
         (uint8_t)(workspace_input_monitor_capture_enabled &&
                   heap_handle_for_object(form) == default_form_handle);
+
+    if (form_width > right_margin) {
+        wrap_limit_x = form_width - right_margin;
+    }
+    if (wrap_width != 0U) {
+        uint32_t configured_limit_x = left_margin + (wrap_width * char_width());
+        if (wrap_limit_x == 0U || configured_limit_x < wrap_limit_x) {
+            wrap_limit_x = configured_limit_x;
+        }
+    }
 
     while (*text != '\0') {
         const struct recorz_mvp_heap_object *glyph_bitmap;
@@ -8043,7 +8184,50 @@ static void form_write_string_with_colors(
             ++text;
             continue;
         }
-        if (cursor_x + char_width() >= form_width) {
+        if (*text == '\t') {
+            uint32_t tab_width = text_tab_width();
+            uint32_t column = 0U;
+            uint32_t spaces_to_next_tab;
+
+            if (cursor_x > left_margin && char_width() != 0U) {
+                column = (cursor_x - left_margin) / char_width();
+            }
+            spaces_to_next_tab = tab_width - (column % tab_width);
+            if (spaces_to_next_tab == 0U) {
+                spaces_to_next_tab = tab_width;
+            }
+            while (spaces_to_next_tab-- > 0U) {
+                if (text_line_break_mode() != 0U &&
+                    wrap_limit_x != 0U &&
+                    cursor_x + char_width() > wrap_limit_x) {
+                    form_newline(form);
+                }
+                glyph_bitmap = glyph_bitmap_for_char(' ');
+                bitblt_copy_mono_bitmap_to_form(
+                    glyph_bitmap,
+                    form,
+                    0U,
+                    0U,
+                    bitmap_width(glyph_bitmap),
+                    bitmap_height(glyph_bitmap),
+                    cursor_x,
+                    cursor_y,
+                    text_pixel_scale(),
+                    foreground_color,
+                    background_color,
+                    0U
+                );
+                cursor_x += char_width();
+            }
+            if (capture_feedback) {
+                workspace_input_monitor_feedback_append_char('\t');
+            }
+            ++text;
+            continue;
+        }
+        if (text_line_break_mode() != 0U &&
+            wrap_limit_x != 0U &&
+            cursor_x + char_width() > wrap_limit_x) {
             form_newline(form);
         }
         glyph_bitmap = glyph_bitmap_for_char(*text);

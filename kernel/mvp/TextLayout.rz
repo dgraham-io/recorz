@@ -1,7 +1,20 @@
-RecorzKernelClass: #TextLayout descriptorOrder: 7 objectKindOrder: 8 instanceVariableNames: 'left top scale lineSpacing'
+RecorzKernelClass: #TextLayout descriptorOrder: 7 objectKindOrder: 8 sourceBootOrder: 21 instanceVariableNames: 'margins scale lineSpacing flow'
 !
-RecorzKernelBootObject: #TranscriptLayout family: #beforeGlyphs order: 6 class: #TextLayout
-fields: 'small:24 small:24 small:4 small:2'
+RecorzKernelBootObject: #TranscriptLayout family: #beforeGlyphs order: 8 class: #TextLayout
+fields: 'object:TranscriptMargins small:4 small:2 object:TranscriptFlow'
 rootExports: 'transcript_layout'
 !
 RecorzKernelRoot: #transcript_layout object: #TranscriptLayout order: 3
+!
+margins
+    ^margins
+!
+scale
+    ^scale
+!
+lineSpacing
+    ^lineSpacing
+!
+flow
+    ^flow
+!

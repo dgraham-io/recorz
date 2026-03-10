@@ -1098,7 +1098,9 @@ def load_kernel_glyph_bitmap_family_declaration() -> KernelGlyphBitmapFamilyDecl
 KERNEL_GLYPH_BITMAP_FAMILY_DECLARATION = load_kernel_glyph_bitmap_family_declaration()
 DEFAULT_FORM_BOOT_FIELD_SPECS = boot_object_field_specs("DefaultForm")
 TRANSCRIPT_BEHAVIOR_BOOT_FIELD_SPECS = boot_object_field_specs("TranscriptBehavior")
-TRANSCRIPT_LAYOUT_FIELD_VALUES = boot_object_small_integer_field_values("TranscriptLayout")
+TRANSCRIPT_LAYOUT_FIELD_SPECS = boot_object_field_specs("TranscriptLayout")
+TRANSCRIPT_MARGINS_FIELD_VALUES = boot_object_small_integer_field_values("TranscriptMargins")
+TRANSCRIPT_FLOW_FIELD_VALUES = boot_object_small_integer_field_values("TranscriptFlow")
 TRANSCRIPT_STYLE_FIELD_VALUES = boot_object_small_integer_field_values("TranscriptStyle")
 FRAMEBUFFER_BITMAP_FIELD_VALUES = boot_object_small_integer_field_values("FramebufferBitmap")
 TRANSCRIPT_METRICS_FIELD_VALUES = boot_object_small_integer_fields_in_order("TranscriptMetrics")
@@ -1519,6 +1521,15 @@ def compile_kernel_method_program(class_name: str, instance_variables: list[str]
                     and send_site.argument_count == 0
                 ):
                     lowered.append(encode_compiled_method_instruction("push_root", SEED_ROOT_TRANSCRIPT_STYLE))
+                    instruction_index += 2
+                    continue
+                if (
+                    isinstance(send_site, SendSite)
+                    and not send_site.super_send
+                    and send_site.selector == "layout"
+                    and send_site.argument_count == 0
+                ):
+                    lowered.append(encode_compiled_method_instruction("push_root", SEED_ROOT_TRANSCRIPT_LAYOUT))
                     instruction_index += 2
                     continue
             if binding.kind == "global":

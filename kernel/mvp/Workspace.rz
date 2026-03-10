@@ -1,6 +1,6 @@
 RecorzKernelClass: #Workspace descriptorOrder: 19 objectKindOrder: 19 sourceBootOrder: 11 instanceVariableNames: 'currentViewKind currentTargetName currentSource lastSource'
 !
-RecorzKernelBootObject: #Workspace family: #beforeGlyphs order: 11 class: #Workspace
+RecorzKernelBootObject: #Workspace family: #beforeGlyphs order: 13 class: #Workspace
 globalExports: 'Workspace'
 !
 fileIn: source

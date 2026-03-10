@@ -1,6 +1,6 @@
 RecorzKernelClass: #Form descriptorOrder: 10 objectKindOrder: 2 sourceBootOrder: 7 instanceVariableNames: 'bits'
 !
-RecorzKernelBootObject: #DefaultForm family: #beforeGlyphs order: 9 class: #Form
+RecorzKernelBootObject: #DefaultForm family: #beforeGlyphs order: 11 class: #Form
 fields: 'object:FramebufferBitmap'
 rootExports: 'default_form'
 !

@@ -1,0 +1,18 @@
+Transcript show: Display layout margins left printString.
+Transcript cr.
+Transcript show: Display layout margins top printString.
+Transcript cr.
+Transcript show: Display layout margins right printString.
+Transcript cr.
+Transcript show: Display layout margins bottom printString.
+Transcript cr.
+Transcript show: Display layout scale printString.
+Transcript cr.
+Transcript show: Display layout lineSpacing printString.
+Transcript cr.
+Transcript show: Display layout flow wrapWidth printString.
+Transcript cr.
+Transcript show: Display layout flow tabWidth printString.
+Transcript cr.
+Transcript show: Display layout flow lineBreakMode printString.
+Transcript cr.

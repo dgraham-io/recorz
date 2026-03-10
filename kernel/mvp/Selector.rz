@@ -242,3 +242,27 @@ RecorzKernelSelector: #style order: 119
 !
 RecorzKernelSelector: #writeStyledText: order: 120
 !
+RecorzKernelSelector: #layout order: 121
+!
+RecorzKernelSelector: #margins order: 122
+!
+RecorzKernelSelector: #flow order: 123
+!
+RecorzKernelSelector: #left order: 124
+!
+RecorzKernelSelector: #top order: 125
+!
+RecorzKernelSelector: #right order: 126
+!
+RecorzKernelSelector: #bottom order: 127
+!
+RecorzKernelSelector: #scale order: 128
+!
+RecorzKernelSelector: #lineSpacing order: 129
+!
+RecorzKernelSelector: #wrapWidth order: 130
+!
+RecorzKernelSelector: #tabWidth order: 131
+!
+RecorzKernelSelector: #lineBreakMode order: 132
+!

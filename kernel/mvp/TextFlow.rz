@@ -1,0 +1,14 @@
+RecorzKernelClass: #TextFlow descriptorOrder: 29 objectKindOrder: 29 sourceBootOrder: 23 instanceVariableNames: 'wrapWidth tabWidth lineBreakMode'
+!
+RecorzKernelBootObject: #TranscriptFlow family: #beforeGlyphs order: 7 class: #TextFlow
+fields: 'small:48 small:4 small:1'
+!
+wrapWidth
+    ^wrapWidth
+!
+tabWidth
+    ^tabWidth
+!
+lineBreakMode
+    ^lineBreakMode
+!

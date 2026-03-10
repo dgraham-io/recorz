@@ -1,6 +1,6 @@
 RecorzKernelClass: #KernelInstaller descriptorOrder: 17 objectKindOrder: 17 sourceBootOrder: 9 instanceVariableNames: ''
 !
-RecorzKernelBootObject: #KernelInstaller family: #beforeGlyphs order: 10 class: #KernelInstaller
+RecorzKernelBootObject: #KernelInstaller family: #beforeGlyphs order: 12 class: #KernelInstaller
 globalExports: 'KernelInstaller'
 !
 compiledMethodWord0: word0 word1: word1 word2: word2 word3: word3 instructionCount: instructionCount
