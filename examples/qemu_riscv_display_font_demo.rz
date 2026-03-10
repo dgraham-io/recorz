@@ -1,0 +1,2 @@
+Transcript show: Display font pointSize printString.
+Transcript cr.

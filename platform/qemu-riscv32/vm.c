@@ -69,6 +69,10 @@
 #define TEXT_METRICS_FIELD_CELL_HEIGHT RECORZ_MVP_TEXT_METRICS_FIELD_CELL_HEIGHT
 #define TEXT_BEHAVIOR_FIELD_FALLBACK_BITMAP RECORZ_MVP_TEXT_BEHAVIOR_FIELD_FALLBACK_GLYPH
 #define TEXT_BEHAVIOR_FIELD_CLEAR_ON_OVERFLOW RECORZ_MVP_TEXT_BEHAVIOR_FIELD_CLEAR_ON_OVERFLOW
+#define FONT_FIELD_GLYPHS RECORZ_MVP_FONT_FIELD_GLYPHS
+#define FONT_FIELD_METRICS RECORZ_MVP_FONT_FIELD_METRICS
+#define FONT_FIELD_BEHAVIOR RECORZ_MVP_FONT_FIELD_BEHAVIOR
+#define FONT_FIELD_POINT_SIZE RECORZ_MVP_FONT_FIELD_POINT_SIZE
 #define CLASS_FIELD_SUPERCLASS RECORZ_MVP_CLASS_FIELD_SUPERCLASS
 #define CLASS_FIELD_INSTANCE_KIND RECORZ_MVP_CLASS_FIELD_INSTANCE_KIND
 #define CLASS_FIELD_METHOD_START RECORZ_MVP_CLASS_FIELD_METHOD_START
@@ -118,7 +122,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEST_RUNNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_BROWSE_PACKAGES_INTERACTIVE
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_FONT
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_TEST_RUNNER
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #define SOURCE_EVAL_ENV_LIMIT 32U
@@ -301,6 +305,7 @@ static uint16_t transcript_layout_handle = 0U;
 static uint16_t transcript_style_handle = 0U;
 static uint16_t transcript_metrics_handle = 0U;
 static uint16_t transcript_behavior_handle = 0U;
+static uint16_t transcript_font_handle = 0U;
 static struct recorz_mvp_source_lexical_environment source_eval_environments[SOURCE_EVAL_ENV_LIMIT];
 static struct recorz_mvp_source_home_context source_eval_home_contexts[SOURCE_EVAL_HOME_CONTEXT_LIMIT];
 static struct recorz_mvp_runtime_block_state source_eval_block_states[SOURCE_EVAL_BLOCK_STATE_LIMIT];
@@ -809,6 +814,16 @@ static const char *selector_name(uint8_t selector) {
             return "developmentHome";
         case RECORZ_MVP_SELECTOR_BROWSE_PACKAGES_INTERACTIVE:
             return "browsePackagesInteractive";
+        case RECORZ_MVP_SELECTOR_GLYPHS:
+            return "glyphs";
+        case RECORZ_MVP_SELECTOR_METRICS:
+            return "metrics";
+        case RECORZ_MVP_SELECTOR_BEHAVIOR:
+            return "behavior";
+        case RECORZ_MVP_SELECTOR_POINT_SIZE:
+            return "pointSize";
+        case RECORZ_MVP_SELECTOR_FONT:
+            return "font";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -881,6 +896,8 @@ static const char *object_kind_name(uint8_t kind) {
             return "Context";
         case RECORZ_MVP_OBJECT_TEST_RUNNER:
             return "TestRunner";
+        case RECORZ_MVP_OBJECT_FONT:
+            return "Font";
     }
     return "UnknownObject";
 }
@@ -2839,6 +2856,8 @@ static struct recorz_mvp_value seed_root_value(uint32_t root_id) {
             return object_value(transcript_style_handle);
         case RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS:
             return object_value(transcript_metrics_handle);
+        case RECORZ_MVP_SEED_ROOT_TRANSCRIPT_FONT:
+            return object_value(transcript_font_handle);
     }
     machine_panic("unknown seed root in method body");
     return nil_value();
@@ -7572,7 +7591,7 @@ static void validate_compiled_method(
                 break;
             case COMPILED_METHOD_OP_PUSH_ROOT:
                 if (operand_a < RECORZ_MVP_SEED_ROOT_DEFAULT_FORM ||
-                    operand_a > RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS) {
+                    operand_a > RECORZ_MVP_SEED_ROOT_TRANSCRIPT_FONT) {
                     machine_panic("compiled method pushRoot root id is out of range");
                 }
                 next_depth = (uint8_t)(stack_depth + 1U);
@@ -7920,6 +7939,7 @@ static void reset_runtime_state(void) {
     transcript_style_handle = 0U;
     transcript_metrics_handle = 0U;
     transcript_behavior_handle = 0U;
+    transcript_font_handle = 0U;
     startup_hook_receiver_handle = 0U;
     startup_hook_selector_id = 0U;
     cursor_x = 0U;
@@ -8024,6 +8044,37 @@ static uint32_t text_pixel_scale(void) {
     return scale;
 }
 
+static const struct recorz_mvp_heap_object *transcript_font_object(void) {
+    const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(transcript_font_handle);
+
+    if (object->kind != RECORZ_MVP_OBJECT_FONT) {
+        machine_panic("transcript font root is not a font");
+    }
+    return object;
+}
+
+static const struct recorz_mvp_heap_object *transcript_font_reference_object(
+    uint8_t field_index,
+    uint8_t expected_kind,
+    const char *message
+) {
+    struct recorz_mvp_value reference_value = heap_get_field(transcript_font_object(), field_index);
+    const struct recorz_mvp_heap_object *reference_object;
+
+    if (reference_value.kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic(message);
+    }
+    reference_object = heap_object_for_value(reference_value);
+    if (reference_object->kind != expected_kind) {
+        machine_panic(message);
+    }
+    return reference_object;
+}
+
+static uint32_t transcript_font_u32(uint8_t index, const char *message) {
+    return small_integer_u32(heap_get_field(transcript_font_object(), index), message);
+}
+
 static const struct recorz_mvp_heap_object *transcript_style_object(void) {
     const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(transcript_style_handle);
 
@@ -8052,12 +8103,11 @@ static uint32_t text_foreground_color(void) {
 }
 
 static const struct recorz_mvp_heap_object *transcript_metrics_object(void) {
-    const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(transcript_metrics_handle);
-
-    if (object->kind != RECORZ_MVP_OBJECT_TEXT_METRICS) {
-        machine_panic("transcript metrics root is not a text metrics object");
-    }
-    return object;
+    return transcript_font_reference_object(
+        FONT_FIELD_METRICS,
+        RECORZ_MVP_OBJECT_TEXT_METRICS,
+        "transcript font metrics is not a text metrics object"
+    );
 }
 
 static uint32_t transcript_metrics_u32(uint8_t index, const char *message) {
@@ -8065,13 +8115,20 @@ static uint32_t transcript_metrics_u32(uint8_t index, const char *message) {
 }
 
 static const struct recorz_mvp_heap_object *transcript_behavior_object(void) {
-    const struct recorz_mvp_heap_object *object =
-        (const struct recorz_mvp_heap_object *)heap_object(transcript_behavior_handle);
+    return transcript_font_reference_object(
+        FONT_FIELD_BEHAVIOR,
+        RECORZ_MVP_OBJECT_TEXT_BEHAVIOR,
+        "transcript font behavior is not a text behavior object"
+    );
+}
 
-    if (object->kind != RECORZ_MVP_OBJECT_TEXT_BEHAVIOR) {
-        machine_panic("transcript behavior root is not a text behavior object");
+static void validate_transcript_font_glyphs_reference(void) {
+    struct recorz_mvp_value glyphs_value = heap_get_field(transcript_font_object(), FONT_FIELD_GLYPHS);
+
+    if (glyphs_value.kind != RECORZ_MVP_VALUE_OBJECT ||
+        (uint16_t)glyphs_value.integer != global_handles[RECORZ_MVP_GLOBAL_GLYPHS]) {
+        machine_panic("transcript font glyphs does not point at Glyphs");
     }
-    return object;
 }
 
 static uint32_t transcript_clear_on_overflow(void) {
@@ -8193,6 +8250,7 @@ static void reset_text_cursor(void) {
 static const struct recorz_mvp_heap_object *glyph_bitmap_for_char(char ch) {
     uint32_t index = (uint8_t)ch;
 
+    validate_transcript_font_glyphs_reference();
     if (index >= 128U || glyph_bitmap_handles[index] == 0U) {
         return (const struct recorz_mvp_heap_object *)heap_object(glyph_fallback_handle);
     }
@@ -8200,6 +8258,7 @@ static const struct recorz_mvp_heap_object *glyph_bitmap_for_char(char ch) {
 }
 
 static struct recorz_mvp_value glyph_bitmap_value_for_code(uint32_t code) {
+    validate_transcript_font_glyphs_reference();
     if (code >= 128U || glyph_bitmap_handles[code] == 0U) {
         return object_value(glyph_fallback_handle);
     }
@@ -8545,6 +8604,7 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
     transcript_layout_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_LAYOUT]);
     transcript_style_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_STYLE]);
     transcript_metrics_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS]);
+    transcript_font_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_FONT]);
     if (heap_get_field(heap_object(default_form_handle), FORM_FIELD_BITS).kind != RECORZ_MVP_VALUE_OBJECT ||
         (uint16_t)heap_get_field(heap_object(default_form_handle), FORM_FIELD_BITS).integer != framebuffer_bitmap_handle) {
         machine_panic("seed default form does not point at the framebuffer bitmap");
@@ -8566,6 +8626,18 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
         }
         glyph_fallback_handle = (uint16_t)fallback_value.integer;
     }
+    if (heap_get_field(transcript_font_object(), FONT_FIELD_METRICS).kind != RECORZ_MVP_VALUE_OBJECT ||
+        (uint16_t)heap_get_field(transcript_font_object(), FONT_FIELD_METRICS).integer != transcript_metrics_handle) {
+        machine_panic("transcript font does not point at transcript metrics");
+    }
+    if (heap_get_field(transcript_font_object(), FONT_FIELD_BEHAVIOR).kind != RECORZ_MVP_VALUE_OBJECT ||
+        (uint16_t)heap_get_field(transcript_font_object(), FONT_FIELD_BEHAVIOR).integer != transcript_behavior_handle) {
+        machine_panic("transcript font does not point at transcript behavior");
+    }
+    if (transcript_font_u32(FONT_FIELD_POINT_SIZE, "transcript font point size is not a small integer") == 0U) {
+        machine_panic("transcript font point size must be non-zero");
+    }
+    validate_transcript_font_glyphs_reference();
     for (code_index = 0U; code_index < seed->glyph_code_count; ++code_index) {
         uint16_t glyph_object_index = seed->glyph_object_indices_by_code[code_index];
         if (glyph_object_index == RECORZ_MVP_SEED_INVALID_OBJECT_INDEX) {
@@ -9031,7 +9103,7 @@ static uint32_t snapshot_total_size(
     return SNAPSHOT_HEADER_SIZE +
            (heap_size * SNAPSHOT_OBJECT_SIZE) +
            (MAX_GLOBAL_ID * 2U) +
-           (RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS * 2U) +
+           (RECORZ_MVP_SEED_ROOT_TRANSCRIPT_FONT * 2U) +
            (128U * 2U) +
            ((uint32_t)dynamic_class_count * SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE) +
            ((uint32_t)package_count * SNAPSHOT_PACKAGE_RECORD_SIZE) +
@@ -9280,6 +9352,8 @@ static void emit_live_snapshot(void) {
     offset += 2U;
     write_u16_le(snapshot_buffer + offset, transcript_metrics_handle);
     offset += 2U;
+    write_u16_le(snapshot_buffer + offset, transcript_font_handle);
+    offset += 2U;
     for (handle = 0U; handle < 128U; ++handle) {
         write_u16_le(snapshot_buffer + offset, glyph_bitmap_handles[handle]);
         offset += 2U;
@@ -9486,7 +9560,7 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     string_section_offset = SNAPSHOT_HEADER_SIZE +
                             ((uint32_t)object_count * SNAPSHOT_OBJECT_SIZE) +
                             (MAX_GLOBAL_ID * 2U) +
-                            (RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS * 2U) +
+                            (RECORZ_MVP_SEED_ROOT_TRANSCRIPT_FONT * 2U) +
                             (128U * 2U) +
                             ((uint32_t)dynamic_count * SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE) +
                             ((uint32_t)saved_package_count * SNAPSHOT_PACKAGE_RECORD_SIZE) +
@@ -9550,12 +9624,15 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     offset += 2U;
     transcript_metrics_handle = read_u16_le(blob + offset);
     offset += 2U;
+    transcript_font_handle = read_u16_le(blob + offset);
+    offset += 2U;
     if (default_form_handle == 0U || default_form_handle > object_count ||
         framebuffer_bitmap_handle == 0U || framebuffer_bitmap_handle > object_count ||
         transcript_behavior_handle == 0U || transcript_behavior_handle > object_count ||
         transcript_layout_handle == 0U || transcript_layout_handle > object_count ||
         transcript_style_handle == 0U || transcript_style_handle > object_count ||
-        transcript_metrics_handle == 0U || transcript_metrics_handle > object_count) {
+        transcript_metrics_handle == 0U || transcript_metrics_handle > object_count ||
+        transcript_font_handle == 0U || transcript_font_handle > object_count) {
         machine_panic("snapshot root handle is out of range");
     }
     for (handle = 0U; handle < 128U; ++handle) {
@@ -9737,6 +9814,18 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
         }
         glyph_fallback_handle = (uint16_t)fallback_value.integer;
     }
+    if (heap_get_field(transcript_font_object(), FONT_FIELD_METRICS).kind != RECORZ_MVP_VALUE_OBJECT ||
+        (uint16_t)heap_get_field(transcript_font_object(), FONT_FIELD_METRICS).integer != transcript_metrics_handle) {
+        machine_panic("snapshot transcript font does not point at transcript metrics");
+    }
+    if (heap_get_field(transcript_font_object(), FONT_FIELD_BEHAVIOR).kind != RECORZ_MVP_VALUE_OBJECT ||
+        (uint16_t)heap_get_field(transcript_font_object(), FONT_FIELD_BEHAVIOR).integer != transcript_behavior_handle) {
+        machine_panic("snapshot transcript font does not point at transcript behavior");
+    }
+    if (transcript_font_u32(FONT_FIELD_POINT_SIZE, "snapshot transcript font point size is not a small integer") == 0U) {
+        machine_panic("snapshot transcript font point size must be non-zero");
+    }
+    validate_transcript_font_glyphs_reference();
     if (heap_get_field(heap_object(default_form_handle), FORM_FIELD_BITS).kind != RECORZ_MVP_VALUE_OBJECT ||
         (uint16_t)heap_get_field(heap_object(default_form_handle), FORM_FIELD_BITS).integer != framebuffer_bitmap_handle) {
         machine_panic("snapshot default form does not point at the framebuffer bitmap");

@@ -15,6 +15,7 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORM_DIR = ROOT / "platform" / "qemu-riscv32"
 DEFAULT_EXAMPLE = ROOT / "examples" / "qemu_riscv_fb_demo.rz"
+DISPLAY_FONT_EXAMPLE = ROOT / "examples" / "qemu_riscv_display_font_demo.rz"
 MEMORY_REPORT_EXAMPLE = ROOT / "examples" / "qemu_riscv_memory_report_demo.rz"
 MULTISTATEMENT_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_multistatement_source_demo.rz"
 TEMPS_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_temps_method_demo.rz"
@@ -268,6 +269,47 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("SIZE: 1024 x 768", output)
             self.assertIn("RAMFB ONLINE.", output)
             self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
+
+    def test_display_font_point_size_is_visible_from_the_image(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-display-font-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, DISPLAY_FONT_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("16", output)
+            self.assertNotIn("panic:", output)
 
     def test_workspace_can_recover_last_evaluated_source_into_the_current_buffer(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-recover-last-source-") as temp_dir:

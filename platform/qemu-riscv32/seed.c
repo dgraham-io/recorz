@@ -68,7 +68,7 @@ const struct recorz_mvp_seed *recorz_mvp_seed_load(const uint8_t *blob, uint32_t
     for (global_index = 0U; global_index <= RECORZ_MVP_GLOBAL_TEST_RUNNER; ++global_index) {
         loaded_seed.global_object_indices[global_index] = RECORZ_MVP_SEED_INVALID_OBJECT_INDEX;
     }
-    for (global_index = 0U; global_index <= RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS; ++global_index) {
+    for (global_index = 0U; global_index <= RECORZ_MVP_SEED_ROOT_TRANSCRIPT_FONT; ++global_index) {
         loaded_seed.root_object_indices[global_index] = RECORZ_MVP_SEED_INVALID_OBJECT_INDEX;
     }
 
@@ -127,7 +127,7 @@ const struct recorz_mvp_seed *recorz_mvp_seed_load(const uint8_t *blob, uint32_t
 
         offset += RECORZ_MVP_SEED_BINDING_SIZE;
         if (binding_id < RECORZ_MVP_SEED_ROOT_DEFAULT_FORM ||
-            binding_id > RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS) {
+            binding_id > RECORZ_MVP_SEED_ROOT_TRANSCRIPT_FONT) {
             machine_panic("seed manifest root binding id is out of range");
         }
         if (binding_object_index >= object_count) {
@@ -140,7 +140,7 @@ const struct recorz_mvp_seed *recorz_mvp_seed_load(const uint8_t *blob, uint32_t
     }
 
     for (object_index = RECORZ_MVP_SEED_ROOT_DEFAULT_FORM;
-         object_index <= RECORZ_MVP_SEED_ROOT_TRANSCRIPT_METRICS;
+         object_index <= RECORZ_MVP_SEED_ROOT_TRANSCRIPT_FONT;
          ++object_index) {
         if (loaded_seed.root_object_indices[object_index] == RECORZ_MVP_SEED_INVALID_OBJECT_INDEX) {
             machine_panic("seed manifest is missing a required root binding");

@@ -17,3 +17,6 @@ writeString: text
 newline
     Display defaultForm newline.
     ^self
+!
+font
+    ^Display font

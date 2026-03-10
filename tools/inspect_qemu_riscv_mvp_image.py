@@ -32,6 +32,7 @@ ROOT_NAMES = {
     mvp.SEED_ROOT_TRANSCRIPT_LAYOUT: "transcript_layout",
     mvp.SEED_ROOT_TRANSCRIPT_STYLE: "transcript_style",
     mvp.SEED_ROOT_TRANSCRIPT_METRICS: "transcript_metrics",
+    mvp.SEED_ROOT_TRANSCRIPT_FONT: "transcript_font",
 }
 PRIMITIVE_BINDING_BY_ENTRY_ID = {
     mvp.METHOD_ENTRY_VALUES[name]: binding_id

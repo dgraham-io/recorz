@@ -1284,6 +1284,7 @@ SEED_ROOT_TRANSCRIPT_BEHAVIOR = constant_value(SEED_ROOT_IDS, SEED_ROOT_VALUES, 
 SEED_ROOT_TRANSCRIPT_LAYOUT = constant_value(SEED_ROOT_IDS, SEED_ROOT_VALUES, "transcript_layout")
 SEED_ROOT_TRANSCRIPT_STYLE = constant_value(SEED_ROOT_IDS, SEED_ROOT_VALUES, "transcript_style")
 SEED_ROOT_TRANSCRIPT_METRICS = constant_value(SEED_ROOT_IDS, SEED_ROOT_VALUES, "transcript_metrics")
+SEED_ROOT_TRANSCRIPT_FONT = constant_value(SEED_ROOT_IDS, SEED_ROOT_VALUES, "transcript_font")
 SELECTOR_SPECS = build_selector_specs_from_declarations(KERNEL_SELECTOR_DECLARATIONS_IN_ORDER)
 SELECTOR_IDS, SELECTOR_VALUES, SELECTOR_DEFINITIONS = build_named_constant_maps(SELECTOR_SPECS)
 
@@ -1492,6 +1493,15 @@ def compile_kernel_method_program(class_name: str, instance_variables: list[str]
                     and send_site.argument_count == 0
                 ):
                     lowered.append(encode_compiled_method_instruction("push_root", SEED_ROOT_DEFAULT_FORM))
+                    instruction_index += 2
+                    continue
+                if (
+                    isinstance(send_site, SendSite)
+                    and not send_site.super_send
+                    and send_site.selector == "font"
+                    and send_site.argument_count == 0
+                ):
+                    lowered.append(encode_compiled_method_instruction("push_root", SEED_ROOT_TRANSCRIPT_FONT))
                     instruction_index += 2
                     continue
             if binding.kind == "global":

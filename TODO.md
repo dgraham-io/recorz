@@ -28,7 +28,7 @@ Get Recorz to the point where text rendering and the main development UI are own
 - [x] Prove the full RV32 loop repeatedly: browse, edit, accept, test, save, reboot, continue
 
 ## Phase 2 - Define The Image-Side Text Model
-- [ ] Add image-visible font objects rather than relying on VM-only font decisions
+- [x] Add image-visible font objects rather than relying on VM-only font decisions
 - [ ] Represent glyph metrics, baseline, ascent, descent, and line height in image objects
 - [ ] Represent text style separately from raw strings
 - [ ] Add image-side text layout objects for line breaking, wrapping, margins, and tab handling

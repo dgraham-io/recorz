@@ -206,3 +206,13 @@ RecorzKernelSelector: #developmentHome order: 101
 !
 RecorzKernelSelector: #browsePackagesInteractive order: 102
 !
+RecorzKernelSelector: #glyphs order: 103
+!
+RecorzKernelSelector: #metrics order: 104
+!
+RecorzKernelSelector: #behavior order: 105
+!
+RecorzKernelSelector: #pointSize order: 106
+!
+RecorzKernelSelector: #font order: 107
+!
