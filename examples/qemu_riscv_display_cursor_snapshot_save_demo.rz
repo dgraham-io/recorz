@@ -1,0 +1,13 @@
+| rebound cursor |
+Display clear.
+rebound := Form fromBits: Display defaultForm bits.
+rebound beDisplay.
+KernelInstaller rememberObject: rebound named: 'savedDisplay'.
+cursor := Cursor fromBits: (Glyphs at: 88) hotspotX: 0 hotspotY: 0.
+cursor beCursor.
+Cursor moveCursorToX: 12 y: 34.
+Cursor showCursor.
+KernelInstaller rememberObject: cursor named: 'savedCursor'.
+Transcript show: 'DISPLAY CURSOR SAVED'.
+Transcript cr.
+KernelInstaller saveSnapshot.

@@ -42,8 +42,8 @@
 #define SNAPSHOT_MAGIC_1 'C'
 #define SNAPSHOT_MAGIC_2 'Z'
 #define SNAPSHOT_MAGIC_3 'T'
-#define SNAPSHOT_VERSION 5U
-#define SNAPSHOT_HEADER_SIZE 42U
+#define SNAPSHOT_VERSION 6U
+#define SNAPSHOT_HEADER_SIZE 52U
 #define SNAPSHOT_VALUE_SIZE 8U
 #define SNAPSHOT_OBJECT_SIZE (4U + (OBJECT_FIELD_LIMIT * SNAPSHOT_VALUE_SIZE))
 #define SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE \
@@ -9187,6 +9187,16 @@ static void emit_live_snapshot(void) {
     offset += 2U;
     write_u16_le(snapshot_buffer + offset, (uint16_t)live_string_literal_byte_count);
     offset += 2U;
+    write_u16_le(snapshot_buffer + offset, active_display_form_handle);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, active_cursor_handle);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, active_cursor_visible != 0U ? 1U : 0U);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, (uint16_t)active_cursor_screen_x);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, (uint16_t)active_cursor_screen_y);
+    offset += 2U;
     write_u32_le(snapshot_buffer + offset, total_size);
     offset += 4U;
     string_section = snapshot_buffer + (total_size - string_byte_count);
@@ -9362,6 +9372,11 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     uint16_t saved_cursor_y;
     uint16_t saved_startup_hook_receiver_handle;
     uint16_t saved_startup_hook_selector_id;
+    uint16_t saved_active_display_form_handle;
+    uint16_t saved_active_cursor_handle;
+    uint16_t saved_active_cursor_visible;
+    uint16_t saved_active_cursor_x;
+    uint16_t saved_active_cursor_y;
     uint32_t expected_size;
     uint32_t string_section_offset;
     uint32_t offset;
@@ -9394,7 +9409,12 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     saved_live_method_source_count = read_u16_le(blob + 30U);
     saved_live_string_literal_count = read_u16_le(blob + 34U);
     saved_live_string_literal_byte_count = read_u16_le(blob + 36U);
-    expected_size = read_u32_le(blob + 38U);
+    saved_active_display_form_handle = read_u16_le(blob + 38U);
+    saved_active_cursor_handle = read_u16_le(blob + 40U);
+    saved_active_cursor_visible = read_u16_le(blob + 42U);
+    saved_active_cursor_x = read_u16_le(blob + 44U);
+    saved_active_cursor_y = read_u16_le(blob + 46U);
+    expected_size = read_u32_le(blob + 48U);
     if (object_count == 0U || object_count > HEAP_LIMIT) {
         machine_panic("snapshot object count exceeds heap capacity");
     }
@@ -9478,11 +9498,6 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     }
     default_form_handle = read_u16_le(blob + offset);
     offset += 2U;
-    active_display_form_handle = default_form_handle;
-    active_cursor_handle = 0U;
-    active_cursor_visible = 0U;
-    active_cursor_screen_x = 0U;
-    active_cursor_screen_y = 0U;
     framebuffer_bitmap_handle = read_u16_le(blob + offset);
     offset += 2U;
     transcript_behavior_handle = read_u16_le(blob + offset);
@@ -9504,6 +9519,20 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
         transcript_font_handle == 0U || transcript_font_handle > object_count) {
         machine_panic("snapshot root handle is out of range");
     }
+    if (saved_active_display_form_handle == 0U || saved_active_display_form_handle > object_count) {
+        machine_panic("snapshot active display form handle is out of range");
+    }
+    if (saved_active_cursor_handle > object_count) {
+        machine_panic("snapshot active cursor handle is out of range");
+    }
+    if (saved_active_cursor_visible > 1U) {
+        machine_panic("snapshot active cursor visibility is invalid");
+    }
+    active_display_form_handle = saved_active_display_form_handle;
+    active_cursor_handle = saved_active_cursor_handle;
+    active_cursor_visible = saved_active_cursor_handle == 0U ? 0U : (uint8_t)saved_active_cursor_visible;
+    active_cursor_screen_x = saved_active_cursor_x;
+    active_cursor_screen_y = saved_active_cursor_y;
     for (handle = 0U; handle < 128U; ++handle) {
         glyph_bitmap_handles[handle] = read_u16_le(blob + offset);
         if (glyph_bitmap_handles[handle] != 0U && glyph_bitmap_handles[handle] > object_count) {

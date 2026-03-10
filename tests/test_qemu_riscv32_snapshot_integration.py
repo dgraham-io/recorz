@@ -140,6 +140,9 @@ SNAPSHOT_PACKAGE_DEV_LOOP_SECOND_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-sna
 SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-workspace-regenerated-boot-source-test"
 SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-workspace-regenerated-boot-source-reload-test"
 SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "workspace-regenerated-boot-source-live-image.bin"
+SNAPSHOT_DISPLAY_CURSOR_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-display-cursor-snapshot-test"
+SNAPSHOT_DISPLAY_CURSOR_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-display-cursor-snapshot-reload-test"
+SNAPSHOT_DISPLAY_CURSOR_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "display-cursor-live-image.bin"
 
 SNAPSHOT_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_save_demo.rz"
 SNAPSHOT_RELOAD_DEMO_PATH = ROOT / "examples" / "qemu_riscv_snapshot_reload_demo.rz"
@@ -174,6 +177,8 @@ SNAPSHOT_INTERACTIVE_DEV_LOOP_DEMO_PATH = ROOT / "examples" / "qemu_riscv_worksp
 SNAPSHOT_PACKAGE_DEV_LOOP_DEMO_PATH = ROOT / "examples" / "qemu_riscv_workspace_package_dev_loop_demo.rz"
 SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_workspace_regenerated_boot_source_save_demo.rz"
 SNAPSHOT_DEVELOPMENT_HOME_BOOT_DEMO_PATH = ROOT / "examples" / "qemu_riscv_image_development_home_boot.rz"
+SNAPSHOT_DISPLAY_CURSOR_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_display_cursor_snapshot_save_demo.rz"
+SNAPSHOT_DISPLAY_CURSOR_RELOAD_DEMO_PATH = ROOT / "examples" / "qemu_riscv_display_cursor_snapshot_reload_demo.rz"
 
 
 @unittest.skipUnless(
@@ -437,6 +442,28 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             self.fail(f"snapshot is missing the workspace summary\nstdout:\n{result.stdout}")
         return workspace
 
+    def inspect_snapshot_summary(self, *, snapshot_path: Path) -> dict[str, object]:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "tools" / "inspect_qemu_riscv_snapshot.py"),
+                str(snapshot_path),
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            self.fail(
+                "snapshot inspection failed\n"
+                f"stdout:\n{result.stdout}\n"
+                f"stderr:\n{result.stderr}"
+            )
+        inspected = json.loads(result.stdout)
+        if not isinstance(inspected, dict):
+            self.fail(f"snapshot inspection did not return a JSON object\nstdout:\n{result.stdout}")
+        return inspected
+
     def render_cold_file_in_demo(
         self,
         *,
@@ -515,6 +542,38 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         self.assertGreater(line_1[TEXT_FOREGROUND], 300)
         self.assertGreater(line_2[TEXT_FOREGROUND], 120)
         self.assertGreater(line_1[TEXT_FOREGROUND], line_2[TEXT_FOREGROUND] + 120)
+
+    def test_snapshot_preserves_active_display_form_and_cursor_state(self) -> None:
+        save_log = self.save_snapshot(
+            build_dir=SNAPSHOT_DISPLAY_CURSOR_BUILD_DIR,
+            example_path=SNAPSHOT_DISPLAY_CURSOR_SAVE_DEMO_PATH,
+            snapshot_output=SNAPSHOT_DISPLAY_CURSOR_OUTPUT_PATH,
+        )
+        self.assertIn("recorz-snapshot-begin", save_log)
+        self.assertTrue(SNAPSHOT_DISPLAY_CURSOR_OUTPUT_PATH.exists())
+
+        snapshot_summary = self.inspect_snapshot_summary(snapshot_path=SNAPSHOT_DISPLAY_CURSOR_OUTPUT_PATH)
+        header = snapshot_summary.get("header")
+        self.assertIsInstance(header, dict)
+        assert isinstance(header, dict)
+        self.assertEqual(header["active_cursor_visible"], 1)
+        self.assertEqual(header["active_cursor_x"], 12)
+        self.assertEqual(header["active_cursor_y"], 34)
+        self.assertNotEqual(header["active_display_form_handle"], 11)
+        self.assertNotEqual(header["active_cursor_handle"], 0)
+
+        reload_log, width, height, _data = self.render_demo(
+            build_dir=SNAPSHOT_DISPLAY_CURSOR_RELOAD_BUILD_DIR,
+            example_path=SNAPSHOT_DISPLAY_CURSOR_RELOAD_DEMO_PATH,
+            snapshot_payload=SNAPSHOT_DISPLAY_CURSOR_OUTPUT_PATH,
+        )
+        self.assertEqual((width, height), (1024, 768))
+        self.assertIn("recorz qemu-riscv32 mvp: loaded snapshot", reload_log)
+        self.assertIn("DISPLAY RESTORED", reload_log)
+        self.assertIn("CURSOR RESTORED", reload_log)
+        self.assertIn("CURSOR VISIBLE", reload_log)
+        self.assertIn("CURSOR X OK", reload_log)
+        self.assertIn("CURSOR Y OK", reload_log)
 
     def test_external_file_in_payload_can_evolve_a_saved_snapshot(self) -> None:
         save_log = self.save_snapshot(

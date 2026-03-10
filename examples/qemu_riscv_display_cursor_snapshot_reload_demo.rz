@@ -1,0 +1,21 @@
+Display clear.
+(Display defaultForm = (KernelInstaller objectNamed: 'savedDisplay')) ifTrue: [
+    Transcript show: 'DISPLAY RESTORED'.
+    Transcript cr.
+].
+(Cursor current = (KernelInstaller objectNamed: 'savedCursor')) ifTrue: [
+    Transcript show: 'CURSOR RESTORED'.
+    Transcript cr.
+].
+Cursor cursorVisible ifTrue: [
+    Transcript show: 'CURSOR VISIBLE'.
+    Transcript cr.
+].
+(Cursor cursorX = 12) ifTrue: [
+    Transcript show: 'CURSOR X OK'.
+    Transcript cr.
+].
+(Cursor cursorY = 34) ifTrue: [
+    Transcript show: 'CURSOR Y OK'.
+    Transcript cr.
+].

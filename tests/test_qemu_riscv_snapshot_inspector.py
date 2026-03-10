@@ -69,7 +69,7 @@ def _build_workspace_snapshot(*, view_kind: int, target_name: str, current_sourc
     struct.pack_into("<H", header, 4, SNAPSHOT_VERSION)
     struct.pack_into("<H", header, 6, 1)
     struct.pack_into("<I", header, 18, len(string_section))
-    struct.pack_into("<I", header, 38, total_size)
+    struct.pack_into("<I", header, 48, total_size)
 
     return bytes(header + object_record + global_section + root_section + glyph_section + string_section)
 
@@ -87,6 +87,9 @@ class QemuRiscvSnapshotInspectorTests(unittest.TestCase):
 
         self.assertEqual(inspection["header"]["version"], SNAPSHOT_VERSION)
         self.assertEqual(inspection["header"]["object_count"], 1)
+        self.assertEqual(inspection["header"]["active_display_form_handle"], 0)
+        self.assertEqual(inspection["header"]["active_cursor_handle"], 0)
+        self.assertEqual(inspection["header"]["active_cursor_visible"], 0)
         self.assertEqual(inspection["workspace"]["handle"], 1)
         self.assertEqual(inspection["workspace"]["current_view_kind"], 13)
         self.assertEqual(inspection["workspace"]["current_target_name"], "Tools")

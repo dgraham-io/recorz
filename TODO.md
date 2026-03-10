@@ -14,7 +14,7 @@ Reference:
 
 ## Primitive Boundary To Reach
 - [ ] `BitBlt>>copyBits`-class primitive path for bitmap copy, fill, clipping, and monochrome/color transfer
-- [ ] `Form>>beDisplay`-class primitive path to bind a `Form` to the real framebuffer
+- [x] `Form>>beDisplay`-class primitive path to bind a `Form` to the real framebuffer
 - [x] `Cursor>>beCursor`-class primitive path to install a cursor image
 - [ ] `CharacterScanner`-class text scan primitive for glyph placement and stop conditions
 - [ ] line/shape primitive support comparable to `drawLoop` / line drawing support where useful
@@ -51,8 +51,8 @@ Reference:
 - [x] Introduce a real `beDisplay`-style path so a `Form` can become the active screen surface from image code
 - [x] Introduce a real `beCursor`-style path so cursor shape and hotspot come from image objects
 - [x] Expose cursor show/hide and position updates through a primitive boundary that does not own editor policy
-- [ ] Make the active display form and active cursor snapshot-safe and image-visible
-- [ ] Keep the existing framebuffer bootstrap working while this surface is introduced
+- [x] Make the active display form and active cursor snapshot-safe and image-visible
+- [x] Keep the existing framebuffer bootstrap working while this surface is introduced
 
 ## Phase 3 - Build The Text Scan Primitive
 - [ ] Add a `scanCharacters`-class primitive suitable for an image-side `CharacterScanner` / `TextScanner`

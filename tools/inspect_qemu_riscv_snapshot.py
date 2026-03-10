@@ -19,8 +19,8 @@ import build_qemu_riscv_mvp_image as mvp  # noqa: E402
 
 
 SNAPSHOT_MAGIC = b"RCZT"
-SNAPSHOT_VERSION = 5
-SNAPSHOT_HEADER_SIZE = 42
+SNAPSHOT_VERSION = 6
+SNAPSHOT_HEADER_SIZE = 52
 SNAPSHOT_VALUE_SIZE = 8
 OBJECT_FIELD_LIMIT = 4
 SNAPSHOT_OBJECT_SIZE = 4 + (OBJECT_FIELD_LIMIT * SNAPSHOT_VALUE_SIZE)
@@ -85,6 +85,11 @@ class SnapshotHeader:
     live_method_source_byte_count: int
     live_string_literal_count: int
     live_string_literal_byte_count: int
+    active_display_form_handle: int
+    active_cursor_handle: int
+    active_cursor_visible: int
+    active_cursor_x: int
+    active_cursor_y: int
     total_size: int
 
 
@@ -148,7 +153,12 @@ def parse_snapshot(blob: bytes) -> ParsedSnapshot:
         live_method_source_byte_count=_read_u16_le(blob, 32),
         live_string_literal_count=_read_u16_le(blob, 34),
         live_string_literal_byte_count=_read_u16_le(blob, 36),
-        total_size=_read_u32_le(blob, 38),
+        active_display_form_handle=_read_u16_le(blob, 38),
+        active_cursor_handle=_read_u16_le(blob, 40),
+        active_cursor_visible=_read_u16_le(blob, 42),
+        active_cursor_x=_read_u16_le(blob, 44),
+        active_cursor_y=_read_u16_le(blob, 46),
+        total_size=_read_u32_le(blob, 48),
     )
     if header.version != SNAPSHOT_VERSION:
         raise SnapshotInspectionError("snapshot version mismatch")
@@ -325,6 +335,11 @@ def inspect_snapshot(blob: bytes) -> dict[str, object]:
             "live_method_source_byte_count": snapshot.header.live_method_source_byte_count,
             "live_string_literal_count": snapshot.header.live_string_literal_count,
             "live_string_literal_byte_count": snapshot.header.live_string_literal_byte_count,
+            "active_display_form_handle": snapshot.header.active_display_form_handle,
+            "active_cursor_handle": snapshot.header.active_cursor_handle,
+            "active_cursor_visible": snapshot.header.active_cursor_visible,
+            "active_cursor_x": snapshot.header.active_cursor_x,
+            "active_cursor_y": snapshot.header.active_cursor_y,
             "total_size": snapshot.header.total_size,
         },
         "workspace": _workspace_summary(snapshot),
