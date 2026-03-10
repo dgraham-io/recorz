@@ -37,9 +37,11 @@ QEMU_RUN_ARGS := $(QEMU_UPDATE_ARGS) $(QEMU_FILE_IN_ARGS) $(QEMU_SNAPSHOT_ARGS) 
 CONTINUE_SNAPSHOT_OUTPUT := $(SNAPSHOT_PAYLOAD)
 CONTINUE_SNAPSHOT_TEMP_OUTPUT := $(CONTINUE_SNAPSHOT_OUTPUT).tmp
 CONTINUE_SNAPSHOT_BACKUP_OUTPUT := $(CONTINUE_SNAPSHOT_OUTPUT).bak
+CONTINUE_SNAPSHOT_SIGNAL ?=
 QEMU_FILE_IN_DEP := $(if $(strip $(FILE_IN_PAYLOADS)),$(GENERATED_FILE_IN_PAYLOAD))
 DEV_SNAPSHOT ?= $(ROOT)/misc/qemu-riscv32-dev/live.bin
 DEV_SNAPSHOT_BACKUP ?= $(DEV_SNAPSHOT).bak
+DEV_LOOP_SIGNAL ?= $(BUILD_DIR)/dev-loop.snapshot
 DEV_INIT_EXAMPLE ?= $(ROOT)/examples/qemu_riscv_image_development_home_save.rz
 DEV_BOOT_EXAMPLE ?= $(ROOT)/examples/qemu_riscv_image_first_boot.rz
 DEV_INTERACTIVE_EXAMPLE ?= $(ROOT)/examples/qemu_riscv_image_development_home_boot.rz
@@ -76,7 +78,7 @@ OBJECTS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(filter %.c,$(SOURCES))) \
 	$(patsubst %.S,$(BUILD_DIR)/%.o,$(filter %.S,$(SOURCES))) \
 	$(GENERATED_IMAGE_OBJECT)
 
-.PHONY: all run run-interactive run-headless screenshot save-snapshot continue-snapshot continue-snapshot-interactive regenerate-boot-source regenerate-runtime-bindings regenerate-image dev-init dev-boot dev-interactive dev-screenshot dev-file-in dev-regenerate-boot-source dev-regenerate-runtime-bindings dev-regenerate-image dev-reset dev-restore inspect-image clean FORCE
+.PHONY: all run run-interactive run-headless screenshot save-snapshot continue-snapshot continue-snapshot-interactive regenerate-boot-source regenerate-runtime-bindings regenerate-image dev-init dev-boot dev-interactive dev-loop dev-screenshot dev-file-in dev-regenerate-boot-source dev-regenerate-runtime-bindings dev-regenerate-image dev-reset dev-restore inspect-image clean FORCE
 
 all: $(ELF)
 
@@ -158,7 +160,7 @@ continue-snapshot: $(ELF) $(QEMU_FILE_IN_DEP)
 
 continue-snapshot-interactive: $(ELF) $(QEMU_FILE_IN_DEP)
 	@test -n "$(SNAPSHOT_PAYLOAD)" || (echo "SNAPSHOT_PAYLOAD is required for continue-snapshot-interactive" >&2; exit 1)
-	rm -f $(QEMU_LOG) $(CONTINUE_SNAPSHOT_TEMP_OUTPUT)
+	rm -f $(QEMU_LOG) $(CONTINUE_SNAPSHOT_TEMP_OUTPUT) $(CONTINUE_SNAPSHOT_SIGNAL)
 	@$(QEMU) -machine virt -m $(QEMU_MEMORY) -smp 1 -kernel $(ELF) $(QEMU_INTERACTIVE_CHARDEV) -monitor none -device ramfb $(QEMU_WINDOW_INPUT_ARGS) $(QEMU_RUN_ARGS); \
 	STATUS=$$?; \
 	if grep -q 'recorz-snapshot-end' $(QEMU_LOG); then \
@@ -166,6 +168,7 @@ continue-snapshot-interactive: $(ELF) $(QEMU_FILE_IN_DEP)
 		mkdir -p $(dir $(CONTINUE_SNAPSHOT_OUTPUT)); \
 		if [ -f "$(CONTINUE_SNAPSHOT_OUTPUT)" ]; then cp "$(CONTINUE_SNAPSHOT_OUTPUT)" "$(CONTINUE_SNAPSHOT_BACKUP_OUTPUT)"; echo "backed up $(CONTINUE_SNAPSHOT_BACKUP_OUTPUT)"; fi; \
 		mv $(CONTINUE_SNAPSHOT_TEMP_OUTPUT) $(CONTINUE_SNAPSHOT_OUTPUT); \
+		if [ -n "$(CONTINUE_SNAPSHOT_SIGNAL)" ]; then mkdir -p $(dir $(CONTINUE_SNAPSHOT_SIGNAL)); touch "$(CONTINUE_SNAPSHOT_SIGNAL)"; fi; \
 		echo "wrote $(CONTINUE_SNAPSHOT_OUTPUT)"; \
 	else \
 		echo "no snapshot emitted from interactive session"; \
@@ -205,6 +208,18 @@ dev-interactive:
 	@mkdir -p $(dir $(DEV_SNAPSHOT))
 	@if [ ! -f "$(DEV_SNAPSHOT)" ]; then $(MAKE) -C $(CURDIR) BUILD_DIR=$(BUILD_DIR) DEV_SNAPSHOT=$(DEV_SNAPSHOT) dev-init; fi
 	@$(MAKE) -C $(CURDIR) BUILD_DIR=$(BUILD_DIR) EXAMPLE=$(DEV_INTERACTIVE_EXAMPLE) SNAPSHOT_PAYLOAD=$(DEV_SNAPSHOT) continue-snapshot-interactive
+
+dev-loop:
+	@mkdir -p $(dir $(DEV_SNAPSHOT))
+	@if [ ! -f "$(DEV_SNAPSHOT)" ]; then $(MAKE) -C $(CURDIR) BUILD_DIR=$(BUILD_DIR) DEV_SNAPSHOT=$(DEV_SNAPSHOT) dev-init; fi
+	@while true; do \
+		rm -f "$(DEV_LOOP_SIGNAL)"; \
+		$(MAKE) -C $(CURDIR) BUILD_DIR=$(BUILD_DIR) EXAMPLE=$(DEV_INTERACTIVE_EXAMPLE) SNAPSHOT_PAYLOAD=$(DEV_SNAPSHOT) CONTINUE_SNAPSHOT_SIGNAL="$(DEV_LOOP_SIGNAL)" continue-snapshot-interactive; \
+		STATUS=$$?; \
+		if [ $$STATUS -ne 0 ]; then exit $$STATUS; fi; \
+		if [ ! -f "$(DEV_LOOP_SIGNAL)" ]; then break; fi; \
+		echo "resuming $(DEV_SNAPSHOT)"; \
+	done
 
 dev-screenshot:
 	@test -f "$(DEV_SNAPSHOT)" || (echo "DEV_SNAPSHOT does not exist; run dev-init first" >&2; exit 1)

@@ -126,6 +126,7 @@ class QemuRiscvMakefileTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="qemu-riscv64-makefile-continue-snapshot-interactive-") as temp_dir:
             build_dir = Path(temp_dir)
             snapshot_path = build_dir / "live.bin"
+            signal_path = build_dir / "continued.flag"
             result = subprocess.run(
                 [
                     "make",
@@ -134,6 +135,7 @@ class QemuRiscvMakefileTests(unittest.TestCase):
                     str(PLATFORM_DIR),
                     f"BUILD_DIR={build_dir}",
                     f"SNAPSHOT_PAYLOAD={snapshot_path}",
+                    f"CONTINUE_SNAPSHOT_SIGNAL={signal_path}",
                     "continue-snapshot-interactive",
                 ],
                 cwd=ROOT,
@@ -157,6 +159,7 @@ class QemuRiscvMakefileTests(unittest.TestCase):
             self.assertIn("grep -q 'recorz-snapshot-end' ", result.stdout)
             self.assertIn(f"extract_qemu_riscv_snapshot.py --timeout 1 {build_dir / 'qemu.log'} {temp_snapshot_path}", result.stdout)
             self.assertIn(f"cp \"{snapshot_path}\" \"{backup_snapshot_path}\"", result.stdout)
+            self.assertIn(f"touch \"{signal_path}\"", result.stdout)
             self.assertIn(f"mv {temp_snapshot_path} {snapshot_path}", result.stdout)
 
     @unittest.skipUnless(shutil.which("make"), "make is required for QEMU Makefile tests")
@@ -226,6 +229,41 @@ class QemuRiscvMakefileTests(unittest.TestCase):
             self.assertIn(f"DEV_SNAPSHOT={snapshot_path}", result.stdout)
             self.assertIn(f"SNAPSHOT_PAYLOAD={snapshot_path}", result.stdout)
             self.assertIn("continue-snapshot-interactive", result.stdout)
+
+    @unittest.skipUnless(shutil.which("make"), "make is required for QEMU Makefile tests")
+    def test_dev_loop_reopens_after_snapshot_emission(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv64-makefile-dev-loop-") as temp_dir:
+            build_dir = Path(temp_dir)
+            snapshot_path = build_dir / "dev" / "live.bin"
+            signal_path = build_dir / "dev-loop.snapshot"
+            result = subprocess.run(
+                [
+                    "make",
+                    "-n",
+                    "-C",
+                    str(PLATFORM_DIR),
+                    f"BUILD_DIR={build_dir}",
+                    f"DEV_SNAPSHOT={snapshot_path}",
+                    f"DEV_LOOP_SIGNAL={signal_path}",
+                    "dev-loop",
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    "make -n dev-loop failed\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            self.assertIn("while true; do", result.stdout)
+            self.assertIn(f"rm -f \"{signal_path}\"", result.stdout)
+            self.assertIn(f"CONTINUE_SNAPSHOT_SIGNAL=\"{signal_path}\"", result.stdout)
+            self.assertIn(f"SNAPSHOT_PAYLOAD={snapshot_path}", result.stdout)
+            self.assertIn("continue-snapshot-interactive", result.stdout)
+            self.assertIn(f"echo \"resuming {snapshot_path}\"", result.stdout)
 
     @unittest.skipUnless(shutil.which("make"), "make is required for QEMU Makefile tests")
     def test_dev_reset_reinitializes_the_default_snapshot_and_clears_backup(self) -> None:
