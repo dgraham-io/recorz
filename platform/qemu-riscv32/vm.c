@@ -20,7 +20,7 @@
 #define METHOD_SOURCE_NAME_LIMIT 96U
 #define CLASS_COMMENT_LIMIT 128U
 #define PACKAGE_COMMENT_LIMIT CLASS_COMMENT_LIMIT
-#define METHOD_SOURCE_CHUNK_LIMIT 512U
+#define METHOD_SOURCE_CHUNK_LIMIT 1024U
 #define PACKAGE_SOURCE_BUFFER_LIMIT 16384U
 #define REGENERATED_SOURCE_BUFFER_LIMIT 65536U
 #define WORKSPACE_INPUT_MONITOR_STATE_LIMIT METHOD_SOURCE_CHUNK_LIMIT
@@ -160,12 +160,12 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CHARACTER_SCANNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_DRAW_LINE_ON_FORM_FROM_X_FROM_Y_TO_X_TO_Y_COLOR
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_MOVE_TEXT_CURSOR_TO_X_Y
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
-#define SOURCE_EVAL_ENV_LIMIT 32U
-#define SOURCE_EVAL_HOME_CONTEXT_LIMIT 32U
-#define SOURCE_EVAL_BLOCK_STATE_LIMIT 64U
+#define SOURCE_EVAL_ENV_LIMIT 128U
+#define SOURCE_EVAL_HOME_CONTEXT_LIMIT 128U
+#define SOURCE_EVAL_BLOCK_STATE_LIMIT 512U
 
 #define WORKSPACE_VIEW_NONE 0U
 #define WORKSPACE_VIEW_CLASSES 1U
@@ -1042,6 +1042,12 @@ static const char *selector_name(uint8_t selector) {
             return "y";
         case RECORZ_MVP_SELECTOR_DRAW_LINE_ON_FORM_FROM_X_FROM_Y_TO_X_TO_Y_COLOR:
             return "drawLineOnForm:fromX:fromY:toX:toY:color:";
+        case RECORZ_MVP_SELECTOR_TEXT_CURSOR_X:
+            return "textCursorX";
+        case RECORZ_MVP_SELECTOR_TEXT_CURSOR_Y:
+            return "textCursorY";
+        case RECORZ_MVP_SELECTOR_MOVE_TEXT_CURSOR_TO_X_Y:
+            return "moveTextCursorToX:y:";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -8411,16 +8417,6 @@ static void reset_runtime_state(void) {
     }
 }
 
-static uint32_t bitmap_row_mask(uint32_t width) {
-    if (width == 0U || width > MONO_BITMAP_MAX_WIDTH) {
-        machine_panic("bitmap width out of supported range");
-    }
-    if (width == 32U) {
-        return UINT32_MAX;
-    }
-    return (1U << width) - 1U;
-}
-
 static uint32_t small_integer_u32(struct recorz_mvp_value value, const char *message) {
     if (value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER || value.integer < 0) {
         machine_panic(message);
@@ -11281,6 +11277,45 @@ static void execute_entry_form_be_display(
         machine_panic("Form beDisplay expects a framebuffer-backed form");
     }
     active_display_form_handle = heap_handle_for_object(object);
+    push(receiver);
+}
+
+static void execute_entry_display_text_cursor_x(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    push(small_integer_value((int32_t)cursor_x));
+}
+
+static void execute_entry_display_text_cursor_y(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    push(small_integer_value((int32_t)cursor_y));
+}
+
+static void execute_entry_display_move_text_cursor_to_x_y(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)text;
+    cursor_x = small_integer_u32(arguments[0], "Display moveTextCursorToX:y: expects a non-negative small integer x");
+    cursor_y = small_integer_u32(arguments[1], "Display moveTextCursorToX:y: expects a non-negative small integer y");
     push(receiver);
 }
 

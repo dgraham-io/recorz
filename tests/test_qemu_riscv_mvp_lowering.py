@@ -621,19 +621,22 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
 
     def test_derives_primitive_binding_ids_from_kernel_sources(self) -> None:
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["bitbltFillFormColor"], 1)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["bitbltDrawLineOnFormFromXFromYToXToYColor"], 5)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["glyphsAt"], 6)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formClear"], 9)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formWriteCodePointColor"], 12)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formNewline"], 13)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formBeDisplay"], 14)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["displayTextCursorX"], 1)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["displayTextCursorY"], 2)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["displayMoveTextCursorToXY"], 3)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["bitbltFillFormColor"], 4)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["bitbltDrawLineOnFormFromXFromYToXToYColor"], 8)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["glyphsAt"], 9)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formClear"], 12)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formWriteCodePointColor"], 15)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formNewline"], 16)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formBeDisplay"], 17)
         self.assertEqual(
             mvp.PRIMITIVE_BINDING_VALUES["kernelInstallerInstallCompiledMethodOnClassSelectorIdArgumentCount"],
-            17,
+            20,
         )
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formWriteStyledText"], 11)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 74)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formWriteStyledText"], 14)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 77)
         self.assertEqual(
             mvp.PRIMITIVE_BINDING_BY_ENTRY_NAME["RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING"],
             mvp.PRIMITIVE_BINDING_VALUES["formWriteString"],
@@ -876,6 +879,9 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_X", 169),
                 ("RECORZ_MVP_SELECTOR_Y", 170),
                 ("RECORZ_MVP_SELECTOR_DRAW_LINE_ON_FORM_FROM_X_FROM_Y_TO_X_TO_Y_COLOR", 171),
+                ("RECORZ_MVP_SELECTOR_TEXT_CURSOR_X", 172),
+                ("RECORZ_MVP_SELECTOR_TEXT_CURSOR_Y", 173),
+                ("RECORZ_MVP_SELECTOR_MOVE_TEXT_CURSOR_TO_X_Y", 174),
             ],
         )
 
@@ -2078,7 +2084,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 (mvp.SEED_FIELD_OBJECT_INDEX, 191),
                 (mvp.SEED_FIELD_SMALL_INTEGER, 0),
                 (mvp.SEED_FIELD_SMALL_INTEGER, mvp.SEED_OBJECT_CLASS),
-                (mvp.SEED_FIELD_OBJECT_INDEX, 304),
+                (mvp.SEED_FIELD_OBJECT_INDEX, 307),
             ],
         )
 

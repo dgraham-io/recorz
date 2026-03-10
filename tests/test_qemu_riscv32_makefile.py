@@ -41,7 +41,8 @@ class QemuRiscv32MakefileTests(unittest.TestCase):
             self.assertIn("-march=rv32im -mabi=ilp32", result.stdout)
             self.assertIn("-DRECORZ_MVP_PROFILE_DEV=1", result.stdout)
             self.assertIn("-device ramfb", result.stdout)
-            self.assertNotIn("-fw_cfg name=", result.stdout)
+            self.assertIn("-fw_cfg name=opt/recorz-file-in,file=", result.stdout)
+            self.assertIn("kernel/textui/TextRendererBootstrap.rz", result.stdout)
 
     @unittest.skipUnless(shutil.which("make"), "make is required for QEMU RISC-V Makefile tests")
     def test_target_profile_can_be_selected_explicitly(self) -> None:

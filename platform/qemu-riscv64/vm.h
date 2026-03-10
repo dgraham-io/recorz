@@ -5,7 +5,7 @@
 
 #include "recorz_mvp_generated_runtime_bindings.h"
 
-#define RECORZ_MVP_HEAP_LIMIT 512U
+#define RECORZ_MVP_HEAP_LIMIT 4096U
 #define RECORZ_MVP_GLYPH_CODE_LIMIT 128U
 #define RECORZ_MVP_PROGRAM_LEXICAL_LIMIT 32U
 #define RECORZ_MVP_PROGRAM_LEXICAL_NAME_LIMIT 96U

@@ -96,6 +96,7 @@ class QemuRiscvMakefileTests(unittest.TestCase):
             build_dir = Path(temp_dir)
             snapshot_path = build_dir / "live.bin"
             file_in_path = build_dir / "update.rz"
+            file_in_path.write_text("RecorzKernelClass: #Update descriptorOrder: 1 instanceVariableNames: ''\n", encoding="utf-8")
             result = subprocess.run(
                 [
                     "make",
@@ -118,7 +119,10 @@ class QemuRiscvMakefileTests(unittest.TestCase):
                     f"stderr:\n{result.stderr}"
                 )
 
-            self.assertIn(f"-fw_cfg name=opt/recorz-file-in,file={file_in_path}", result.stdout)
+            combined_payload = build_dir / "external_file_in_payload.rz"
+            bootstrap_payload = ROOT / "kernel" / "textui" / "TextRendererBootstrap.rz"
+            self.assertIn(f"for path in {bootstrap_payload} {file_in_path}; do", result.stdout)
+            self.assertIn(f"-fw_cfg name=opt/recorz-file-in,file={combined_payload}", result.stdout)
             self.assertIn(f"-fw_cfg name=opt/recorz-snapshot,file={snapshot_path}", result.stdout)
 
     @unittest.skipUnless(shutil.which("make"), "make is required for QEMU Makefile tests")
@@ -194,7 +198,8 @@ class QemuRiscvMakefileTests(unittest.TestCase):
                 )
 
             combined_payload = build_dir / "external_file_in_payload.rz"
-            self.assertIn(f"for path in {first_file} {second_file}; do", result.stdout)
+            bootstrap_payload = ROOT / "kernel" / "textui" / "TextRendererBootstrap.rz"
+            self.assertIn(f"for path in {bootstrap_payload} {first_file} {second_file}; do", result.stdout)
             self.assertIn(f"cat $path >> {combined_payload}", result.stdout)
             self.assertIn(f"-fw_cfg name=opt/recorz-file-in,file={combined_payload}", result.stdout)
 

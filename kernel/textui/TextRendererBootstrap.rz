@@ -1,0 +1,45 @@
+RecorzKernelClass: #TextRenderer superclass: #Object package: 'TextUI' instanceVariableNames: ''
+!
+drawStyledText: styledText onForm: form
+    | text style |
+    text := styledText text.
+    style := styledText style.
+    ^self text: text index: 1 x: Display textCursorX y: Display textCursorY style: style onForm: form
+!
+text: text index: index x: x y: y style: style onForm: form
+    | scanner stopValue |
+    index > text size ifTrue: [Display moveTextCursorToX: x y: y. ^form].
+    scanner := KernelInstaller objectNamed: 'BootTextScanner'.
+    scanner scanText: text index: index x: x y: y style: style onForm: form right: (self w: form) selectionBoundary: 0 cursorBoundary: 0.
+    Display moveTextCursorToX: scanner x y: scanner y.
+    stopValue := scanner stop.
+    stopValue = 0 ifTrue: [^form].
+    stopValue = 1 ifTrue: [form newline. ^self text: text index: scanner index x: Display textCursorX y: Display textCursorY style: style onForm: form].
+    stopValue = 2 ifTrue: [form writeCodePoint: 9 color: style foregroundColor. ^self text: text index: scanner index + 1 x: Display textCursorX y: Display textCursorY style: style onForm: form].
+    stopValue = 3 ifTrue: [form newline. ^self text: text index: scanner index + 1 x: Display textCursorX y: Display textCursorY style: style onForm: form].
+    ^form
+!
+w: form
+    | right configured |
+    right := form width - Display layout margins right.
+    Display layout flow wrapWidth = 0 ifTrue: [^right].
+    configured := Display layout margins left + (Display layout flow wrapWidth * self ca).
+    configured < right ifTrue: [^configured].
+    ^right
+!
+ca
+    | metrics |
+    metrics := Display font metrics.
+    ^metrics cellWidth * Display layout scale
+!
+RecorzKernelClass: #Form descriptorOrder: 10 objectKindOrder: 2 sourceBootOrder: 7 instanceVariableNames: 'bits'
+!
+writeStyledText: styledText
+    | renderer |
+    renderer := KernelInstaller objectNamed: 'BootTextRenderer'.
+    renderer drawStyledText: styledText onForm: self.
+    ^self
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: ((KernelInstaller classNamed: 'TextRenderer') new) named: 'BootTextRenderer'.
+KernelInstaller rememberObject: ((KernelInstaller classNamed: 'CharacterScanner') new) named: 'BootTextScanner'.

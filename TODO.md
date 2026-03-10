@@ -122,7 +122,7 @@ Reference:
 - [ ] Reduce remaining builder-side ownership of text and UI behavior
 
 ## Near-Term Experiments
-- [ ] Add a temporary transcript/browser demo built directly on `beDisplay` + `copyBits` + image-side scanner code
+- [x] Add a temporary transcript/browser demo built directly on `beDisplay` + `copyBits` + image-side scanner code
 - [ ] Measure 12-point primary and 16-point comfort-mode text density on 1024x768 and current QEMU targets
 - [x] Add a simple cursor-form proof using `beCursor`
 - [x] Add a simple scanner proof that stops at wrap margin and tab/newline boundaries

@@ -107,7 +107,8 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         qemu_log, width, height, data = self.render_example(IMAGE_SIDE_TEXT_RENDERER_EXAMPLE)
 
         normalized_log = qemu_log.replace("\r", "")
-        self.assertIn("IMAGE RENDERER", normalized_log)
+        self.assertIn("recorz qemu-riscv32 mvp: created class TextRenderer", normalized_log)
+        self.assertIn("recorz qemu-riscv32 mvp: applied external file-in", normalized_log)
         self.assertEqual((width, height), (1024, 768))
 
         text_histogram = _region_histogram(data, width, 24, 24, 360, 140)

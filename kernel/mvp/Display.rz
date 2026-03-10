@@ -31,3 +31,12 @@ style
 layout
     ^Display layout
 !
+textCursorX
+    <primitive: #displayTextCursorX>
+!
+textCursorY
+    <primitive: #displayTextCursorY>
+!
+moveTextCursorToX: x y: y
+    <primitive: #displayMoveTextCursorToXY>
+!

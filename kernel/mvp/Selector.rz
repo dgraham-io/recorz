@@ -342,3 +342,9 @@ RecorzKernelSelector: #y order: 169
 !
 RecorzKernelSelector: #drawLineOnForm:fromX:fromY:toX:toY:color: order: 170
 !
+RecorzKernelSelector: #textCursorX order: 171
+!
+RecorzKernelSelector: #textCursorY order: 172
+!
+RecorzKernelSelector: #moveTextCursorToX:y: order: 173
+!
