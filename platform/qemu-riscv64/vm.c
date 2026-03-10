@@ -144,7 +144,7 @@
 #define RECORZ_MVP_TRANSFER_RULE_COPY 0U
 #define RECORZ_MVP_TRANSFER_RULE_OVER 1U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CURSOR_FACTORY
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_BE_CURSOR
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_MOVE_CURSOR_TO_X_Y
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -262,6 +262,9 @@ static struct recorz_mvp_live_string_literal live_string_literals[LIVE_STRING_LI
 static uint16_t default_form_handle = 0U;
 static uint16_t active_display_form_handle = 0U;
 static uint16_t active_cursor_handle = 0U;
+static uint8_t active_cursor_visible = 0U;
+static uint32_t active_cursor_screen_x = 0U;
+static uint32_t active_cursor_screen_y = 0U;
 static uint16_t framebuffer_bitmap_handle = 0U;
 static uint16_t next_dynamic_method_entry_execution_id = RECORZ_MVP_METHOD_ENTRY_COUNT;
 static uint16_t dynamic_class_count = 0U;
@@ -430,6 +433,10 @@ static void bitblt_copy_mono_bitmap_to_form(
     uint32_t clip_width,
     uint8_t apply_color
 );
+static void active_cursor_move_to(uint32_t x, uint32_t y);
+static void active_cursor_set_visible(uint8_t visible);
+static uint8_t active_cursor_is_visible(void);
+static void draw_active_cursor_on_form(const struct recorz_mvp_heap_object *form);
 static uint32_t bitmap_storage_kind(const struct recorz_mvp_heap_object *bitmap);
 static uint32_t text_pixel_scale(void);
 static uint32_t text_foreground_color(void);
@@ -925,6 +932,18 @@ static const char *selector_name(uint8_t selector) {
             return "fromBits:hotspotX:hotspotY:";
         case RECORZ_MVP_SELECTOR_BE_CURSOR:
             return "beCursor";
+        case RECORZ_MVP_SELECTOR_SHOW_CURSOR:
+            return "showCursor";
+        case RECORZ_MVP_SELECTOR_HIDE_CURSOR:
+            return "hideCursor";
+        case RECORZ_MVP_SELECTOR_CURSOR_VISIBLE:
+            return "cursorVisible";
+        case RECORZ_MVP_SELECTOR_CURSOR_X:
+            return "cursorX";
+        case RECORZ_MVP_SELECTOR_CURSOR_Y:
+            return "cursorY";
+        case RECORZ_MVP_SELECTOR_MOVE_CURSOR_TO_X_Y:
+            return "moveCursorToX:y:";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -4192,41 +4211,9 @@ static void workspace_draw_input_monitor_cursor(
     uint32_t column
 ) {
     if (active_cursor_handle != 0U) {
-        const struct recorz_mvp_heap_object *cursor_object =
-            (const struct recorz_mvp_heap_object *)heap_object(active_cursor_handle);
-        const struct recorz_mvp_heap_object *cursor_bitmap = heap_object_for_value(
-            heap_get_field(cursor_object, CURSOR_FIELD_BITS)
-        );
-        uint32_t scale = text_pixel_scale();
-        uint32_t hotspot_x = (uint32_t)heap_get_field(cursor_object, CURSOR_FIELD_HOTSPOT_X).integer;
-        uint32_t hotspot_y = (uint32_t)heap_get_field(cursor_object, CURSOR_FIELD_HOTSPOT_Y).integer;
-        uint32_t cursor_left = text_left_margin() + (column * char_width());
-        uint32_t cursor_top = cursor_y;
-
-        if (cursor_left >= hotspot_x * scale) {
-            cursor_left -= hotspot_x * scale;
-        } else {
-            cursor_left = 0U;
-        }
-        if (cursor_top >= hotspot_y * scale) {
-            cursor_top -= hotspot_y * scale;
-        } else {
-            cursor_top = 0U;
-        }
-        bitblt_copy_mono_bitmap_to_form(
-            cursor_bitmap,
-            form,
-            0U,
-            0U,
-            bitmap_width(cursor_bitmap),
-            bitmap_height(cursor_bitmap),
-            cursor_left,
-            cursor_top,
-            scale,
-            text_foreground_color(),
-            0U,
-            RECORZ_MVP_TRANSFER_RULE_OVER
-        );
+        active_cursor_move_to(text_left_margin() + (column * char_width()), cursor_y);
+        active_cursor_set_visible(1U);
+        draw_active_cursor_on_form(form);
         return;
     }
     form_fill_rect_color(
@@ -7624,6 +7611,9 @@ static void reset_runtime_state(void) {
     default_form_handle = 0U;
     active_display_form_handle = 0U;
     active_cursor_handle = 0U;
+    active_cursor_visible = 0U;
+    active_cursor_screen_x = 0U;
+    active_cursor_screen_y = 0U;
     framebuffer_bitmap_handle = 0U;
     glyph_fallback_handle = 0U;
     transcript_layout_handle = 0U;
@@ -8592,6 +8582,65 @@ static uint32_t cursor_hotspot_u32(
     return small_integer_u32(hotspot_value, message);
 }
 
+static void active_cursor_move_to(uint32_t x, uint32_t y) {
+    active_cursor_screen_x = x;
+    active_cursor_screen_y = y;
+}
+
+static void active_cursor_set_visible(uint8_t visible) {
+    active_cursor_visible = visible != 0U ? 1U : 0U;
+}
+
+static uint8_t active_cursor_is_visible(void) {
+    return (uint8_t)(active_cursor_handle != 0U && active_cursor_visible != 0U);
+}
+
+static void draw_active_cursor_on_form(const struct recorz_mvp_heap_object *form) {
+    const struct recorz_mvp_heap_object *cursor_object;
+    const struct recorz_mvp_heap_object *cursor_bitmap;
+    uint32_t scale;
+    uint32_t hotspot_x;
+    uint32_t hotspot_y;
+    uint32_t cursor_left;
+    uint32_t cursor_top;
+
+    if (!active_cursor_is_visible()) {
+        return;
+    }
+    cursor_object = (const struct recorz_mvp_heap_object *)heap_object(active_cursor_handle);
+    cursor_bitmap = cursor_bitmap_object(cursor_object);
+    scale = text_pixel_scale();
+    hotspot_x = cursor_hotspot_u32(cursor_object, CURSOR_FIELD_HOTSPOT_X, "Cursor hotspotX must be a non-negative small integer");
+    hotspot_y = cursor_hotspot_u32(cursor_object, CURSOR_FIELD_HOTSPOT_Y, "Cursor hotspotY must be a non-negative small integer");
+    cursor_left = active_cursor_screen_x;
+    cursor_top = active_cursor_screen_y;
+
+    if (cursor_left >= hotspot_x * scale) {
+        cursor_left -= hotspot_x * scale;
+    } else {
+        cursor_left = 0U;
+    }
+    if (cursor_top >= hotspot_y * scale) {
+        cursor_top -= hotspot_y * scale;
+    } else {
+        cursor_top = 0U;
+    }
+    bitblt_copy_mono_bitmap_to_form(
+        cursor_bitmap,
+        form,
+        0U,
+        0U,
+        bitmap_width(cursor_bitmap),
+        bitmap_height(cursor_bitmap),
+        cursor_left,
+        cursor_top,
+        scale,
+        text_foreground_color(),
+        0U,
+        RECORZ_MVP_TRANSFER_RULE_OVER
+    );
+}
+
 static void initialize_roots(const struct recorz_mvp_seed *seed) {
     uint32_t glyph_index;
     uint32_t code_index;
@@ -8638,6 +8687,9 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
     default_form_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_DEFAULT_FORM]);
     active_display_form_handle = default_form_handle;
     active_cursor_handle = 0U;
+    active_cursor_visible = 0U;
+    active_cursor_screen_x = 0U;
+    active_cursor_screen_y = 0U;
     framebuffer_bitmap_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_FRAMEBUFFER_BITMAP]);
     transcript_behavior_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_BEHAVIOR]);
     transcript_layout_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_LAYOUT]);
@@ -9428,6 +9480,9 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     offset += 2U;
     active_display_form_handle = default_form_handle;
     active_cursor_handle = 0U;
+    active_cursor_visible = 0U;
+    active_cursor_screen_x = 0U;
+    active_cursor_screen_y = 0U;
     framebuffer_bitmap_handle = read_u16_le(blob + offset);
     offset += 2U;
     transcript_behavior_handle = read_u16_le(blob + offset);
@@ -10041,6 +10096,86 @@ static void execute_entry_cursor_factory_current(
         return;
     }
     push(object_value(active_cursor_handle));
+}
+
+static void execute_entry_cursor_factory_show(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)arguments;
+    (void)text;
+    active_cursor_set_visible(1U);
+    push(receiver);
+}
+
+static void execute_entry_cursor_factory_hide(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)arguments;
+    (void)text;
+    active_cursor_set_visible(0U);
+    push(receiver);
+}
+
+static void execute_entry_cursor_factory_visible(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    push(boolean_value(active_cursor_is_visible()));
+}
+
+static void execute_entry_cursor_factory_x(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    push(small_integer_value((int32_t)active_cursor_screen_x));
+}
+
+static void execute_entry_cursor_factory_y(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    push(small_integer_value((int32_t)active_cursor_screen_y));
+}
+
+static void execute_entry_cursor_factory_move_to_x_y(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)text;
+    active_cursor_move_to(
+        small_integer_u32(arguments[0], "Cursor moveToX:y: expects a non-negative x small integer"),
+        small_integer_u32(arguments[1], "Cursor moveToX:y: expects a non-negative y small integer")
+    );
+    push(receiver);
 }
 
 static void execute_entry_cursor_be_cursor(

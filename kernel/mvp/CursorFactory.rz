@@ -9,3 +9,21 @@ fromBits: bits hotspotX: hotspotX hotspotY: hotspotY
 current
     <primitive: #cursorFactoryCurrent>
 !
+showCursor
+    <primitive: #cursorFactoryShow>
+!
+hideCursor
+    <primitive: #cursorFactoryHide>
+!
+cursorVisible
+    <primitive: #cursorFactoryVisible>
+!
+cursorX
+    <primitive: #cursorFactoryX>
+!
+cursorY
+    <primitive: #cursorFactoryY>
+!
+moveCursorToX: x y: y
+    <primitive: #cursorFactoryMoveToXY>
+!

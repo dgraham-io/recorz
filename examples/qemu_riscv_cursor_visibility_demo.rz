@@ -1,0 +1,18 @@
+| cursor |
+cursor := Cursor fromBits: (Glyphs at: 88) hotspotX: 0 hotspotY: 0.
+cursor beCursor.
+Cursor moveCursorToX: 12 y: 34.
+Cursor showCursor.
+Transcript show: Cursor cursorX printString.
+Transcript cr.
+Transcript show: Cursor cursorY printString.
+Transcript cr.
+Cursor cursorVisible ifTrue: [
+    Transcript show: 'CURSOR SHOWN'.
+    Transcript cr.
+].
+Cursor hideCursor.
+Cursor cursorVisible ifFalse: [
+    Transcript show: 'CURSOR HIDDEN'.
+    Transcript cr.
+].

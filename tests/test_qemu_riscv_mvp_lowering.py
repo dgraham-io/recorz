@@ -856,6 +856,12 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_HOTSPOT_Y", 158),
                 ("RECORZ_MVP_SELECTOR_FROM_BITS_HOTSPOT_X_HOTSPOT_Y", 159),
                 ("RECORZ_MVP_SELECTOR_BE_CURSOR", 160),
+                ("RECORZ_MVP_SELECTOR_SHOW_CURSOR", 161),
+                ("RECORZ_MVP_SELECTOR_HIDE_CURSOR", 162),
+                ("RECORZ_MVP_SELECTOR_CURSOR_VISIBLE", 163),
+                ("RECORZ_MVP_SELECTOR_CURSOR_X", 164),
+                ("RECORZ_MVP_SELECTOR_CURSOR_Y", 165),
+                ("RECORZ_MVP_SELECTOR_MOVE_CURSOR_TO_X_Y", 166),
             ],
         )
 
@@ -1133,7 +1139,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            mvp.METHOD_ENTRY_ORDER[-21:],
+            mvp.METHOD_ENTRY_ORDER[-27:],
             [
                 "RECORZ_MVP_METHOD_ENTRY_TEXT_MARGINS_LEFT",
                 "RECORZ_MVP_METHOD_ENTRY_TEXT_MARGINS_TOP",
@@ -1156,6 +1162,12 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "RECORZ_MVP_METHOD_ENTRY_CURSOR_HOTSPOT_Y",
                 "RECORZ_MVP_METHOD_ENTRY_CURSOR_FACTORY_FROM_BITS_HOTSPOT_X_HOTSPOT_Y",
                 "RECORZ_MVP_METHOD_ENTRY_CURSOR_FACTORY_CURRENT",
+                "RECORZ_MVP_METHOD_ENTRY_CURSOR_FACTORY_SHOW_CURSOR",
+                "RECORZ_MVP_METHOD_ENTRY_CURSOR_FACTORY_HIDE_CURSOR",
+                "RECORZ_MVP_METHOD_ENTRY_CURSOR_FACTORY_CURSOR_VISIBLE",
+                "RECORZ_MVP_METHOD_ENTRY_CURSOR_FACTORY_CURSOR_X",
+                "RECORZ_MVP_METHOD_ENTRY_CURSOR_FACTORY_CURSOR_Y",
+                "RECORZ_MVP_METHOD_ENTRY_CURSOR_FACTORY_MOVE_CURSOR_TO_X_Y",
             ],
         )
 

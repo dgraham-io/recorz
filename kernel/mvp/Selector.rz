@@ -320,3 +320,15 @@ RecorzKernelSelector: #fromBits:hotspotX:hotspotY: order: 158
 !
 RecorzKernelSelector: #beCursor order: 159
 !
+RecorzKernelSelector: #showCursor order: 160
+!
+RecorzKernelSelector: #hideCursor order: 161
+!
+RecorzKernelSelector: #cursorVisible order: 162
+!
+RecorzKernelSelector: #cursorX order: 163
+!
+RecorzKernelSelector: #cursorY order: 164
+!
+RecorzKernelSelector: #moveCursorToX:y: order: 165
+!

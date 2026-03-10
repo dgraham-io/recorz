@@ -50,7 +50,7 @@ Reference:
 ## Phase 2 - Finish The Display / Form / Cursor Primitive Layer
 - [x] Introduce a real `beDisplay`-style path so a `Form` can become the active screen surface from image code
 - [x] Introduce a real `beCursor`-style path so cursor shape and hotspot come from image objects
-- [ ] Expose cursor show/hide and position updates through a primitive boundary that does not own editor policy
+- [x] Expose cursor show/hide and position updates through a primitive boundary that does not own editor policy
 - [ ] Make the active display form and active cursor snapshot-safe and image-visible
 - [ ] Keep the existing framebuffer bootstrap working while this surface is introduced
 
