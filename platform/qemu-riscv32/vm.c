@@ -355,7 +355,7 @@ static uint32_t text_line_spacing(void);
 static uint32_t bitmap_width(const struct recorz_mvp_heap_object *bitmap);
 static uint32_t bitmap_height(const struct recorz_mvp_heap_object *bitmap);
 static const struct recorz_mvp_heap_object *bitmap_for_form(const struct recorz_mvp_heap_object *form);
-static void workspace_evaluate_source(const char *source);
+static struct recorz_mvp_value workspace_evaluate_source(const char *source);
 static struct recorz_mvp_value workspace_current_source_value(
     const struct recorz_mvp_heap_object *workspace_object
 );
@@ -2580,6 +2580,7 @@ static void build_workspace_source_program(
     const char *cursor = source;
     char statement[METHOD_SOURCE_CHUNK_LIMIT];
     uint8_t statement_count = 0U;
+    uint8_t pending_value = 0U;
 
     program->instruction_count = 0U;
     program->literal_count = 0U;
@@ -2599,17 +2600,19 @@ static void build_workspace_source_program(
         cursor = workspace_parse_temporary_declarations(cursor, program);
     }
     while (source_copy_next_statement(&cursor, statement, sizeof(statement)) != 0U) {
-        workspace_compile_statement(statement, program);
-        if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_POP, 0U, 0U)) {
-            machine_panic("Workspace source exceeds instruction capacity");
+        if (pending_value) {
+            if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_POP, 0U, 0U)) {
+                machine_panic("Workspace source exceeds instruction capacity");
+            }
         }
+        workspace_compile_statement(statement, program);
+        pending_value = 1U;
         ++statement_count;
     }
     if (statement_count == 0U) {
         machine_panic("Workspace source contains no executable statements");
     }
-    if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_PUSH_NIL, 0U, 0U) ||
-        !workspace_source_append_instruction(program, RECORZ_MVP_OP_RETURN, 0U, 0U)) {
+    if (!workspace_source_append_instruction(program, RECORZ_MVP_OP_RETURN, 0U, 0U)) {
         machine_panic("Workspace source exceeds instruction capacity");
     }
 }
@@ -4528,6 +4531,25 @@ static void workspace_input_monitor_feedback_append_char(char ch) {
     }
 }
 
+static void workspace_input_monitor_feedback_append_text(const char *text) {
+    if (text == 0) {
+        return;
+    }
+    while (*text != '\0') {
+        workspace_input_monitor_feedback_append_char(*text);
+        ++text;
+    }
+}
+
+static void workspace_input_monitor_feedback_append_line(const char *text) {
+    uint32_t length = text_length(workspace_input_monitor_feedback);
+
+    if (length != 0U && workspace_input_monitor_feedback[length - 1U] != '\n') {
+        workspace_input_monitor_feedback_append_char('\n');
+    }
+    workspace_input_monitor_feedback_append_text(text);
+}
+
 static uint32_t workspace_input_monitor_reserved_output_lines(uint32_t total_visible_lines) {
     if (total_visible_lines <= 6U) {
         return 0U;
@@ -4635,38 +4657,58 @@ static const char *workspace_named_object_name_for_handle(uint16_t object_handle
     return 0;
 }
 
+static const char *workspace_text_for_value(
+    struct recorz_mvp_value value,
+    char buffer[],
+    uint32_t buffer_size
+) {
+    const char *named_object_name;
+    struct recorz_mvp_value printed_value;
+    uint32_t offset = 0U;
+
+    if (buffer != 0 && buffer_size != 0U) {
+        buffer[0] = '\0';
+    }
+    if (value.kind == RECORZ_MVP_VALUE_NIL) {
+        return "nil";
+    }
+    if (value.kind == RECORZ_MVP_VALUE_SMALL_INTEGER ||
+        value.kind == RECORZ_MVP_VALUE_STRING) {
+        printed_value = perform_send_and_pop_result(
+            value,
+            RECORZ_MVP_SELECTOR_PRINT_STRING,
+            0U,
+            0,
+            0
+        );
+        if (printed_value.kind != RECORZ_MVP_VALUE_STRING || printed_value.string == 0) {
+            machine_panic("Workspace printString did not return a string");
+        }
+        if (buffer != 0 && buffer_size != 0U) {
+            append_text_checked(buffer, buffer_size, &offset, printed_value.string);
+            return buffer;
+        }
+        return printed_value.string;
+    }
+    if (value.kind == RECORZ_MVP_VALUE_OBJECT) {
+        named_object_name = workspace_named_object_name_for_handle((uint16_t)value.integer);
+        if (named_object_name != 0) {
+            return named_object_name;
+        }
+        return class_name_for_object(class_object_for_heap_object(heap_object_for_value(value)));
+    }
+    machine_panic("Workspace encountered an unsupported value");
+    return "";
+}
+
 static void workspace_write_label_and_value(
     const struct recorz_mvp_heap_object *form,
     const char *label,
     struct recorz_mvp_value value
 ) {
-    if (value.kind == RECORZ_MVP_VALUE_NIL) {
-        workspace_write_label_and_text(form, label, "nil");
-        return;
-    }
-    if (value.kind == RECORZ_MVP_VALUE_STRING && value.string != 0) {
-        workspace_write_label_and_text(form, label, value.string);
-        return;
-    }
-    if (value.kind == RECORZ_MVP_VALUE_SMALL_INTEGER) {
-        workspace_write_label_and_integer(form, label, (uint32_t)value.integer);
-        return;
-    }
-    if (value.kind == RECORZ_MVP_VALUE_OBJECT) {
-        const char *named_object_name = workspace_named_object_name_for_handle((uint16_t)value.integer);
+    char text[METHOD_SOURCE_CHUNK_LIMIT];
 
-        if (named_object_name != 0) {
-            workspace_write_label_and_text(form, label, named_object_name);
-            return;
-        }
-        workspace_write_label_and_text(
-            form,
-            label,
-            class_name_for_object(class_object_for_heap_object(heap_object_for_value(value)))
-        );
-        return;
-    }
-    machine_panic("Workspace browser encountered an unsupported value");
+    workspace_write_label_and_text(form, label, workspace_text_for_value(value, text, sizeof(text)));
 }
 
 static void workspace_render_class_browser(
@@ -5180,8 +5222,9 @@ static void workspace_render_input_monitor_browser(
     form_clear(form);
     workspace_write_label_and_text(form, "VIEW", "INPUT");
     workspace_write_label_and_text(form, "INPUT", "SERIAL");
-    workspace_write_label_and_text(form, "MOVE", "ARROWS CTRL-B/F/P/N");
+    workspace_write_label_and_text(form, "MOVE", "ARROWS CTRL-B/F/N");
     workspace_write_label_and_text(form, "HOME", "CTRL-A/E");
+    workspace_write_label_and_text(form, "PRINT", "CTRL-P");
     workspace_write_label_and_text(form, "RUN", "CTRL-R");
     workspace_write_label_and_text(form, "SAVE", "CTRL-W");
     workspace_write_label_and_text(form, "BROWSE", "CTRL-O");
@@ -5794,6 +5837,65 @@ static void workspace_evaluate_input_monitor_buffer(
     workspace_remember_source(workspace_object, chunk_source);
 }
 
+static void workspace_print_input_monitor_buffer(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    uint16_t workspace_handle = heap_handle_for_object(workspace_object);
+    struct recorz_mvp_value saved_view_kind = heap_get_field(
+        workspace_object,
+        workspace_current_view_kind_field_index(workspace_object)
+    );
+    struct recorz_mvp_value saved_target_name = heap_get_field(
+        workspace_object,
+        workspace_current_target_name_field_index(workspace_object)
+    );
+    const char *chunk_source;
+    struct recorz_mvp_value result;
+    char rendered_value[METHOD_SOURCE_CHUNK_LIMIT];
+    uint32_t browser_view_kind = WORKSPACE_VIEW_NONE;
+    char browser_target_name[METHOD_SOURCE_CHUNK_LIMIT];
+
+    if (workspace_input_monitor_buffer[0] == '\0') {
+        workspace_input_monitor_set_status("EMPTY BUFFER");
+        return;
+    }
+    if (workspace_input_monitor_accept_context(
+            workspace_object,
+            &browser_view_kind,
+            browser_target_name,
+            sizeof(browser_target_name))) {
+        workspace_input_monitor_set_status("PRINT USE CTRL-X");
+        return;
+    }
+    workspace_input_monitor_clear_feedback();
+    workspace_input_monitor_set_status("PRINTING");
+    workspace_input_monitor_capture_enabled = 1U;
+    chunk_source = workspace_normalize_do_it_source(workspace_input_monitor_buffer);
+    workspace_remember_source(workspace_object, chunk_source);
+    result = workspace_evaluate_source(workspace_source_for_evaluation(chunk_source));
+    workspace_input_monitor_capture_enabled = 0U;
+    workspace_input_monitor_feedback_append_line(
+        workspace_text_for_value(result, rendered_value, sizeof(rendered_value))
+    );
+    workspace_input_monitor_set_status("PRINT OK");
+    heap_set_field(
+        workspace_handle,
+        workspace_current_view_kind_field_index(workspace_object),
+        saved_view_kind
+    );
+    heap_set_field(
+        workspace_handle,
+        workspace_current_target_name_field_index(workspace_object),
+        saved_target_name
+    );
+    heap_set_field(
+        workspace_handle,
+        workspace_current_source_field_index(workspace_object),
+        string_value(workspace_input_monitor_buffer)
+    );
+    workspace_remember_source(workspace_object, chunk_source);
+}
+
 static void workspace_accept_current_in_place(
     const struct recorz_mvp_heap_object *object
 ) {
@@ -6042,7 +6144,7 @@ static void workspace_run_interactive_input_monitor(
             continue;
         }
         if (ch == 0x10) {
-            workspace_move_input_monitor_cursor_up(workspace_object);
+            workspace_print_input_monitor_buffer(workspace_object);
             workspace_render_input_monitor_browser(workspace_object);
             continue;
         }
@@ -13537,7 +13639,7 @@ static void execute_executable(
     machine_panic("executable did not return");
 }
 
-static void workspace_evaluate_source(const char *source) {
+static struct recorz_mvp_value workspace_evaluate_source(const char *source) {
     struct recorz_mvp_workspace_source_program program;
     struct recorz_mvp_executable executable = {
         .instruction_source = program.instructions,
@@ -13573,7 +13675,7 @@ static void workspace_evaluate_source(const char *source) {
     if (stack_size != stack_size_before + 1U) {
         machine_panic("Workspace source execution did not return exactly one value");
     }
-    (void)pop_value();
+    return pop_value();
 }
 
 static void execute_block_closure_with_sender(

@@ -367,10 +367,11 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
 
             output = output.replace("\r", "")
             self.assertIn("VIEW: INPUT", output)
-            self.assertIn("MOVE: ARROWS CTRL-B/F/P/N", output)
+            self.assertIn("MOVE: ARROWS CTRL-B/F/N", output)
+            self.assertIn("PRINT: CTRL-P", output)
             self.assertIn("LINE: 1", output)
             self.assertIn("TOP: 1", output)
-            self.assertIn("EXIT: CTRL-", output)
+            self.assertIn("DONE: CTRL-D", output)
             self.assertIn("BUFFER=aCbD", output.replace("\n", ""))
             self.assertNotIn("panic:", output)
 
@@ -408,7 +409,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 output = _read_until(process, "VIEW: INPUT", timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
-                process.stdin.write("A\nBC\nD\x10X\x0eY\x04")
+                process.stdin.write("A\nBC\nD\x1b[AX\x0eY\x04")
                 process.stdin.flush()
                 time.sleep(1.0)
                 if process.poll() is None:
@@ -544,6 +545,63 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 output.replace("\n", ""),
             )
             self.assertIn("RERUN=3", output.replace("\n", ""))
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_interactive_input_monitor_can_print_the_current_buffer_result(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-input-monitor-print-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_INPUT_MONITOR_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "VIEW: INPUT", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("1 + 2\x10\x04")
+                process.stdin.flush()
+                time.sleep(1.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("PRINT: CTRL-P", output)
+            self.assertIn("STATUS: PRINT OK", output)
+            self.assertIn("OUT> 3", output)
+            self.assertIn("BUFFER=1 + 2", output.replace("\n", ""))
             self.assertNotIn("panic:", output)
 
     def test_workspace_interactive_input_monitor_can_accept_current_buffer(self) -> None:
@@ -709,6 +767,60 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
 
             output = output.replace("\r", "")
             self.assertIn("STATUS: RUN USE CTRL-X", output)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_interactive_input_monitor_refuses_to_print_method_source_as_a_doit(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-input-monitor-print-method-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_EDIT_METHOD_ENTRY_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "VIEW: INPUT", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("\x10\x04")
+                process.stdin.flush()
+                time.sleep(1.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("STATUS: PRINT USE CTRL-X", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_interactive_input_monitor_can_return_to_its_browser_context(self) -> None:
