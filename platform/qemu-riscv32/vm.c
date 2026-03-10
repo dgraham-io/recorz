@@ -6266,25 +6266,82 @@ static void workspace_accept_current_in_place(
     );
 }
 
-static const char *workspace_source_text_for_browser_target(
+static uint8_t workspace_resolve_source_browser_target(
     uint32_t view_kind,
-    const char *target_name
+    const char *target_name,
+    uint32_t *normalized_view_kind_out,
+    char normalized_target_name_out[],
+    uint32_t normalized_target_name_out_size,
+    const char **source_out
 ) {
     const struct recorz_mvp_heap_object *class_object;
     char class_name[METHOD_SOURCE_NAME_LIMIT];
+    char protocol_name[METHOD_SOURCE_NAME_LIMIT];
     char selector_name_text[METHOD_SOURCE_NAME_LIMIT];
 
+    if (normalized_view_kind_out != 0) {
+        *normalized_view_kind_out = WORKSPACE_VIEW_NONE;
+    }
+    if (normalized_target_name_out != 0 && normalized_target_name_out_size != 0U) {
+        normalized_target_name_out[0] = '\0';
+    }
+    if (source_out != 0) {
+        *source_out = 0;
+    }
     if (target_name == 0 || target_name[0] == '\0') {
-        return 0;
+        return 0U;
     }
-    if (view_kind == WORKSPACE_VIEW_CLASS_SOURCE) {
-        return file_out_class_source_by_name(target_name);
+    if (view_kind == WORKSPACE_VIEW_PACKAGE || view_kind == WORKSPACE_VIEW_PACKAGE_SOURCE) {
+        if (normalized_view_kind_out != 0) {
+            *normalized_view_kind_out = WORKSPACE_VIEW_PACKAGE_SOURCE;
+        }
+        if (normalized_target_name_out != 0 && normalized_target_name_out_size != 0U) {
+            source_copy_identifier(normalized_target_name_out, normalized_target_name_out_size, target_name);
+        }
+        if (source_out != 0) {
+            *source_out = file_out_package_source_by_name(target_name);
+        }
+        return 1U;
     }
-    if (view_kind == WORKSPACE_VIEW_PACKAGE_SOURCE) {
-        return file_out_package_source_by_name(target_name);
+    if (view_kind == WORKSPACE_VIEW_CLASS ||
+        view_kind == WORKSPACE_VIEW_CLASS_SOURCE ||
+        view_kind == WORKSPACE_VIEW_METHODS ||
+        view_kind == WORKSPACE_VIEW_CLASS_METHODS ||
+        view_kind == WORKSPACE_VIEW_PROTOCOLS ||
+        view_kind == WORKSPACE_VIEW_CLASS_PROTOCOLS) {
+        if (normalized_view_kind_out != 0) {
+            *normalized_view_kind_out = WORKSPACE_VIEW_CLASS_SOURCE;
+        }
+        if (normalized_target_name_out != 0 && normalized_target_name_out_size != 0U) {
+            source_copy_identifier(normalized_target_name_out, normalized_target_name_out_size, target_name);
+        }
+        if (source_out != 0) {
+            *source_out = file_out_class_source_by_name(target_name);
+        }
+        return 1U;
+    }
+    if (view_kind == WORKSPACE_VIEW_PROTOCOL || view_kind == WORKSPACE_VIEW_CLASS_PROTOCOL) {
+        if (!workspace_parse_protocol_target_name(
+                target_name,
+                class_name,
+                sizeof(class_name),
+                protocol_name,
+                sizeof(protocol_name))) {
+            return 0U;
+        }
+        if (normalized_view_kind_out != 0) {
+            *normalized_view_kind_out = WORKSPACE_VIEW_CLASS_SOURCE;
+        }
+        if (normalized_target_name_out != 0 && normalized_target_name_out_size != 0U) {
+            source_copy_identifier(normalized_target_name_out, normalized_target_name_out_size, class_name);
+        }
+        if (source_out != 0) {
+            *source_out = file_out_class_source_by_name(class_name);
+        }
+        return 1U;
     }
     if (view_kind != WORKSPACE_VIEW_METHOD && view_kind != WORKSPACE_VIEW_CLASS_METHOD) {
-        return 0;
+        return 0U;
     }
     if (!workspace_parse_method_target_name(
             target_name,
@@ -6292,17 +6349,76 @@ static const char *workspace_source_text_for_browser_target(
             sizeof(class_name),
             selector_name_text,
             sizeof(selector_name_text))) {
-        return 0;
+        return 0U;
     }
     class_object = lookup_class_by_name(class_name);
     if (class_object == 0) {
+        return 0U;
+    }
+    if (normalized_view_kind_out != 0) {
+        *normalized_view_kind_out = view_kind;
+    }
+    if (normalized_target_name_out != 0 && normalized_target_name_out_size != 0U) {
+        source_copy_identifier(normalized_target_name_out, normalized_target_name_out_size, target_name);
+    }
+    if (source_out != 0) {
+        *source_out = workspace_method_source_text_for_browser_target(
+            view_kind == WORKSPACE_VIEW_METHOD ? class_object : class_side_lookup_target(class_object),
+            class_name,
+            selector_name_text,
+            view_kind == WORKSPACE_VIEW_CLASS_METHOD
+        );
+    }
+    return 1U;
+}
+
+static const char *workspace_source_text_for_browser_target(
+    uint32_t view_kind,
+    const char *target_name
+) {
+    const char *source = 0;
+
+    if (!workspace_resolve_source_browser_target(
+            view_kind,
+            target_name,
+            0,
+            0,
+            0U,
+            &source)) {
         return 0;
     }
-    return workspace_method_source_text_for_browser_target(
-        view_kind == WORKSPACE_VIEW_METHOD ? class_object : class_side_lookup_target(class_object),
+    return source;
+}
+
+static void workspace_render_source_browser_target(
+    const struct recorz_mvp_heap_object *object,
+    uint32_t view_kind,
+    const char *target_name
+) {
+    char class_name[METHOD_SOURCE_NAME_LIMIT];
+    char selector_name_text[METHOD_SOURCE_NAME_LIMIT];
+
+    if (view_kind == WORKSPACE_VIEW_CLASS_SOURCE) {
+        workspace_render_class_source_browser(object, target_name);
+        return;
+    }
+    if (view_kind == WORKSPACE_VIEW_PACKAGE_SOURCE) {
+        workspace_render_package_source_browser(object, target_name);
+        return;
+    }
+    if (!workspace_parse_method_target_name(
+            target_name,
+            class_name,
+            sizeof(class_name),
+            selector_name_text,
+            sizeof(selector_name_text))) {
+        machine_panic("Workspace source browser target is invalid");
+    }
+    workspace_render_method_browser(
+        object,
         class_name,
         selector_name_text,
-        view_kind == WORKSPACE_VIEW_CLASS_METHOD
+        view_kind == WORKSPACE_VIEW_METHOD ? "INST" : "CLASS"
     );
 }
 
@@ -6312,8 +6428,8 @@ static void workspace_revert_current_in_place(
     struct recorz_mvp_value view_kind_value;
     struct recorz_mvp_value target_name_value;
     const char *source;
-    char class_name[METHOD_SOURCE_NAME_LIMIT];
-    char selector_name_text[METHOD_SOURCE_NAME_LIMIT];
+    uint32_t normalized_view_kind = WORKSPACE_VIEW_NONE;
+    char normalized_target_name[METHOD_SOURCE_NAME_LIMIT];
 
     view_kind_value = heap_get_field(object, workspace_current_view_kind_field_index(object));
     if (view_kind_value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
@@ -6328,38 +6444,17 @@ static void workspace_revert_current_in_place(
         target_name_value.string[0] == '\0') {
         machine_panic("Workspace revertCurrent is missing the current browser target");
     }
-    source = workspace_source_text_for_browser_target(
-        (uint32_t)view_kind_value.integer,
-        target_name_value.string
-    );
-    if (source == 0) {
+    if (!workspace_resolve_source_browser_target(
+            (uint32_t)view_kind_value.integer,
+            target_name_value.string,
+            &normalized_view_kind,
+            normalized_target_name,
+            sizeof(normalized_target_name),
+            &source)) {
         machine_panic("Workspace revertCurrent requires a source browser target");
     }
-    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_SOURCE) {
-        workspace_remember_current_source(object, source);
-        workspace_render_class_source_browser(object, target_name_value.string);
-        return;
-    }
-    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PACKAGE_SOURCE) {
-        workspace_remember_current_source(object, source);
-        workspace_render_package_source_browser(object, target_name_value.string);
-        return;
-    }
-    if (!workspace_parse_method_target_name(
-            target_name_value.string,
-            class_name,
-            sizeof(class_name),
-            selector_name_text,
-            sizeof(selector_name_text))) {
-        machine_panic("Workspace revertCurrent current method target is invalid");
-    }
     workspace_remember_current_source(object, source);
-    workspace_render_method_browser(
-        object,
-        class_name,
-        selector_name_text,
-        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_METHOD ? "INST" : "CLASS"
-    );
+    workspace_render_source_browser_target(object, normalized_view_kind, normalized_target_name);
 }
 
 static void workspace_run_current_tests_in_place(
@@ -6815,10 +6910,9 @@ static void workspace_edit_current_in_place(
 ) {
     struct recorz_mvp_value view_kind_value;
     struct recorz_mvp_value target_name_value;
-    const struct recorz_mvp_heap_object *class_object;
     const char *source;
-    char class_name[METHOD_SOURCE_NAME_LIMIT];
-    char selector_name_text[METHOD_SOURCE_NAME_LIMIT];
+    uint32_t normalized_view_kind = WORKSPACE_VIEW_NONE;
+    char normalized_target_name[METHOD_SOURCE_NAME_LIMIT];
 
     view_kind_value = heap_get_field(object, workspace_current_view_kind_field_index(object));
     if (view_kind_value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
@@ -6842,91 +6936,23 @@ static void workspace_edit_current_in_place(
         workspace_run_interactive_input_monitor(object);
         return;
     }
-    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS ||
-        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_SOURCE) {
-        if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
-            target_name_value.string == 0 ||
-            target_name_value.string[0] == '\0') {
-            machine_panic("Workspace editCurrent is missing the current class target");
-        }
-        source = file_out_class_source_by_name(target_name_value.string);
-        workspace_remember_current_source(object, source);
-        workspace_remember_source(object, source);
-        workspace_remember_view(object, WORKSPACE_VIEW_CLASS_SOURCE, target_name_value.string);
-        workspace_run_interactive_input_monitor(object);
-        return;
-    }
-    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_METHODS ||
-        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_METHODS ||
-        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PROTOCOLS ||
-        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_PROTOCOLS) {
-        if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
-            target_name_value.string == 0 ||
-            target_name_value.string[0] == '\0') {
-            machine_panic("Workspace editCurrent is missing the current class target");
-        }
-        source = file_out_class_source_by_name(target_name_value.string);
-        workspace_remember_current_source(object, source);
-        workspace_remember_source(object, source);
-        workspace_remember_view(object, WORKSPACE_VIEW_CLASS_SOURCE, target_name_value.string);
-        workspace_run_interactive_input_monitor(object);
-        return;
-    }
-    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PROTOCOL ||
-        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_PROTOCOL) {
-        char protocol_name[METHOD_SOURCE_NAME_LIMIT];
-
-        if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
-            target_name_value.string == 0 ||
-            target_name_value.string[0] == '\0') {
-            machine_panic("Workspace editCurrent is missing the current protocol target");
-        }
-        if (!workspace_parse_protocol_target_name(
-                target_name_value.string,
-                class_name,
-                sizeof(class_name),
-                protocol_name,
-                sizeof(protocol_name))) {
-            machine_panic("Workspace editCurrent current protocol target is invalid");
-        }
-        source = file_out_class_source_by_name(class_name);
-        workspace_remember_current_source(object, source);
-        workspace_remember_source(object, source);
-        workspace_remember_view(object, WORKSPACE_VIEW_CLASS_SOURCE, class_name);
-        workspace_run_interactive_input_monitor(object);
-        return;
-    }
-    if ((uint32_t)view_kind_value.integer != WORKSPACE_VIEW_METHOD &&
-        (uint32_t)view_kind_value.integer != WORKSPACE_VIEW_CLASS_METHOD) {
-        machine_panic("Workspace editCurrent requires a class, method, protocol, or package browser target");
-    }
     if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
         target_name_value.string == 0 ||
         target_name_value.string[0] == '\0') {
-        machine_panic("Workspace editCurrent is missing the current method target");
+        machine_panic("Workspace editCurrent is missing the current browser target");
     }
-    if (!workspace_parse_method_target_name(
+    if (!workspace_resolve_source_browser_target(
+            (uint32_t)view_kind_value.integer,
             target_name_value.string,
-            class_name,
-            sizeof(class_name),
-            selector_name_text,
-            sizeof(selector_name_text))) {
-        machine_panic("Workspace editCurrent current method target is invalid");
+            &normalized_view_kind,
+            normalized_target_name,
+            sizeof(normalized_target_name),
+            &source)) {
+        machine_panic("Workspace editCurrent requires a class, method, protocol, or package browser target");
     }
-    class_object = lookup_class_by_name(class_name);
-    if (class_object == 0) {
-        machine_panic("Workspace editCurrent could not resolve the target class");
-    }
-    source = workspace_method_source_text_for_browser_target(
-        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_METHOD
-            ? class_object
-            : class_side_lookup_target(class_object),
-        class_name,
-        selector_name_text,
-        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_METHOD
-    );
     workspace_remember_current_source(object, source);
     workspace_remember_source(object, source);
+    workspace_remember_view(object, normalized_view_kind, normalized_target_name);
     workspace_run_interactive_input_monitor(object);
 }
 
