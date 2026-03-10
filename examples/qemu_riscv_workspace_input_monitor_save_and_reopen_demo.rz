@@ -1,0 +1,32 @@
+Display clear.
+Workspace browseClassNamed: 'Display'.
+Workspace browseMethod: 'newline' ofClassNamed: 'Display'.
+Workspace setContents: 'newline
+    | first second third fourth fifth sixth seventh eighth ninth tenth eleventh twelfth thirteenth fourteenth fifteenth sixteenth seventeenth eighteenth nineteenth twentieth |
+    first := ''ONE''.
+    second := ''TWO''.
+    third := ''THREE''.
+    fourth := ''FOUR''.
+    fifth := ''FIVE''.
+    sixth := ''SIX''.
+    seventh := ''SEVEN''.
+    eighth := ''EIGHT''.
+    ninth := ''NINE''.
+    tenth := ''TEN''.
+    eleventh := ''ELEVEN''.
+    twelfth := ''TWELVE''.
+    thirteenth := ''THIRTEEN''.
+    fourteenth := ''FOURTEEN''.
+    fifteenth := ''FIFTEEN''.
+    sixteenth := ''SIXTEEN''.
+    seventeenth := ''SEVENTEEN''.
+    eighteenth := ''EIGHTEEN''.
+    nineteenth := ''NINETEEN''.
+    twentieth := ''TWENTY''.
+    Transcript show: first.
+    Transcript cr.
+    Transcript show: twentieth.
+    Transcript cr.
+    ^self'.
+Workspace interactiveInputMonitor.
+Workspace saveAndReopen.

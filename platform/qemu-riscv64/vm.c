@@ -11401,6 +11401,8 @@ static void workspace_reopen_in_place(
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_INPUT_MONITOR) {
+        workspace_bind_input_monitor_buffer(object);
+        workspace_bind_input_monitor_cursor_state(object);
         workspace_render_input_monitor_browser(object);
         return;
     }

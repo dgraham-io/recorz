@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 import shutil
 import subprocess
 import sys
@@ -11,6 +13,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORM_DIR = ROOT / "platform" / "qemu-riscv32"
 TEXT_FOREGROUND = (31, 41, 51)
+SNAPSHOT_BEGIN_RE = re.compile(r"recorz-snapshot-begin (\d+)")
+SNAPSHOT_DATA_RE = re.compile(r"^recorz-snapshot-data ([0-9a-f]+)$", re.MULTILINE)
+SNAPSHOT_END_RE = re.compile(r"^recorz-snapshot-end$", re.MULTILINE)
 
 
 def _read_ppm(path: Path) -> tuple[int, int, bytes]:
@@ -93,6 +98,9 @@ SNAPSHOT_WORKSPACE_SAVE_AND_RERUN_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-sn
 SNAPSHOT_WORKSPACE_RECOVERY_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-workspace-recovery-test"
 SNAPSHOT_WORKSPACE_RECOVERY_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-workspace-recovery-reload-test"
 SNAPSHOT_WORKSPACE_RECOVERY_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "workspace-recovery-live-image.bin"
+SNAPSHOT_WORKSPACE_INPUT_MONITOR_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-workspace-input-monitor-snapshot-test"
+SNAPSHOT_WORKSPACE_INPUT_MONITOR_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-workspace-input-monitor-snapshot-reload-test"
+SNAPSHOT_WORKSPACE_INPUT_MONITOR_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "workspace-input-monitor-live-image.bin"
 SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-workspace-regenerated-boot-source-test"
 SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-workspace-regenerated-boot-source-reload-test"
 SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "workspace-regenerated-boot-source-live-image.bin"
@@ -124,6 +132,7 @@ SNAPSHOT_KERNEL_CLASS_FILE_OUT_COLD_FILE_IN_DEMO_PATH = ROOT / "examples" / "qem
 SNAPSHOT_WORKSPACE_SAVE_AND_REOPEN_DEMO_PATH = ROOT / "examples" / "qemu_riscv_workspace_save_and_reopen_demo.rz"
 SNAPSHOT_WORKSPACE_SAVE_AND_RERUN_DEMO_PATH = ROOT / "examples" / "qemu_riscv_workspace_save_and_rerun_demo.rz"
 SNAPSHOT_WORKSPACE_SAVE_RECOVERY_DEMO_PATH = ROOT / "examples" / "qemu_riscv_workspace_save_recovery_snapshot_demo.rz"
+SNAPSHOT_WORKSPACE_INPUT_MONITOR_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_save_and_reopen_demo.rz"
 SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_workspace_regenerated_boot_source_save_demo.rz"
 
 
@@ -132,6 +141,91 @@ SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_SAVE_DEMO_PATH = ROOT / "examples" / 
     "QEMU RV32 snapshot integration test requires qemu-system-riscv32 and riscv64-unknown-elf-gcc",
 )
 class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
+    def build_elf(self, *, build_dir: Path, example_path: Path) -> Path:
+        command = [
+            "make",
+            "-C",
+            str(PLATFORM_DIR),
+            f"BUILD_DIR={build_dir}",
+            f"EXAMPLE={example_path}",
+            "clean",
+            "all",
+        ]
+        result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
+        if result.returncode != 0:
+            self.fail(f"QEMU RV32 build failed\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}")
+        return build_dir / "recorz-qemu-riscv32-mvp.elf"
+
+    def extract_snapshot_bytes(self, log_text: str) -> bytes | None:
+        normalized_log = log_text.replace("\r\n", "\n").replace("\r", "\n")
+        begin_match = SNAPSHOT_BEGIN_RE.search(normalized_log)
+        end_match = SNAPSHOT_END_RE.search(normalized_log)
+
+        if begin_match is None or end_match is None or end_match.start() < begin_match.end():
+            return None
+        expected_size = int(begin_match.group(1))
+        payload_region = normalized_log[begin_match.end() : end_match.start()]
+        payload_hex = "".join(match.group(1) for match in SNAPSHOT_DATA_RE.finditer(payload_region))
+        snapshot = bytes.fromhex(payload_hex)
+        if len(snapshot) != expected_size:
+            self.fail(
+                f"snapshot size mismatch: expected {expected_size} bytes, extracted {len(snapshot)} bytes"
+            )
+        return snapshot
+
+    def save_snapshot_from_interactive_editor(
+        self,
+        *,
+        build_dir: Path,
+        example_path: Path,
+        snapshot_output: Path,
+        serial_input: str,
+    ) -> str:
+        elf_path = self.build_elf(build_dir=build_dir, example_path=example_path)
+        process = subprocess.Popen(
+            [
+                "qemu-system-riscv32",
+                "-machine",
+                "virt",
+                "-m",
+                "32M",
+                "-smp",
+                "1",
+                "-kernel",
+                str(elf_path),
+                "-serial",
+                "stdio",
+                "-display",
+                "none",
+                "-device",
+                "ramfb",
+            ],
+            cwd=ROOT,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        try:
+            try:
+                output, _ = process.communicate(input=serial_input, timeout=20.0)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                output, _ = process.communicate(timeout=5.0)
+        finally:
+            if process.stdout is not None:
+                process.stdout.close()
+            if process.stdin is not None:
+                process.stdin.close()
+
+        snapshot = self.extract_snapshot_bytes(output)
+        if snapshot is None:
+            self.fail(f"interactive editor run did not emit a snapshot\nstdout:\n{output}")
+        snapshot_output.parent.mkdir(parents=True, exist_ok=True)
+        snapshot_output.write_bytes(snapshot)
+        (build_dir / "qemu.log").write_text(output, encoding="utf-8")
+        return output
+
     def save_snapshot(self, *, build_dir: Path, example_path: Path, snapshot_output: Path) -> str:
         command = [
             "make",
@@ -197,6 +291,29 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
                 f"stderr:\n{result.stderr}"
             )
         return output_path.read_text(encoding="utf-8")
+
+    def inspect_workspace_snapshot(self, *, snapshot_path: Path) -> dict[str, object]:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "tools" / "inspect_qemu_riscv_snapshot.py"),
+                str(snapshot_path),
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            self.fail(
+                "snapshot inspection failed\n"
+                f"stdout:\n{result.stdout}\n"
+                f"stderr:\n{result.stderr}"
+            )
+        inspected = json.loads(result.stdout)
+        workspace = inspected.get("workspace")
+        if not isinstance(workspace, dict):
+            self.fail(f"snapshot is missing the workspace summary\nstdout:\n{result.stdout}")
+        return workspace
 
     def render_cold_file_in_demo(
         self,
@@ -475,6 +592,57 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         line_2 = _region_histogram(data, width, 24, 58, 260, 90)
         self.assertGreater(line_1[TEXT_FOREGROUND], 300)
         self.assertGreater(line_2[TEXT_FOREGROUND], 300)
+
+    def test_snapshot_can_reopen_workspace_input_monitor_state_without_demo_specific_program(self) -> None:
+        save_log = self.save_snapshot_from_interactive_editor(
+            build_dir=SNAPSHOT_WORKSPACE_INPUT_MONITOR_BUILD_DIR,
+            example_path=SNAPSHOT_WORKSPACE_INPUT_MONITOR_SAVE_DEMO_PATH,
+            snapshot_output=SNAPSHOT_WORKSPACE_INPUT_MONITOR_OUTPUT_PATH,
+            serial_input=("\x0e" * 6) + ("\x06" * 4) + "\x04",
+        )
+        self.assertIn("recorz-snapshot-begin", save_log)
+        self.assertTrue(SNAPSHOT_WORKSPACE_INPUT_MONITOR_OUTPUT_PATH.exists())
+
+        workspace_summary = self.inspect_workspace_snapshot(
+            snapshot_path=SNAPSHOT_WORKSPACE_INPUT_MONITOR_OUTPUT_PATH,
+        )
+        self.assertEqual(workspace_summary["current_view_kind"], 18)
+        self.assertRegex(
+            str(workspace_summary["current_target_name"]),
+            r"CURSOR:[1-9][0-9]*;TOP:0;VIEW:5;TARGET:Display>>newline",
+        )
+
+        extracted_source = self.extract_workspace_current_source(
+            snapshot_path=SNAPSHOT_WORKSPACE_INPUT_MONITOR_OUTPUT_PATH,
+            output_path=ROOT / "misc" / "qemu-riscv32-snapshots" / "workspace-input-monitor-current-source.rz",
+        )
+        self.assertIn("twentieth := 'TWENTY'.", extracted_source)
+        self.assertIn("Transcript show: twentieth.", extracted_source)
+
+        reload_log, width, height, data = self.render_demo(
+            build_dir=SNAPSHOT_WORKSPACE_INPUT_MONITOR_RELOAD_BUILD_DIR,
+            example_path=SNAPSHOT_WORKSPACE_IDLE_DEMO_PATH,
+            snapshot_payload=SNAPSHOT_WORKSPACE_INPUT_MONITOR_OUTPUT_PATH,
+        )
+
+        self.assertEqual((width, height), (1024, 768))
+        self.assertIn("recorz qemu-riscv32 mvp: loaded snapshot", reload_log)
+        self.assertIn("recorz qemu-riscv32 mvp: rendered", reload_log)
+        self.assertNotIn("panic:", reload_log)
+        self.assertIn("VIEW: INPUT", reload_log)
+        self.assertRegex(reload_log, r"LINE: [2-9]")
+        self.assertRegex(reload_log, r"COL: [2-9]")
+        self.assertIn("TOP: 1", reload_log)
+        self.assertIn("newline    | first second third", reload_log)
+        self.assertIn("seventh := 'SEVEN'.", reload_log)
+
+        line_1 = _region_histogram(data, width, 24, 24, 420, 56)
+        line_2 = _region_histogram(data, width, 24, 58, 420, 90)
+        source_region = _region_histogram(data, width, 24, 126, 980, 700)
+
+        self.assertGreater(line_1[TEXT_FOREGROUND], 240)
+        self.assertGreater(line_2[TEXT_FOREGROUND], 160)
+        self.assertGreater(source_region[TEXT_FOREGROUND], 2000)
 
     def test_snapshot_can_reopen_workspace_class_source_browser_state_without_demo_specific_program(self) -> None:
         save_log = self.save_snapshot(
