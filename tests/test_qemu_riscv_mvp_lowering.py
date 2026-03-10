@@ -820,6 +820,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_START_COLUMN", 141),
                 ("RECORZ_MVP_SELECTOR_END_LINE", 142),
                 ("RECORZ_MVP_SELECTOR_END_COLUMN", 143),
+                ("RECORZ_MVP_SELECTOR_SIZE", 144),
             ],
         )
 

@@ -1,0 +1,6 @@
+Transcript show: 'SIZE='.
+Transcript show: 'ABC' size printString.
+Transcript cr.
+Transcript show: 'AT='.
+Transcript show: ('ABC' at: 2) printString.
+Transcript cr.

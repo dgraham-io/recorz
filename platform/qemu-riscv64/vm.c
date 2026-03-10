@@ -139,7 +139,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEXT_SELECTION
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_END_COLUMN
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SIZE
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -856,6 +856,8 @@ static const char *selector_name(uint8_t selector) {
             return "endLine";
         case RECORZ_MVP_SELECTOR_END_COLUMN:
             return "endColumn";
+        case RECORZ_MVP_SELECTOR_SIZE:
+            return "size";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -14621,6 +14623,29 @@ static void perform_send(
     if (receiver.kind == RECORZ_MVP_VALUE_STRING) {
         if (selector == RECORZ_MVP_SELECTOR_PRINT_STRING) {
             push(receiver);
+            return;
+        }
+        if (selector == RECORZ_MVP_SELECTOR_SIZE) {
+            push(small_integer_value((int32_t)text_length(receiver.string == 0 ? "" : receiver.string)));
+            return;
+        }
+        if (selector == RECORZ_MVP_SELECTOR_AT) {
+            uint32_t index;
+
+            if (arguments[0].kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+                machine_panic("String at: expects a small integer argument");
+            }
+            if (receiver.string == 0) {
+                machine_panic("String at: receiver is null");
+            }
+            if (arguments[0].integer <= 0) {
+                machine_panic("String at: index must be positive");
+            }
+            index = (uint32_t)arguments[0].integer - 1U;
+            if (index >= text_length(receiver.string)) {
+                machine_panic("String at: index is out of range");
+            }
+            push(small_integer_value((int32_t)(uint8_t)receiver.string[index]));
             return;
         }
         machine_panic("unsupported String selector");
