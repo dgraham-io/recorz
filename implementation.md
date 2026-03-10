@@ -1,5 +1,11 @@
 # Implementation Log
 
+## 2026-03-10 - Rewrite The UI Roadmap Around Smalltalk-Style Primitives
+- Rewrote [TODO.md](/Users/david/repos/recorz/TODO.md) around a Smalltalk-80-style primitive boundary for the first native Recorz UI. The new roadmap now treats `copyBits`, display binding, cursor binding, text scanning, input delivery, and persistence/debug support as the long-lived VM/platform surface, with text composition, workspace/browser rendering, and tool behavior moving into the image.
+- Restructured the roadmap into explicit phases: primitive-contract cleanup, display/form/cursor primitives, text scan primitive, image-side composition, image-side renderer completion, image-owned UI primitives, C renderer replacement, first native workspace/browser surfaces, GC work if required for native tools, and finally source-owning the UI stack.
+- Added an explicit GC track in the TODO because the current fixed heap may become the limiting factor once image-side views, text objects, and live tools become the default development surface. The roadmap keeps GC below the image, but makes its compatibility requirements with handles, snapshots, contexts, named objects, and tool/view state explicit.
+- Made the font targets concrete inside the same roadmap: 16-point as the baseline readable development font and 12-point as the dense mode for 1024x768-class framebuffer targets.
+
 ## 2026-03-10 - Set The Dense Text Mode Target To 12-Point
 - Updated [TODO.md](/Users/david/repos/recorz/TODO.md) so the image-owned text/UI roadmap now pins the smaller dense development mode to a 12-point font, while keeping 16-point as the readable baseline workspace/browser size. This keeps the display plan concrete before the actual image-side text renderer grows font-size support.
 

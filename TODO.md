@@ -1,7 +1,23 @@
 # Recorz TODO
 
 ## Goal
-Get Recorz to the point where text rendering and the main development UI are owned by image-side objects rather than hard-wired in the C VM, while keeping RV32 as the primary development target.
+Build the first native Recorz development UI in the image using a Smalltalk-80-style primitive boundary:
+
+- a tiny VM/platform surface for bitmap display, cursor/display binding, text scanning, line/shape support, input delivery, and persistence
+- image-owned text composition, editor/browser rendering, tool behavior, and UI structure
+- RV32 as the primary development target, with RV64 kept as a validation target
+
+The immediate target is not a full window system. It is a credible initial in-image workspace and browser built on the same kind of primitive boundary Smalltalk-80 used.
+
+## Primitive Boundary To Reach
+- [ ] `BitBlt>>copyBits`-class primitive path for bitmap copy, fill, clipping, and monochrome/color transfer
+- [ ] `Form>>beDisplay`-class primitive path to bind a `Form` to the real framebuffer
+- [ ] `Cursor>>beCursor`-class primitive path to install a cursor image
+- [ ] `CharacterScanner`-class text scan primitive for glyph placement and stop conditions
+- [ ] line/shape primitive support comparable to `drawLoop` / line drawing support where useful
+- [ ] keyboard and serial event delivery as raw input primitives, not UI policy
+- [ ] snapshot/load/save and boot glue kept below the image
+- [ ] emergency panic/debug output kept below the image
 
 ## Current State
 - [x] RV32 framebuffer boot on QEMU
@@ -9,84 +25,114 @@ Get Recorz to the point where text rendering and the main development UI are own
 - [x] Browser-backed editing for methods, classes, and packages
 - [x] In-image accept, revert, test, save, resume, and regeneration hooks
 - [x] Source-owned kernel/package regeneration path
-- [ ] Text rendering policy owned by the image
-- [ ] Image-owned workspace/browser views
-- [ ] Real window or pane structure inside the image
+- [x] Image-visible font, metrics, style, layout, cursor, and selection objects
+- [x] First image-side text renderer slice
+- [x] Shared `Form` string path can delegate to image-side rendering on RV32
+- [ ] Display/input primitive boundary cleaned up around the Smalltalk-80 model
+- [ ] Image-owned workspace/browser rendering
+- [ ] Real native tool surfaces in the image
 
-## Keep In The Platform / VM
-- [ ] Framebuffer access and low-level pixel writes
-- [ ] Keyboard and serial event delivery
-- [ ] BitBlt / bitmap copy / fill primitives
-- [ ] Snapshot load/save transport and boot glue
-- [ ] Emergency panic/debug output
+## Phase 1 - Lock The Primitive Contract
+- [ ] Decide and document the exact initial primitive surface Recorz will keep in C:
+  `copyBits`, display binding, cursor binding, text scan, input delivery, snapshot/persistence, panic/debug
+- [ ] Audit current C-side text/UI helpers and classify each one as:
+  primitive to keep, temporary scaffold to replace, or behavior that should move into the image immediately
+- [ ] Normalize existing bitmap/form operations so the future image-side renderer uses one coherent primitive path instead of multiple ad hoc text helpers
+- [ ] Add explicit clipping and transfer-mode decisions to the bitmap copy surface
+- [ ] Define how glyph blitting relates to `copyBits` so text rendering stays Smalltalk-shaped rather than hard-wired as a special VM text API
+- [ ] Document the RV32 performance assumptions for this primitive set
 
-## Phase 1 - Make The Native Development Loop Comfortable
-- [x] Make the browser/editor workflow the default development path, not a special tool mode
-- [x] Improve editor help, status, and feedback so the current command surface is self-explanatory
-- [x] Tighten save/resume/recovery so continuing from a snapshot feels like a normal image action
-- [x] Make package-centered edit/test/save flow routine from inside the image
-- [x] Prove the full RV32 loop repeatedly: browse, edit, accept, test, save, reboot, continue
+## Phase 2 - Finish The Display / Form / Cursor Primitive Layer
+- [ ] Introduce a real `beDisplay`-style path so a `Form` can become the active screen surface from image code
+- [ ] Introduce a real `beCursor`-style path so cursor shape and hotspot come from image objects
+- [ ] Expose cursor show/hide and position updates through a primitive boundary that does not own editor policy
+- [ ] Make the active display form and active cursor snapshot-safe and image-visible
+- [ ] Keep the existing framebuffer bootstrap working while this surface is introduced
 
-## Phase 2 - Define The Image-Side Text Model
-- [x] Add image-visible font objects rather than relying on VM-only font decisions
-- [x] Represent glyph metrics, baseline, ascent, descent, and line height in image objects
-- [x] Represent text style separately from raw strings
-- [x] Add image-side text layout objects for line breaking, wrapping, margins, and tab handling
-- [x] Add image-side cursor and selection model objects
-- [ ] Keep the C VM limited to primitive bitmap and input support while layout decisions move upward
+## Phase 3 - Build The Text Scan Primitive
+- [ ] Add a `scanCharacters`-class primitive suitable for an image-side `CharacterScanner` / `TextScanner`
+- [ ] Define stop conditions for:
+  end of run, right margin, tab, newline, control character, and optional selection/cursor boundaries
+- [ ] Return enough placement state from the scan primitive to let image code own wrapping and composition
+- [ ] Keep the primitive low-level: scan/advance only, not editor policy
+- [ ] Prove the primitive can render the current transcript/workspace text with image-owned scanner code
 
-## Phase 3 - Build Image-Side Text Rendering
-- [x] Add a Smalltalk-shaped text renderer that draws glyphs onto `Form`/`Bitmap` using existing primitives
-- [x] Move string drawing policy out of the ad hoc C workspace/browser renderer
-- [ ] Render cursor, selection, status lines, and simple highlighted regions from image code
-- [ ] Make the first comfortable development font target a readable 16-point size for the framebuffer workspace/browser
-- [ ] Support at least two usable text sizes, with 16-point as the baseline development size and a 12-point dense mode after that
-- [ ] Make text metrics configurable so resolution can be used effectively on RV32 targets
-- [ ] Keep a temporary C fallback only until the image-side renderer reaches parity
+## Phase 4 - Move Text Layout And Composition Into The Image
+- [ ] Replace VM-owned margin, wrap, tab, and line-height policy with image-owned text composition objects
+- [ ] Move line breaking, cursor x/y calculation, and visible line traversal into image code
+- [ ] Move status-line and feedback-line composition into image code
+- [ ] Make the baseline readable development font target a 16-point image-owned font
+- [ ] Add a denser 12-point image-owned mode for 1024x768 and similar targets
+- [ ] Make text metrics configurable from the image instead of fixed in the VM
+- [ ] Keep a temporary C fallback only until image-side composition reaches parity
 
-## Phase 4 - Introduce Image-Owned UI Primitives
-- [ ] Decide the first UI structure: simple pane/window system or a minimal declarative view tree
+## Phase 5 - Complete The Image-Side Text Renderer
+- [ ] Rebuild the current transcript/workspace text painting path around image-side scanner/renderer objects
+- [ ] Render cursor, selection, status lines, and highlighted regions from image code
+- [ ] Support at least:
+  plain text, styled text, cursor painting, and single-region selection highlighting
+- [ ] Keep the VM at the primitive boundary:
+  bitmap copy, display/cursor binding, text scan, input delivery
+- [ ] Prove that normal workspace text output no longer depends on C-side text layout rules
+
+## Phase 6 - Introduce Image-Owned UI Primitives
+- [ ] Decide the first image-side UI structure:
+  minimal pane/window system or minimal declarative view tree on top of the same primitive layer
 - [ ] Add image-side view objects for bounds, invalidation, redraw, and focus
-- [ ] Add image-side input routing for keyboard commands and focus changes
+- [ ] Add image-side input routing for keyboard focus and command dispatch
 - [ ] Add image-side layout objects for vertical, horizontal, and split arrangements
-- [ ] Add core reusable widgets: label, list, text editor, status area, and command/action surface
-- [ ] Keep the VM limited to event delivery and primitive drawing instead of view policy
+- [ ] Add core widgets needed for the first tools:
+  label, list, text editor, status area, command surface
+- [ ] Keep event transport and primitive drawing in the VM only
 
-## Phase 5 - Replace The C Workspace / Browser Renderer
+## Phase 7 - Replace The C Workspace / Browser Renderer
 - [ ] Rebuild the workspace as an image-side editor component
 - [ ] Rebuild the browser as image-side list/source components
-- [ ] Move do-it, print-it, accept, revert, test, save, and regenerate commands behind image-side tool objects
-- [ ] Make browser navigation, source display, and editing use the same image-owned text/UI components
-- [ ] Remove the special-case C rendering paths once image-side tools are functionally equivalent
+- [ ] Move do-it, print-it, accept, revert, test, save, and regenerate behind image-side tool objects
+- [ ] Make browser navigation and source editing use the same editor/view components
+- [ ] Remove the special-case C workspace/browser renderers once the image-side tools reach parity
 
-## Phase 6 - Add Real Native Tool Structure
-- [ ] Support a true workspace surface and browser surface at the same time
-- [ ] Add a minimal pane or window manager for switching, tiling, or stacking tool views
-- [ ] Preserve open tools, focus, cursor, and scroll state across snapshot save/load
-- [ ] Allow a normal development session to stay entirely inside the image
-- [ ] Make the image reopen into the same development tools after reboot
+## Phase 8 - Reach The First Native UI
+- [ ] Support a functional workspace surface and a functional browser surface from inside the image
+- [ ] Allow switching between them without falling back to C-side tool policy
+- [ ] Preserve open tool state, focus, cursor, and scroll position across snapshot save/load
+- [ ] Make the normal development loop:
+  browse, edit, do it / print it / accept, test, save, reboot, continue
+- [ ] Reopen into the same native tools after reboot
 
-## Phase 7 - Make The Tools Source-Owned
+## Phase 9 - Garbage Collector Work Needed For Native Tools
+- [ ] Decide whether the current fixed heap is sufficient for the initial native tool milestone or whether GC must land first
+- [ ] If needed, introduce a Smalltalk-appropriate managed heap/GC before the image-side UI becomes the default tool surface
+- [ ] Keep the collector compatible with:
+  handles/object identity, snapshots, live method source tables, named objects, contexts, and display/cursor roots
+- [ ] Ensure the collector can trace:
+  activation/context stacks, live editor state, source buffers, text/layout objects, and view trees
+- [ ] Keep GC policy below the image, but make the image-side tool set safe to run under it
+- [ ] Add recovery/debug tooling so UI work is not fragile while the collector matures
+
+## Phase 10 - Source-Own The UI Stack
 - [ ] File out and file in the text/UI tool classes in canonical source form
 - [ ] Include the tool classes in regenerated kernel / boot source
-- [ ] Prove that a regenerated image reboots with the same text/UI tools available
-- [ ] Reduce remaining builder-side ownership of text and tool behavior
+- [ ] Prove that a regenerated image boots directly into the native workspace/browser tools
+- [ ] Reduce remaining builder-side ownership of text and UI behavior
 
-## Phase 8 - Optional But Likely Near-Term Improvements
-- [ ] Add a denser 12-point bitmap font optimized for 1024x768 and similar framebuffer targets once the 16-point baseline renderer is working
-- [ ] Add basic selection, copy, and paste hooks
-- [ ] Add mouse input after keyboard-only tools are stable
-- [ ] Experiment with a declarative UI layer once the first image-owned tool set is working
-- [ ] Decide whether the long-term UI model is classic Smalltalk MVC, Morphic-like, or declarative on top of the same primitive view layer
+## Near-Term Experiments
+- [ ] Add a temporary transcript/browser demo built directly on `beDisplay` + `copyBits` + image-side scanner code
+- [ ] Measure 16-point and 12-point text density on 1024x768 and current QEMU targets
+- [ ] Add a simple cursor-form proof using `beCursor`
+- [ ] Add a simple scanner proof that stops at wrap margin and tab/newline boundaries
+- [ ] Evaluate whether the first native UI should stay Smalltalk-pane-like or move toward a declarative surface after the primitive layer is proven
 
 ## Milestones To Watch
-- [ ] Milestone A: image-owned text layout and rendering for the workspace
-- [ ] Milestone B: image-owned workspace and browser components replacing the C renderer
-- [ ] Milestone C: native snapshot/reopen of multiple tool surfaces
-- [ ] Milestone D: regenerated image boots directly into image-owned development tools
+- [ ] Milestone A: Smalltalk-80-style primitive boundary documented and implemented
+- [ ] Milestone B: image-owned text composition and rendering for the workspace
+- [ ] Milestone C: image-owned workspace and browser replacing the C renderer
+- [ ] Milestone D: native workspace and browser survive snapshot/reboot
+- [ ] Milestone E: regenerated image boots directly into image-owned development tools
 
 ## Definition Of Done
-- [ ] Text layout and rendering decisions come from Recorz objects in the image
+- [ ] Recorz UI drawing depends on a tiny primitive set comparable in spirit to Smalltalk-80
+- [ ] Text composition and rendering decisions come from image objects, not C-side UI policy
 - [ ] Workspace and browser are implemented as image-side tools
-- [ ] The VM only provides primitive drawing, input, and persistence support
-- [ ] Development can continue from inside the image without depending on C-side UI policy
+- [ ] The VM provides only low-level drawing, display/cursor binding, input, GC/persistence support, and panic/debug paths
+- [ ] Development can continue from inside the image without depending on C-side workspace/browser behavior
