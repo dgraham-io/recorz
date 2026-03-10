@@ -404,6 +404,8 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
 
             output = output.replace("\r", "")
             self.assertIn("VIEW: INPUT", output)
+            self.assertIn("MODE: WORKSPACE", output)
+            self.assertIn("TARGET: DOIT BUFFER", output)
             self.assertIn("MOVE: ARROWS CTRL-B/F/N", output)
             self.assertIn("PRINT: CTRL-P", output)
             self.assertIn("DOIT: CTRL-D/R", output)
@@ -576,7 +578,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
 
             output = output.replace("\r", "")
             self.assertIn("DOIT: CTRL-D/R", output)
-            self.assertIn("STATUS: DOIT OK", output)
+            self.assertIn("STATUS: DOIT COMPLETE", output)
             self.assertIn("OUT> 3", output)
             self.assertIn(
                 "BUFFER=Transcript show: (1 + 2) printString.!",
@@ -637,7 +639,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
 
             output = output.replace("\r", "")
             self.assertIn("PRINT: CTRL-P", output)
-            self.assertIn("STATUS: PRINT OK", output)
+            self.assertIn("STATUS: PRINT COMPLETE", output)
             self.assertIn("OUT> 3", output)
             self.assertIn("BUFFER=1 + 2", output.replace("\n", ""))
             self.assertNotIn("panic:", output)
@@ -802,7 +804,8 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     process.stdin.close()
 
             output = output.replace("\r", "")
-            self.assertIn("STATUS: DOIT USE CTRL-X", output)
+            self.assertIn("MODE: METHOD SOURCE", output)
+            self.assertIn("STATUS: CTRL-X INSTALLS SOURCE", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_interactive_input_monitor_refuses_to_print_method_source_as_a_doit(self) -> None:
@@ -856,7 +859,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     process.stdin.close()
 
             output = output.replace("\r", "")
-            self.assertIn("STATUS: PRINT USE CTRL-X", output)
+            self.assertIn("STATUS: CTRL-X INSTALLS SOURCE", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_interactive_input_monitor_can_return_to_its_browser_context(self) -> None:
@@ -1449,8 +1452,8 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
 
             output = output.replace("\r", "")
             self.assertIn("Display defaultForm newline.", output)
-            self.assertIn("STATUS: DOIT USE CTRL-X", output)
-            self.assertIn("STATUS: ACCEPT OK", output)
+            self.assertIn("STATUS: CTRL-X INSTALLS SOURCE", output)
+            self.assertIn("STATUS: INSTALL COMPLETE", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_interactive_input_monitor_can_revert_current_browser_source(self) -> None:
@@ -1506,8 +1509,8 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             output = output.replace("\r", "")
             self.assertIn("DISPLAY DEFAULTFORM NEWLINE.^SELF", output.upper())
             self.assertIn("REVERT: CTRL-Y", output)
-            self.assertIn("STATUS: REVERT OK", output)
-            self.assertIn("STATUS: ACCEPT OK", output)
+            self.assertIn("STATUS: SOURCE RESTORED", output)
+            self.assertIn("STATUS: INSTALL COMPLETE", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_interactive_input_monitor_can_save_a_recovery_snapshot(self) -> None:
@@ -1601,7 +1604,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     self.fail("QEMU process stdin is not available")
                 process.stdin.write("\x14")
                 process.stdin.flush()
-                output += _read_until(process, "STATUS: TEST OK", timeout=8.0)
+                output += _read_until(process, "STATUS: TESTS COMPLETE", timeout=8.0)
                 process.stdin.write("\x0f")
                 process.stdin.flush()
                 time.sleep(0.5)
@@ -1622,7 +1625,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("PASS TinySpec>>testPass", output)
             self.assertIn("FAIL TinySpec>>testFail", output)
             self.assertIn("SUMMARY TinySpec P=1 F=1 T=2", output)
-            self.assertIn("STATUS: TEST OK", output)
+            self.assertIn("STATUS: TESTS COMPLETE", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_edit_package_entry_opens_the_interactive_editor_from_package_source(self) -> None:
@@ -1718,7 +1721,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     self.fail("QEMU process stdin is not available")
                 process.stdin.write("\x14")
                 process.stdin.flush()
-                output += _read_until(process, "STATUS: TEST OK", timeout=8.0)
+                output += _read_until(process, "STATUS: TESTS COMPLETE", timeout=8.0)
                 process.stdin.write("\x0f")
                 process.stdin.flush()
                 time.sleep(0.5)
@@ -1793,7 +1796,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     process.stdin.close()
 
             output = output.replace("\r", "")
-            self.assertIn("STATUS: ACCEPT OK", output)
+            self.assertIn("STATUS: INSTALL COMPLETE", output)
             self.assertIn("CLASS: DISPLAY", output)
             self.assertIn("VIEW: SOURCE", output)
             self.assertNotIn("panic:", output)

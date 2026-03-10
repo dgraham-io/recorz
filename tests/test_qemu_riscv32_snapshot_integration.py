@@ -706,7 +706,7 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         input_monitor_state = workspace_summary.get("input_monitor_state")
         self.assertIsInstance(input_monitor_state, dict)
         assert isinstance(input_monitor_state, dict)
-        self.assertEqual(input_monitor_state["status"], "PRINT OK")
+        self.assertEqual(input_monitor_state["status"], "PRINT COMPLETE")
         self.assertEqual(input_monitor_state["feedback"], "3")
 
         reload_log, width, height, data = self.render_demo(
@@ -718,7 +718,7 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         self.assertEqual((width, height), (1024, 768))
         self.assertIn("recorz qemu-riscv32 mvp: loaded snapshot", reload_log)
         self.assertIn("VIEW: INPUT", reload_log)
-        self.assertIn("STATUS: PRINT OK", reload_log)
+        self.assertIn("STATUS: PRINT COMPLETE", reload_log)
         self.assertIn("OUT> 3", reload_log)
         self.assertNotIn("panic:", reload_log)
 
@@ -762,10 +762,10 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
                 self.fail("QEMU process stdin is not available")
             process.stdin.write("\x18")
             process.stdin.flush()
-            output += _read_until(process, "STATUS: ACCEPT OK", timeout=8.0)
+            output += _read_until(process, "STATUS: INSTALL COMPLETE", timeout=8.0)
             process.stdin.write("\x14")
             process.stdin.flush()
-            output += _read_until(process, "STATUS: TEST OK", timeout=8.0)
+            output += _read_until(process, "STATUS: TESTS COMPLETE", timeout=8.0)
             process.stdin.write("\x17")
             process.stdin.flush()
             process.stdin.close()
@@ -792,8 +792,8 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         SNAPSHOT_INTERACTIVE_DEV_LOOP_OUTPUT_PATH.write_bytes(snapshot)
         (SNAPSHOT_INTERACTIVE_DEV_LOOP_BUILD_DIR / "qemu.log").write_text(output, encoding="utf-8")
 
-        self.assertIn("STATUS: ACCEPT OK", output)
-        self.assertIn("STATUS: TEST OK", output)
+        self.assertIn("STATUS: INSTALL COMPLETE", output)
+        self.assertIn("STATUS: TESTS COMPLETE", output)
         self.assertIn("recorz qemu-riscv32 mvp: snapshot saved, shutting down", output)
         self.assertTrue(SNAPSHOT_INTERACTIVE_DEV_LOOP_OUTPUT_PATH.exists())
 
@@ -805,7 +805,7 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         self.assertIsInstance(input_monitor_state, dict)
         assert isinstance(input_monitor_state, dict)
         self.assertEqual(input_monitor_state["saved_target_name"], "Tests")
-        self.assertEqual(input_monitor_state["status"], "TEST OK")
+        self.assertEqual(input_monitor_state["status"], "TESTS COMPLETE")
         self.assertIn("RecorzKernelPackage: 'Tests'", str(workspace_summary["current_source"]))
 
         reload_log, width, height, data = self.render_demo(
@@ -817,7 +817,7 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         self.assertEqual((width, height), (1024, 768))
         self.assertIn("recorz qemu-riscv32 mvp: loaded snapshot", reload_log)
         self.assertIn("VIEW: INPUT", reload_log)
-        self.assertIn("STATUS: TEST OK", reload_log)
+        self.assertIn("STATUS: TESTS COMPLETE", reload_log)
         self.assertIn("TinySpec", reload_log)
         self.assertNotIn("panic:", reload_log)
 

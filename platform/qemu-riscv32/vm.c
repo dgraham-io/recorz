@@ -5468,6 +5468,8 @@ static void workspace_render_input_monitor_browser(
 ) {
     const struct recorz_mvp_heap_object *form = default_form_object();
     struct recorz_mvp_value source_value = workspace_current_source_value(workspace_object);
+    char mode_text[METHOD_SOURCE_NAME_LIMIT];
+    char target_text[METHOD_SOURCE_CHUNK_LIMIT];
     const char *cursor;
     char line[METHOD_SOURCE_CHUNK_LIMIT];
     uint32_t cursor_index;
@@ -5478,22 +5480,93 @@ static void workspace_render_input_monitor_browser(
     uint32_t output_line_capacity;
     uint32_t source_line_index = 0U;
     uint32_t rendered_line_count = 0U;
+    uint32_t saved_cursor_index = 0U;
+    uint32_t saved_top_line = 0U;
+    uint32_t saved_view_kind = WORKSPACE_VIEW_NONE;
+    uint8_t source_editor_mode = 0U;
+    char saved_target_name[METHOD_SOURCE_CHUNK_LIMIT];
     uint8_t wrote_line = 0U;
 
     form_clear(form);
     workspace_write_label_and_text(form, "VIEW", "INPUT");
-    workspace_write_label_and_text(form, "INPUT", "SERIAL");
-    workspace_write_label_and_text(form, "MOVE", "ARROWS CTRL-B/F/N");
-    workspace_write_label_and_text(form, "HOME", "CTRL-A/E");
-    workspace_write_label_and_text(form, "PRINT", "CTRL-P");
-    workspace_write_label_and_text(form, "DOIT", "CTRL-D/R");
-    workspace_write_label_and_text(form, "REVERT", "CTRL-Y");
-    workspace_write_label_and_text(form, "TESTS", "CTRL-T");
+    saved_target_name[0] = '\0';
+    if (workspace_parse_input_monitor_state(
+            heap_get_field(
+                workspace_object,
+                workspace_current_target_name_field_index(workspace_object)
+            ).kind == RECORZ_MVP_VALUE_STRING
+                ? heap_get_field(
+                      workspace_object,
+                      workspace_current_target_name_field_index(workspace_object)
+                  ).string
+                : 0,
+            &saved_cursor_index,
+            &saved_top_line,
+            &saved_view_kind,
+            saved_target_name,
+            sizeof(saved_target_name),
+            0,
+            0U,
+            0,
+            0U) &&
+        (saved_view_kind == WORKSPACE_VIEW_METHOD ||
+         saved_view_kind == WORKSPACE_VIEW_CLASS_METHOD ||
+         saved_view_kind == WORKSPACE_VIEW_CLASS_SOURCE ||
+         saved_view_kind == WORKSPACE_VIEW_PACKAGE_SOURCE)) {
+        source_editor_mode = 1U;
+    }
+    if (source_editor_mode) {
+        if (saved_view_kind == WORKSPACE_VIEW_METHOD) {
+            append_text_checked(mode_text, sizeof(mode_text), &(uint32_t){0U}, "METHOD SOURCE");
+        } else if (saved_view_kind == WORKSPACE_VIEW_CLASS_METHOD) {
+            append_text_checked(mode_text, sizeof(mode_text), &(uint32_t){0U}, "CLASS METHOD");
+        } else if (saved_view_kind == WORKSPACE_VIEW_CLASS_SOURCE) {
+            append_text_checked(mode_text, sizeof(mode_text), &(uint32_t){0U}, "CLASS SOURCE");
+        } else {
+            append_text_checked(mode_text, sizeof(mode_text), &(uint32_t){0U}, "PACKAGE SOURCE");
+        }
+        append_text_checked(
+            target_text,
+            sizeof(target_text),
+            &(uint32_t){0U},
+            saved_target_name[0] == '\0' ? "CURRENT SOURCE" : saved_target_name
+        );
+    } else {
+        append_text_checked(mode_text, sizeof(mode_text), &(uint32_t){0U}, "WORKSPACE");
+        append_text_checked(target_text, sizeof(target_text), &(uint32_t){0U}, "DOIT BUFFER");
+    }
+    workspace_write_label_and_text(form, "MODE", mode_text);
+    workspace_write_label_and_text(form, "TARGET", target_text);
+    workspace_write_label_and_text(form, "MOVE", "ARROWS CTRL-B/F/N A/E");
+    workspace_write_label_and_text(
+        form,
+        "PRINT",
+        source_editor_mode ? "CTRL-P USES WORKSPACE MODE" : "CTRL-P"
+    );
+    workspace_write_label_and_text(
+        form,
+        "DOIT",
+        source_editor_mode ? "CTRL-D/R USES WORKSPACE MODE" : "CTRL-D/R"
+    );
+    workspace_write_label_and_text(
+        form,
+        "REVERT",
+        source_editor_mode ? "CTRL-Y RESTORES SOURCE" : "CTRL-Y NEEDS SOURCE"
+    );
+    workspace_write_label_and_text(
+        form,
+        "TESTS",
+        source_editor_mode ? "CTRL-T RUNS TARGET" : "CTRL-T NEEDS TARGET"
+    );
     workspace_write_label_and_text(form, "EMIT", "CTRL-U");
     workspace_write_label_and_text(form, "SAVE", "CTRL-W/K REGEN:G/L");
     workspace_write_label_and_text(form, "FILEIN", "CTRL-Q");
-    workspace_write_label_and_text(form, "CLOSE", "CTRL-O");
-    workspace_write_label_and_text(form, "ACCEPT", "CTRL-X");
+    workspace_write_label_and_text(form, "CLOSE", source_editor_mode ? "CTRL-O RETURNS" : "CTRL-O EXITS");
+    workspace_write_label_and_text(
+        form,
+        "ACCEPT",
+        source_editor_mode ? "CTRL-X INSTALLS" : "CTRL-X NEEDS SOURCE"
+    );
     cursor_index = workspace_input_monitor_cursor_index(workspace_object);
     workspace_input_monitor_cursor_line_and_column(
         source_value.kind == RECORZ_MVP_VALUE_STRING ? source_value.string : 0,
@@ -5931,7 +6004,33 @@ static void workspace_bind_input_monitor_cursor_state(
         status_text[0] = '\0';
         feedback_text[0] = '\0';
     }
-    workspace_input_monitor_set_status(status_text);
+    if (status_text[0] == '\0') {
+        uint32_t saved_view_kind = WORKSPACE_VIEW_NONE;
+        char saved_target_name[METHOD_SOURCE_CHUNK_LIMIT];
+
+        saved_target_name[0] = '\0';
+        if (workspace_parse_input_monitor_state(
+                target_name_value.kind == RECORZ_MVP_VALUE_STRING ? target_name_value.string : 0,
+                &cursor_index,
+                &top_line,
+                &saved_view_kind,
+                saved_target_name,
+                sizeof(saved_target_name),
+                0,
+                0U,
+                0,
+                0U) &&
+            (saved_view_kind == WORKSPACE_VIEW_METHOD ||
+             saved_view_kind == WORKSPACE_VIEW_CLASS_METHOD ||
+             saved_view_kind == WORKSPACE_VIEW_CLASS_SOURCE ||
+             saved_view_kind == WORKSPACE_VIEW_PACKAGE_SOURCE)) {
+            workspace_input_monitor_set_status("SOURCE EDITOR READY");
+        } else {
+            workspace_input_monitor_set_status("WORKSPACE READY");
+        }
+    } else {
+        workspace_input_monitor_set_status(status_text);
+    }
     workspace_input_monitor_set_feedback_text(feedback_text);
     workspace_store_input_monitor_state(workspace_object, cursor_index, top_line);
 }
@@ -6146,7 +6245,7 @@ static void workspace_evaluate_input_monitor_buffer(
     char browser_target_name[METHOD_SOURCE_CHUNK_LIMIT];
 
     if (workspace_input_monitor_buffer[0] == '\0') {
-        workspace_input_monitor_set_status("EMPTY BUFFER");
+        workspace_input_monitor_set_status("BUFFER EMPTY");
         return;
     }
     if (workspace_input_monitor_accept_context(
@@ -6154,17 +6253,17 @@ static void workspace_evaluate_input_monitor_buffer(
             &browser_view_kind,
             browser_target_name,
             sizeof(browser_target_name))) {
-        workspace_input_monitor_set_status("DOIT USE CTRL-X");
+        workspace_input_monitor_set_status("CTRL-X INSTALLS SOURCE");
         return;
     }
     workspace_input_monitor_clear_feedback();
-    workspace_input_monitor_set_status("DOING");
+    workspace_input_monitor_set_status("DOIT RUNNING");
     workspace_input_monitor_capture_enabled = 1U;
     chunk_source = workspace_normalize_do_it_source(workspace_input_monitor_buffer);
     workspace_remember_source(workspace_object, chunk_source);
     workspace_evaluate_source(workspace_source_for_evaluation(chunk_source));
     workspace_input_monitor_capture_enabled = 0U;
-    workspace_input_monitor_set_status("DOIT OK");
+    workspace_input_monitor_set_status("DOIT COMPLETE");
     heap_set_field(
         workspace_handle,
         workspace_current_view_kind_field_index(workspace_object),
@@ -6202,7 +6301,7 @@ static void workspace_print_input_monitor_buffer(
     char browser_target_name[METHOD_SOURCE_CHUNK_LIMIT];
 
     if (workspace_input_monitor_buffer[0] == '\0') {
-        workspace_input_monitor_set_status("EMPTY BUFFER");
+        workspace_input_monitor_set_status("BUFFER EMPTY");
         return;
     }
     if (workspace_input_monitor_accept_context(
@@ -6210,11 +6309,11 @@ static void workspace_print_input_monitor_buffer(
             &browser_view_kind,
             browser_target_name,
             sizeof(browser_target_name))) {
-        workspace_input_monitor_set_status("PRINT USE CTRL-X");
+        workspace_input_monitor_set_status("CTRL-X INSTALLS SOURCE");
         return;
     }
     workspace_input_monitor_clear_feedback();
-    workspace_input_monitor_set_status("PRINTING");
+    workspace_input_monitor_set_status("PRINT RUNNING");
     workspace_input_monitor_capture_enabled = 1U;
     chunk_source = workspace_normalize_do_it_source(workspace_input_monitor_buffer);
     workspace_remember_source(workspace_object, chunk_source);
@@ -6223,7 +6322,7 @@ static void workspace_print_input_monitor_buffer(
     workspace_input_monitor_feedback_append_line(
         workspace_text_for_value(result, rendered_value, sizeof(rendered_value))
     );
-    workspace_input_monitor_set_status("PRINT OK");
+    workspace_input_monitor_set_status("PRINT COMPLETE");
     heap_set_field(
         workspace_handle,
         workspace_current_view_kind_field_index(workspace_object),
@@ -6622,7 +6721,7 @@ static void workspace_revert_input_monitor_buffer(
             &revert_view_kind,
             revert_target_name,
             sizeof(revert_target_name))) {
-        workspace_input_monitor_set_status("REVERT NEEDS BROWSER");
+        workspace_input_monitor_set_status("REVERT NEEDS SOURCE TARGET");
         return;
     }
     workspace_input_monitor_clear_feedback();
@@ -6646,7 +6745,7 @@ static void workspace_revert_input_monitor_buffer(
         revert_view_kind,
         revert_target_name[0] == '\0' ? 0 : revert_target_name
     );
-    workspace_input_monitor_set_status("REVERT OK");
+    workspace_input_monitor_set_status("SOURCE RESTORED");
 }
 
 static void workspace_accept_input_monitor_buffer(
@@ -6666,7 +6765,7 @@ static void workspace_accept_input_monitor_buffer(
     const char *prior_source;
 
     if (workspace_input_monitor_buffer[0] == '\0') {
-        workspace_input_monitor_set_status("EMPTY BUFFER");
+        workspace_input_monitor_set_status("BUFFER EMPTY");
         return;
     }
     if (!workspace_input_monitor_accept_context(
@@ -6674,7 +6773,7 @@ static void workspace_accept_input_monitor_buffer(
             &accept_view_kind,
             accept_target_name,
             sizeof(accept_target_name))) {
-        workspace_input_monitor_set_status("ACCEPT NEEDS BROWSER");
+        workspace_input_monitor_set_status("ACCEPT NEEDS SOURCE TARGET");
         return;
     }
     prior_source = workspace_source_text_for_browser_target(accept_view_kind, accept_target_name);
@@ -6708,7 +6807,7 @@ static void workspace_accept_input_monitor_buffer(
         workspace_current_source_field_index(workspace_object),
         string_value(workspace_input_monitor_buffer)
     );
-    workspace_input_monitor_set_status("ACCEPT OK");
+    workspace_input_monitor_set_status("INSTALL COMPLETE");
 }
 
 static void workspace_save_and_reopen_in_place(
@@ -6759,11 +6858,11 @@ static void workspace_run_input_monitor_tests(
             &test_view_kind,
             test_target_name,
             sizeof(test_target_name))) {
-        workspace_input_monitor_set_status("TEST NEEDS BROWSER");
+        workspace_input_monitor_set_status("TESTS NEED TARGET");
         return;
     }
     workspace_input_monitor_clear_feedback();
-    workspace_input_monitor_set_status("TESTING");
+    workspace_input_monitor_set_status("TESTS RUNNING");
     heap_set_field(
         workspace_handle,
         workspace_current_view_kind_field_index(workspace_object),
@@ -6792,16 +6891,16 @@ static void workspace_run_input_monitor_tests(
         workspace_current_source_field_index(workspace_object),
         string_value(workspace_input_monitor_buffer)
     );
-    workspace_input_monitor_set_status("TEST OK");
+    workspace_input_monitor_set_status("TESTS COMPLETE");
 }
 
 static void workspace_emit_regenerated_source_from_input_monitor(
     const struct recorz_mvp_heap_object *workspace_object
 ) {
-    workspace_input_monitor_set_status("REGENERATING");
+    workspace_input_monitor_set_status("REGEN RUNNING");
     emit_regenerated_kernel_source();
     emit_regenerated_boot_source(workspace_object);
-    workspace_input_monitor_set_status("REGEN OK");
+    workspace_input_monitor_set_status("REGEN COMPLETE");
 }
 
 static uint8_t workspace_browse_input_monitor_context(

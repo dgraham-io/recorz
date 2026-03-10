@@ -99,7 +99,7 @@ class QemuRiscvSnapshotInspectorTests(unittest.TestCase):
             view_kind=18,
             target_name=(
                 "CURSOR:5;TOP:1;VIEW:5;TARGET:Display>>newline;"
-                "STATUS:PRINT OK;FEEDBACK:OUT> 3%0AOUT> READY"
+                "STATUS:PRINT COMPLETE;FEEDBACK:OUT> 3%0AOUT> READY"
             ),
             current_source="1 + 2",
             last_source="1 + 2",
@@ -114,7 +114,7 @@ class QemuRiscvSnapshotInspectorTests(unittest.TestCase):
         self.assertEqual(input_monitor_state["top_line"], 1)
         self.assertEqual(input_monitor_state["saved_view_kind"], 5)
         self.assertEqual(input_monitor_state["saved_target_name"], "Display>>newline")
-        self.assertEqual(input_monitor_state["status"], "PRINT OK")
+        self.assertEqual(input_monitor_state["status"], "PRINT COMPLETE")
         self.assertEqual(input_monitor_state["feedback"], "OUT> 3\nOUT> READY")
 
     def test_extract_workspace_current_source_returns_image_visible_source(self) -> None:
