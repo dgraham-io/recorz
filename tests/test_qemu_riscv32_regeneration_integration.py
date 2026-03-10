@@ -228,6 +228,44 @@ class QemuRiscv32RegenerationIntegrationTests(unittest.TestCase):
             self.assertIn("RecorzKernelClass: #Display", regenerated_kernel_source)
             self.assertIn("Transcript show: 'RGEN'.", regenerated_kernel_source)
 
+    def test_regenerated_boot_source_recreates_seeded_class_edit_state_after_cold_boot(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="regen-", dir=ROOT / "misc") as temp_dir:
+            temp_root = Path(temp_dir)
+            (
+                regenerated_log,
+                regenerated_source_path,
+                regenerated_source,
+                _regenerated_kernel_source_path,
+                regenerated_kernel_source,
+            ) = self.regenerate_boot_source(
+                build_dir=temp_root / "regen-edit",
+                example_path=REGENERATION_AFTER_CLASS_EDIT_EXAMPLE,
+            )
+
+            original_log, original_ppm = self.render_demo(
+                build_dir=temp_root / "orig-edit",
+                example_path=REGENERATION_AFTER_CLASS_EDIT_EXAMPLE,
+            )
+            rebuilt_log, rebuilt_ppm = self.render_demo(
+                build_dir=temp_root / "rebld-edit",
+                example_path=regenerated_source_path,
+            )
+
+            self.assertIn("recorz-regenerated-boot-source-begin", regenerated_log)
+            self.assertIn("Workspace fileIn: 'RecorzKernelClass: #Transcript", regenerated_source)
+            self.assertIn("Workspace fileOutClassNamed: 'Display'.", regenerated_source)
+            self.assertIn("Transcript show: ''RGEN''.", regenerated_source)
+            self.assertIn("Transcript show: 'RGEN'.", regenerated_kernel_source)
+            self.assertIn("recorz qemu-riscv32 mvp: rendered", original_log)
+            self.assertIn("recorz qemu-riscv32 mvp: rendered", rebuilt_log)
+            self.assertIn("RGEN", original_log)
+            self.assertIn("RGEN", rebuilt_log)
+            self.assertIn("CLASS: DISPLAY", rebuilt_log)
+            self.assertIn("VIEW: SOURCE", rebuilt_log)
+            self.assertIn("NEWLINETRANSCRIPT SHOW: 'RGEN'.TRANSCRIPT CR.^SELF!", rebuilt_log.replace("\r", "").replace("\n", ""))
+            self.assertNotEqual(len(original_ppm), 0)
+            self.assertNotEqual(len(rebuilt_ppm), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

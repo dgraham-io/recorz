@@ -5473,7 +5473,7 @@ static void workspace_render_input_monitor_browser(
     workspace_write_label_and_text(form, "DOIT", "CTRL-D/R");
     workspace_write_label_and_text(form, "REVERT", "CTRL-Y");
     workspace_write_label_and_text(form, "TESTS", "CTRL-T");
-    workspace_write_label_and_text(form, "SAVE", "CTRL-W/K REGEN:G");
+    workspace_write_label_and_text(form, "SAVE", "CTRL-W/K REGEN:G/L");
     workspace_write_label_and_text(form, "CLOSE", "CTRL-O");
     workspace_write_label_and_text(form, "ACCEPT", "CTRL-X");
     cursor_index = workspace_input_monitor_cursor_index(workspace_object);
@@ -6960,6 +6960,14 @@ static void workspace_run_interactive_input_monitor(
                 workspace_object,
                 WORKSPACE_VIEW_REGENERATED_KERNEL_SOURCE,
                 "KERNEL"
+            );
+            continue;
+        }
+        if (ch == 0x0c) {
+            workspace_view_regenerated_source_from_input_monitor(
+                workspace_object,
+                WORKSPACE_VIEW_REGENERATED_BOOT_SOURCE,
+                "BOOT"
             );
             continue;
         }
