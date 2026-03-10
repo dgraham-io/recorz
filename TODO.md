@@ -23,7 +23,7 @@ Get Recorz to the point where text rendering and the main development UI are own
 ## Phase 1 - Make The Native Development Loop Comfortable
 - [x] Make the browser/editor workflow the default development path, not a special tool mode
 - [x] Improve editor help, status, and feedback so the current command surface is self-explanatory
-- [ ] Tighten save/resume/recovery so continuing from a snapshot feels like a normal image action
+- [x] Tighten save/resume/recovery so continuing from a snapshot feels like a normal image action
 - [ ] Make package-centered edit/test/save flow routine from inside the image
 - [ ] Prove the full RV32 loop repeatedly: browse, edit, accept, test, save, reboot, continue
 

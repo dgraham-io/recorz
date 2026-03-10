@@ -18,15 +18,24 @@ To boot the current RV32 framebuffer demo:
 make -C /Users/david/repos/recorz/platform/qemu-riscv32 run
 ```
 
-To launch the interactive RV32 development image and continue working from the saved snapshot:
+For the normal RV32 in-image development loop, use the auto-resume target:
 
 ```sh
-make -C /Users/david/repos/recorz/platform/qemu-riscv32 dev-interactive
+make -C /Users/david/repos/recorz/platform/qemu-riscv32 dev-loop
 ```
+
+`dev-loop` reopens the saved image automatically after `Ctrl-W`, so save/resume feels like one continuous development session. The older one-shot entry remains available as `dev-interactive`.
 
 In the interactive workspace, the primary commands are:
 - `Ctrl-D` do it
 - `Ctrl-P` print it
 - `Ctrl-X` accept
 - `Ctrl-O` close/return
-- `Ctrl-W` save the snapshot and end the current session
+- `Ctrl-W` save the snapshot and continue when launched through `dev-loop`
+- `Ctrl-K` save a checkpointed image state
+
+If you need to roll back to the previous saved image:
+
+```sh
+make -C /Users/david/repos/recorz/platform/qemu-riscv32 dev-restore
+```
