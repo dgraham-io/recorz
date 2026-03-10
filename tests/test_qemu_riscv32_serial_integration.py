@@ -39,6 +39,7 @@ WORKSPACE_INPUT_MONITOR_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_inpu
 WORKSPACE_INPUT_MONITOR_EVALUATE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_evaluate_demo.rz"
 WORKSPACE_INPUT_MONITOR_ACCEPT_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_accept_demo.rz"
 WORKSPACE_INPUT_MONITOR_BROWSER_BRIDGE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_browser_bridge_demo.rz"
+WORKSPACE_INPUT_MONITOR_PACKAGE_BRIDGE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_package_bridge_demo.rz"
 TEST_RUNNER_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_test_runner_demo.rz"
 METHOD_BLOCK_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_demo.rz"
 METHOD_BLOCK_CAPTURE_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_capture_demo.rz"
@@ -652,6 +653,118 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("BROWSE: CTRL-O", output)
             self.assertGreaterEqual(output.count("CLASS: DISPLAY"), 2)
             self.assertGreaterEqual(output.count("METHOD: NEWLINE"), 2)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_interactive_input_monitor_closes_back_to_method_browser_context(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-input-monitor-close-method-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_INPUT_MONITOR_BROWSER_BRIDGE_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "VIEW: INPUT", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("\x04")
+                process.stdin.flush()
+                time.sleep(1.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("DONE: CTRL-D", output)
+            self.assertGreaterEqual(output.count("CLASS: DISPLAY"), 2)
+            self.assertGreaterEqual(output.count("METHOD: NEWLINE"), 2)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_interactive_input_monitor_closes_back_to_package_source_context(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-input-monitor-close-package-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_INPUT_MONITOR_PACKAGE_BRIDGE_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "VIEW: INPUT", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("\x04")
+                process.stdin.flush()
+                time.sleep(1.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("DONE: CTRL-D", output)
+            self.assertGreaterEqual(output.count("PACKAGE: TOOLS"), 2)
+            self.assertGreaterEqual(output.count("VIEW: SOURCE"), 2)
             self.assertNotIn("panic:", output)
 
     def test_memory_report_demo_prints_usage_within_budget(self) -> None:

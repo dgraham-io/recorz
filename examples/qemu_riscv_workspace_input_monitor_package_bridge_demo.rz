@@ -1,0 +1,7 @@
+Display clear.
+Workspace fileIn: 'RecorzKernelPackage: ''Tools'' comment: ''Shared utilities''
+!
+RecorzKernelClass: #PackageAlpha superclass: #Object package: ''Tools'' instanceVariableNames: ''''
+!'.
+Workspace fileOutPackageNamed: 'Tools'.
+Workspace interactiveInputMonitor.

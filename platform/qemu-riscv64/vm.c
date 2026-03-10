@@ -4506,7 +4506,7 @@ static void workspace_render_input_monitor_browser(
     workspace_write_label_and_text(form, "RUN", "CTRL-R");
     workspace_write_label_and_text(form, "BROWSE", "CTRL-O");
     workspace_write_label_and_text(form, "ACCEPT", "CTRL-X");
-    workspace_write_label_and_text(form, "EXIT", "CTRL-D");
+    workspace_write_label_and_text(form, "DONE", "CTRL-D");
     cursor_index = workspace_input_monitor_cursor_index(workspace_object);
     workspace_input_monitor_cursor_line_and_column(
         source_value.kind == RECORZ_MVP_VALUE_STRING ? source_value.string : 0,
@@ -5275,6 +5275,7 @@ static void workspace_run_interactive_input_monitor(
         char ch = machine_wait_getc();
 
         if (ch == 0x04) {
+            workspace_browse_input_monitor_context(workspace_object);
             break;
         }
         if (ch == '\r') {
