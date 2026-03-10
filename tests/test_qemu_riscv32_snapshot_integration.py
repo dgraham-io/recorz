@@ -602,6 +602,7 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         )
         self.assertIn("SAVE: CTRL-W", save_log)
         self.assertIn("recorz-snapshot-begin", save_log)
+        self.assertIn("recorz qemu-riscv32 mvp: snapshot saved, shutting down", save_log)
         self.assertTrue(SNAPSHOT_WORKSPACE_INPUT_MONITOR_OUTPUT_PATH.exists())
 
         workspace_summary = self.inspect_workspace_snapshot(

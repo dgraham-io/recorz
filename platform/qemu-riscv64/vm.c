@@ -7321,6 +7321,8 @@ static void emit_live_snapshot(void) {
         machine_putc('\n');
     }
     machine_puts("recorz-snapshot-end\n");
+    machine_puts("recorz qemu-riscv64 mvp: snapshot saved, shutting down\n");
+    machine_shutdown();
 }
 
 static void load_snapshot_state(const uint8_t *blob, uint32_t size) {

@@ -696,9 +696,6 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     self.fail("QEMU process stdin is not available")
                 process.stdin.write("\x17")
                 process.stdin.flush()
-                time.sleep(1.0)
-                if process.poll() is None:
-                    process.kill()
                 process.wait(timeout=5.0)
                 output += process.stdout.read() or ""
             finally:
@@ -714,6 +711,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("SAVE: CTRL-W", output)
             self.assertIn("recorz-snapshot-begin", output)
             self.assertIn("recorz-snapshot-end", output)
+            self.assertIn("recorz qemu-riscv32 mvp: snapshot saved, shutting down", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_interactive_input_monitor_refuses_to_run_method_source_as_a_doit(self) -> None:

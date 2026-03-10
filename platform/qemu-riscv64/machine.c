@@ -146,6 +146,11 @@
 #define KEY_END 107U
 #define KEY_DOWN 108U
 
+#define SBI_EXTENSION_SYSTEM_RESET 0x53525354UL
+#define SBI_FUNCTION_SYSTEM_RESET 0UL
+#define SBI_RESET_TYPE_SHUTDOWN 0UL
+#define SBI_RESET_REASON_NONE 0UL
+
 struct virtq_desc {
     uint64_t addr;
     uint32_t len;
@@ -1092,6 +1097,16 @@ void machine_wait_forever(void) {
     for (;;) {
         __asm__ volatile("wfi");
     }
+}
+
+void machine_shutdown(void) {
+    register uintptr_t a0 asm("a0") = SBI_RESET_TYPE_SHUTDOWN;
+    register uintptr_t a1 asm("a1") = SBI_RESET_REASON_NONE;
+    register uintptr_t a6 asm("a6") = SBI_FUNCTION_SYSTEM_RESET;
+    register uintptr_t a7 asm("a7") = SBI_EXTENSION_SYSTEM_RESET;
+
+    __asm__ volatile("ecall" : "+r"(a0), "+r"(a1) : "r"(a6), "r"(a7) : "memory");
+    machine_wait_forever();
 }
 
 void machine_set_panic_hook(machine_panic_hook hook) {
