@@ -204,6 +204,79 @@ def parse_snapshot(blob: bytes) -> ParsedSnapshot:
     return ParsedSnapshot(header=header, objects=tuple(objects), global_handles=global_handles)
 
 
+def _hex_value(ch: str) -> int:
+    if "0" <= ch <= "9":
+        return ord(ch) - ord("0")
+    if "a" <= ch <= "f":
+        return 10 + (ord(ch) - ord("a"))
+    if "A" <= ch <= "F":
+        return 10 + (ord(ch) - ord("A"))
+    raise SnapshotInspectionError(f"invalid input-monitor state escape {ch!r}")
+
+
+def _decode_input_monitor_state_text(cursor: str, start: int) -> tuple[str, int]:
+    chars: list[str] = []
+    index = start
+
+    while index < len(cursor) and cursor[index] != ";":
+        ch = cursor[index]
+        if ch == "%":
+            if index + 2 >= len(cursor):
+                raise SnapshotInspectionError("truncated input-monitor state escape")
+            value = (_hex_value(cursor[index + 1]) << 4) | _hex_value(cursor[index + 2])
+            chars.append(chr(value))
+            index += 3
+            continue
+        chars.append(ch)
+        index += 1
+    return ("".join(chars), index)
+
+
+def _parse_workspace_input_monitor_state(text: str) -> dict[str, object]:
+    if not text.startswith("CURSOR:"):
+        raise SnapshotInspectionError("input-monitor state is missing the CURSOR header")
+    index = len("CURSOR:")
+    while index < len(text) and text[index].isdigit():
+        index += 1
+    cursor_index = int(text[len("CURSOR:") : index])
+    if not text[index:].startswith(";TOP:"):
+        raise SnapshotInspectionError("input-monitor state is missing the TOP header")
+    index += len(";TOP:")
+    top_start = index
+    while index < len(text) and text[index].isdigit():
+        index += 1
+    top_line = int(text[top_start:index])
+    if not text[index:].startswith(";VIEW:"):
+        raise SnapshotInspectionError("input-monitor state is missing the VIEW header")
+    index += len(";VIEW:")
+    view_start = index
+    while index < len(text) and text[index].isdigit():
+        index += 1
+    saved_view_kind = int(text[view_start:index])
+    saved_target_name = ""
+    status = ""
+    feedback = ""
+    if text[index:].startswith(";TARGET:"):
+        index += len(";TARGET:")
+        saved_target_name, index = _decode_input_monitor_state_text(text, index)
+    if text[index:].startswith(";STATUS:"):
+        index += len(";STATUS:")
+        status, index = _decode_input_monitor_state_text(text, index)
+    if text[index:].startswith(";FEEDBACK:"):
+        index += len(";FEEDBACK:")
+        feedback, index = _decode_input_monitor_state_text(text, index)
+    if index != len(text):
+        raise SnapshotInspectionError("input-monitor state contains unexpected trailing text")
+    return {
+        "cursor_index": cursor_index,
+        "top_line": top_line,
+        "saved_view_kind": saved_view_kind,
+        "saved_target_name": saved_target_name,
+        "status": status,
+        "feedback": feedback,
+    }
+
+
 def _workspace_summary(snapshot: ParsedSnapshot) -> dict[str, object] | None:
     workspace_handle = snapshot.global_handles[WORKSPACE_GLOBAL_ID - 1]
     if workspace_handle == 0:
@@ -213,15 +286,22 @@ def _workspace_summary(snapshot: ParsedSnapshot) -> dict[str, object] | None:
 
     workspace_object = snapshot.objects[workspace_handle - 1]
     fields = workspace_object.fields
+    input_monitor_state = None
+    current_view_kind = fields[WORKSPACE_FIELD_CURRENT_VIEW_KIND].value
+    current_target_name = fields[WORKSPACE_FIELD_CURRENT_TARGET_NAME].value
+
+    if isinstance(current_view_kind, int) and current_view_kind == 18 and isinstance(current_target_name, str):
+        input_monitor_state = _parse_workspace_input_monitor_state(current_target_name)
     return {
         "handle": workspace_handle,
         "kind": workspace_object.kind,
         "field_count": workspace_object.field_count,
         "class_handle": workspace_object.class_handle,
-        "current_view_kind": fields[WORKSPACE_FIELD_CURRENT_VIEW_KIND].value,
-        "current_target_name": fields[WORKSPACE_FIELD_CURRENT_TARGET_NAME].value,
+        "current_view_kind": current_view_kind,
+        "current_target_name": current_target_name,
         "current_source": fields[WORKSPACE_FIELD_CURRENT_SOURCE].value,
         "last_source": fields[WORKSPACE_FIELD_LAST_SOURCE].value,
+        "input_monitor_state": input_monitor_state,
     }
 
 

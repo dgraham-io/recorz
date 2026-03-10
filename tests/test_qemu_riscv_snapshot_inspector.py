@@ -92,6 +92,30 @@ class QemuRiscvSnapshotInspectorTests(unittest.TestCase):
         self.assertEqual(inspection["workspace"]["current_target_name"], "Tools")
         self.assertIn("RecorzKernelPackage", inspection["workspace"]["current_source"])
         self.assertIn("browsePackageNamed:", inspection["workspace"]["last_source"])
+        self.assertIsNone(inspection["workspace"]["input_monitor_state"])
+
+    def test_inspect_snapshot_decodes_input_monitor_state(self) -> None:
+        snapshot = _build_workspace_snapshot(
+            view_kind=18,
+            target_name=(
+                "CURSOR:5;TOP:1;VIEW:5;TARGET:Display>>newline;"
+                "STATUS:PRINT OK;FEEDBACK:OUT> 3%0AOUT> READY"
+            ),
+            current_source="1 + 2",
+            last_source="1 + 2",
+        )
+
+        inspection = inspect_snapshot(snapshot)
+
+        self.assertEqual(inspection["workspace"]["current_view_kind"], 18)
+        input_monitor_state = inspection["workspace"]["input_monitor_state"]
+        assert isinstance(input_monitor_state, dict)
+        self.assertEqual(input_monitor_state["cursor_index"], 5)
+        self.assertEqual(input_monitor_state["top_line"], 1)
+        self.assertEqual(input_monitor_state["saved_view_kind"], 5)
+        self.assertEqual(input_monitor_state["saved_target_name"], "Display>>newline")
+        self.assertEqual(input_monitor_state["status"], "PRINT OK")
+        self.assertEqual(input_monitor_state["feedback"], "OUT> 3\nOUT> READY")
 
     def test_extract_workspace_current_source_returns_image_visible_source(self) -> None:
         source_text = "RecorzKernelClass: #Exported superclass: #Object"
