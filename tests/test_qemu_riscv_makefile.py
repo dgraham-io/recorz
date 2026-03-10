@@ -51,8 +51,8 @@ class QemuRiscvMakefileTests(unittest.TestCase):
             stateful_output = _inspect_image_output(build_dir, STATEFUL_EXAMPLE)
 
             self.assertNotEqual(_checksum(default_output), _checksum(stateful_output))
-            self.assertIn("program: instructions=125", default_output)
-            self.assertIn("program: instructions=38", stateful_output)
+            self.assertIn("program: instructions=129", default_output)
+            self.assertIn("program: instructions=42", stateful_output)
 
     @unittest.skipUnless(shutil.which("make"), "make is required for QEMU Makefile tests")
     def test_continue_snapshot_uses_a_temporary_output_before_replacing_input_snapshot(self) -> None:
@@ -120,6 +120,42 @@ class QemuRiscvMakefileTests(unittest.TestCase):
             self.assertIn(f"-fw_cfg name=opt/recorz-snapshot,file={snapshot_path}", result.stdout)
 
     @unittest.skipUnless(shutil.which("make"), "make is required for QEMU Makefile tests")
+    def test_continue_snapshot_interactive_logs_stdio_and_updates_the_snapshot_file(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv64-makefile-continue-snapshot-interactive-") as temp_dir:
+            build_dir = Path(temp_dir)
+            snapshot_path = build_dir / "live.bin"
+            result = subprocess.run(
+                [
+                    "make",
+                    "-n",
+                    "-C",
+                    str(PLATFORM_DIR),
+                    f"BUILD_DIR={build_dir}",
+                    f"SNAPSHOT_PAYLOAD={snapshot_path}",
+                    "continue-snapshot-interactive",
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    "make -n continue-snapshot-interactive failed\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            temp_snapshot_path = f"{snapshot_path}.tmp"
+            self.assertIn(
+                f"-chardev stdio,id=recorzio,signal=off,logfile={build_dir / 'qemu.log'},logappend=off",
+                result.stdout,
+            )
+            self.assertIn("-serial chardev:recorzio -monitor none", result.stdout)
+            self.assertIn("grep -q 'recorz-snapshot-end' ", result.stdout)
+            self.assertIn(f"extract_qemu_riscv_snapshot.py --timeout 1 {build_dir / 'qemu.log'} {temp_snapshot_path}", result.stdout)
+            self.assertIn(f"mv {temp_snapshot_path} {snapshot_path}", result.stdout)
+
+    @unittest.skipUnless(shutil.which("make"), "make is required for QEMU Makefile tests")
     def test_continue_snapshot_uses_generated_combined_file_in_payload_for_multiple_sources(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv64-makefile-file-in-stream-") as temp_dir:
             build_dir = Path(temp_dir)
@@ -154,6 +190,38 @@ class QemuRiscvMakefileTests(unittest.TestCase):
             self.assertIn(f"for path in {first_file} {second_file}; do", result.stdout)
             self.assertIn(f"cat $path >> {combined_payload}", result.stdout)
             self.assertIn(f"-fw_cfg name=opt/recorz-file-in,file={combined_payload}", result.stdout)
+
+    @unittest.skipUnless(shutil.which("make"), "make is required for QEMU Makefile tests")
+    def test_dev_interactive_routes_through_continue_snapshot_interactive(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv64-makefile-dev-interactive-") as temp_dir:
+            build_dir = Path(temp_dir)
+            snapshot_path = build_dir / "dev" / "live.bin"
+            result = subprocess.run(
+                [
+                    "make",
+                    "-n",
+                    "-C",
+                    str(PLATFORM_DIR),
+                    f"BUILD_DIR={build_dir}",
+                    f"DEV_SNAPSHOT={snapshot_path}",
+                    "dev-interactive",
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    "make -n dev-interactive failed\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            self.assertIn("qemu_riscv_image_first_save.rz", result.stdout)
+            self.assertIn("qemu_riscv_image_first_boot.rz", result.stdout)
+            self.assertIn(f"DEV_SNAPSHOT={snapshot_path}", result.stdout)
+            self.assertIn(f"SNAPSHOT_PAYLOAD={snapshot_path}", result.stdout)
+            self.assertIn("continue-snapshot-interactive", result.stdout)
 
 
 if __name__ == "__main__":

@@ -47,13 +47,14 @@ PPM := $(BUILD_DIR)/recorz-qemu-riscv64-mvp.ppm
 MONITOR_SOCK := $(BUILD_DIR)/monitor.sock
 QEMU_LOG := $(BUILD_DIR)/qemu.log
 QEMU_PID := $(BUILD_DIR)/qemu.pid
+QEMU_INTERACTIVE_CHARDEV := -chardev stdio,id=recorzio,signal=off,logfile=$(QEMU_LOG),logappend=off -serial chardev:recorzio
 
 SOURCES := start.S machine.c display.c vm.c program.c seed.c image.c main.c
 OBJECTS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(filter %.c,$(SOURCES))) \
 	$(patsubst %.S,$(BUILD_DIR)/%.o,$(filter %.S,$(SOURCES))) \
 	$(GENERATED_IMAGE_OBJECT)
 
-.PHONY: all run run-headless screenshot save-snapshot continue-snapshot dev-init dev-boot dev-screenshot dev-file-in inspect-image clean FORCE
+.PHONY: all run run-headless screenshot save-snapshot continue-snapshot continue-snapshot-interactive dev-init dev-boot dev-interactive dev-screenshot dev-file-in inspect-image clean FORCE
 
 all: $(ELF)
 
@@ -129,6 +130,21 @@ continue-snapshot: $(ELF) $(QEMU_FILE_IN_DEP)
 	@mv $(CONTINUE_SNAPSHOT_TEMP_OUTPUT) $(CONTINUE_SNAPSHOT_OUTPUT)
 	@echo "wrote $(CONTINUE_SNAPSHOT_OUTPUT)"
 
+continue-snapshot-interactive: $(ELF) $(QEMU_FILE_IN_DEP)
+	@test -n "$(SNAPSHOT_PAYLOAD)" || (echo "SNAPSHOT_PAYLOAD is required for continue-snapshot-interactive" >&2; exit 1)
+	rm -f $(QEMU_LOG) $(CONTINUE_SNAPSHOT_TEMP_OUTPUT)
+	@$(QEMU) -machine virt -m 128M -smp 1 -kernel $(ELF) $(QEMU_INTERACTIVE_CHARDEV) -monitor none -device ramfb $(QEMU_WINDOW_INPUT_ARGS) $(QEMU_RUN_ARGS); \
+	STATUS=$$?; \
+	if grep -q 'recorz-snapshot-end' $(QEMU_LOG); then \
+		$(PYTHON) $(ROOT)/tools/extract_qemu_riscv_snapshot.py --timeout 1 $(QEMU_LOG) $(CONTINUE_SNAPSHOT_TEMP_OUTPUT); \
+		mkdir -p $(dir $(CONTINUE_SNAPSHOT_OUTPUT)); \
+		mv $(CONTINUE_SNAPSHOT_TEMP_OUTPUT) $(CONTINUE_SNAPSHOT_OUTPUT); \
+		echo "wrote $(CONTINUE_SNAPSHOT_OUTPUT)"; \
+	else \
+		echo "no snapshot emitted from interactive session"; \
+	fi; \
+	exit $$STATUS
+
 dev-init:
 	@mkdir -p $(dir $(DEV_SNAPSHOT))
 	@$(MAKE) -C $(CURDIR) BUILD_DIR=$(BUILD_DIR) EXAMPLE=$(DEV_SAVE_EXAMPLE) SNAPSHOT_OUTPUT=$(DEV_SNAPSHOT) save-snapshot
@@ -136,6 +152,11 @@ dev-init:
 dev-boot:
 	@test -f "$(DEV_SNAPSHOT)" || (echo "DEV_SNAPSHOT does not exist; run dev-init first" >&2; exit 1)
 	@$(MAKE) -C $(CURDIR) BUILD_DIR=$(BUILD_DIR) EXAMPLE=$(DEV_BOOT_EXAMPLE) SNAPSHOT_PAYLOAD=$(DEV_SNAPSHOT) run
+
+dev-interactive:
+	@mkdir -p $(dir $(DEV_SNAPSHOT))
+	@if [ ! -f "$(DEV_SNAPSHOT)" ]; then $(MAKE) -C $(CURDIR) BUILD_DIR=$(BUILD_DIR) DEV_SNAPSHOT=$(DEV_SNAPSHOT) dev-init; fi
+	@$(MAKE) -C $(CURDIR) BUILD_DIR=$(BUILD_DIR) EXAMPLE=$(DEV_BOOT_EXAMPLE) SNAPSHOT_PAYLOAD=$(DEV_SNAPSHOT) continue-snapshot-interactive
 
 dev-screenshot:
 	@test -f "$(DEV_SNAPSHOT)" || (echo "DEV_SNAPSHOT does not exist; run dev-init first" >&2; exit 1)

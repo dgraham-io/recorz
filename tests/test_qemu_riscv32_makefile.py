@@ -103,6 +103,43 @@ class QemuRiscv32MakefileTests(unittest.TestCase):
             self.assertNotIn(f"rm -f {snapshot_path}", result.stdout)
 
     @unittest.skipUnless(shutil.which("make"), "make is required for QEMU RISC-V Makefile tests")
+    def test_continue_snapshot_interactive_logs_stdio_and_updates_the_snapshot_file(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-makefile-continue-snapshot-interactive-") as temp_dir:
+            build_dir = Path(temp_dir)
+            snapshot_path = build_dir / "live.bin"
+            result = subprocess.run(
+                [
+                    "make",
+                    "-n",
+                    "-C",
+                    str(PLATFORM_DIR),
+                    f"BUILD_DIR={build_dir}",
+                    f"SNAPSHOT_PAYLOAD={snapshot_path}",
+                    "continue-snapshot-interactive",
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    "make -n continue-snapshot-interactive failed\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            temp_snapshot_path = f"{snapshot_path}.tmp"
+            self.assertIn(
+                f"-chardev stdio,id=recorzio,signal=off,logfile={build_dir / 'qemu.log'},logappend=off",
+                result.stdout,
+            )
+            self.assertIn("-serial chardev:recorzio -monitor none", result.stdout)
+            self.assertIn("grep -q 'recorz-snapshot-end' ", result.stdout)
+            self.assertIn("extract_qemu_riscv_snapshot.py --timeout 1", result.stdout)
+            self.assertIn(f"{build_dir / 'qemu.log'} {temp_snapshot_path}", result.stdout)
+            self.assertIn(f"mv {temp_snapshot_path} {snapshot_path}", result.stdout)
+
+    @unittest.skipUnless(shutil.which("make"), "make is required for QEMU RISC-V Makefile tests")
     def test_dev_file_in_routes_through_continue_snapshot_with_rv32_examples(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-makefile-dev-file-in-") as temp_dir:
             build_dir = Path(temp_dir)
@@ -133,6 +170,38 @@ class QemuRiscv32MakefileTests(unittest.TestCase):
             self.assertIn(f"SNAPSHOT_PAYLOAD={snapshot_path}", result.stdout)
             self.assertIn(f"FILE_IN_PAYLOAD={IMAGE_FIRST_UPDATE_PATH}", result.stdout)
             self.assertIn("continue-snapshot", result.stdout)
+
+    @unittest.skipUnless(shutil.which("make"), "make is required for QEMU RISC-V Makefile tests")
+    def test_dev_interactive_routes_through_continue_snapshot_interactive(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-makefile-dev-interactive-") as temp_dir:
+            build_dir = Path(temp_dir)
+            snapshot_path = build_dir / "dev" / "live.bin"
+            result = subprocess.run(
+                [
+                    "make",
+                    "-n",
+                    "-C",
+                    str(PLATFORM_DIR),
+                    f"BUILD_DIR={build_dir}",
+                    f"DEV_SNAPSHOT={snapshot_path}",
+                    "dev-interactive",
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    "make -n dev-interactive failed\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            self.assertIn("qemu_riscv_image_first_save.rz", result.stdout)
+            self.assertIn("qemu_riscv_image_first_boot.rz", result.stdout)
+            self.assertIn(f"DEV_SNAPSHOT={snapshot_path}", result.stdout)
+            self.assertIn(f"SNAPSHOT_PAYLOAD={snapshot_path}", result.stdout)
+            self.assertIn("continue-snapshot-interactive", result.stdout)
 
     @unittest.skipUnless(shutil.which("make"), "make is required for QEMU RISC-V Makefile tests")
     def test_regenerate_boot_source_uses_a_temporary_output_before_replacing_final_source(self) -> None:
