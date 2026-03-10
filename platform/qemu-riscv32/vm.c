@@ -5121,6 +5121,7 @@ static void workspace_render_input_monitor_browser(
     workspace_write_label_and_text(form, "MOVE", "ARROWS CTRL-B/F/P/N");
     workspace_write_label_and_text(form, "HOME", "CTRL-A/E");
     workspace_write_label_and_text(form, "RUN", "CTRL-R");
+    workspace_write_label_and_text(form, "SAVE", "CTRL-W");
     workspace_write_label_and_text(form, "BROWSE", "CTRL-O");
     workspace_write_label_and_text(form, "ACCEPT", "CTRL-X");
     workspace_write_label_and_text(form, "DONE", "CTRL-D");
@@ -5850,6 +5851,14 @@ static void workspace_accept_input_monitor_buffer(
     workspace_input_monitor_set_status("ACCEPT OK");
 }
 
+static void workspace_save_and_reopen_in_place(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    startup_hook_receiver_handle = heap_handle_for_object(workspace_object);
+    startup_hook_selector_id = RECORZ_MVP_SELECTOR_REOPEN;
+    emit_live_snapshot();
+}
+
 static uint8_t workspace_browse_input_monitor_context(
     const struct recorz_mvp_heap_object *workspace_object
 ) {
@@ -5982,6 +5991,10 @@ static void workspace_run_interactive_input_monitor(
             workspace_accept_input_monitor_buffer(workspace_object);
             workspace_render_input_monitor_browser(workspace_object);
             continue;
+        }
+        if (ch == 0x17) {
+            workspace_save_and_reopen_in_place(workspace_object);
+            break;
         }
         if (ch == 0x02) {
             workspace_move_input_monitor_cursor_left(workspace_object);
@@ -12417,6 +12430,7 @@ static void execute_entry_workspace_edit_method_of_class_named(
     const char *text
 ) {
     const struct recorz_mvp_heap_object *class_object;
+    const struct recorz_mvp_live_method_source *source_record;
     uint8_t selector_id;
 
     (void)text;
@@ -12438,6 +12452,18 @@ static void execute_entry_workspace_edit_method_of_class_named(
         lookup_builtin_method_descriptor(class_object, selector_id, 1U) == 0) {
         machine_panic("Workspace editMethod:ofClassNamed: could not resolve method");
     }
+    source_record = live_method_source_for(heap_handle_for_object(class_object), selector_id);
+    if (source_record != 0) {
+        workspace_remember_current_source(
+            object,
+            live_method_source_text(source_record)
+        );
+    }
+    workspace_remember_view(
+        object,
+        WORKSPACE_VIEW_METHOD,
+        workspace_compose_method_target_name(arguments[1].string, arguments[0].string)
+    );
     workspace_render_method_browser(object, arguments[1].string, arguments[0].string, "INST");
     workspace_run_interactive_input_monitor(object);
     push(receiver);
@@ -12604,9 +12630,7 @@ static void execute_entry_workspace_save_and_reopen(
 ) {
     (void)arguments;
     (void)text;
-    startup_hook_receiver_handle = heap_handle_for_object(object);
-    startup_hook_selector_id = RECORZ_MVP_SELECTOR_REOPEN;
-    emit_live_snapshot();
+    workspace_save_and_reopen_in_place(object);
     push(receiver);
 }
 

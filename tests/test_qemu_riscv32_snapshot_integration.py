@@ -598,8 +598,9 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             build_dir=SNAPSHOT_WORKSPACE_INPUT_MONITOR_BUILD_DIR,
             example_path=SNAPSHOT_WORKSPACE_INPUT_MONITOR_SAVE_DEMO_PATH,
             snapshot_output=SNAPSHOT_WORKSPACE_INPUT_MONITOR_OUTPUT_PATH,
-            serial_input=("\x0e" * 6) + ("\x06" * 4) + "\x04",
+            serial_input=("\x0e" * 6) + ("\x06" * 4) + "\x17",
         )
+        self.assertIn("SAVE: CTRL-W", save_log)
         self.assertIn("recorz-snapshot-begin", save_log)
         self.assertTrue(SNAPSHOT_WORKSPACE_INPUT_MONITOR_OUTPUT_PATH.exists())
 
@@ -630,11 +631,11 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         self.assertIn("recorz qemu-riscv32 mvp: rendered", reload_log)
         self.assertNotIn("panic:", reload_log)
         self.assertIn("VIEW: INPUT", reload_log)
-        self.assertRegex(reload_log, r"LINE: [2-9]")
-        self.assertRegex(reload_log, r"COL: [2-9]")
+        self.assertIn("LINE: 6", reload_log)
+        self.assertIn("COL: 5", reload_log)
         self.assertIn("TOP: 1", reload_log)
         self.assertIn("newline    | first second third", reload_log)
-        self.assertIn("seventh := 'SEVEN'.", reload_log)
+        self.assertIn("sixth := 'SIX'.", reload_log)
 
         line_1 = _region_histogram(data, width, 24, 24, 420, 56)
         line_2 = _region_histogram(data, width, 24, 58, 420, 90)
