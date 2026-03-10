@@ -19,6 +19,7 @@ DISPLAY_FONT_EXAMPLE = ROOT / "examples" / "qemu_riscv_display_font_demo.rz"
 DISPLAY_FONT_METRICS_EXAMPLE = ROOT / "examples" / "qemu_riscv_display_font_metrics_demo.rz"
 DISPLAY_STYLED_TEXT_EXAMPLE = ROOT / "examples" / "qemu_riscv_display_styled_text_demo.rz"
 DISPLAY_LAYOUT_EXAMPLE = ROOT / "examples" / "qemu_riscv_display_layout_demo.rz"
+FORM_BE_DISPLAY_EXAMPLE = ROOT / "examples" / "qemu_riscv_form_be_display_demo.rz"
 WORKSPACE_CURSOR_SELECTION_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_cursor_selection_demo.rz"
 STRING_SIZE_AT_EXAMPLE = ROOT / "examples" / "qemu_riscv_string_size_at_demo.rz"
 MEMORY_REPORT_EXAMPLE = ROOT / "examples" / "qemu_riscv_memory_report_demo.rz"
@@ -314,6 +315,47 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
 
             output = output.replace("\r", "")
             self.assertIn("16", output)
+            self.assertNotIn("panic:", output)
+
+    def test_form_be_display_rebinds_display_default_form(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-form-be-display-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, FORM_BE_DISPLAY_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("DISPLAY REBOUND", output)
             self.assertNotIn("panic:", output)
 
     def test_display_font_metrics_are_visible_from_the_image(self) -> None:

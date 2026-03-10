@@ -48,7 +48,7 @@ Reference:
 - [x] Document the RV32 performance assumptions for this primitive set
 
 ## Phase 2 - Finish The Display / Form / Cursor Primitive Layer
-- [ ] Introduce a real `beDisplay`-style path so a `Form` can become the active screen surface from image code
+- [x] Introduce a real `beDisplay`-style path so a `Form` can become the active screen surface from image code
 - [ ] Introduce a real `beCursor`-style path so cursor shape and hotspot come from image objects
 - [ ] Expose cursor show/hide and position updates through a primitive boundary that does not own editor policy
 - [ ] Make the active display form and active cursor snapshot-safe and image-visible

@@ -141,7 +141,7 @@
 #define RECORZ_MVP_TRANSFER_RULE_COPY 0U
 #define RECORZ_MVP_TRANSFER_RULE_OVER 1U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEXT_SELECTION
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_TEXT_INDEX_STYLE_ON_FORM
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_BE_DISPLAY
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -257,6 +257,7 @@ static struct recorz_mvp_named_object_binding named_objects[NAMED_OBJECT_LIMIT];
 static struct recorz_mvp_live_method_source live_method_sources[LIVE_METHOD_SOURCE_LIMIT];
 static struct recorz_mvp_live_string_literal live_string_literals[LIVE_STRING_LITERAL_LIMIT];
 static uint16_t default_form_handle = 0U;
+static uint16_t active_display_form_handle = 0U;
 static uint16_t framebuffer_bitmap_handle = 0U;
 static uint16_t next_dynamic_method_entry_execution_id = RECORZ_MVP_METHOD_ENTRY_COUNT;
 static uint16_t dynamic_class_count = 0U;
@@ -2419,7 +2420,7 @@ static struct recorz_mvp_value boolean_value(uint8_t condition) {
 static struct recorz_mvp_value seed_root_value(uint32_t root_id) {
     switch (root_id) {
         case RECORZ_MVP_SEED_ROOT_DEFAULT_FORM:
-            return object_value(default_form_handle);
+            return object_value(active_display_form_handle);
         case RECORZ_MVP_SEED_ROOT_FRAMEBUFFER_BITMAP:
             return object_value(framebuffer_bitmap_handle);
         case RECORZ_MVP_SEED_ROOT_TRANSCRIPT_BEHAVIOR:
@@ -3185,10 +3186,10 @@ static const char *workspace_method_source_text_for_browser_target(
 }
 
 static const struct recorz_mvp_heap_object *default_form_object(void) {
-    if (default_form_handle == 0U) {
+    if (active_display_form_handle == 0U) {
         machine_panic("default form is not initialized");
     }
-    return (const struct recorz_mvp_heap_object *)heap_object(default_form_handle);
+    return (const struct recorz_mvp_heap_object *)heap_object(active_display_form_handle);
 }
 
 static void validate_workspace_receiver(const struct recorz_mvp_heap_object *workspace_object) {
@@ -7549,6 +7550,7 @@ static void reset_runtime_state(void) {
     named_object_count = 0U;
     live_method_source_count = 0U;
     default_form_handle = 0U;
+    active_display_form_handle = 0U;
     framebuffer_bitmap_handle = 0U;
     glyph_fallback_handle = 0U;
     transcript_layout_handle = 0U;
@@ -8336,7 +8338,7 @@ static void form_newline(const struct recorz_mvp_heap_object *form) {
     uint32_t bottom_margin = text_bottom_margin();
     uint8_t capture_feedback =
         (uint8_t)(workspace_input_monitor_capture_enabled &&
-                  heap_handle_for_object(form) == default_form_handle);
+                  heap_handle_for_object(form) == active_display_form_handle);
 
     cursor_x = text_left_margin();
     cursor_y += text_line_height();
@@ -8363,7 +8365,7 @@ static void form_write_code_point_with_colors(
     uint32_t wrap_limit_x = 0U;
     uint8_t capture_feedback =
         (uint8_t)(workspace_input_monitor_capture_enabled &&
-                  heap_handle_for_object(form) == default_form_handle);
+                  heap_handle_for_object(form) == active_display_form_handle);
 
     if (form_width > right_margin) {
         wrap_limit_x = form_width - right_margin;
@@ -8479,6 +8481,15 @@ static struct recorz_mvp_value allocate_form_from_bits_value(struct recorz_mvp_v
     return object_value(form_handle);
 }
 
+static uint8_t form_can_be_display(const struct recorz_mvp_heap_object *form) {
+    struct recorz_mvp_value bits_value = heap_get_field(form, FORM_FIELD_BITS);
+
+    if (bits_value.kind != RECORZ_MVP_VALUE_OBJECT) {
+        return 0U;
+    }
+    return (uint8_t)((uint16_t)bits_value.integer == framebuffer_bitmap_handle);
+}
+
 static void initialize_roots(const struct recorz_mvp_seed *seed) {
     uint32_t glyph_index;
     uint32_t code_index;
@@ -8523,6 +8534,7 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
     }
 
     default_form_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_DEFAULT_FORM]);
+    active_display_form_handle = default_form_handle;
     framebuffer_bitmap_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_FRAMEBUFFER_BITMAP]);
     transcript_behavior_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_BEHAVIOR]);
     transcript_layout_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_LAYOUT]);
@@ -9311,6 +9323,7 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     }
     default_form_handle = read_u16_le(blob + offset);
     offset += 2U;
+    active_display_form_handle = default_form_handle;
     framebuffer_bitmap_handle = read_u16_le(blob + offset);
     offset += 2U;
     transcript_behavior_handle = read_u16_le(blob + offset);
@@ -9854,6 +9867,21 @@ static void execute_entry_form_newline(
     (void)arguments;
     (void)text;
     form_newline(object);
+    push(receiver);
+}
+
+static void execute_entry_form_be_display(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    if (!form_can_be_display(object)) {
+        machine_panic("Form beDisplay expects a framebuffer-backed form");
+    }
+    active_display_form_handle = heap_handle_for_object(object);
     push(receiver);
 }
 

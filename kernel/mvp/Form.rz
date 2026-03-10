@@ -21,6 +21,9 @@ writeCodePoint: codePoint color: color
 newline
     <primitive: #formNewline>
 !
+beDisplay
+    <primitive: #formBeDisplay>
+!
 bits
     ^bits
 !

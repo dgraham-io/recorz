@@ -326,6 +326,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         bitblt_fill_form_color = sources["RECORZ_MVP_METHOD_ENTRY_BITBLT_FILL_FORM_COLOR"]
         form_width = sources["RECORZ_MVP_METHOD_ENTRY_FORM_WIDTH"]
         form_newline = sources["RECORZ_MVP_METHOD_ENTRY_FORM_NEWLINE"]
+        form_be_display = sources["RECORZ_MVP_METHOD_ENTRY_FORM_BE_DISPLAY"]
         font_point_size = sources["RECORZ_MVP_METHOD_ENTRY_FONT_POINT_SIZE"]
 
         self.assertEqual(len(sources), len(mvp.METHOD_ENTRY_DEFINITIONS))
@@ -410,6 +411,13 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(form_newline.implementation_kind, mvp.KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE)
         self.assertEqual(form_newline.primitive_binding, "formNewline")
         self.assertEqual(form_newline.source_text, "newline\n    <primitive: #formNewline>")
+        self.assertEqual(form_be_display.class_name, "Form")
+        self.assertEqual(form_be_display.entry_name, "RECORZ_MVP_METHOD_ENTRY_FORM_BE_DISPLAY")
+        self.assertEqual(form_be_display.selector, "beDisplay")
+        self.assertEqual(form_be_display.argument_count, 0)
+        self.assertEqual(form_be_display.implementation_kind, mvp.KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE)
+        self.assertEqual(form_be_display.primitive_binding, "formBeDisplay")
+        self.assertEqual(form_be_display.source_text, "beDisplay\n    <primitive: #formBeDisplay>")
         self.assertEqual(font_point_size.class_name, "Font")
         self.assertEqual(font_point_size.relative_path, "Font.rz")
         self.assertEqual(font_point_size.selector, "pointSize")
@@ -610,12 +618,14 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["glyphsAt"], 5)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formClear"], 8)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formWriteCodePointColor"], 11)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formNewline"], 12)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formBeDisplay"], 13)
         self.assertEqual(
             mvp.PRIMITIVE_BINDING_VALUES["kernelInstallerInstallCompiledMethodOnClassSelectorIdArgumentCount"],
-            15,
+            16,
         )
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formWriteStyledText"], 10)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 72)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 73)
         self.assertEqual(
             mvp.PRIMITIVE_BINDING_BY_ENTRY_NAME["RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING"],
             mvp.PRIMITIVE_BINDING_VALUES["formWriteString"],
@@ -623,6 +633,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(
             mvp.PRIMITIVE_BINDING_BY_ENTRY_NAME["RECORZ_MVP_METHOD_ENTRY_FORM_NEWLINE"],
             mvp.PRIMITIVE_BINDING_VALUES["formNewline"],
+        )
+        self.assertEqual(
+            mvp.PRIMITIVE_BINDING_BY_ENTRY_NAME["RECORZ_MVP_METHOD_ENTRY_FORM_BE_DISPLAY"],
+            mvp.PRIMITIVE_BINDING_VALUES["formBeDisplay"],
         )
 
     def test_derives_global_maps_from_boot_object_exports_and_selector_maps_from_source(self) -> None:
@@ -832,6 +846,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_D_X_Y_S_F", 152),
                 ("RECORZ_MVP_SELECTOR_WRITE_CODE_POINT_COLOR", 153),
                 ("RECORZ_MVP_SELECTOR_TEXT_INDEX_STYLE_ON_FORM", 154),
+                ("RECORZ_MVP_SELECTOR_BE_DISPLAY", 155),
             ],
         )
 
@@ -1983,14 +1998,14 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             399,
         )
         self.assertEqual(method_start_by_kind[mvp.SEED_OBJECT_CLASS], 399)
-        self.assertEqual(method_count_by_kind[mvp.SEED_OBJECT_FORM], 8)
+        self.assertEqual(method_count_by_kind[mvp.SEED_OBJECT_FORM], 9)
         self.assertEqual(
             method_seed_objects[0].fields,
             [
                 (mvp.SEED_FIELD_OBJECT_INDEX, 191),
                 (mvp.SEED_FIELD_SMALL_INTEGER, 0),
                 (mvp.SEED_FIELD_SMALL_INTEGER, mvp.SEED_OBJECT_CLASS),
-                (mvp.SEED_FIELD_OBJECT_INDEX, 302),
+                (mvp.SEED_FIELD_OBJECT_INDEX, 303),
             ],
         )
 
@@ -2111,6 +2126,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertIn("enum recorz_mvp_primitive_binding {", header)
         for symbol in (
             "bitbltFillFormColor",
+            "formBeDisplay",
             "formNewline",
             "classNew",
             "workspaceBrowsePackagesInteractive",
@@ -2239,6 +2255,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertIn(
             "[RECORZ_MVP_PRIMITIVE_FORM_NEWLINE] = execute_entry_form_newline,",
+            header,
+        )
+        self.assertIn(
+            "[RECORZ_MVP_PRIMITIVE_FORM_BE_DISPLAY] = execute_entry_form_be_display,",
             header,
         )
         self.assertIn(

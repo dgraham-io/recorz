@@ -308,3 +308,5 @@ RecorzKernelSelector: #writeCodePoint:color: order: 152
 !
 RecorzKernelSelector: #text:index:style:onForm: order: 153
 !
+RecorzKernelSelector: #beDisplay order: 154
+!

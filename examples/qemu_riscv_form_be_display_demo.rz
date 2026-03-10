@@ -1,0 +1,7 @@
+| rebound |
+rebound := Form fromBits: Display defaultForm bits.
+rebound beDisplay.
+(Display defaultForm = rebound) ifTrue: [
+    Transcript show: 'DISPLAY REBOUND'.
+    Transcript cr.
+].
