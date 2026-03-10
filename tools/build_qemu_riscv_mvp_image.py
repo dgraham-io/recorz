@@ -970,6 +970,14 @@ def boot_object_small_integer_field_values(object_name: str) -> tuple[int, ...]:
     return tuple(field_values)
 
 
+def boot_object_small_integer_fields_in_order(object_name: str) -> tuple[int, ...]:
+    return tuple(
+        int(field_value)
+        for field_kind, field_value in boot_object_field_specs(object_name)
+        if field_kind == FIELD_SPEC_SMALL_INTEGER
+    )
+
+
 def boot_object_first_glyph_field_value(object_name: str) -> int:
     for field_kind, field_value in boot_object_field_specs(object_name):
         if field_kind == FIELD_SPEC_GLYPH_REF:
@@ -1093,7 +1101,7 @@ TRANSCRIPT_BEHAVIOR_BOOT_FIELD_SPECS = boot_object_field_specs("TranscriptBehavi
 TRANSCRIPT_LAYOUT_FIELD_VALUES = boot_object_small_integer_field_values("TranscriptLayout")
 TRANSCRIPT_STYLE_FIELD_VALUES = boot_object_small_integer_field_values("TranscriptStyle")
 FRAMEBUFFER_BITMAP_FIELD_VALUES = boot_object_small_integer_field_values("FramebufferBitmap")
-TRANSCRIPT_METRICS_FIELD_VALUES = boot_object_small_integer_field_values("TranscriptMetrics")
+TRANSCRIPT_METRICS_FIELD_VALUES = boot_object_small_integer_fields_in_order("TranscriptMetrics")
 BITMAP_STORAGE_FRAMEBUFFER = FRAMEBUFFER_BITMAP_FIELD_VALUES[2]
 BITMAP_STORAGE_GLYPH_MONO = KERNEL_GLYPH_BITMAP_FAMILY_DECLARATION.storage_kind
 GLYPH_FALLBACK_CODE = boot_object_first_glyph_field_value("TranscriptBehavior")

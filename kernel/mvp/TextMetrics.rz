@@ -1,7 +1,28 @@
-RecorzKernelClass: #TextMetrics descriptorOrder: 11 objectKindOrder: 10 instanceVariableNames: 'cellWidth cellHeight'
+RecorzKernelClass: #TextMetrics descriptorOrder: 11 objectKindOrder: 10 sourceBootOrder: 17 instanceVariableNames: 'cellWidth cellHeight baseline verticalMetrics'
 !
-RecorzKernelBootObject: #TranscriptMetrics family: #afterGlyphs order: 0 class: #TextMetrics
-fields: 'small:6 small:8'
+RecorzKernelBootObject: #TranscriptMetrics family: #afterGlyphs order: 1 class: #TextMetrics
+fields: 'small:6 small:8 small:6 object:TranscriptVerticalMetrics'
 rootExports: 'transcript_metrics'
 !
 RecorzKernelRoot: #transcript_metrics object: #TranscriptMetrics order: 5
+!
+cellWidth
+    ^cellWidth
+!
+cellHeight
+    ^cellHeight
+!
+baseline
+    ^baseline
+!
+verticalMetrics
+    ^verticalMetrics
+!
+ascent
+    ^verticalMetrics ascent
+!
+descent
+    ^verticalMetrics descent
+!
+lineHeight
+    ^verticalMetrics lineHeight

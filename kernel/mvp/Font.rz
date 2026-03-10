@@ -1,6 +1,6 @@
 RecorzKernelClass: #Font descriptorOrder: 25 objectKindOrder: 25 sourceBootOrder: 16 instanceVariableNames: 'glyphs metrics behavior pointSize'
 !
-RecorzKernelBootObject: #TranscriptFont family: #afterGlyphs order: 2 class: #Font
+RecorzKernelBootObject: #TranscriptFont family: #afterGlyphs order: 3 class: #Font
 fields: 'object:Glyphs object:TranscriptMetrics object:TranscriptBehavior small:16'
 rootExports: 'transcript_font'
 !

@@ -58,7 +58,7 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         self.assertEqual(summary["seed"]["root_send_method_object_count"], 0)
         self.assertEqual(summary["seed"]["root_value_method_object_count"], 0)
         self.assertEqual(summary["seed"]["interpreted_method_object_count"], 0)
-        self.assertEqual(summary["seed"]["compiled_method_object_count"], 25)
+        self.assertEqual(summary["seed"]["compiled_method_object_count"], len(mvp.COMPILED_METHOD_ENTRY_ORDER))
         self.assertEqual(summary["seed"]["method_entry_object_count"], len(mvp.METHOD_ENTRY_ORDER))
         self.assertEqual(summary["seed"]["declared_method_count"], len(mvp.METHOD_ENTRY_ORDER))
         self.assertEqual(summary["seed"]["method_entry_count"], len(mvp.METHOD_ENTRY_ORDER))
@@ -71,11 +71,11 @@ class QemuRiscvImageInspectorTests(unittest.TestCase):
         self.assertEqual(summary["seed"]["globals"]["false"], 13)
         self.assertEqual(summary["seed"]["globals"]["TestRunner"], 14)
         self.assertEqual(summary["seed"]["roots"]["default_form"], 9)
-        self.assertEqual(summary["seed"]["roots"]["transcript_behavior"], 144)
+        self.assertEqual(summary["seed"]["roots"]["transcript_behavior"], 145)
         self.assertEqual(summary["seed"]["roots"]["transcript_layout"], 6)
         self.assertEqual(summary["seed"]["roots"]["transcript_style"], 7)
-        self.assertEqual(summary["seed"]["roots"]["transcript_metrics"], 143)
-        self.assertEqual(summary["seed"]["roots"]["transcript_font"], 145)
+        self.assertEqual(summary["seed"]["roots"]["transcript_metrics"], 144)
+        self.assertEqual(summary["seed"]["roots"]["transcript_font"], 146)
         self.assertEqual(summary["seed"]["glyph_code_count"], 128)
 
     def test_rejects_profile_mismatch(self) -> None:

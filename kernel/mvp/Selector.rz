@@ -216,3 +216,17 @@ RecorzKernelSelector: #pointSize order: 106
 !
 RecorzKernelSelector: #font order: 107
 !
+RecorzKernelSelector: #cellWidth order: 108
+!
+RecorzKernelSelector: #cellHeight order: 109
+!
+RecorzKernelSelector: #baseline order: 110
+!
+RecorzKernelSelector: #verticalMetrics order: 111
+!
+RecorzKernelSelector: #ascent order: 112
+!
+RecorzKernelSelector: #descent order: 113
+!
+RecorzKernelSelector: #lineHeight order: 114
+!

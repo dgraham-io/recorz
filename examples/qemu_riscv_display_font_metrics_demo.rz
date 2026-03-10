@@ -1,0 +1,8 @@
+Transcript show: Display font metrics baseline printString.
+Transcript cr.
+Transcript show: Display font metrics ascent printString.
+Transcript cr.
+Transcript show: Display font metrics descent printString.
+Transcript cr.
+Transcript show: Display font metrics lineHeight printString.
+Transcript cr.

@@ -1,0 +1,13 @@
+RecorzKernelClass: #TextVerticalMetrics descriptorOrder: 26 objectKindOrder: 26 sourceBootOrder: 18 instanceVariableNames: 'ascent descent lineHeight'
+!
+RecorzKernelBootObject: #TranscriptVerticalMetrics family: #afterGlyphs order: 0 class: #TextVerticalMetrics
+fields: 'small:6 small:2 small:10'
+!
+ascent
+    ^ascent
+!
+descent
+    ^descent
+!
+lineHeight
+    ^lineHeight

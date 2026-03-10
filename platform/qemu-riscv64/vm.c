@@ -67,6 +67,11 @@
 #define TEXT_STYLE_FIELD_FOREGROUND_COLOR RECORZ_MVP_TEXT_STYLE_FIELD_FOREGROUND_COLOR
 #define TEXT_METRICS_FIELD_CELL_WIDTH RECORZ_MVP_TEXT_METRICS_FIELD_CELL_WIDTH
 #define TEXT_METRICS_FIELD_CELL_HEIGHT RECORZ_MVP_TEXT_METRICS_FIELD_CELL_HEIGHT
+#define TEXT_METRICS_FIELD_BASELINE RECORZ_MVP_TEXT_METRICS_FIELD_BASELINE
+#define TEXT_METRICS_FIELD_VERTICAL_METRICS RECORZ_MVP_TEXT_METRICS_FIELD_VERTICAL_METRICS
+#define TEXT_VERTICAL_METRICS_FIELD_ASCENT RECORZ_MVP_TEXT_VERTICAL_METRICS_FIELD_ASCENT
+#define TEXT_VERTICAL_METRICS_FIELD_DESCENT RECORZ_MVP_TEXT_VERTICAL_METRICS_FIELD_DESCENT
+#define TEXT_VERTICAL_METRICS_FIELD_LINE_HEIGHT RECORZ_MVP_TEXT_VERTICAL_METRICS_FIELD_LINE_HEIGHT
 #define TEXT_BEHAVIOR_FIELD_FALLBACK_BITMAP RECORZ_MVP_TEXT_BEHAVIOR_FIELD_FALLBACK_GLYPH
 #define TEXT_BEHAVIOR_FIELD_CLEAR_ON_OVERFLOW RECORZ_MVP_TEXT_BEHAVIOR_FIELD_CLEAR_ON_OVERFLOW
 #define FONT_FIELD_GLYPHS RECORZ_MVP_FONT_FIELD_GLYPHS
@@ -116,8 +121,8 @@
 #define BITMAP_STORAGE_FRAMEBUFFER RECORZ_MVP_BITMAP_STORAGE_FRAMEBUFFER
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
-#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEST_RUNNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_FONT
+#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEXT_VERTICAL_METRICS
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_LINE_HEIGHT
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_TEST_RUNNER
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -293,6 +298,7 @@ static uint32_t text_left_margin(void);
 static uint32_t char_width(void);
 static uint32_t char_height(void);
 static uint32_t text_line_spacing(void);
+static uint32_t text_line_height(void);
 static uint32_t bitmap_width(const struct recorz_mvp_heap_object *bitmap);
 static uint32_t bitmap_height(const struct recorz_mvp_heap_object *bitmap);
 static const struct recorz_mvp_heap_object *bitmap_for_form(const struct recorz_mvp_heap_object *form);
@@ -755,6 +761,20 @@ static const char *selector_name(uint8_t selector) {
             return "pointSize";
         case RECORZ_MVP_SELECTOR_FONT:
             return "font";
+        case RECORZ_MVP_SELECTOR_CELL_WIDTH:
+            return "cellWidth";
+        case RECORZ_MVP_SELECTOR_CELL_HEIGHT:
+            return "cellHeight";
+        case RECORZ_MVP_SELECTOR_BASELINE:
+            return "baseline";
+        case RECORZ_MVP_SELECTOR_VERTICAL_METRICS:
+            return "verticalMetrics";
+        case RECORZ_MVP_SELECTOR_ASCENT:
+            return "ascent";
+        case RECORZ_MVP_SELECTOR_DESCENT:
+            return "descent";
+        case RECORZ_MVP_SELECTOR_LINE_HEIGHT:
+            return "lineHeight";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -799,6 +819,8 @@ static const char *object_kind_name(uint8_t kind) {
             return "TextStyle";
         case RECORZ_MVP_OBJECT_TEXT_METRICS:
             return "TextMetrics";
+        case RECORZ_MVP_OBJECT_TEXT_VERTICAL_METRICS:
+            return "TextVerticalMetrics";
         case RECORZ_MVP_OBJECT_TEXT_BEHAVIOR:
             return "TextBehavior";
         case RECORZ_MVP_OBJECT_CLASS:
@@ -3894,7 +3916,7 @@ static uint8_t workspace_has_line_capacity(const struct recorz_mvp_heap_object *
 
 static void workspace_newline(void) {
     cursor_x = text_left_margin();
-    cursor_y += char_height() + text_line_spacing();
+    cursor_y += text_line_height();
 }
 
 static void workspace_copy_display_text(
@@ -4032,7 +4054,7 @@ static uint32_t workspace_input_monitor_visible_line_capacity(
 ) {
     uint32_t form_height = bitmap_height(bitmap_for_form(form));
     uint32_t line_y = cursor_y;
-    uint32_t line_step = char_height() + text_line_spacing();
+    uint32_t line_step = text_line_height();
     uint32_t count = 0U;
 
     while (line_y + char_height() < form_height) {
@@ -7501,6 +7523,27 @@ static uint32_t transcript_metrics_u32(uint8_t index, const char *message) {
     return small_integer_u32(heap_get_field(transcript_metrics_object(), index), message);
 }
 
+static const struct recorz_mvp_heap_object *transcript_vertical_metrics_object(void) {
+    struct recorz_mvp_value vertical_metrics_value = heap_get_field(
+        transcript_metrics_object(),
+        TEXT_METRICS_FIELD_VERTICAL_METRICS
+    );
+    const struct recorz_mvp_heap_object *vertical_metrics_object;
+
+    if (vertical_metrics_value.kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("text metrics verticalMetrics is not a text vertical metrics object");
+    }
+    vertical_metrics_object = heap_object_for_value(vertical_metrics_value);
+    if (vertical_metrics_object->kind != RECORZ_MVP_OBJECT_TEXT_VERTICAL_METRICS) {
+        machine_panic("text metrics verticalMetrics is not a text vertical metrics object");
+    }
+    return vertical_metrics_object;
+}
+
+static uint32_t transcript_vertical_metrics_u32(uint8_t index, const char *message) {
+    return small_integer_u32(heap_get_field(transcript_vertical_metrics_object(), index), message);
+}
+
 static const struct recorz_mvp_heap_object *transcript_behavior_object(void) {
     return transcript_font_reference_object(
         FONT_FIELD_BEHAVIOR,
@@ -7537,6 +7580,67 @@ static uint32_t char_height(void) {
         TEXT_METRICS_FIELD_CELL_HEIGHT,
         "text metrics cell height is not a small integer"
     ) * text_pixel_scale();
+}
+
+static uint32_t text_baseline(void) {
+    return transcript_metrics_u32(
+        TEXT_METRICS_FIELD_BASELINE,
+        "text metrics baseline is not a small integer"
+    ) * text_pixel_scale();
+}
+
+static uint32_t text_ascent(void) {
+    return transcript_vertical_metrics_u32(
+        TEXT_VERTICAL_METRICS_FIELD_ASCENT,
+        "text vertical metrics ascent is not a small integer"
+    ) * text_pixel_scale();
+}
+
+static uint32_t text_descent(void) {
+    return transcript_vertical_metrics_u32(
+        TEXT_VERTICAL_METRICS_FIELD_DESCENT,
+        "text vertical metrics descent is not a small integer"
+    ) * text_pixel_scale();
+}
+
+static uint32_t text_line_height(void) {
+    return transcript_vertical_metrics_u32(
+        TEXT_VERTICAL_METRICS_FIELD_LINE_HEIGHT,
+        "text vertical metrics line height is not a small integer"
+    ) * text_pixel_scale();
+}
+
+static void validate_transcript_text_metrics(const char *prefix) {
+    uint32_t baseline = text_baseline();
+    uint32_t ascent = text_ascent();
+    uint32_t descent = text_descent();
+    uint32_t line_height = text_line_height();
+    uint32_t cell_height = char_height();
+
+    if (baseline == 0U) {
+        machine_panic(prefix);
+    }
+    if (line_height == 0U) {
+        machine_panic(prefix);
+    }
+    if (ascent == 0U) {
+        machine_panic(prefix);
+    }
+    if (line_height < cell_height) {
+        machine_panic(prefix);
+    }
+    if (line_height < cell_height + text_line_spacing()) {
+        machine_panic(prefix);
+    }
+    if (baseline < ascent) {
+        machine_panic(prefix);
+    }
+    if (baseline + descent > line_height) {
+        machine_panic(prefix);
+    }
+    if (ascent + descent != cell_height) {
+        machine_panic(prefix);
+    }
 }
 
 static uint32_t bitmap_width(const struct recorz_mvp_heap_object *bitmap) {
@@ -7854,7 +7958,7 @@ static void form_newline(const struct recorz_mvp_heap_object *form) {
                   heap_handle_for_object(form) == default_form_handle);
 
     cursor_x = text_left_margin();
-    cursor_y += char_height() + text_line_spacing();
+    cursor_y += text_line_height();
     if (transcript_clear_on_overflow() && cursor_y + char_height() >= bitmap_height(bitmap_for_form(form))) {
         form_clear(form);
     }
@@ -8017,6 +8121,7 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
         machine_panic("transcript font point size must be non-zero");
     }
     validate_transcript_font_glyphs_reference();
+    validate_transcript_text_metrics("transcript text metrics are inconsistent");
     for (code_index = 0U; code_index < seed->glyph_code_count; ++code_index) {
         uint16_t glyph_object_index = seed->glyph_object_indices_by_code[code_index];
         if (glyph_object_index == RECORZ_MVP_SEED_INVALID_OBJECT_INDEX) {
@@ -8965,6 +9070,7 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
         machine_panic("snapshot transcript font point size must be non-zero");
     }
     validate_transcript_font_glyphs_reference();
+    validate_transcript_text_metrics("snapshot transcript text metrics are inconsistent");
 }
 
 static void push(struct recorz_mvp_value value) {
