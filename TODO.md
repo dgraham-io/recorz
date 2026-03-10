@@ -40,7 +40,7 @@ Get Recorz to the point where text rendering and the main development UI are own
 - [x] Move string drawing policy out of the ad hoc C workspace/browser renderer
 - [ ] Render cursor, selection, status lines, and simple highlighted regions from image code
 - [ ] Make the first comfortable development font target a readable 16-point size for the framebuffer workspace/browser
-- [ ] Support at least two usable text sizes, with 16-point as the baseline development size and a smaller dense mode after that
+- [ ] Support at least two usable text sizes, with 16-point as the baseline development size and a 12-point dense mode after that
 - [ ] Make text metrics configurable so resolution can be used effectively on RV32 targets
 - [ ] Keep a temporary C fallback only until the image-side renderer reaches parity
 
@@ -73,7 +73,7 @@ Get Recorz to the point where text rendering and the main development UI are own
 - [ ] Reduce remaining builder-side ownership of text and tool behavior
 
 ## Phase 8 - Optional But Likely Near-Term Improvements
-- [ ] Add a denser bitmap font optimized for 1024x768 and similar framebuffer targets once the 16-point baseline renderer is working
+- [ ] Add a denser 12-point bitmap font optimized for 1024x768 and similar framebuffer targets once the 16-point baseline renderer is working
 - [ ] Add basic selection, copy, and paste hooks
 - [ ] Add mouse input after keyboard-only tools are stable
 - [ ] Experiment with a declarative UI layer once the first image-owned tool set is working
