@@ -1532,3 +1532,7 @@
 - Added `/Users/david/repos/recorz/TODO.md` as a focused roadmap from the current RV32 interactive workspace to image-owned text rendering and image-owned UI components.
 - The new roadmap separates what should remain in the platform/VM from what should migrate into Recorz objects, then stages the work through text modeling, image-side text rendering, image-side UI primitives, replacement of the current C workspace/browser renderer, and eventual source-owned native development tools.
 - It also records the decision point around future UI structure: the first target is a usable image-owned workspace/browser surface, while the longer-term choice between pane/window style tools and a more declarative UI layer remains open until the primitive image-side view system exists.
+
+## 2026-03-10 - Set A 16-Point Baseline For Image-Owned Text Rendering
+- Updated `/Users/david/repos/recorz/TODO.md` so the text/UI roadmap now makes the first comfortable in-image development font an explicit 16-point target for the framebuffer workspace and browser.
+- This keeps the text-rendering objective concrete: the first image-owned renderer should not just be “smaller” or “configurable,” it should establish a readable baseline development size first, then add denser modes afterward for higher information density on RV32 framebuffer targets.
