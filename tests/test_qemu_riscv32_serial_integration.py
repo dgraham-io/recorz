@@ -38,6 +38,7 @@ REGENERATED_KERNEL_SOURCE_BROWSER_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_i
 WORKSPACE_INPUT_MONITOR_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_demo.rz"
 WORKSPACE_INPUT_MONITOR_EVALUATE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_evaluate_demo.rz"
 WORKSPACE_INPUT_MONITOR_ACCEPT_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_accept_demo.rz"
+WORKSPACE_INPUT_MONITOR_RUN_TESTS_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_run_tests_demo.rz"
 WORKSPACE_INPUT_MONITOR_BROWSER_BRIDGE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_browser_bridge_demo.rz"
 WORKSPACE_INPUT_MONITOR_PACKAGE_BRIDGE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_package_bridge_demo.rz"
 WORKSPACE_EDIT_METHOD_ENTRY_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_method_entry_demo.rz"
@@ -1158,6 +1159,66 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("REVERT: CTRL-Y", output)
             self.assertIn("STATUS: REVERT OK", output)
             self.assertIn("STATUS: ACCEPT OK", output)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_interactive_input_monitor_can_run_current_tests(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-input-monitor-tests-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_INPUT_MONITOR_RUN_TESTS_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "TESTS: CTRL-T", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("\x14")
+                process.stdin.flush()
+                output += _read_until(process, "STATUS: TEST OK", timeout=8.0)
+                process.stdin.write("\x0f")
+                process.stdin.flush()
+                time.sleep(0.5)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("PASS TinySpec>>testPass", output)
+            self.assertIn("FAIL TinySpec>>testFail", output)
+            self.assertIn("SUMMARY TinySpec P=1 F=1 T=2", output)
+            self.assertIn("STATUS: TEST OK", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_edit_package_entry_opens_the_interactive_editor_from_package_source(self) -> None:

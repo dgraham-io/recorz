@@ -113,7 +113,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEST_RUNNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_REVERT_CURRENT
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_RUN_CURRENT_TESTS
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_TEST_RUNNER
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -731,6 +731,8 @@ static const char *selector_name(uint8_t selector) {
             return "editPackageNamed:";
         case RECORZ_MVP_SELECTOR_REVERT_CURRENT:
             return "revertCurrent";
+        case RECORZ_MVP_SELECTOR_RUN_CURRENT_TESTS:
+            return "runCurrentTests";
     }
     return "unknown";
 }
@@ -3291,6 +3293,55 @@ static void test_runner_accumulate_class(
     test_runner_set_counter(test_runner_object, TEST_RUNNER_FIELD_TOTAL, total_count);
 }
 
+static void test_runner_run_package(
+    const struct recorz_mvp_heap_object *test_runner_object,
+    const char *package_name
+) {
+    const struct recorz_mvp_dynamic_class_definition *sorted_definitions[DYNAMIC_CLASS_LIMIT];
+    uint16_t sorted_count = 0U;
+    uint16_t dynamic_index;
+
+    validate_test_runner_receiver(test_runner_object);
+    if (package_definition_for_name(package_name) == 0) {
+        machine_panic("TestRunner runPackageNamed: could not resolve package");
+    }
+    test_runner_reset_state(test_runner_object);
+    for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
+        const struct recorz_mvp_dynamic_class_definition *definition = &dynamic_classes[dynamic_index];
+        uint16_t insert_index;
+
+        if (!source_names_equal(definition->package_name, package_name)) {
+            continue;
+        }
+        insert_index = sorted_count;
+        while (insert_index != 0U &&
+               compare_source_names(
+                   definition->class_name,
+                   sorted_definitions[insert_index - 1U]->class_name
+               ) < 0) {
+            sorted_definitions[insert_index] = sorted_definitions[insert_index - 1U];
+            --insert_index;
+        }
+        sorted_definitions[insert_index] = definition;
+        ++sorted_count;
+    }
+    for (dynamic_index = 0U; dynamic_index < sorted_count; ++dynamic_index) {
+        const struct recorz_mvp_heap_object *class_object =
+            lookup_class_by_name(sorted_definitions[dynamic_index]->class_name);
+
+        if (class_object == 0) {
+            machine_panic("TestRunner package contains an unresolved class");
+        }
+        test_runner_accumulate_class(test_runner_object, class_object, sorted_definitions[dynamic_index]->class_name);
+    }
+    test_runner_write_summary(
+        package_name,
+        test_runner_counter_value(test_runner_object, TEST_RUNNER_FIELD_PASSED, "TestRunner passed counter is invalid"),
+        test_runner_counter_value(test_runner_object, TEST_RUNNER_FIELD_FAILED, "TestRunner failed counter is invalid"),
+        test_runner_counter_value(test_runner_object, TEST_RUNNER_FIELD_TOTAL, "TestRunner total counter is invalid")
+    );
+}
+
 static void workspace_remember_view(
     const struct recorz_mvp_heap_object *workspace_object,
     uint32_t view_kind,
@@ -4623,6 +4674,7 @@ static void workspace_render_input_monitor_browser(
     workspace_write_label_and_text(form, "PRINT", "CTRL-P");
     workspace_write_label_and_text(form, "DOIT", "CTRL-D/R");
     workspace_write_label_and_text(form, "REVERT", "CTRL-Y");
+    workspace_write_label_and_text(form, "TESTS", "CTRL-T");
     workspace_write_label_and_text(form, "SAVE", "CTRL-W");
     workspace_write_label_and_text(form, "CLOSE", "CTRL-O");
     workspace_write_label_and_text(form, "ACCEPT", "CTRL-X");
@@ -5430,6 +5482,96 @@ static void workspace_revert_current_in_place(
     );
 }
 
+static void workspace_run_current_tests_in_place(
+    const struct recorz_mvp_heap_object *object
+) {
+    struct recorz_mvp_value view_kind_value;
+    struct recorz_mvp_value target_name_value;
+    const struct recorz_mvp_heap_object *test_runner_object;
+    const struct recorz_mvp_heap_object *class_object;
+    char class_name[METHOD_SOURCE_NAME_LIMIT];
+    char selector_name_text[METHOD_SOURCE_NAME_LIMIT];
+    char protocol_name[METHOD_SOURCE_NAME_LIMIT];
+
+    if (global_handles[RECORZ_MVP_GLOBAL_TEST_RUNNER] == 0U) {
+        machine_panic("Workspace runCurrentTests requires TestRunner");
+    }
+    test_runner_object = (const struct recorz_mvp_heap_object *)heap_object(
+        global_handles[RECORZ_MVP_GLOBAL_TEST_RUNNER]
+    );
+    view_kind_value = heap_get_field(object, workspace_current_view_kind_field_index(object));
+    if (view_kind_value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+        machine_panic("Workspace runCurrentTests requires a browser target");
+    }
+    if (object->field_count <= workspace_current_target_name_field_index(object)) {
+        machine_panic("Workspace runCurrentTests is missing the current browser target");
+    }
+    target_name_value = heap_get_field(object, workspace_current_target_name_field_index(object));
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PACKAGE ||
+        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PACKAGE_SOURCE) {
+        if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
+            target_name_value.string == 0 ||
+            target_name_value.string[0] == '\0') {
+            machine_panic("Workspace runCurrentTests is missing the current package target");
+        }
+        test_runner_run_package(test_runner_object, target_name_value.string);
+        return;
+    }
+    if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
+        target_name_value.string == 0 ||
+        target_name_value.string[0] == '\0') {
+        machine_panic("Workspace runCurrentTests is missing the current class target");
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS ||
+        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_SOURCE ||
+        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_METHODS ||
+        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_METHODS ||
+        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PROTOCOLS ||
+        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_PROTOCOLS) {
+        class_object = lookup_class_by_name(target_name_value.string);
+        if (class_object == 0) {
+            machine_panic("Workspace runCurrentTests could not resolve the target class");
+        }
+        test_runner_run_class(test_runner_object, class_object, target_name_value.string);
+        return;
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_METHOD ||
+        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_METHOD) {
+        if (!workspace_parse_method_target_name(
+                target_name_value.string,
+                class_name,
+                sizeof(class_name),
+                selector_name_text,
+                sizeof(selector_name_text))) {
+            machine_panic("Workspace runCurrentTests current method target is invalid");
+        }
+        class_object = lookup_class_by_name(class_name);
+        if (class_object == 0) {
+            machine_panic("Workspace runCurrentTests could not resolve the target class");
+        }
+        test_runner_run_class(test_runner_object, class_object, class_name);
+        return;
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PROTOCOL ||
+        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_PROTOCOL) {
+        if (!workspace_parse_protocol_target_name(
+                target_name_value.string,
+                class_name,
+                sizeof(class_name),
+                protocol_name,
+                sizeof(protocol_name))) {
+            machine_panic("Workspace runCurrentTests current protocol target is invalid");
+        }
+        class_object = lookup_class_by_name(class_name);
+        if (class_object == 0) {
+            machine_panic("Workspace runCurrentTests could not resolve the target class");
+        }
+        test_runner_run_class(test_runner_object, class_object, class_name);
+        return;
+    }
+    machine_panic("Workspace runCurrentTests requires a class or package browser target");
+}
+
 static void workspace_revert_input_monitor_buffer(
     const struct recorz_mvp_heap_object *workspace_object
 ) {
@@ -5532,6 +5674,62 @@ static void workspace_save_and_reopen_in_place(
     startup_hook_receiver_handle = heap_handle_for_object(workspace_object);
     startup_hook_selector_id = RECORZ_MVP_SELECTOR_REOPEN;
     emit_live_snapshot();
+}
+
+static void workspace_run_input_monitor_tests(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    uint16_t workspace_handle = heap_handle_for_object(workspace_object);
+    struct recorz_mvp_value saved_view_kind = heap_get_field(
+        workspace_object,
+        workspace_current_view_kind_field_index(workspace_object)
+    );
+    struct recorz_mvp_value saved_target_name = heap_get_field(
+        workspace_object,
+        workspace_current_target_name_field_index(workspace_object)
+    );
+    uint32_t test_view_kind = WORKSPACE_VIEW_NONE;
+    char test_target_name[METHOD_SOURCE_CHUNK_LIMIT];
+
+    if (!workspace_input_monitor_accept_context(
+            workspace_object,
+            &test_view_kind,
+            test_target_name,
+            sizeof(test_target_name))) {
+        workspace_input_monitor_set_status("TEST NEEDS BROWSER");
+        return;
+    }
+    workspace_input_monitor_clear_feedback();
+    workspace_input_monitor_set_status("TESTING");
+    heap_set_field(
+        workspace_handle,
+        workspace_current_view_kind_field_index(workspace_object),
+        small_integer_value((int32_t)test_view_kind)
+    );
+    heap_set_field(
+        workspace_handle,
+        workspace_current_target_name_field_index(workspace_object),
+        test_target_name[0] == '\0' ? nil_value() : string_value(test_target_name)
+    );
+    workspace_input_monitor_capture_enabled = 1U;
+    workspace_run_current_tests_in_place(workspace_object);
+    workspace_input_monitor_capture_enabled = 0U;
+    heap_set_field(
+        workspace_handle,
+        workspace_current_view_kind_field_index(workspace_object),
+        saved_view_kind
+    );
+    heap_set_field(
+        workspace_handle,
+        workspace_current_target_name_field_index(workspace_object),
+        saved_target_name
+    );
+    heap_set_field(
+        workspace_handle,
+        workspace_current_source_field_index(workspace_object),
+        string_value(workspace_input_monitor_buffer)
+    );
+    workspace_input_monitor_set_status("TEST OK");
 }
 
 static uint8_t workspace_browse_input_monitor_context(
@@ -5647,6 +5845,11 @@ static void workspace_run_interactive_input_monitor(
         }
         if (ch == 0x04 || ch == 0x12) {
             workspace_evaluate_input_monitor_buffer(workspace_object);
+            workspace_render_input_monitor_browser(workspace_object);
+            continue;
+        }
+        if (ch == 0x14) {
+            workspace_run_input_monitor_tests(workspace_object);
             workspace_render_input_monitor_browser(workspace_object);
             continue;
         }
@@ -10864,36 +11067,12 @@ static void execute_entry_test_runner_run_package_named(
     const struct recorz_mvp_value arguments[],
     const char *text
 ) {
-    uint16_t dynamic_index;
-
     (void)text;
     validate_test_runner_receiver(object);
     if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
         machine_panic("TestRunner runPackageNamed: expects a package name string");
     }
-    if (package_definition_for_name(arguments[0].string) == 0) {
-        machine_panic("TestRunner runPackageNamed: could not resolve package");
-    }
-    test_runner_reset_state(object);
-    for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
-        const struct recorz_mvp_dynamic_class_definition *definition = &dynamic_classes[dynamic_index];
-        const struct recorz_mvp_heap_object *class_object;
-
-        if (!source_names_equal(definition->package_name, arguments[0].string)) {
-            continue;
-        }
-        class_object = lookup_class_by_name(definition->class_name);
-        if (class_object == 0) {
-            machine_panic("TestRunner package contains an unresolved class");
-        }
-        test_runner_accumulate_class(object, class_object, definition->class_name);
-    }
-    test_runner_write_summary(
-        arguments[0].string,
-        test_runner_counter_value(object, TEST_RUNNER_FIELD_PASSED, "TestRunner passed counter is invalid"),
-        test_runner_counter_value(object, TEST_RUNNER_FIELD_FAILED, "TestRunner failed counter is invalid"),
-        test_runner_counter_value(object, TEST_RUNNER_FIELD_TOTAL, "TestRunner total counter is invalid")
-    );
+    test_runner_run_package(object, arguments[0].string);
     push(receiver);
 }
 
@@ -11108,6 +11287,18 @@ static void execute_entry_workspace_revert_current(
     (void)arguments;
     (void)text;
     workspace_revert_current_in_place(object);
+    push(receiver);
+}
+
+static void execute_entry_workspace_run_current_tests(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    workspace_run_current_tests_in_place(object);
     push(receiver);
 }
 

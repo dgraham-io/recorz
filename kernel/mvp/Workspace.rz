@@ -78,6 +78,9 @@ acceptCurrent
 revertCurrent
     <primitive: #workspaceRevertCurrent>
 !
+runCurrentTests
+    <primitive: #workspaceRunCurrentTests>
+!
 saveAndReopen
     <primitive: #workspaceSaveAndReopen>
 !

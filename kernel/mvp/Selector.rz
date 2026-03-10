@@ -196,3 +196,5 @@ RecorzKernelSelector: #editPackageNamed: order: 96
 !
 RecorzKernelSelector: #revertCurrent order: 97
 !
+RecorzKernelSelector: #runCurrentTests order: 98
+!
