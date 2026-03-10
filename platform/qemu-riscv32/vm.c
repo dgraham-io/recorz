@@ -5225,11 +5225,10 @@ static void workspace_render_input_monitor_browser(
     workspace_write_label_and_text(form, "MOVE", "ARROWS CTRL-B/F/N");
     workspace_write_label_and_text(form, "HOME", "CTRL-A/E");
     workspace_write_label_and_text(form, "PRINT", "CTRL-P");
-    workspace_write_label_and_text(form, "RUN", "CTRL-R");
+    workspace_write_label_and_text(form, "DOIT", "CTRL-D/R");
     workspace_write_label_and_text(form, "SAVE", "CTRL-W");
-    workspace_write_label_and_text(form, "BROWSE", "CTRL-O");
+    workspace_write_label_and_text(form, "CLOSE", "CTRL-O");
     workspace_write_label_and_text(form, "ACCEPT", "CTRL-X");
-    workspace_write_label_and_text(form, "DONE", "CTRL-D");
     cursor_index = workspace_input_monitor_cursor_index(workspace_object);
     workspace_input_monitor_cursor_line_and_column(
         source_value.kind == RECORZ_MVP_VALUE_STRING ? source_value.string : 0,
@@ -5808,17 +5807,17 @@ static void workspace_evaluate_input_monitor_buffer(
             &browser_view_kind,
             browser_target_name,
             sizeof(browser_target_name))) {
-        workspace_input_monitor_set_status("RUN USE CTRL-X");
+        workspace_input_monitor_set_status("DOIT USE CTRL-X");
         return;
     }
     workspace_input_monitor_clear_feedback();
-    workspace_input_monitor_set_status("RUNNING");
+    workspace_input_monitor_set_status("DOING");
     workspace_input_monitor_capture_enabled = 1U;
     chunk_source = workspace_normalize_do_it_source(workspace_input_monitor_buffer);
     workspace_remember_source(workspace_object, chunk_source);
     workspace_evaluate_source(workspace_source_for_evaluation(chunk_source));
     workspace_input_monitor_capture_enabled = 0U;
-    workspace_input_monitor_set_status("RUN OK");
+    workspace_input_monitor_set_status("DOIT OK");
     heap_set_field(
         workspace_handle,
         workspace_current_view_kind_field_index(workspace_object),
@@ -6074,10 +6073,6 @@ static void workspace_run_interactive_input_monitor(
     while (1) {
         char ch = machine_wait_getc();
 
-        if (ch == 0x04) {
-            workspace_browse_input_monitor_context(workspace_object);
-            break;
-        }
         if (ch == '\r') {
             saw_carriage_return = 1U;
             workspace_insert_input_monitor_character(workspace_object, '\n');
@@ -6148,16 +6143,14 @@ static void workspace_run_interactive_input_monitor(
             workspace_render_input_monitor_browser(workspace_object);
             continue;
         }
-        if (ch == 0x12) {
+        if (ch == 0x04 || ch == 0x12) {
             workspace_evaluate_input_monitor_buffer(workspace_object);
             workspace_render_input_monitor_browser(workspace_object);
             continue;
         }
         if (ch == 0x0f) {
-            if (!workspace_browse_input_monitor_context(workspace_object)) {
-                workspace_input_monitor_set_status("BROWSE NEEDS BROWSER");
-                workspace_render_input_monitor_browser(workspace_object);
-                continue;
+            if (workspace_browse_input_monitor_context(workspace_object)) {
+                break;
             }
             break;
         }

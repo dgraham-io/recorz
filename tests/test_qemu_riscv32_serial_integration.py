@@ -349,7 +349,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 output = _read_until(process, "VIEW: INPUT", timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
-                process.stdin.write("ab\x02C\x06D\x04")
+                process.stdin.write("ab\x02C\x06D\x0f")
                 process.stdin.flush()
                 time.sleep(1.0)
                 if process.poll() is None:
@@ -369,9 +369,10 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("VIEW: INPUT", output)
             self.assertIn("MOVE: ARROWS CTRL-B/F/N", output)
             self.assertIn("PRINT: CTRL-P", output)
+            self.assertIn("DOIT: CTRL-D/R", output)
             self.assertIn("LINE: 1", output)
             self.assertIn("TOP: 1", output)
-            self.assertIn("DONE: CTRL-D", output)
+            self.assertIn("CLOSE: CTRL-O", output)
             self.assertIn("BUFFER=aCbD", output.replace("\n", ""))
             self.assertNotIn("panic:", output)
 
@@ -409,7 +410,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 output = _read_until(process, "VIEW: INPUT", timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
-                process.stdin.write("A\nBC\nD\x1b[AX\x0eY\x04")
+                process.stdin.write("A\nBC\nD\x1b[AX\x0eY\x0f")
                 process.stdin.flush()
                 time.sleep(1.0)
                 if process.poll() is None:
@@ -465,7 +466,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 output = _read_until(process, "VIEW: INPUT", timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
-                process.stdin.write(("A\n" * 40) + "\x04")
+                process.stdin.write(("A\n" * 40) + "\x0f")
                 process.stdin.flush()
                 time.sleep(1.5)
                 if process.poll() is None:
@@ -520,7 +521,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 output = _read_until(process, "VIEW: INPUT", timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
-                process.stdin.write("Transcript show: (1 + 2) printString.\x12!\x04")
+                process.stdin.write("Transcript show: (1 + 2) printString.\x04!\x0f")
                 process.stdin.flush()
                 time.sleep(1.0)
                 if process.poll() is None:
@@ -537,8 +538,8 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     process.stdin.close()
 
             output = output.replace("\r", "")
-            self.assertIn("RUN: CTRL-R", output)
-            self.assertIn("STATUS: RUN OK", output)
+            self.assertIn("DOIT: CTRL-D/R", output)
+            self.assertIn("STATUS: DOIT OK", output)
             self.assertIn("OUT> 3", output)
             self.assertIn(
                 "BUFFER=Transcript show: (1 + 2) printString.!",
@@ -581,7 +582,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 output = _read_until(process, "VIEW: INPUT", timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
-                process.stdin.write("1 + 2\x10\x04")
+                process.stdin.write("1 + 2\x10\x0f")
                 process.stdin.flush()
                 time.sleep(1.0)
                 if process.poll() is None:
@@ -638,7 +639,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 output = _read_until(process, "VIEW: INPUT", timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
-                process.stdin.write("\x18\x04")
+                process.stdin.write("\x18\x0f")
                 process.stdin.flush()
                 time.sleep(1.0)
                 if process.poll() is None:
@@ -749,7 +750,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 output = _read_until(process, "VIEW: INPUT", timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
-                process.stdin.write("\x12\x04")
+                process.stdin.write("\x04\x0f")
                 process.stdin.flush()
                 time.sleep(1.0)
                 if process.poll() is None:
@@ -766,7 +767,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     process.stdin.close()
 
             output = output.replace("\r", "")
-            self.assertIn("STATUS: RUN USE CTRL-X", output)
+            self.assertIn("STATUS: DOIT USE CTRL-X", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_interactive_input_monitor_refuses_to_print_method_source_as_a_doit(self) -> None:
@@ -803,7 +804,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 output = _read_until(process, "VIEW: INPUT", timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
-                process.stdin.write("\x10\x04")
+                process.stdin.write("\x10\x0f")
                 process.stdin.flush()
                 time.sleep(1.0)
                 if process.poll() is None:
@@ -913,7 +914,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 output = _read_until(process, "VIEW: INPUT", timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
-                process.stdin.write("\x04")
+                process.stdin.write("\x0f")
                 process.stdin.flush()
                 time.sleep(1.0)
                 if process.poll() is None:
@@ -930,7 +931,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     process.stdin.close()
 
             output = output.replace("\r", "")
-            self.assertIn("DONE: CTRL-D", output)
+            self.assertIn("CLOSE: CTRL-O", output)
             self.assertGreaterEqual(output.count("CLASS: DISPLAY"), 2)
             self.assertGreaterEqual(output.count("METHOD: NEWLINE"), 2)
             self.assertNotIn("panic:", output)
@@ -969,7 +970,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 output = _read_until(process, "VIEW: INPUT", timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
-                process.stdin.write("\x04")
+                process.stdin.write("\x0f")
                 process.stdin.flush()
                 time.sleep(1.0)
                 if process.poll() is None:
@@ -986,7 +987,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     process.stdin.close()
 
             output = output.replace("\r", "")
-            self.assertIn("DONE: CTRL-D", output)
+            self.assertIn("CLOSE: CTRL-O", output)
             self.assertGreaterEqual(output.count("PACKAGE: TOOLS"), 2)
             self.assertGreaterEqual(output.count("VIEW: SOURCE"), 2)
             self.assertNotIn("panic:", output)
@@ -1025,7 +1026,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 output = _read_until(process, "VIEW: INPUT", timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
-                process.stdin.write("\x04")
+                process.stdin.write("\x0f")
                 process.stdin.flush()
                 time.sleep(1.0)
                 if process.poll() is None:
@@ -1042,7 +1043,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     process.stdin.close()
 
             output = output.replace("\r", "")
-            self.assertIn("DONE: CTRL-D", output)
+            self.assertIn("CLOSE: CTRL-O", output)
             self.assertGreaterEqual(output.count("VIEW: INPUT"), 1)
             self.assertGreaterEqual(output.count("CLASS: DISPLAY"), 1)
             self.assertGreaterEqual(output.count("METHOD: NEWLINE"), 1)
@@ -1082,7 +1083,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 output = _read_until(process, "Display defaultForm newline.", timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
-                process.stdin.write("\x12\x18\x04")
+                process.stdin.write("\x04\x18\x0f")
                 process.stdin.flush()
                 time.sleep(1.0)
                 if process.poll() is None:
@@ -1100,7 +1101,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
 
             output = output.replace("\r", "")
             self.assertIn("Display defaultForm newline.", output)
-            self.assertIn("STATUS: RUN USE CTRL-X", output)
+            self.assertIn("STATUS: DOIT USE CTRL-X", output)
             self.assertIn("STATUS: ACCEPT OK", output)
             self.assertNotIn("panic:", output)
 
@@ -1138,7 +1139,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 output = _read_until(process, "VIEW: INPUT", timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
-                process.stdin.write("\x04")
+                process.stdin.write("\x0f")
                 process.stdin.flush()
                 time.sleep(1.0)
                 if process.poll() is None:
@@ -1155,7 +1156,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     process.stdin.close()
 
             output = output.replace("\r", "")
-            self.assertIn("DONE: CTRL-D", output)
+            self.assertIn("CLOSE: CTRL-O", output)
             self.assertGreaterEqual(output.count("VIEW: INPUT"), 1)
             self.assertGreaterEqual(output.count("PACKAGE: TOOLS"), 1)
             self.assertGreaterEqual(output.count("VIEW: SOURCE"), 1)
