@@ -1,5 +1,10 @@
 # Implementation Log
 
+## 2026-03-09 - Add Quick Run Instructions To The README
+- Extended [README.md](/Users/david/repos/recorz/README.md) with a short RV32-first quick start section so the top-level project description now also tells a new reader how to run the system.
+- Kept the instructions intentionally small and current: minimal host prerequisites, a simple `make -C /Users/david/repos/recorz/platform/qemu-riscv32 run` framebuffer boot command, and the `dev-interactive` command for the saved interactive workspace loop.
+- Added the current interactive workspace command summary to the README as well, so the first use of the framebuffer editor is self-explanatory without having to dig through implementation notes or Makefiles.
+
 ## 2026-03-09 - Add A Real Project Description To The README
 - Replaced the placeholder top-level [README.md](/Users/david/repos/recorz/README.md) with a short positive description of Recorz that matches the current direction of the project: Smalltalk/Strongtalk-inspired, live-image oriented, RV32-first, and aimed at self-hosted development on RISC-V.
 - Kept the copy intentionally brief and architectural rather than promotional fluff. The new text describes what already exists today in the repo, including QEMU framebuffer boot, live source loading, snapshots, and the in-image workspace/editor, while still pointing toward the broader platform goals.
