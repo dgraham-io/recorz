@@ -113,7 +113,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEST_RUNNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_INTERACTIVE_INPUT_MONITOR
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_EDIT_PACKAGE_NAMED
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_TEST_RUNNER
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -10571,6 +10571,25 @@ static void execute_entry_workspace_file_out_package_named(
     push(receiver);
 }
 
+static void execute_entry_workspace_edit_package_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace editPackageNamed: expects a package name string");
+    }
+    if (package_definition_for_name(arguments[0].string) == 0) {
+        machine_panic("Workspace editPackageNamed: could not resolve package");
+    }
+    workspace_remember_current_source(object, file_out_package_source_by_name(arguments[0].string));
+    workspace_remember_view(object, WORKSPACE_VIEW_PACKAGE_SOURCE, arguments[0].string);
+    workspace_run_interactive_input_monitor(object);
+    push(receiver);
+}
+
 static void execute_entry_workspace_contents(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -10905,6 +10924,39 @@ static void execute_entry_workspace_browse_method_of_class_named(
         workspace_compose_method_target_name(arguments[1].string, arguments[0].string)
     );
     workspace_render_method_browser(object, arguments[1].string, arguments[0].string, "INST");
+    push(receiver);
+}
+
+static void execute_entry_workspace_edit_method_of_class_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const struct recorz_mvp_heap_object *class_object;
+    uint8_t selector_id;
+
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace editMethod:ofClassNamed: expects a selector name string");
+    }
+    if (arguments[1].kind != RECORZ_MVP_VALUE_STRING || arguments[1].string == 0) {
+        machine_panic("Workspace editMethod:ofClassNamed: expects a class name string");
+    }
+    selector_id = source_selector_id_for_name(arguments[0].string);
+    if (selector_id == 0U) {
+        machine_panic("Workspace editMethod:ofClassNamed: selector is not declared");
+    }
+    class_object = lookup_class_by_name(arguments[1].string);
+    if (class_object == 0) {
+        machine_panic("Workspace editMethod:ofClassNamed: could not resolve class");
+    }
+    if (lookup_builtin_method_descriptor(class_object, selector_id, 0U) == 0 &&
+        lookup_builtin_method_descriptor(class_object, selector_id, 1U) == 0) {
+        machine_panic("Workspace editMethod:ofClassNamed: could not resolve method");
+    }
+    workspace_render_method_browser(object, arguments[1].string, arguments[0].string, "INST");
+    workspace_run_interactive_input_monitor(object);
     push(receiver);
 }
 

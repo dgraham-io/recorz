@@ -190,3 +190,7 @@ RecorzKernelSelector: #browseInteractiveInput order: 93
 !
 RecorzKernelSelector: #interactiveInputMonitor order: 94
 !
+RecorzKernelSelector: #editMethod:ofClassNamed: order: 95
+!
+RecorzKernelSelector: #editPackageNamed: order: 96
+!

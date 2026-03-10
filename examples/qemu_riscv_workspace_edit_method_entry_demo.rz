@@ -1,0 +1,2 @@
+Display clear.
+Workspace editMethod: 'newline' ofClassNamed: 'Display'.

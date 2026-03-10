@@ -104,3 +104,9 @@ browseInteractiveInput
 !
 interactiveInputMonitor
     <primitive: #workspaceInteractiveInputMonitor>
+!
+editMethod: selectorName ofClassNamed: className
+    <primitive: #workspaceEditMethodOfClassNamed>
+!
+editPackageNamed: packageName
+    <primitive: #workspaceEditPackageNamed>
