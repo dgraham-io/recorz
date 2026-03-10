@@ -134,14 +134,17 @@
 #define COMPILED_METHOD_OP_JUMP RECORZ_MVP_COMPILED_METHOD_OP_JUMP
 #define COMPILED_METHOD_OP_JUMP_IF_TRUE RECORZ_MVP_COMPILED_METHOD_OP_JUMP_IF_TRUE
 #define COMPILED_METHOD_OP_JUMP_IF_FALSE RECORZ_MVP_COMPILED_METHOD_OP_JUMP_IF_FALSE
+#define CURSOR_FIELD_BITS RECORZ_MVP_CURSOR_FIELD_BITS
+#define CURSOR_FIELD_HOTSPOT_X RECORZ_MVP_CURSOR_FIELD_HOTSPOT_X
+#define CURSOR_FIELD_HOTSPOT_Y RECORZ_MVP_CURSOR_FIELD_HOTSPOT_Y
 
 #define BITMAP_STORAGE_FRAMEBUFFER RECORZ_MVP_BITMAP_STORAGE_FRAMEBUFFER
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define RECORZ_MVP_TRANSFER_RULE_COPY 0U
 #define RECORZ_MVP_TRANSFER_RULE_OVER 1U
-#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEXT_SELECTION
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_BE_DISPLAY
+#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CURSOR_FACTORY
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_BE_CURSOR
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -258,6 +261,7 @@ static struct recorz_mvp_live_method_source live_method_sources[LIVE_METHOD_SOUR
 static struct recorz_mvp_live_string_literal live_string_literals[LIVE_STRING_LITERAL_LIMIT];
 static uint16_t default_form_handle = 0U;
 static uint16_t active_display_form_handle = 0U;
+static uint16_t active_cursor_handle = 0U;
 static uint16_t framebuffer_bitmap_handle = 0U;
 static uint16_t next_dynamic_method_entry_execution_id = RECORZ_MVP_METHOD_ENTRY_COUNT;
 static uint16_t dynamic_class_count = 0U;
@@ -411,6 +415,20 @@ static void form_write_code_point_with_colors(
     uint8_t code_point,
     uint32_t foreground_color,
     uint32_t background_color
+);
+static void bitblt_copy_mono_bitmap_to_form(
+    const struct recorz_mvp_heap_object *bitmap,
+    const struct recorz_mvp_heap_object *form,
+    uint32_t src_x,
+    uint32_t src_y,
+    uint32_t width,
+    uint32_t height,
+    uint32_t dest_x,
+    uint32_t dest_y,
+    uint32_t clip_x,
+    uint32_t clip_y,
+    uint32_t clip_width,
+    uint8_t apply_color
 );
 static uint32_t bitmap_storage_kind(const struct recorz_mvp_heap_object *bitmap);
 static uint32_t text_pixel_scale(void);
@@ -895,6 +913,18 @@ static const char *selector_name(uint8_t selector) {
             return "writeCodePoint:color:";
         case RECORZ_MVP_SELECTOR_TEXT_INDEX_STYLE_ON_FORM:
             return "text:index:style:onForm:";
+        case RECORZ_MVP_SELECTOR_BE_DISPLAY:
+            return "beDisplay";
+        case RECORZ_MVP_SELECTOR_CURRENT:
+            return "current";
+        case RECORZ_MVP_SELECTOR_HOTSPOT_X:
+            return "hotspotX";
+        case RECORZ_MVP_SELECTOR_HOTSPOT_Y:
+            return "hotspotY";
+        case RECORZ_MVP_SELECTOR_FROM_BITS_HOTSPOT_X_HOTSPOT_Y:
+            return "fromBits:hotspotX:hotspotY:";
+        case RECORZ_MVP_SELECTOR_BE_CURSOR:
+            return "beCursor";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -981,6 +1011,10 @@ static const char *object_kind_name(uint8_t kind) {
             return "TestRunner";
         case RECORZ_MVP_OBJECT_FONT:
             return "Font";
+        case RECORZ_MVP_OBJECT_CURSOR:
+            return "Cursor";
+        case RECORZ_MVP_OBJECT_CURSOR_FACTORY:
+            return "CursorFactory";
     }
     return "UnknownObject";
 }
@@ -4157,6 +4191,44 @@ static void workspace_draw_input_monitor_cursor(
     const struct recorz_mvp_heap_object *form,
     uint32_t column
 ) {
+    if (active_cursor_handle != 0U) {
+        const struct recorz_mvp_heap_object *cursor_object =
+            (const struct recorz_mvp_heap_object *)heap_object(active_cursor_handle);
+        const struct recorz_mvp_heap_object *cursor_bitmap = heap_object_for_value(
+            heap_get_field(cursor_object, CURSOR_FIELD_BITS)
+        );
+        uint32_t scale = text_pixel_scale();
+        uint32_t hotspot_x = (uint32_t)heap_get_field(cursor_object, CURSOR_FIELD_HOTSPOT_X).integer;
+        uint32_t hotspot_y = (uint32_t)heap_get_field(cursor_object, CURSOR_FIELD_HOTSPOT_Y).integer;
+        uint32_t cursor_left = text_left_margin() + (column * char_width());
+        uint32_t cursor_top = cursor_y;
+
+        if (cursor_left >= hotspot_x * scale) {
+            cursor_left -= hotspot_x * scale;
+        } else {
+            cursor_left = 0U;
+        }
+        if (cursor_top >= hotspot_y * scale) {
+            cursor_top -= hotspot_y * scale;
+        } else {
+            cursor_top = 0U;
+        }
+        bitblt_copy_mono_bitmap_to_form(
+            cursor_bitmap,
+            form,
+            0U,
+            0U,
+            bitmap_width(cursor_bitmap),
+            bitmap_height(cursor_bitmap),
+            cursor_left,
+            cursor_top,
+            scale,
+            text_foreground_color(),
+            0U,
+            RECORZ_MVP_TRANSFER_RULE_OVER
+        );
+        return;
+    }
     form_fill_rect_color(
         form,
         text_left_margin() + (column * char_width()),
@@ -7551,6 +7623,7 @@ static void reset_runtime_state(void) {
     live_method_source_count = 0U;
     default_form_handle = 0U;
     active_display_form_handle = 0U;
+    active_cursor_handle = 0U;
     framebuffer_bitmap_handle = 0U;
     glyph_fallback_handle = 0U;
     transcript_layout_handle = 0U;
@@ -8490,6 +8563,35 @@ static uint8_t form_can_be_display(const struct recorz_mvp_heap_object *form) {
     return (uint8_t)((uint16_t)bits_value.integer == framebuffer_bitmap_handle);
 }
 
+static const struct recorz_mvp_heap_object *cursor_bitmap_object(const struct recorz_mvp_heap_object *cursor) {
+    struct recorz_mvp_value bits_value = heap_get_field(cursor, CURSOR_FIELD_BITS);
+    const struct recorz_mvp_heap_object *bitmap;
+    uint32_t storage_kind;
+
+    if (bits_value.kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("Cursor bits must be a bitmap object");
+    }
+    bitmap = heap_object_for_value(bits_value);
+    if (bitmap->kind != RECORZ_MVP_OBJECT_BITMAP) {
+        machine_panic("Cursor bits must be a bitmap object");
+    }
+    storage_kind = bitmap_storage_kind(bitmap);
+    if (storage_kind != BITMAP_STORAGE_GLYPH_MONO && storage_kind != BITMAP_STORAGE_HEAP_MONO) {
+        machine_panic("Cursor bits must be a monochrome bitmap");
+    }
+    return bitmap;
+}
+
+static uint32_t cursor_hotspot_u32(
+    const struct recorz_mvp_heap_object *cursor,
+    uint8_t field_index,
+    const char *message
+) {
+    struct recorz_mvp_value hotspot_value = heap_get_field(cursor, field_index);
+
+    return small_integer_u32(hotspot_value, message);
+}
+
 static void initialize_roots(const struct recorz_mvp_seed *seed) {
     uint32_t glyph_index;
     uint32_t code_index;
@@ -8535,6 +8637,7 @@ static void initialize_roots(const struct recorz_mvp_seed *seed) {
 
     default_form_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_DEFAULT_FORM]);
     active_display_form_handle = default_form_handle;
+    active_cursor_handle = 0U;
     framebuffer_bitmap_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_FRAMEBUFFER_BITMAP]);
     transcript_behavior_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_BEHAVIOR]);
     transcript_layout_handle = seed_handle_at(seed, seed->root_object_indices[RECORZ_MVP_SEED_ROOT_TRANSCRIPT_LAYOUT]);
@@ -9324,6 +9427,7 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     default_form_handle = read_u16_le(blob + offset);
     offset += 2U;
     active_display_form_handle = default_form_handle;
+    active_cursor_handle = 0U;
     framebuffer_bitmap_handle = read_u16_le(blob + offset);
     offset += 2U;
     transcript_behavior_handle = read_u16_le(blob + offset);
@@ -9882,6 +9986,75 @@ static void execute_entry_form_be_display(
         machine_panic("Form beDisplay expects a framebuffer-backed form");
     }
     active_display_form_handle = heap_handle_for_object(object);
+    push(receiver);
+}
+
+static void execute_entry_cursor_factory_from_bits_hotspot_x_hotspot_y(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint16_t cursor_handle;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("Cursor fromBits:hotspotX:hotspotY: expects a bitmap");
+    }
+    if (arguments[1].kind != RECORZ_MVP_VALUE_SMALL_INTEGER ||
+        arguments[2].kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+        machine_panic("Cursor fromBits:hotspotX:hotspotY: expects small integer hotspot coordinates");
+    }
+    {
+        const struct recorz_mvp_heap_object *bitmap = heap_object_for_value(arguments[0]);
+        uint32_t storage_kind;
+
+        if (bitmap->kind != RECORZ_MVP_OBJECT_BITMAP) {
+            machine_panic("Cursor fromBits:hotspotX:hotspotY: expects a bitmap");
+        }
+        storage_kind = bitmap_storage_kind(bitmap);
+        if (storage_kind != BITMAP_STORAGE_GLYPH_MONO && storage_kind != BITMAP_STORAGE_HEAP_MONO) {
+            machine_panic("Cursor fromBits:hotspotX:hotspotY: expects a monochrome bitmap");
+        }
+    }
+    cursor_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_CURSOR);
+    heap_set_field(cursor_handle, CURSOR_FIELD_BITS, arguments[0]);
+    heap_set_field(cursor_handle, CURSOR_FIELD_HOTSPOT_X, arguments[1]);
+    heap_set_field(cursor_handle, CURSOR_FIELD_HOTSPOT_Y, arguments[2]);
+    push(object_value(cursor_handle));
+}
+
+static void execute_entry_cursor_factory_current(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    if (active_cursor_handle == 0U) {
+        push(nil_value());
+        return;
+    }
+    push(object_value(active_cursor_handle));
+}
+
+static void execute_entry_cursor_be_cursor(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    (void)cursor_bitmap_object(object);
+    (void)cursor_hotspot_u32(object, CURSOR_FIELD_HOTSPOT_X, "Cursor hotspotX must be a non-negative small integer");
+    (void)cursor_hotspot_u32(object, CURSOR_FIELD_HOTSPOT_Y, "Cursor hotspotY must be a non-negative small integer");
+    active_cursor_handle = heap_handle_for_object(object);
     push(receiver);
 }
 

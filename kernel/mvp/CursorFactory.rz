@@ -1,0 +1,11 @@
+RecorzKernelClass: #CursorFactory descriptorOrder: 33 objectKindOrder: 33 sourceBootOrder: 27 instanceVariableNames: ''
+!
+RecorzKernelBootObject: #CursorFactory family: #beforeGlyphs order: 17 class: #CursorFactory
+globalExports: 'Cursor'
+!
+fromBits: bits hotspotX: hotspotX hotspotY: hotspotY
+    <primitive: #cursorFactoryFromBitsHotspotXHotspotY>
+!
+current
+    <primitive: #cursorFactoryCurrent>
+!

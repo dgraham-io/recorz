@@ -1,0 +1,7 @@
+| cursor |
+cursor := Cursor fromBits: (Glyphs at: 88) hotspotX: 0 hotspotY: 0.
+cursor beCursor.
+(Cursor current = cursor) ifTrue: [
+    Transcript show: 'CURSOR BOUND'.
+    Transcript cr.
+].

@@ -1,0 +1,14 @@
+RecorzKernelClass: #Cursor descriptorOrder: 32 objectKindOrder: 32 sourceBootOrder: 26 instanceVariableNames: 'bits hotspotX hotspotY'
+!
+beCursor
+    <primitive: #cursorBeCursor>
+!
+bits
+    ^bits
+!
+hotspotX
+    ^hotspotX
+!
+hotspotY
+    ^hotspotY
+!

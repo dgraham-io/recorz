@@ -310,3 +310,13 @@ RecorzKernelSelector: #text:index:style:onForm: order: 153
 !
 RecorzKernelSelector: #beDisplay order: 154
 !
+RecorzKernelSelector: #current order: 155
+!
+RecorzKernelSelector: #hotspotX order: 156
+!
+RecorzKernelSelector: #hotspotY order: 157
+!
+RecorzKernelSelector: #fromBits:hotspotX:hotspotY: order: 158
+!
+RecorzKernelSelector: #beCursor order: 159
+!
