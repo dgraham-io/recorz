@@ -230,3 +230,15 @@ RecorzKernelSelector: #descent order: 113
 !
 RecorzKernelSelector: #lineHeight order: 114
 !
+RecorzKernelSelector: #foregroundColor order: 115
+!
+RecorzKernelSelector: #backgroundColor order: 116
+!
+RecorzKernelSelector: #withText: order: 117
+!
+RecorzKernelSelector: #text order: 118
+!
+RecorzKernelSelector: #style order: 119
+!
+RecorzKernelSelector: #writeStyledText: order: 120
+!

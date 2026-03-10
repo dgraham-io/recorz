@@ -65,6 +65,8 @@
 #define TEXT_LAYOUT_FIELD_PIXEL_SCALE RECORZ_MVP_TEXT_LAYOUT_FIELD_SCALE
 #define TEXT_STYLE_FIELD_BACKGROUND_COLOR RECORZ_MVP_TEXT_STYLE_FIELD_BACKGROUND_COLOR
 #define TEXT_STYLE_FIELD_FOREGROUND_COLOR RECORZ_MVP_TEXT_STYLE_FIELD_FOREGROUND_COLOR
+#define STYLED_TEXT_FIELD_TEXT RECORZ_MVP_STYLED_TEXT_FIELD_TEXT
+#define STYLED_TEXT_FIELD_STYLE RECORZ_MVP_STYLED_TEXT_FIELD_STYLE
 #define TEXT_METRICS_FIELD_CELL_WIDTH RECORZ_MVP_TEXT_METRICS_FIELD_CELL_WIDTH
 #define TEXT_METRICS_FIELD_CELL_HEIGHT RECORZ_MVP_TEXT_METRICS_FIELD_CELL_HEIGHT
 #define TEXT_METRICS_FIELD_BASELINE RECORZ_MVP_TEXT_METRICS_FIELD_BASELINE
@@ -121,8 +123,8 @@
 #define BITMAP_STORAGE_FRAMEBUFFER RECORZ_MVP_BITMAP_STORAGE_FRAMEBUFFER
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
-#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEXT_VERTICAL_METRICS
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_LINE_HEIGHT
+#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_STYLED_TEXT
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_WRITE_STYLED_TEXT
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_TEST_RUNNER
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -775,6 +777,18 @@ static const char *selector_name(uint8_t selector) {
             return "descent";
         case RECORZ_MVP_SELECTOR_LINE_HEIGHT:
             return "lineHeight";
+        case RECORZ_MVP_SELECTOR_FOREGROUND_COLOR:
+            return "foregroundColor";
+        case RECORZ_MVP_SELECTOR_BACKGROUND_COLOR:
+            return "backgroundColor";
+        case RECORZ_MVP_SELECTOR_WITH_TEXT:
+            return "withText:";
+        case RECORZ_MVP_SELECTOR_TEXT:
+            return "text";
+        case RECORZ_MVP_SELECTOR_STYLE:
+            return "style";
+        case RECORZ_MVP_SELECTOR_WRITE_STYLED_TEXT:
+            return "writeStyledText:";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -821,6 +835,8 @@ static const char *object_kind_name(uint8_t kind) {
             return "TextMetrics";
         case RECORZ_MVP_OBJECT_TEXT_VERTICAL_METRICS:
             return "TextVerticalMetrics";
+        case RECORZ_MVP_OBJECT_STYLED_TEXT:
+            return "StyledText";
         case RECORZ_MVP_OBJECT_TEXT_BEHAVIOR:
             return "TextBehavior";
         case RECORZ_MVP_OBJECT_CLASS:
@@ -7493,21 +7509,62 @@ static const struct recorz_mvp_heap_object *transcript_style_object(void) {
     return object;
 }
 
-static uint32_t transcript_style_u32(uint8_t index, const char *message) {
-    return small_integer_u32(heap_get_field(transcript_style_object(), index), message);
+static const struct recorz_mvp_heap_object *text_style_object_for_value(
+    struct recorz_mvp_value value,
+    const char *message
+) {
+    const struct recorz_mvp_heap_object *style_object;
+
+    if (value.kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic(message);
+    }
+    style_object = heap_object_for_value(value);
+    if (style_object->kind != RECORZ_MVP_OBJECT_TEXT_STYLE) {
+        machine_panic(message);
+    }
+    return style_object;
+}
+
+static uint32_t text_style_u32(
+    const struct recorz_mvp_heap_object *style_object,
+    uint8_t index,
+    const char *message
+) {
+    if (style_object->kind != RECORZ_MVP_OBJECT_TEXT_STYLE) {
+        machine_panic(message);
+    }
+    return small_integer_u32(heap_get_field(style_object, index), message);
 }
 
 static uint32_t text_background_color(void) {
-    return transcript_style_u32(
+    return text_style_u32(
+        transcript_style_object(),
         TEXT_STYLE_FIELD_BACKGROUND_COLOR,
         "text style background color is not a small integer"
     );
 }
 
 static uint32_t text_foreground_color(void) {
-    return transcript_style_u32(
+    return text_style_u32(
+        transcript_style_object(),
         TEXT_STYLE_FIELD_FOREGROUND_COLOR,
         "text style foreground color is not a small integer"
+    );
+}
+
+static uint32_t styled_text_background_color(const struct recorz_mvp_heap_object *style_object) {
+    return text_style_u32(
+        style_object,
+        TEXT_STYLE_FIELD_BACKGROUND_COLOR,
+        "styled text background color is not a small integer"
+    );
+}
+
+static uint32_t styled_text_foreground_color(const struct recorz_mvp_heap_object *style_object) {
+    return text_style_u32(
+        style_object,
+        TEXT_STYLE_FIELD_FOREGROUND_COLOR,
+        "styled text foreground color is not a small integer"
     );
 }
 
@@ -7967,7 +8024,12 @@ static void form_newline(const struct recorz_mvp_heap_object *form) {
     }
 }
 
-static void form_write_string(const struct recorz_mvp_heap_object *form, const char *text) {
+static void form_write_string_with_colors(
+    const struct recorz_mvp_heap_object *form,
+    const char *text,
+    uint32_t foreground_color,
+    uint32_t background_color
+) {
     uint32_t form_width = bitmap_width(bitmap_for_form(form));
     uint8_t capture_feedback =
         (uint8_t)(workspace_input_monitor_capture_enabled &&
@@ -7995,8 +8057,8 @@ static void form_write_string(const struct recorz_mvp_heap_object *form, const c
             cursor_x,
             cursor_y,
             text_pixel_scale(),
-            text_foreground_color(),
-            text_background_color(),
+            foreground_color,
+            background_color,
             0U
         );
         cursor_x += char_width();
@@ -8005,6 +8067,15 @@ static void form_write_string(const struct recorz_mvp_heap_object *form, const c
         }
         ++text;
     }
+}
+
+static void form_write_string(const struct recorz_mvp_heap_object *form, const char *text) {
+    form_write_string_with_colors(
+        form,
+        text,
+        text_foreground_color(),
+        text_background_color()
+    );
 }
 
 static struct recorz_mvp_value allocate_mono_bitmap_value(uint32_t width, uint32_t height) {
@@ -9325,6 +9396,61 @@ static void execute_entry_form_write_string(
     (void)arguments;
     form_write_string(object, text);
     push(receiver);
+}
+
+static void execute_entry_form_write_styled_text(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const struct recorz_mvp_heap_object *styled_text_object;
+    const struct recorz_mvp_heap_object *style_object;
+    struct recorz_mvp_value text_value;
+
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("Form writeStyledText: expects a styled text object");
+    }
+    styled_text_object = heap_object_for_value(arguments[0]);
+    if (styled_text_object->kind != RECORZ_MVP_OBJECT_STYLED_TEXT) {
+        machine_panic("Form writeStyledText: expects a styled text object");
+    }
+    text_value = heap_get_field(styled_text_object, STYLED_TEXT_FIELD_TEXT);
+    if (text_value.kind != RECORZ_MVP_VALUE_STRING || text_value.string == 0) {
+        machine_panic("StyledText text is not a string");
+    }
+    style_object = text_style_object_for_value(
+        heap_get_field(styled_text_object, STYLED_TEXT_FIELD_STYLE),
+        "StyledText style is not a text style object"
+    );
+    form_write_string_with_colors(
+        object,
+        text_value.string,
+        styled_text_foreground_color(style_object),
+        styled_text_background_color(style_object)
+    );
+    push(receiver);
+}
+
+static void execute_entry_text_style_with_text(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint16_t styled_text_handle;
+
+    (void)object;
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("TextStyle withText: expects a string");
+    }
+    (void)text_style_object_for_value(receiver, "TextStyle withText: expects a text style receiver");
+    styled_text_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_STYLED_TEXT);
+    heap_set_field(styled_text_handle, STYLED_TEXT_FIELD_TEXT, arguments[0]);
+    heap_set_field(styled_text_handle, STYLED_TEXT_FIELD_STYLE, receiver);
+    push(object_value(styled_text_handle));
 }
 
 static void execute_entry_form_newline(

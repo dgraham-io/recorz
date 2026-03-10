@@ -14,9 +14,16 @@ writeString: text
     Display defaultForm writeString: text.
     ^self
 !
+writeStyledText: styledText
+    Display defaultForm writeStyledText: styledText.
+    ^self
+!
 newline
     Display defaultForm newline.
     ^self
 !
 font
     ^Display font
+!
+style
+    ^Display style

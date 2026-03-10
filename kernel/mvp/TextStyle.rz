@@ -1,7 +1,16 @@
-RecorzKernelClass: #TextStyle descriptorOrder: 8 objectKindOrder: 9 instanceVariableNames: 'foregroundColor backgroundColor'
+RecorzKernelClass: #TextStyle descriptorOrder: 8 objectKindOrder: 9 sourceBootOrder: 19 instanceVariableNames: 'foregroundColor backgroundColor'
 !
 RecorzKernelBootObject: #TranscriptStyle family: #beforeGlyphs order: 7 class: #TextStyle
 fields: 'small:2042163 small:16249832'
 rootExports: 'transcript_style'
 !
 RecorzKernelRoot: #transcript_style object: #TranscriptStyle order: 4
+!
+foregroundColor
+    ^foregroundColor
+!
+backgroundColor
+    ^backgroundColor
+!
+withText: aString
+    <primitive: #textStyleWithText>

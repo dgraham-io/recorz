@@ -30,7 +30,7 @@ Get Recorz to the point where text rendering and the main development UI are own
 ## Phase 2 - Define The Image-Side Text Model
 - [x] Add image-visible font objects rather than relying on VM-only font decisions
 - [x] Represent glyph metrics, baseline, ascent, descent, and line height in image objects
-- [ ] Represent text style separately from raw strings
+- [x] Represent text style separately from raw strings
 - [ ] Add image-side text layout objects for line breaking, wrapping, margins, and tab handling
 - [ ] Add image-side cursor and selection model objects
 - [ ] Keep the C VM limited to primitive bitmap and input support while layout decisions move upward

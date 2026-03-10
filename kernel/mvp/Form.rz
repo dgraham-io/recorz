@@ -12,6 +12,9 @@ clear
 writeString: text
     <primitive: #formWriteString>
 !
+writeStyledText: styledText
+    <primitive: #formWriteStyledText>
+!
 newline
     <primitive: #formNewline>
 !

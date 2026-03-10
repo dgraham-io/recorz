@@ -1,0 +1,7 @@
+RecorzKernelClass: #StyledText descriptorOrder: 27 objectKindOrder: 27 sourceBootOrder: 20 instanceVariableNames: 'text style'
+!
+text
+    ^text
+!
+style
+    ^style

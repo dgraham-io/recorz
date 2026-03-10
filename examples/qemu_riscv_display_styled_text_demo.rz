@@ -1,0 +1,8 @@
+| styled |
+styled := Display style withText: 'STYLE'.
+Display writeStyledText: styled.
+Display newline.
+Transcript show: styled text.
+Transcript cr.
+Transcript show: styled style foregroundColor printString.
+Transcript cr.

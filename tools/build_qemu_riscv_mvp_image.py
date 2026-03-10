@@ -1512,6 +1512,15 @@ def compile_kernel_method_program(class_name: str, instance_variables: list[str]
                     lowered.append(encode_compiled_method_instruction("push_root", SEED_ROOT_TRANSCRIPT_FONT))
                     instruction_index += 2
                     continue
+                if (
+                    isinstance(send_site, SendSite)
+                    and not send_site.super_send
+                    and send_site.selector == "style"
+                    and send_site.argument_count == 0
+                ):
+                    lowered.append(encode_compiled_method_instruction("push_root", SEED_ROOT_TRANSCRIPT_STYLE))
+                    instruction_index += 2
+                    continue
             if binding.kind == "global":
                 global_id = GLOBAL_IDS.get(binding.name)
                 if global_id is None:
