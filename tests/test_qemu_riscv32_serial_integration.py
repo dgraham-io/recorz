@@ -33,6 +33,7 @@ WORKSPACE_BLOCK_RETURN_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image
 WORKSPACE_SELF_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_self_demo.rz"
 WORKSPACE_TEMPS_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_temps_demo.rz"
 WORKSPACE_ACCEPT_CURRENT_PACKAGE_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_accept_current_package_demo.rz"
+WORKSPACE_ACCEPT_CURRENT_CLASS_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_accept_current_class_demo.rz"
 WORKSPACE_RECOVER_LAST_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_workspace_recover_last_source_demo.rz"
 REGENERATED_KERNEL_SOURCE_BROWSER_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_regenerated_kernel_source_browser_demo.rz"
 WORKSPACE_INPUT_MONITOR_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_demo.rz"
@@ -43,6 +44,7 @@ WORKSPACE_INPUT_MONITOR_BROWSER_BRIDGE_EXAMPLE = ROOT / "examples" / "qemu_riscv
 WORKSPACE_INPUT_MONITOR_PACKAGE_BRIDGE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_package_bridge_demo.rz"
 WORKSPACE_EDIT_METHOD_ENTRY_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_method_entry_demo.rz"
 WORKSPACE_EDIT_PACKAGE_ENTRY_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_package_entry_demo.rz"
+WORKSPACE_EDIT_CURRENT_CLASS_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_current_class_demo.rz"
 WORKSPACE_EDIT_CURRENT_PACKAGE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_current_package_demo.rz"
 TEST_RUNNER_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_test_runner_demo.rz"
 METHOD_BLOCK_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_demo.rz"
@@ -1394,6 +1396,62 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("PACKAGE: TESTS", output)
             self.assertNotIn("panic:", output)
 
+    def test_workspace_edit_current_opens_the_interactive_editor_from_class_browser(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-edit-current-class-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_EDIT_CURRENT_CLASS_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "RecorzKernelClass: #Display", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("\x18\x0f")
+                process.stdin.flush()
+                time.sleep(1.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("STATUS: ACCEPT OK", output)
+            self.assertIn("CLASS: DISPLAY", output)
+            self.assertIn("VIEW: SOURCE", output)
+            self.assertNotIn("panic:", output)
+
     def test_memory_report_demo_prints_usage_within_budget(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-memory-report-") as temp_dir:
             build_dir = Path(temp_dir)
@@ -2126,6 +2184,49 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("ACC", output)
             self.assertIn("METHOD: NEWLINE", output)
             self.assertIn("NEWLINE", output)
+
+    def test_workspace_accept_current_installs_seeded_class_source_and_keeps_class_browser_context(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-accept-current-class-source-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_ACCEPT_CURRENT_CLASS_SOURCE_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertNotIn("panic:", output)
+            self.assertIn("KEDIT", output)
+            self.assertIn("CLASS: DISPLAY", output)
+            self.assertIn("VIEW: SOURCE", output)
 
     def test_workspace_evaluation_uses_workspace_as_the_receiver(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-self-source-") as temp_dir:

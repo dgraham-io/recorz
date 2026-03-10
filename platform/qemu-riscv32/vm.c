@@ -5904,6 +5904,7 @@ static uint8_t workspace_input_monitor_accept_context(
         return 0U;
     }
     if (saved_view_kind != WORKSPACE_VIEW_METHOD &&
+        saved_view_kind != WORKSPACE_VIEW_CLASS_SOURCE &&
         saved_view_kind != WORKSPACE_VIEW_CLASS_METHOD &&
         saved_view_kind != WORKSPACE_VIEW_PACKAGE_SOURCE) {
         return 0U;
@@ -6216,9 +6217,24 @@ static void workspace_accept_current_in_place(
         workspace_render_package_source_browser(object, target_name_value.string);
         return;
     }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_SOURCE) {
+        if (object->field_count <= workspace_current_target_name_field_index(object)) {
+            machine_panic("Workspace acceptCurrent is missing the current class target");
+        }
+        target_name_value = heap_get_field(object, workspace_current_target_name_field_index(object));
+        if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
+            target_name_value.string == 0 ||
+            target_name_value.string[0] == '\0') {
+            machine_panic("Workspace acceptCurrent is missing the current class target");
+        }
+        file_in_chunk_stream_source(source_value.string);
+        workspace_remember_current_source(object, file_out_class_source_by_name(target_name_value.string));
+        workspace_render_class_source_browser(object, target_name_value.string);
+        return;
+    }
     if ((uint32_t)view_kind_value.integer != WORKSPACE_VIEW_METHOD &&
         (uint32_t)view_kind_value.integer != WORKSPACE_VIEW_CLASS_METHOD) {
-        machine_panic("Workspace acceptCurrent requires a method or package source browser target");
+        machine_panic("Workspace acceptCurrent requires a method, class, or package source browser target");
     }
     class_object = workspace_target_class_for_file_in(object);
     if (class_object == 0) {
