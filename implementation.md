@@ -1,5 +1,10 @@
 # Implementation Log
 
+## 2026-03-09 - Add A Real Project Description To The README
+- Replaced the placeholder top-level [README.md](/Users/david/repos/recorz/README.md) with a short positive description of Recorz that matches the current direction of the project: Smalltalk/Strongtalk-inspired, live-image oriented, RV32-first, and aimed at self-hosted development on RISC-V.
+- Kept the copy intentionally brief and architectural rather than promotional fluff. The new text describes what already exists today in the repo, including QEMU framebuffer boot, live source loading, snapshots, and the in-image workspace/editor, while still pointing toward the broader platform goals.
+- This is a docs-only step, but it matters because the repo now has a clear front-door explanation that matches the source of truth in the architecture documents and the implementation work already underway.
+
 ## 2026-03-09 - Make Interactive Save And Resume A First-Class Dev Loop
 - Closed the remaining host-workflow gap after `Ctrl-W` by teaching the platform Makefiles how to treat an interactive save as an update to the live snapshot file instead of a serial stream the user has to harvest manually. Both [platform/qemu-riscv32/Makefile](/Users/david/repos/recorz/platform/qemu-riscv32/Makefile) and [platform/qemu-riscv64/Makefile](/Users/david/repos/recorz/platform/qemu-riscv64/Makefile) now have `continue-snapshot-interactive`, which runs QEMU with a logged stdio chardev and overwrites the input snapshot only if the session actually emits a new `recorz-snapshot-*` payload.
 - Added `dev-interactive` on both platform targets as the first real “resume my saved image and keep working” wrapper. It auto-initializes `DEV_SNAPSHOT` if needed through the existing `dev-init` flow, then boots the saved snapshot back into the interactive path. This keeps the save/resume behavior aligned with the image-owned model while making the host-side entry point much closer to a normal Smalltalk image loop.
