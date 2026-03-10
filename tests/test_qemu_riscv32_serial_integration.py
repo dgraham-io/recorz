@@ -1162,6 +1162,61 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("STATUS: ACCEPT OK", output)
             self.assertNotIn("panic:", output)
 
+    def test_workspace_interactive_input_monitor_can_save_a_recovery_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-input-monitor-recovery-save-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_EDIT_METHOD_ENTRY_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "SAVE: CTRL-W", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("\x0b")
+                process.stdin.flush()
+                time.sleep(1.0)
+                if process.poll() is None:
+                    process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("SAVE: CTRL-W/K", output)
+            self.assertIn("recorz-snapshot-begin", output)
+            self.assertIn("recorz qemu-riscv32 mvp: snapshot saved, shutting down", output)
+            self.assertNotIn("panic:", output)
+
     def test_workspace_interactive_input_monitor_can_run_current_tests(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-input-monitor-tests-") as temp_dir:
             build_dir = Path(temp_dir)
