@@ -113,7 +113,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEST_RUNNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_DEVELOPMENT_HOME
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_BROWSE_PACKAGES_INTERACTIVE
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_TEST_RUNNER
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -738,6 +738,8 @@ static const char *selector_name(uint8_t selector) {
             return "browseRegeneratedFileInSource";
         case RECORZ_MVP_SELECTOR_DEVELOPMENT_HOME:
             return "developmentHome";
+        case RECORZ_MVP_SELECTOR_BROWSE_PACKAGES_INTERACTIVE:
+            return "browsePackagesInteractive";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -4405,25 +4407,12 @@ static uint32_t workspace_package_class_count(
     return count;
 }
 
-static void workspace_render_package_list_browser(
-    const struct recorz_mvp_heap_object *workspace_object
+static uint16_t workspace_collect_sorted_packages(
+    const struct recorz_mvp_live_package_definition *sorted_packages[PACKAGE_LIMIT]
 ) {
-    const struct recorz_mvp_heap_object *form = default_form_object();
-    const struct recorz_mvp_live_package_definition *sorted_packages[PACKAGE_LIMIT];
     uint16_t package_index;
     uint16_t sorted_count = 0U;
 
-    (void)workspace_object;
-    form_clear(form);
-    form_write_string(form, "WORKSPACE");
-    form_newline(form);
-    form_write_string(form, "PACKAGES");
-    form_newline(form);
-    workspace_write_label_and_integer(form, "PACKAGES", workspace_package_count());
-    if (workspace_package_count() == 0U) {
-        workspace_write_text_line(form, "NO PACKAGES");
-        return;
-    }
     for (package_index = 0U; package_index < package_count; ++package_index) {
         uint16_t insert_index = sorted_count;
 
@@ -4437,11 +4426,80 @@ static void workspace_render_package_list_browser(
         sorted_packages[insert_index] = &live_packages[package_index];
         ++sorted_count;
     }
+    return sorted_count;
+}
+
+static void workspace_render_package_list_browser(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    const struct recorz_mvp_heap_object *form = default_form_object();
+    const struct recorz_mvp_live_package_definition *sorted_packages[PACKAGE_LIMIT];
+    uint16_t package_index;
+    uint16_t sorted_count;
+
+    (void)workspace_object;
+    form_clear(form);
+    form_write_string(form, "WORKSPACE");
+    form_newline(form);
+    form_write_string(form, "PACKAGES");
+    form_newline(form);
+    workspace_write_label_and_integer(form, "PACKAGES", workspace_package_count());
+    if (workspace_package_count() == 0U) {
+        workspace_write_text_line(form, "NO PACKAGES");
+        return;
+    }
+    sorted_count = workspace_collect_sorted_packages(sorted_packages);
     for (package_index = 0U; package_index < sorted_count; ++package_index) {
         char line[METHOD_SOURCE_LINE_LIMIT];
         uint32_t line_offset = 0U;
 
         append_text_checked(line, sizeof(line), &line_offset, sorted_packages[package_index]->package_name);
+        append_text_checked(line, sizeof(line), &line_offset, " :: ");
+        render_small_integer((int32_t)workspace_package_class_count(sorted_packages[package_index]->package_name));
+        append_text_checked(line, sizeof(line), &line_offset, print_buffer);
+        workspace_write_text_line(form, line);
+    }
+}
+
+static void workspace_render_interactive_package_list_browser(
+    const struct recorz_mvp_heap_object *workspace_object,
+    const struct recorz_mvp_live_package_definition *sorted_packages[PACKAGE_LIMIT],
+    uint16_t sorted_count,
+    uint16_t selected_index
+) {
+    const struct recorz_mvp_heap_object *form = default_form_object();
+    uint16_t package_index;
+
+    (void)workspace_object;
+    form_clear(form);
+    workspace_write_label_and_text(form, "VIEW", "PACKAGES");
+    workspace_write_label_and_integer(form, "PACKAGES", sorted_count);
+    workspace_write_label_and_text(form, "MOVE", "ARROWS CTRL-N/P");
+    workspace_write_label_and_text(form, "EDIT", "ENTER/CTRL-X");
+    workspace_write_label_and_text(form, "CLOSE", "CTRL-O/D");
+    if (sorted_count == 0U) {
+        workspace_write_text_line(form, "NO PACKAGES");
+        return;
+    }
+    if (selected_index >= sorted_count) {
+        selected_index = (uint16_t)(sorted_count - 1U);
+    }
+    for (package_index = 0U; package_index < sorted_count; ++package_index) {
+        char line[METHOD_SOURCE_LINE_LIMIT];
+        uint32_t line_offset = 0U;
+
+        append_text_checked(
+            line,
+            sizeof(line),
+            &line_offset,
+            package_index == selected_index ? "> " : "  "
+        );
+        append_text_checked(
+            line,
+            sizeof(line),
+            &line_offset,
+            sorted_packages[package_index]->package_name
+        );
         append_text_checked(line, sizeof(line), &line_offset, " :: ");
         render_small_integer((int32_t)workspace_package_class_count(sorted_packages[package_index]->package_name));
         append_text_checked(line, sizeof(line), &line_offset, print_buffer);
@@ -6549,6 +6607,161 @@ static void workspace_run_interactive_input_monitor(
         }
         workspace_insert_input_monitor_character(workspace_object, ch);
         workspace_render_input_monitor_browser(workspace_object);
+    }
+}
+
+static void workspace_edit_package_in_place(
+    const struct recorz_mvp_heap_object *workspace_object,
+    const char *package_name
+) {
+    const char *source;
+
+    if (package_name == 0 || package_name[0] == '\0') {
+        machine_panic("Workspace package editor is missing the package name");
+    }
+    if (package_definition_for_name(package_name) == 0) {
+        machine_panic("Workspace package editor could not resolve the package");
+    }
+    source = file_out_package_source_by_name(package_name);
+    workspace_remember_current_source(workspace_object, source);
+    workspace_remember_source(workspace_object, source);
+    workspace_remember_view(workspace_object, WORKSPACE_VIEW_PACKAGE_SOURCE, package_name);
+    workspace_render_package_source_browser(workspace_object, package_name);
+    workspace_run_interactive_input_monitor(workspace_object);
+}
+
+static void workspace_run_interactive_package_list_browser(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    const struct recorz_mvp_live_package_definition *sorted_packages[PACKAGE_LIMIT];
+    uint16_t sorted_count = workspace_collect_sorted_packages(sorted_packages);
+    uint16_t selected_index = 0U;
+    uint8_t saw_carriage_return = 0U;
+
+    workspace_remember_view(workspace_object, WORKSPACE_VIEW_PACKAGES, 0);
+    workspace_render_interactive_package_list_browser(
+        workspace_object,
+        sorted_packages,
+        sorted_count,
+        selected_index
+    );
+    while (1) {
+        char ch = machine_wait_getc();
+
+        if (ch == '\r') {
+            saw_carriage_return = 1U;
+            if (sorted_count != 0U) {
+                workspace_edit_package_in_place(
+                    workspace_object,
+                    sorted_packages[selected_index]->package_name
+                );
+                workspace_remember_view(workspace_object, WORKSPACE_VIEW_PACKAGES, 0);
+                workspace_render_interactive_package_list_browser(
+                    workspace_object,
+                    sorted_packages,
+                    sorted_count,
+                    selected_index
+                );
+            }
+            continue;
+        }
+        if (ch == '\n') {
+            if (saw_carriage_return) {
+                saw_carriage_return = 0U;
+                continue;
+            }
+            if (sorted_count != 0U) {
+                workspace_edit_package_in_place(
+                    workspace_object,
+                    sorted_packages[selected_index]->package_name
+                );
+                workspace_remember_view(workspace_object, WORKSPACE_VIEW_PACKAGES, 0);
+                workspace_render_interactive_package_list_browser(
+                    workspace_object,
+                    sorted_packages,
+                    sorted_count,
+                    selected_index
+                );
+            }
+            continue;
+        }
+        saw_carriage_return = 0U;
+        if (ch == 0x1b) {
+            char sequence_lead = machine_wait_getc();
+
+            if (sequence_lead == '[') {
+                char sequence_tail = machine_wait_getc();
+
+                if (sequence_tail == 'A') {
+                    if (selected_index != 0U) {
+                        --selected_index;
+                    }
+                    workspace_render_interactive_package_list_browser(
+                        workspace_object,
+                        sorted_packages,
+                        sorted_count,
+                        selected_index
+                    );
+                    continue;
+                }
+                if (sequence_tail == 'B') {
+                    if (selected_index + 1U < sorted_count) {
+                        ++selected_index;
+                    }
+                    workspace_render_interactive_package_list_browser(
+                        workspace_object,
+                        sorted_packages,
+                        sorted_count,
+                        selected_index
+                    );
+                    continue;
+                }
+            }
+            continue;
+        }
+        if (ch == 0x0e) {
+            if (selected_index + 1U < sorted_count) {
+                ++selected_index;
+            }
+            workspace_render_interactive_package_list_browser(
+                workspace_object,
+                sorted_packages,
+                sorted_count,
+                selected_index
+            );
+            continue;
+        }
+        if (ch == 0x10) {
+            if (selected_index != 0U) {
+                --selected_index;
+            }
+            workspace_render_interactive_package_list_browser(
+                workspace_object,
+                sorted_packages,
+                sorted_count,
+                selected_index
+            );
+            continue;
+        }
+        if (ch == 0x18) {
+            if (sorted_count != 0U) {
+                workspace_edit_package_in_place(
+                    workspace_object,
+                    sorted_packages[selected_index]->package_name
+                );
+                workspace_remember_view(workspace_object, WORKSPACE_VIEW_PACKAGES, 0);
+                workspace_render_interactive_package_list_browser(
+                    workspace_object,
+                    sorted_packages,
+                    sorted_count,
+                    selected_index
+                );
+            }
+            continue;
+        }
+        if (ch == 0x0f || ch == 0x04) {
+            break;
+        }
     }
 }
 
@@ -11559,7 +11772,7 @@ static const char *regenerated_file_in_source_text(void) {
 }
 
 static const char *development_home_initial_source_text(void) {
-    return "Workspace browsePackages.";
+    return "Workspace browsePackagesInteractive.";
 }
 
 static void execute_entry_kernel_installer_compiled_method_word0_word1_word2_word3_instruction_count(
@@ -12053,17 +12266,7 @@ static void execute_entry_workspace_edit_package_named(
     if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
         machine_panic("Workspace editPackageNamed: expects a package name string");
     }
-    if (package_definition_for_name(arguments[0].string) == 0) {
-        machine_panic("Workspace editPackageNamed: could not resolve package");
-    }
-    {
-        const char *source = file_out_package_source_by_name(arguments[0].string);
-
-        workspace_remember_current_source(object, source);
-        workspace_remember_source(object, source);
-    }
-    workspace_remember_view(object, WORKSPACE_VIEW_PACKAGE_SOURCE, arguments[0].string);
-    workspace_run_interactive_input_monitor(object);
+    workspace_edit_package_in_place(object, arguments[0].string);
     push(receiver);
 }
 
@@ -12256,6 +12459,18 @@ static void execute_entry_workspace_browse_packages(
     (void)text;
     workspace_remember_view(object, WORKSPACE_VIEW_PACKAGES, 0);
     workspace_render_package_list_browser(object);
+    push(receiver);
+}
+
+static void execute_entry_workspace_browse_packages_interactive(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    workspace_run_interactive_package_list_browser(object);
     push(receiver);
 }
 

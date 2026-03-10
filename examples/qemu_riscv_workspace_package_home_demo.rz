@@ -1,0 +1,8 @@
+Workspace fileIn: 'RecorzKernelPackage: ''Tools'' comment: ''Shared utilities''
+!
+RecorzKernelClass: #PackageHomeAlpha superclass: #Object package: ''Tools'' instanceVariableNames: ''''
+!
+'.
+Workspace browsePackagesInteractive.
+Transcript show: 'DONE'.
+Transcript cr.

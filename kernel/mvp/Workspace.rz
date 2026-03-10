@@ -125,3 +125,6 @@ editPackageNamed: packageName
 !
 editCurrent
     <primitive: #workspaceEditCurrent>
+!
+browsePackagesInteractive
+    <primitive: #workspaceBrowsePackagesInteractive>

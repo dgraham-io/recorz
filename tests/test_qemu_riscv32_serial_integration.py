@@ -46,6 +46,7 @@ WORKSPACE_INPUT_MONITOR_EMIT_REGENERATED_SOURCE_EXAMPLE = ROOT / "examples" / "q
 WORKSPACE_INPUT_MONITOR_REGENERATED_BOOT_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_regenerated_boot_demo.rz"
 WORKSPACE_INPUT_MONITOR_REGENERATED_KERNEL_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_regenerated_kernel_demo.rz"
 WORKSPACE_INPUT_MONITOR_REGENERATED_FILE_IN_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_regenerated_file_in_demo.rz"
+WORKSPACE_PACKAGE_HOME_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_package_home_demo.rz"
 WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE = ROOT / "examples" / "qemu_riscv_image_development_home_boot.rz"
 WORKSPACE_EDIT_METHOD_ENTRY_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_method_entry_demo.rz"
 WORKSPACE_EDIT_PACKAGE_ENTRY_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_package_entry_demo.rz"
@@ -1145,7 +1146,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 text=True,
             )
             try:
-                output = _read_until(process, "Workspace browsePackages.", timeout=8.0)
+                output = _read_until(process, "Workspace browsePackagesInteractive.", timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
                 process.stdin.write("\x0f")
@@ -1166,8 +1167,66 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
 
             output = output.replace("\r", "")
             self.assertIn("VIEW: INPUT", output)
-            self.assertIn("Workspace browsePackages.", output)
+            self.assertIn("Workspace browsePackagesInteractive.", output)
             self.assertIn("CLOSE: CTRL-O", output)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_browse_packages_interactive_can_edit_a_package_and_return(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-package-home-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_PACKAGE_HOME_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "VIEW: PACKAGES", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("\x18\x0f\x0f")
+                process.stdin.flush()
+                time.sleep(1.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertGreaterEqual(output.count("VIEW: PACKAGES"), 2)
+            self.assertIn("EDIT: ENTER/CTRL-X", output)
+            self.assertIn("VIEW: SOURCE", output)
+            self.assertIn("PACKAGE:", output)
+            self.assertIn("DONE", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_interactive_input_monitor_can_emit_regenerated_sources_and_continue(self) -> None:

@@ -204,3 +204,5 @@ RecorzKernelSelector: #browseRegeneratedFileInSource order: 100
 !
 RecorzKernelSelector: #developmentHome order: 101
 !
+RecorzKernelSelector: #browsePackagesInteractive order: 102
+!
