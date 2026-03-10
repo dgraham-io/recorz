@@ -1,0 +1,11 @@
+Display clear.
+Transcript show: 'wrap wrap wrap wrap wrap wrap wrap wrap wrap wrap wrap wrap wrap wrap'.
+Transcript cr.
+Transcript show: 'tab	stop tab	stop tab	stop'.
+Transcript cr.
+Transcript show: 'SCANNER RENDERER'.
+Transcript cr.
+(KernelInstaller objectNamed: 'CharacterScannerRendererActive') ifTrue: [
+    Transcript show: 'ACTIVE'.
+    Transcript cr.
+].

@@ -1,0 +1,40 @@
+	| scanner text nextIndex |
+scanner := (KernelInstaller classNamed: 'CharacterScanner') new.
+
+text := 'ABCD'.
+scanner scanText: text index: 1 x: 0 y: 0 style: Display style onForm: Display defaultForm right: 40 selectionBoundary: 0 cursorBoundary: 0.
+(scanner stop = 1) ifTrue: [
+    Transcript show: 'RIGHT'.
+    Transcript cr.
+].
+
+scanner scanText: Workspace contents index: 1 x: 0 y: 0 style: Display style onForm: Display defaultForm right: 1000 selectionBoundary: 0 cursorBoundary: 0.
+(scanner stop = 2) ifTrue: [
+    Transcript show: 'TAB'.
+    Transcript cr.
+].
+
+nextIndex := scanner index + 1.
+scanner scanText: Workspace contents index: nextIndex x: 0 y: 0 style: Display style onForm: Display defaultForm right: 1000 selectionBoundary: 0 cursorBoundary: 0.
+(scanner stop = 3) ifTrue: [
+    Transcript show: 'NEWLINE'.
+    Transcript cr.
+].
+
+scanner scanText: text index: 1 x: 0 y: 0 style: Display style onForm: Display defaultForm right: 1000 selectionBoundary: 2 cursorBoundary: 0.
+(scanner stop = 5) ifTrue: [
+    Transcript show: 'SELECTION'.
+    Transcript cr.
+].
+
+scanner scanText: text index: 1 x: 0 y: 0 style: Display style onForm: Display defaultForm right: 1000 selectionBoundary: 0 cursorBoundary: 2.
+(scanner stop = 6) ifTrue: [
+    Transcript show: 'CURSOR'.
+    Transcript cr.
+].
+
+scanner scanText: 'AB' index: 1 x: 0 y: 0 style: Display style onForm: Display defaultForm right: 1000 selectionBoundary: 0 cursorBoundary: 0.
+(scanner stop = 0) ifTrue: [
+    Transcript show: 'END'.
+    Transcript cr.
+].

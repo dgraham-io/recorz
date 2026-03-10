@@ -40,7 +40,7 @@
 #endif
 
 #define RECORZ_MVP_PROGRAM_LEXICAL_LIMIT 32U
-#define RECORZ_MVP_PROGRAM_LEXICAL_NAME_LIMIT 64U
+#define RECORZ_MVP_PROGRAM_LEXICAL_NAME_LIMIT 96U
 
 struct recorz_mvp_instruction {
     uint8_t opcode;

@@ -1,0 +1,16 @@
+RecorzKernelClass: #CharacterScanner descriptorOrder: 34 objectKindOrder: 34 sourceBootOrder: 28 instanceVariableNames: 'stop index x y'
+!
+scanText: text index: index x: x y: y style: style onForm: form right: right selectionBoundary: selectionBoundary cursorBoundary: cursorBoundary
+    <primitive: #characterScannerScan>
+!
+stop
+    ^stop
+!
+index
+    ^index
+!
+x
+    ^x
+!
+y
+    ^y

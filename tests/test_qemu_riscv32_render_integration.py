@@ -14,6 +14,8 @@ GLYPH_EXAMPLE = ROOT / "examples" / "qemu_riscv_source_glyph_demo.rz"
 IMAGE_SIDE_TEXT_RENDERER_EXAMPLE = ROOT / "examples" / "qemu_riscv_image_side_text_renderer_demo.rz"
 IMAGE_SIDE_FORM_WRITER_EXAMPLE = ROOT / "examples" / "qemu_riscv_image_side_form_writer_demo.rz"
 IMAGE_SIDE_FORM_WRITER_FILE_IN = ROOT / "examples" / "qemu_riscv_image_side_form_writer_file_in.rz"
+CHARACTER_SCANNER_RENDERER_EXAMPLE = ROOT / "examples" / "qemu_riscv_character_scanner_renderer_demo.rz"
+CHARACTER_SCANNER_RENDERER_FILE_IN = ROOT / "examples" / "qemu_riscv_character_scanner_renderer_file_in.rz"
 
 
 def _read_ppm(path: Path) -> tuple[int, int, bytes]:
@@ -125,6 +127,21 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         text_histogram = _region_histogram(data, width, 24, 24, 360, 140)
         self.assertGreater(text_histogram[(31, 41, 51)], 600)
         self.assertGreater(text_histogram[(247, 243, 232)], 600)
+
+    def test_character_scanner_renderer_handles_workspace_text_with_wrap_and_tabs(self) -> None:
+        qemu_log, width, height, data = self.render_example(
+            CHARACTER_SCANNER_RENDERER_EXAMPLE,
+            file_in_payload=CHARACTER_SCANNER_RENDERER_FILE_IN,
+        )
+
+        normalized_log = qemu_log.replace("\r", "")
+        self.assertIn("SCANNER RENDERER", normalized_log)
+        self.assertIn("ACTIVE", normalized_log)
+        self.assertEqual((width, height), (1024, 768))
+
+        text_histogram = _region_histogram(data, width, 24, 24, 420, 220)
+        self.assertGreater(text_histogram[(31, 41, 51)], 1800)
+        self.assertGreater(text_histogram[(247, 243, 232)], 1800)
 
 
 if __name__ == "__main__":

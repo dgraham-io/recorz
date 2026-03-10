@@ -17,7 +17,7 @@
 #define MONO_BITMAP_MAX_WIDTH 32U
 #define MONO_BITMAP_MAX_HEIGHT 64U
 #define METHOD_SOURCE_LINE_LIMIT 192U
-#define METHOD_SOURCE_NAME_LIMIT 64U
+#define METHOD_SOURCE_NAME_LIMIT 96U
 #define CLASS_COMMENT_LIMIT 128U
 #define PACKAGE_COMMENT_LIMIT CLASS_COMMENT_LIMIT
 #define METHOD_SOURCE_CHUNK_LIMIT 512U
@@ -142,14 +142,25 @@
 #define CURSOR_FIELD_BITS RECORZ_MVP_CURSOR_FIELD_BITS
 #define CURSOR_FIELD_HOTSPOT_X RECORZ_MVP_CURSOR_FIELD_HOTSPOT_X
 #define CURSOR_FIELD_HOTSPOT_Y RECORZ_MVP_CURSOR_FIELD_HOTSPOT_Y
+#define CHARACTER_SCANNER_FIELD_STOP RECORZ_MVP_CHARACTER_SCANNER_FIELD_STOP
+#define CHARACTER_SCANNER_FIELD_INDEX RECORZ_MVP_CHARACTER_SCANNER_FIELD_INDEX
+#define CHARACTER_SCANNER_FIELD_X RECORZ_MVP_CHARACTER_SCANNER_FIELD_X
+#define CHARACTER_SCANNER_FIELD_Y RECORZ_MVP_CHARACTER_SCANNER_FIELD_Y
 
 #define BITMAP_STORAGE_FRAMEBUFFER RECORZ_MVP_BITMAP_STORAGE_FRAMEBUFFER
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define RECORZ_MVP_TRANSFER_RULE_COPY 0U
 #define RECORZ_MVP_TRANSFER_RULE_OVER 1U
-#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CURSOR_FACTORY
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_MOVE_CURSOR_TO_X_Y
+#define CHARACTER_SCANNER_STOP_END_OF_RUN 0U
+#define CHARACTER_SCANNER_STOP_RIGHT_MARGIN 1U
+#define CHARACTER_SCANNER_STOP_TAB 2U
+#define CHARACTER_SCANNER_STOP_NEWLINE 3U
+#define CHARACTER_SCANNER_STOP_CONTROL 4U
+#define CHARACTER_SCANNER_STOP_SELECTION 5U
+#define CHARACTER_SCANNER_STOP_CURSOR 6U
+#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CHARACTER_SCANNER
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_Y
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #define SOURCE_EVAL_ENV_LIMIT 32U
@@ -1013,6 +1024,14 @@ static const char *selector_name(uint8_t selector) {
             return "cursorY";
         case RECORZ_MVP_SELECTOR_MOVE_CURSOR_TO_X_Y:
             return "moveCursorToX:y:";
+        case RECORZ_MVP_SELECTOR_SCAN_TEXT_INDEX_X_Y_STYLE_ON_FORM_RIGHT_SELECTION_BOUNDARY_CURSOR_BOUNDARY:
+            return "scanText:index:x:y:style:onForm:right:selectionBoundary:cursorBoundary:";
+        case RECORZ_MVP_SELECTOR_STOP:
+            return "stop";
+        case RECORZ_MVP_SELECTOR_X:
+            return "x";
+        case RECORZ_MVP_SELECTOR_Y:
+            return "y";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -1103,6 +1122,8 @@ static const char *object_kind_name(uint8_t kind) {
             return "Cursor";
         case RECORZ_MVP_OBJECT_CURSOR_FACTORY:
             return "CursorFactory";
+        case RECORZ_MVP_OBJECT_CHARACTER_SCANNER:
+            return "CharacterScanner";
     }
     return "UnknownObject";
 }
@@ -2215,6 +2236,99 @@ static int16_t source_allocate_home_context(
     }
     machine_panic("source home context pool overflow");
     return -1;
+}
+
+static uint8_t source_block_state_references_home_context(int16_t home_context_index) {
+    uint16_t state_index;
+
+    for (state_index = 0U; state_index < SOURCE_EVAL_BLOCK_STATE_LIMIT; ++state_index) {
+        if (source_eval_block_states[state_index].in_use &&
+            source_eval_block_states[state_index].home_context_index == home_context_index) {
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
+static uint8_t source_block_state_references_lexical_environment(int16_t lexical_environment_index) {
+    uint16_t state_index;
+
+    for (state_index = 0U; state_index < SOURCE_EVAL_BLOCK_STATE_LIMIT; ++state_index) {
+        if (source_eval_block_states[state_index].in_use &&
+            source_eval_block_states[state_index].lexical_environment_index == lexical_environment_index) {
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
+static uint8_t source_home_context_references_lexical_environment(int16_t lexical_environment_index) {
+    uint16_t home_index;
+
+    for (home_index = 0U; home_index < SOURCE_EVAL_HOME_CONTEXT_LIMIT; ++home_index) {
+        if (source_eval_home_contexts[home_index].in_use &&
+            source_eval_home_contexts[home_index].lexical_environment_index == lexical_environment_index) {
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
+static uint8_t source_child_environment_references_parent(int16_t lexical_environment_index) {
+    uint16_t env_index;
+
+    for (env_index = 0U; env_index < SOURCE_EVAL_ENV_LIMIT; ++env_index) {
+        if (source_eval_environments[env_index].in_use &&
+            source_eval_environments[env_index].parent_index == lexical_environment_index) {
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
+static void source_release_home_context_if_unused(int16_t home_context_index) {
+    struct recorz_mvp_source_home_context *home_context;
+
+    if (home_context_index < 0 ||
+        home_context_index >= (int16_t)SOURCE_EVAL_HOME_CONTEXT_LIMIT ||
+        !source_eval_home_contexts[home_context_index].in_use) {
+        return;
+    }
+    home_context = &source_eval_home_contexts[home_context_index];
+    if (home_context->alive || source_block_state_references_home_context(home_context_index)) {
+        return;
+    }
+    home_context->in_use = 0U;
+    home_context->alive = 0U;
+    home_context->defining_class = 0;
+    home_context->receiver = nil_value();
+    home_context->lexical_environment_index = -1;
+    home_context->context_handle = 0U;
+}
+
+static void source_release_lexical_environment_chain_if_unused(int16_t lexical_environment_index) {
+    while (lexical_environment_index >= 0 &&
+           lexical_environment_index < (int16_t)SOURCE_EVAL_ENV_LIMIT &&
+           source_eval_environments[lexical_environment_index].in_use) {
+        struct recorz_mvp_source_lexical_environment *environment =
+            &source_eval_environments[lexical_environment_index];
+        int16_t parent_index = environment->parent_index;
+        uint16_t binding_index;
+
+        if (source_block_state_references_lexical_environment(lexical_environment_index) ||
+            source_home_context_references_lexical_environment(lexical_environment_index) ||
+            source_child_environment_references_parent(lexical_environment_index)) {
+            return;
+        }
+        environment->in_use = 0U;
+        environment->binding_count = 0U;
+        environment->parent_index = -1;
+        for (binding_index = 0U; binding_index < SOURCE_EVAL_BINDING_LIMIT; ++binding_index) {
+            environment->bindings[binding_index].name[0] = '\0';
+            environment->bindings[binding_index].value = nil_value();
+        }
+        lexical_environment_index = parent_index;
+    }
 }
 
 static uint16_t allocate_source_context_object(
@@ -9190,6 +9304,57 @@ static void form_write_string(const struct recorz_mvp_heap_object *form, const c
     );
 }
 
+static void character_scanner_set_state(
+    const struct recorz_mvp_heap_object *scanner,
+    uint32_t stop_reason,
+    uint32_t text_index,
+    uint32_t x,
+    uint32_t y
+) {
+    uint16_t scanner_handle = heap_handle_for_object(scanner);
+
+    heap_set_field(scanner_handle, CHARACTER_SCANNER_FIELD_STOP, small_integer_value((int32_t)stop_reason));
+    heap_set_field(scanner_handle, CHARACTER_SCANNER_FIELD_INDEX, small_integer_value((int32_t)text_index));
+    heap_set_field(scanner_handle, CHARACTER_SCANNER_FIELD_X, small_integer_value((int32_t)x));
+    heap_set_field(scanner_handle, CHARACTER_SCANNER_FIELD_Y, small_integer_value((int32_t)y));
+}
+
+static void form_draw_code_point_at_with_colors(
+    const struct recorz_mvp_heap_object *form,
+    uint8_t code_point,
+    uint32_t x,
+    uint32_t y,
+    uint32_t foreground_color,
+    uint32_t background_color
+) {
+    uint8_t echo_serial = (uint8_t)(bitmap_storage_kind(bitmap_for_form(form)) == BITMAP_STORAGE_FRAMEBUFFER);
+    uint8_t capture_feedback =
+        (uint8_t)(workspace_input_monitor_capture_enabled &&
+                  heap_handle_for_object(form) == active_display_form_handle);
+    const struct recorz_mvp_heap_object *glyph_bitmap = glyph_bitmap_for_char((char)code_point);
+
+    bitblt_copy_mono_bitmap_to_form(
+        glyph_bitmap,
+        form,
+        0U,
+        0U,
+        bitmap_width(glyph_bitmap),
+        bitmap_height(glyph_bitmap),
+        x,
+        y,
+        text_pixel_scale(),
+        foreground_color,
+        background_color,
+        RECORZ_MVP_TRANSFER_RULE_COPY
+    );
+    if (echo_serial) {
+        machine_putc((char)code_point);
+    }
+    if (capture_feedback) {
+        workspace_input_monitor_feedback_append_char((char)code_point);
+    }
+}
+
 static struct recorz_mvp_value allocate_mono_bitmap_value(uint32_t width, uint32_t height) {
     uint16_t bitmap_handle;
     uint16_t storage_id;
@@ -11146,6 +11311,103 @@ static void execute_entry_cursor_be_cursor(
     push(receiver);
 }
 
+static void execute_entry_character_scanner_scan(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const struct recorz_mvp_heap_object *form;
+    const struct recorz_mvp_heap_object *style_object;
+    const char *source_text;
+    uint32_t source_length;
+    uint32_t text_index;
+    uint32_t x;
+    uint32_t y;
+    uint32_t right_margin;
+    uint32_t selection_boundary;
+    uint32_t cursor_boundary;
+    uint32_t foreground_color;
+    uint32_t background_color;
+
+    (void)receiver;
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_CHARACTER_SCANNER) {
+        machine_panic("CharacterScanner scan expects a character scanner receiver");
+    }
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("CharacterScanner scan expects a string");
+    }
+    if (arguments[5].kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("CharacterScanner scan expects a form");
+    }
+    source_text = arguments[0].string;
+    source_length = text_length(source_text);
+    text_index = small_integer_u32(arguments[1], "CharacterScanner scan index must be a positive small integer");
+    if (text_index == 0U) {
+        machine_panic("CharacterScanner scan index must be one-based");
+    }
+    x = small_integer_u32(arguments[2], "CharacterScanner scan x must be a non-negative small integer");
+    y = small_integer_u32(arguments[3], "CharacterScanner scan y must be a non-negative small integer");
+    style_object = text_style_object_for_value(arguments[4], "CharacterScanner scan expects a text style");
+    form = heap_object_for_value(arguments[5]);
+    if (form->kind != RECORZ_MVP_OBJECT_FORM) {
+        machine_panic("CharacterScanner scan expects a form");
+    }
+    right_margin = small_integer_u32(arguments[6], "CharacterScanner scan right margin must be a non-negative small integer");
+    selection_boundary = small_integer_u32(
+        arguments[7],
+        "CharacterScanner scan selectionBoundary must be a non-negative small integer"
+    );
+    cursor_boundary = small_integer_u32(
+        arguments[8],
+        "CharacterScanner scan cursorBoundary must be a non-negative small integer"
+    );
+    foreground_color = styled_text_foreground_color(style_object);
+    background_color = styled_text_background_color(style_object);
+
+    while (text_index <= source_length) {
+        uint8_t code_point = (uint8_t)source_text[text_index - 1U];
+
+        if (selection_boundary != 0U && text_index == selection_boundary) {
+            character_scanner_set_state(object, CHARACTER_SCANNER_STOP_SELECTION, text_index, x, y);
+            push(receiver);
+            return;
+        }
+        if (cursor_boundary != 0U && text_index == cursor_boundary) {
+            character_scanner_set_state(object, CHARACTER_SCANNER_STOP_CURSOR, text_index, x, y);
+            push(receiver);
+            return;
+        }
+        if (code_point == (uint8_t)'\t') {
+            character_scanner_set_state(object, CHARACTER_SCANNER_STOP_TAB, text_index, x, y);
+            push(receiver);
+            return;
+        }
+        if (code_point == (uint8_t)'\n') {
+            character_scanner_set_state(object, CHARACTER_SCANNER_STOP_NEWLINE, text_index, x, y);
+            push(receiver);
+            return;
+        }
+        if (code_point < 32U) {
+            character_scanner_set_state(object, CHARACTER_SCANNER_STOP_CONTROL, text_index, x, y);
+            push(receiver);
+            return;
+        }
+        if (right_margin != 0U && x + char_width() > right_margin) {
+            character_scanner_set_state(object, CHARACTER_SCANNER_STOP_RIGHT_MARGIN, text_index, x, y);
+            push(receiver);
+            return;
+        }
+        form_draw_code_point_at_with_colors(form, code_point, x, y, foreground_color, background_color);
+        x += char_width();
+        text_index += 1U;
+    }
+
+    character_scanner_set_state(object, CHARACTER_SCANNER_STOP_END_OF_RUN, text_index, x, y);
+    push(receiver);
+}
+
 static void execute_entry_class_new(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -11153,6 +11415,7 @@ static void execute_entry_class_new(
     const char *text
 ) {
     uint16_t instance_handle;
+    uint8_t instance_kind;
     uint8_t field_count;
     uint8_t field_index;
 
@@ -11162,7 +11425,8 @@ static void execute_entry_class_new(
     if (object->kind != RECORZ_MVP_OBJECT_CLASS) {
         machine_panic("Class new expects a class receiver");
     }
-    instance_handle = heap_allocate(RECORZ_MVP_OBJECT_OBJECT);
+    instance_kind = (uint8_t)class_instance_kind(object);
+    instance_handle = heap_allocate(instance_kind);
     heap_set_class(instance_handle, heap_handle_for_object(object));
     field_count = live_instance_field_count_for_class(object);
     for (field_index = 0U; field_index < field_count; ++field_index) {
@@ -12734,6 +12998,7 @@ static struct recorz_mvp_source_eval_result source_execute_block_closure(
             machine_panic("block attempted a non-local return to a dead home context");
         }
     }
+    source_release_lexical_environment_chain_if_unused(lexical_environment_index);
     return result;
 }
 
@@ -12861,6 +13126,8 @@ static void execute_live_source_method_with_sender(
     result = source_evaluate_statement_sequence(&context, body_cursor, 0U);
     source_home_context_at(home_context_index)->alive = 0U;
     heap_set_field(context.current_context_handle, CONTEXT_FIELD_ALIVE, boolean_value(0U));
+    source_release_home_context_if_unused(home_context_index);
+    source_release_lexical_environment_chain_if_unused(lexical_environment_index);
     push(result.value);
 }
 
@@ -16180,6 +16447,7 @@ static void execute_executable(
                             machine_panic("block non-local return crossed an unsupported executable boundary");
                         }
                         push(source_result.value);
+                        source_release_lexical_environment_chain_if_unused(shared_lexical_environment_index);
                         return;
                     }
                     activation_push(activation_stack, &activation_stack_size, source_result.value);
@@ -16222,6 +16490,7 @@ static void execute_executable(
                             machine_panic("block non-local return crossed an unsupported executable boundary");
                         }
                         push(source_result.value);
+                        source_release_lexical_environment_chain_if_unused(shared_lexical_environment_index);
                         return;
                     }
                     activation_push(activation_stack, &activation_stack_size, source_result.value);
@@ -16243,9 +16512,11 @@ static void execute_executable(
                     machine_panic("returnTop stack underflow");
                 }
                 push(activation_peek(activation_stack, activation_stack_size));
+                source_release_lexical_environment_chain_if_unused(shared_lexical_environment_index);
                 return;
             case RECORZ_MVP_OP_RETURN_RECEIVER:
                 push(receiver);
+                source_release_lexical_environment_chain_if_unused(shared_lexical_environment_index);
                 return;
             default:
                 machine_panic("unknown opcode in MVP VM");
@@ -16288,6 +16559,7 @@ static struct recorz_mvp_value workspace_evaluate_source(const char *source) {
     execute_executable(&executable, workspace_receiver_object, workspace_receiver, 0U, 0, context_handle);
     source_home_context_at(home_context_index)->alive = 0U;
     mark_context_dead(context_handle);
+    source_release_home_context_if_unused(home_context_index);
     if (stack_size != stack_size_before + 1U) {
         machine_panic("Workspace source execution did not return exactly one value");
     }
@@ -16913,6 +17185,7 @@ void recorz_mvp_vm_run(
     execute_executable(&executable, top_level_receiver_object, top_level_receiver, 0U, 0, context_handle);
     source_home_context_at(home_context_index)->alive = 0U;
     mark_context_dead(context_handle);
+    source_release_home_context_if_unused(home_context_index);
     panic_phase = "return";
     machine_set_panic_hook(0);
 }

@@ -16,7 +16,7 @@ Reference:
 - [ ] `BitBlt>>copyBits`-class primitive path for bitmap copy, fill, clipping, and monochrome/color transfer
 - [x] `Form>>beDisplay`-class primitive path to bind a `Form` to the real framebuffer
 - [x] `Cursor>>beCursor`-class primitive path to install a cursor image
-- [ ] `CharacterScanner`-class text scan primitive for glyph placement and stop conditions
+- [x] `CharacterScanner`-class text scan primitive for glyph placement and stop conditions
 - [ ] line/shape primitive support comparable to `drawLoop` / line drawing support where useful
 - [ ] keyboard and serial event delivery as raw input primitives, not UI policy
 - [ ] snapshot/load/save and boot glue kept below the image
@@ -55,12 +55,12 @@ Reference:
 - [x] Keep the existing framebuffer bootstrap working while this surface is introduced
 
 ## Phase 3 - Build The Text Scan Primitive
-- [ ] Add a `scanCharacters`-class primitive suitable for an image-side `CharacterScanner` / `TextScanner`
-- [ ] Define stop conditions for:
+- [x] Add a `scanCharacters`-class primitive suitable for an image-side `CharacterScanner` / `TextScanner`
+- [x] Define stop conditions for:
   end of run, right margin, tab, newline, control character, and optional selection/cursor boundaries
-- [ ] Return enough placement state from the scan primitive to let image code own wrapping and composition
-- [ ] Keep the primitive low-level: scan/advance only, not editor policy
-- [ ] Prove the primitive can render the current transcript/workspace text with image-owned scanner code
+- [x] Return enough placement state from the scan primitive to let image code own wrapping and composition
+- [x] Keep the primitive low-level: scan/advance only, not editor policy
+- [x] Prove the primitive can render the current transcript/workspace text with image-owned scanner code
 
 ## Phase 4 - Move Text Layout And Composition Into The Image
 - [ ] Replace VM-owned margin, wrap, tab, and line-height policy with image-owned text composition objects
@@ -125,7 +125,7 @@ Reference:
 - [ ] Add a temporary transcript/browser demo built directly on `beDisplay` + `copyBits` + image-side scanner code
 - [ ] Measure 12-point primary and 16-point comfort-mode text density on 1024x768 and current QEMU targets
 - [x] Add a simple cursor-form proof using `beCursor`
-- [ ] Add a simple scanner proof that stops at wrap margin and tab/newline boundaries
+- [x] Add a simple scanner proof that stops at wrap margin and tab/newline boundaries
 - [ ] Evaluate whether the first native UI should stay Smalltalk-pane-like or move toward a declarative surface after the primitive layer is proven
 
 ## Milestones To Watch

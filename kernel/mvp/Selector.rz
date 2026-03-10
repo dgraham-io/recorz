@@ -332,3 +332,11 @@ RecorzKernelSelector: #cursorY order: 164
 !
 RecorzKernelSelector: #moveCursorToX:y: order: 165
 !
+RecorzKernelSelector: #scanText:index:x:y:style:onForm:right:selectionBoundary:cursorBoundary: order: 166
+!
+RecorzKernelSelector: #stop order: 167
+!
+RecorzKernelSelector: #x order: 168
+!
+RecorzKernelSelector: #y order: 169
+!

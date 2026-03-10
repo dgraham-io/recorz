@@ -337,6 +337,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "Bitmap.rz",
                 "BitmapFactory.rz",
                 "Class.rz",
+                "CharacterScanner.rz",
                 "Context.rz",
                 "Cursor.rz",
                 "CursorFactory.rz",
@@ -862,6 +863,13 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_CURSOR_X", 164),
                 ("RECORZ_MVP_SELECTOR_CURSOR_Y", 165),
                 ("RECORZ_MVP_SELECTOR_MOVE_CURSOR_TO_X_Y", 166),
+                (
+                    "RECORZ_MVP_SELECTOR_SCAN_TEXT_INDEX_X_Y_STYLE_ON_FORM_RIGHT_SELECTION_BOUNDARY_CURSOR_BOUNDARY",
+                    167,
+                ),
+                ("RECORZ_MVP_SELECTOR_STOP", 168),
+                ("RECORZ_MVP_SELECTOR_X", 169),
+                ("RECORZ_MVP_SELECTOR_Y", 170),
             ],
         )
 
@@ -878,7 +886,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.OBJECT_KIND_SPECS[0], ("Transcript", "RECORZ_MVP_OBJECT_TRANSCRIPT"))
         self.assertEqual(
             mvp.OBJECT_KIND_SPECS[-1],
-            ("CursorFactory", "RECORZ_MVP_OBJECT_CURSOR_FACTORY"),
+            ("CharacterScanner", "RECORZ_MVP_OBJECT_CHARACTER_SCANNER"),
         )
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_IN_DESCRIPTOR_ORDER[0],
@@ -921,11 +929,12 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "TextSelection",
                 "Cursor",
                 "CursorFactory",
+                "CharacterScanner",
             ],
         )
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_IN_DESCRIPTOR_ORDER[-1],
-            mvp.KernelClassHeader("CursorFactory", 33, 33, 27, ()),
+            mvp.KernelClassHeader("CharacterScanner", 34, 34, 28, ("stop", "index", "x", "y")),
         )
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_BY_NAME["Class"],
@@ -984,10 +993,14 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             mvp.KERNEL_CLASS_HEADERS_BY_NAME["CursorFactory"],
             mvp.KernelClassHeader("CursorFactory", 33, 33, 27, ()),
         )
+        self.assertEqual(
+            mvp.KERNEL_CLASS_HEADERS_BY_NAME["CharacterScanner"],
+            mvp.KernelClassHeader("CharacterScanner", 34, 34, 28, ("stop", "index", "x", "y")),
+        )
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["BitBlt"], mvp.SEED_OBJECT_BITBLT)
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["CompiledMethod"], mvp.SEED_OBJECT_COMPILED_METHOD)
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["KernelInstaller"], mvp.SEED_OBJECT_KERNEL_INSTALLER)
-        self.assertEqual(mvp.OBJECT_KIND_DEFINITIONS[-1], ("RECORZ_MVP_OBJECT_CURSOR_FACTORY", 34))
+        self.assertEqual(mvp.OBJECT_KIND_DEFINITIONS[-1], ("RECORZ_MVP_OBJECT_CHARACTER_SCANNER", 35))
         self.assertEqual(mvp.CLASS_FIELD_METHOD_START, mvp.kernel_instance_variable_index("Class", "methodStart"))
         self.assertEqual(mvp.METHOD_FIELD_ENTRY, mvp.kernel_instance_variable_index("MethodDescriptor", "entry"))
         self.assertEqual(
@@ -1113,6 +1126,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "TextSelection",
                 "Cursor",
                 "CursorFactory",
+                "CharacterScanner",
             ],
         )
         self.assertEqual(
@@ -1139,8 +1153,16 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            mvp.METHOD_ENTRY_ORDER[-27:],
+            mvp.METHOD_ENTRY_ORDER[-40:],
             [
+                "RECORZ_MVP_METHOD_ENTRY_TEXT_STYLE_BACKGROUND_COLOR",
+                "RECORZ_MVP_METHOD_ENTRY_TEXT_STYLE_WITH_TEXT",
+                "RECORZ_MVP_METHOD_ENTRY_STYLED_TEXT_TEXT",
+                "RECORZ_MVP_METHOD_ENTRY_STYLED_TEXT_STYLE",
+                "RECORZ_MVP_METHOD_ENTRY_TEXT_LAYOUT_MARGINS",
+                "RECORZ_MVP_METHOD_ENTRY_TEXT_LAYOUT_SCALE",
+                "RECORZ_MVP_METHOD_ENTRY_TEXT_LAYOUT_LINE_SPACING",
+                "RECORZ_MVP_METHOD_ENTRY_TEXT_LAYOUT_FLOW",
                 "RECORZ_MVP_METHOD_ENTRY_TEXT_MARGINS_LEFT",
                 "RECORZ_MVP_METHOD_ENTRY_TEXT_MARGINS_TOP",
                 "RECORZ_MVP_METHOD_ENTRY_TEXT_MARGINS_RIGHT",
@@ -1168,6 +1190,11 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "RECORZ_MVP_METHOD_ENTRY_CURSOR_FACTORY_CURSOR_X",
                 "RECORZ_MVP_METHOD_ENTRY_CURSOR_FACTORY_CURSOR_Y",
                 "RECORZ_MVP_METHOD_ENTRY_CURSOR_FACTORY_MOVE_CURSOR_TO_X_Y",
+                "RECORZ_MVP_METHOD_ENTRY_CHARACTER_SCANNER_SCAN_TEXT_INDEX_X_Y_STYLE_ON_FORM_RIGHT_SELECTION_BOUNDARY_CURSOR_BOUNDARY",
+                "RECORZ_MVP_METHOD_ENTRY_CHARACTER_SCANNER_STOP",
+                "RECORZ_MVP_METHOD_ENTRY_CHARACTER_SCANNER_INDEX",
+                "RECORZ_MVP_METHOD_ENTRY_CHARACTER_SCANNER_X",
+                "RECORZ_MVP_METHOD_ENTRY_CHARACTER_SCANNER_Y",
             ],
         )
 
@@ -1564,6 +1591,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "TextSelection",
                 "Cursor",
                 "CursorFactory",
+                "CharacterScanner",
             ],
         )
         self.assertEqual(
@@ -1838,7 +1866,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertIsNone(mvp.validate_dynamic_seed_build_step_specs())
         layout = mvp.build_seed_layout(140, mvp.CLASS_DESCRIPTOR_KIND_ORDER)
-        self.assertEqual(layout["class_descriptors"], mvp.SeedLayoutSection(140, 34))
+        self.assertEqual(layout["class_descriptors"], mvp.SeedLayoutSection(140, 35))
         self.assertEqual(
             layout["selectors"],
             mvp.SeedLayoutSection(140 + len(mvp.CLASS_DESCRIPTOR_KIND_ORDER), len(mvp.SELECTOR_VALUE_ORDER)),
@@ -1876,7 +1904,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         seed_objects, _seed_object_indices_by_name, _glyph_object_indices = mvp.build_fixed_boot_seed_objects()
         dynamic_sections = mvp.build_dynamic_seed_sections(seed_objects)
 
-        self.assertEqual(dynamic_sections.seed_layout["class_descriptors"], mvp.SeedLayoutSection(152, 34))
+        self.assertEqual(dynamic_sections.seed_layout["class_descriptors"], mvp.SeedLayoutSection(152, 35))
         self.assertEqual(dynamic_sections.class_indices[mvp.SEED_OBJECT_TRANSCRIPT], 153)
         self.assertEqual(dynamic_sections.class_indices[mvp.SEED_OBJECT_COMPILED_METHOD], 168)
         self.assertEqual(dynamic_sections.class_indices[mvp.SEED_OBJECT_KERNEL_INSTALLER], 169)
@@ -1892,9 +1920,9 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "selectors",
             ],
         )
-        self.assertEqual(len(dynamic_sections.class_seed_objects), 34)
+        self.assertEqual(len(dynamic_sections.class_seed_objects), 35)
         self.assertEqual(len(dynamic_sections.selector_seed_objects), len(mvp.SELECTOR_VALUE_ORDER))
-        self.assertEqual(len(dynamic_sections.compiled_method_seed_objects), 66)
+        self.assertEqual(len(dynamic_sections.compiled_method_seed_objects), 70)
         self.assertEqual(len(dynamic_sections.method_entry_seed_objects), len(mvp.METHOD_ENTRY_ORDER))
         self.assertEqual(len(dynamic_sections.method_seed_objects), len(mvp.METHOD_ENTRY_ORDER))
         self.assertEqual(
@@ -2137,6 +2165,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             "RECORZ_MVP_OBJECT_FONT",
             "RECORZ_MVP_OBJECT_CURSOR",
             "RECORZ_MVP_OBJECT_CURSOR_FACTORY",
+            "RECORZ_MVP_OBJECT_CHARACTER_SCANNER",
         ):
             self.assertIn(f"{symbol} = {mvp.OBJECT_KIND_VALUES[symbol]},", header)
         self.assertIn("enum recorz_mvp_seed_field_kind {", header)
@@ -2167,6 +2196,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertIn("enum recorz_mvp_primitive_binding {", header)
         for symbol in (
             "bitbltFillFormColor",
+            "characterScannerScan",
             "formBeDisplay",
             "formNewline",
             "classNew",
