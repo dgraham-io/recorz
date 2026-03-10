@@ -42,6 +42,7 @@ WORKSPACE_INPUT_MONITOR_ACCEPT_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspa
 WORKSPACE_INPUT_MONITOR_RUN_TESTS_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_run_tests_demo.rz"
 WORKSPACE_INPUT_MONITOR_BROWSER_BRIDGE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_browser_bridge_demo.rz"
 WORKSPACE_INPUT_MONITOR_PACKAGE_BRIDGE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_package_bridge_demo.rz"
+WORKSPACE_INPUT_MONITOR_EMIT_REGENERATED_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_emit_regenerated_source_demo.rz"
 WORKSPACE_INPUT_MONITOR_REGENERATED_BOOT_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_regenerated_boot_demo.rz"
 WORKSPACE_INPUT_MONITOR_REGENERATED_KERNEL_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_regenerated_kernel_demo.rz"
 WORKSPACE_EDIT_METHOD_ENTRY_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_method_entry_demo.rz"
@@ -116,6 +117,32 @@ def _read_until(process: subprocess.Popen[str], marker: str, *, timeout: float) 
     if marker not in output:
         raise AssertionError(f"did not observe {marker!r}\ncurrent output:\n{output}")
     return output
+
+
+def _read_until_bytes(process: subprocess.Popen[bytes], marker: bytes, *, timeout: float) -> str:
+    if process.stdout is None:
+        raise AssertionError("QEMU process stdout is not available")
+
+    output = b""
+    deadline = time.monotonic() + timeout
+    while marker not in output:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise AssertionError(
+                f"timed out waiting for {marker!r}\ncurrent output:\n{output.decode('utf-8', errors='replace')}"
+            )
+        ready, _, _ = select.select([process.stdout], [], [], remaining)
+        if not ready:
+            continue
+        chunk = os.read(process.stdout.fileno(), 4096)
+        if chunk == b"":
+            break
+        output += chunk
+    if marker not in output:
+        raise AssertionError(
+            f"did not observe {marker!r}\ncurrent output:\n{output.decode('utf-8', errors='replace')}"
+        )
+    return output.decode("utf-8", errors="replace")
 
 
 def _read_file_until(path: Path, marker: str, *, timeout: float) -> str:
@@ -1014,6 +1041,67 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("CLOSE: CTRL-O/D", output)
             self.assertIn("WORKSPACE FILEIN:", output)
             self.assertIn("SAVE: CTRL-W/K REGEN:G/L", output)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_interactive_input_monitor_can_emit_regenerated_sources_and_continue(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-input-monitor-emit-regen-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_INPUT_MONITOR_EMIT_REGENERATED_SOURCE_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            try:
+                output = _read_until_bytes(process, b"EMIT: CTRL-U", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write(b"\x15")
+                process.stdin.write(b"\x07")
+                process.stdin.flush()
+                output += _read_until_bytes(process, b"SOURCE: KERNEL", timeout=50.0)
+                process.stdin.write(b"\x0f")
+                process.stdin.flush()
+                time.sleep(1.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += (process.stdout.read() or b"").decode("utf-8", errors="replace")
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("EMIT: CTRL-U", output)
+            self.assertIn("recorz-regenerated-kernel-source-begin", output)
+            self.assertIn("recorz-regenerated-kernel-source-end", output)
+            self.assertIn("recorz-regenerated-boot-source-begin", output)
+            self.assertIn("recorz-regenerated-boot-source-end", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_interactive_input_monitor_closes_back_to_method_browser_context(self) -> None:

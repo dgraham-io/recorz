@@ -408,6 +408,8 @@ static const char *file_out_class_source_text(const char *class_name, char buffe
 static const char *file_out_class_source_by_name(const char *class_name);
 static const char *file_out_package_source_text(const char *package_name, char buffer[], uint32_t buffer_size);
 static const char *file_out_package_source_by_name(const char *package_name);
+static void emit_regenerated_boot_source(const struct recorz_mvp_heap_object *workspace_object);
+static void emit_regenerated_kernel_source(void);
 static const char *regenerated_boot_source_text(const struct recorz_mvp_heap_object *workspace_object);
 static const char *regenerated_kernel_source_text(void);
 static int compare_source_names(const char *left, const char *right);
@@ -5473,6 +5475,7 @@ static void workspace_render_input_monitor_browser(
     workspace_write_label_and_text(form, "DOIT", "CTRL-D/R");
     workspace_write_label_and_text(form, "REVERT", "CTRL-Y");
     workspace_write_label_and_text(form, "TESTS", "CTRL-T");
+    workspace_write_label_and_text(form, "EMIT", "CTRL-U");
     workspace_write_label_and_text(form, "SAVE", "CTRL-W/K REGEN:G/L");
     workspace_write_label_and_text(form, "CLOSE", "CTRL-O");
     workspace_write_label_and_text(form, "ACCEPT", "CTRL-X");
@@ -6777,6 +6780,15 @@ static void workspace_run_input_monitor_tests(
     workspace_input_monitor_set_status("TEST OK");
 }
 
+static void workspace_emit_regenerated_source_from_input_monitor(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    workspace_input_monitor_set_status("REGENERATING");
+    emit_regenerated_kernel_source();
+    emit_regenerated_boot_source(workspace_object);
+    workspace_input_monitor_set_status("REGEN OK");
+}
+
 static uint8_t workspace_browse_input_monitor_context(
     const struct recorz_mvp_heap_object *workspace_object
 ) {
@@ -6952,6 +6964,11 @@ static void workspace_run_interactive_input_monitor(
         }
         if (ch == 0x14) {
             workspace_run_input_monitor_tests(workspace_object);
+            workspace_render_input_monitor_browser(workspace_object);
+            continue;
+        }
+        if (ch == 0x15) {
+            workspace_emit_regenerated_source_from_input_monitor(workspace_object);
             workspace_render_input_monitor_browser(workspace_object);
             continue;
         }
