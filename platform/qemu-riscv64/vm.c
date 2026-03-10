@@ -6246,9 +6246,49 @@ static void workspace_edit_current_in_place(
         workspace_run_interactive_input_monitor(object);
         return;
     }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_METHODS ||
+        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_METHODS ||
+        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PROTOCOLS ||
+        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_PROTOCOLS) {
+        if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
+            target_name_value.string == 0 ||
+            target_name_value.string[0] == '\0') {
+            machine_panic("Workspace editCurrent is missing the current class target");
+        }
+        source = file_out_class_source_by_name(target_name_value.string);
+        workspace_remember_current_source(object, source);
+        workspace_remember_source(object, source);
+        workspace_remember_view(object, WORKSPACE_VIEW_CLASS_SOURCE, target_name_value.string);
+        workspace_run_interactive_input_monitor(object);
+        return;
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PROTOCOL ||
+        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_PROTOCOL) {
+        char protocol_name[METHOD_SOURCE_NAME_LIMIT];
+
+        if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
+            target_name_value.string == 0 ||
+            target_name_value.string[0] == '\0') {
+            machine_panic("Workspace editCurrent is missing the current protocol target");
+        }
+        if (!workspace_parse_protocol_target_name(
+                target_name_value.string,
+                class_name,
+                sizeof(class_name),
+                protocol_name,
+                sizeof(protocol_name))) {
+            machine_panic("Workspace editCurrent current protocol target is invalid");
+        }
+        source = file_out_class_source_by_name(class_name);
+        workspace_remember_current_source(object, source);
+        workspace_remember_source(object, source);
+        workspace_remember_view(object, WORKSPACE_VIEW_CLASS_SOURCE, class_name);
+        workspace_run_interactive_input_monitor(object);
+        return;
+    }
     if ((uint32_t)view_kind_value.integer != WORKSPACE_VIEW_METHOD &&
         (uint32_t)view_kind_value.integer != WORKSPACE_VIEW_CLASS_METHOD) {
-        machine_panic("Workspace editCurrent requires a class, method, or package browser target");
+        machine_panic("Workspace editCurrent requires a class, method, protocol, or package browser target");
     }
     if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
         target_name_value.string == 0 ||

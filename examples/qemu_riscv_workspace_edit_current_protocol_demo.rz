@@ -1,0 +1,18 @@
+Display clear.
+Workspace fileIn: 'RecorzKernelClass: #Grouped superclass: #Object instanceVariableNames: ''value''
+!
+RecorzKernelProtocol: ''accessing''
+!
+value
+    ^value
+!
+setValue: text
+    value := text.
+    ^self
+!
+RecorzKernelProtocol: ''printing''
+!
+printString
+    ^value'.
+Workspace browseProtocol: 'accessing' ofClassNamed: 'Grouped'.
+Workspace editCurrent.

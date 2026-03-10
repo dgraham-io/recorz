@@ -45,7 +45,9 @@ WORKSPACE_INPUT_MONITOR_PACKAGE_BRIDGE_EXAMPLE = ROOT / "examples" / "qemu_riscv
 WORKSPACE_EDIT_METHOD_ENTRY_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_method_entry_demo.rz"
 WORKSPACE_EDIT_PACKAGE_ENTRY_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_package_entry_demo.rz"
 WORKSPACE_EDIT_CURRENT_CLASS_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_current_class_demo.rz"
+WORKSPACE_EDIT_CURRENT_METHOD_LIST_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_current_method_list_demo.rz"
 WORKSPACE_EDIT_CURRENT_PACKAGE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_current_package_demo.rz"
+WORKSPACE_EDIT_CURRENT_PROTOCOL_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_current_protocol_demo.rz"
 TEST_RUNNER_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_test_runner_demo.rz"
 METHOD_BLOCK_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_demo.rz"
 METHOD_BLOCK_CAPTURE_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_capture_demo.rz"
@@ -1450,6 +1452,118 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("STATUS: ACCEPT OK", output)
             self.assertIn("CLASS: DISPLAY", output)
             self.assertIn("VIEW: SOURCE", output)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_edit_current_opens_the_interactive_editor_from_method_list_browser(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-edit-current-method-list-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_EDIT_CURRENT_METHOD_LIST_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "RecorzKernelClass: #Display", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("\x0f")
+                process.stdin.flush()
+                time.sleep(1.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("CLASS: DISPLAY", output)
+            self.assertIn("METHODS", output)
+            self.assertIn("VIEW: INPUT", output)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_edit_current_opens_the_interactive_editor_from_protocol_browser(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-edit-current-protocol-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_EDIT_CURRENT_PROTOCOL_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "RecorzKernelClass: #Grouped", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("\x0f")
+                process.stdin.flush()
+                time.sleep(1.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("CLASS: GROUPED", output)
+            self.assertIn("PROTOCOL", output)
+            self.assertIn("VIEW: INPUT", output)
             self.assertNotIn("panic:", output)
 
     def test_memory_report_demo_prints_usage_within_budget(self) -> None:
