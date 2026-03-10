@@ -116,3 +116,6 @@ editMethod: selectorName ofClassNamed: className
 !
 editPackageNamed: packageName
     <primitive: #workspaceEditPackageNamed>
+!
+editCurrent
+    <primitive: #workspaceEditCurrent>

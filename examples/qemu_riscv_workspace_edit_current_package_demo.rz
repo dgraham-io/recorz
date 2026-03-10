@@ -1,0 +1,13 @@
+Display clear.
+Workspace fileIn: 'RecorzKernelPackage: ''Tests'' comment: ''Interactive package workflow fixtures''
+!
+RecorzKernelClass: #TinySpec superclass: #Object package: ''Tests'' instanceVariableNames: ''''
+!
+testPass
+    ^true
+!
+testFail
+    ^false
+!'.
+Workspace browsePackageNamed: 'Tests'.
+Workspace editCurrent.

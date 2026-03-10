@@ -198,3 +198,5 @@ RecorzKernelSelector: #revertCurrent order: 97
 !
 RecorzKernelSelector: #runCurrentTests order: 98
 !
+RecorzKernelSelector: #editCurrent order: 99
+!

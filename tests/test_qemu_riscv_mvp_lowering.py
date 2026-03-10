@@ -696,7 +696,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             mvp.SELECTOR_DEFINITIONS[-9:],
         )
         self.assertEqual(
-            mvp.SELECTOR_DEFINITIONS[-47:],
+            mvp.SELECTOR_DEFINITIONS[-48:],
             [
                 ("RECORZ_MVP_SELECTOR_BROWSE_CLASS_METHOD_OF_CLASS_NAMED", 53),
                 ("RECORZ_MVP_SELECTOR_FILE_OUT_CLASS_NAMED", 54),
@@ -745,6 +745,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_EDIT_PACKAGE_NAMED", 97),
                 ("RECORZ_MVP_SELECTOR_REVERT_CURRENT", 98),
                 ("RECORZ_MVP_SELECTOR_RUN_CURRENT_TESTS", 99),
+                ("RECORZ_MVP_SELECTOR_EDIT_CURRENT", 100),
             ],
         )
 
@@ -960,7 +961,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            mvp.METHOD_ENTRY_ORDER[-57:],
+            mvp.METHOD_ENTRY_ORDER[-58:],
             [
                 "RECORZ_MVP_METHOD_ENTRY_KERNEL_INSTALLER_FILE_OUT_CLASS_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_KERNEL_INSTALLER_FILE_OUT_PACKAGE_NAMED",
@@ -1009,6 +1010,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_INTERACTIVE_INPUT_MONITOR",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_EDIT_METHOD_OF_CLASS_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_EDIT_PACKAGE_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_EDIT_CURRENT",
                 "RECORZ_MVP_METHOD_ENTRY_CONTEXT_SENDER",
                 "RECORZ_MVP_METHOD_ENTRY_CONTEXT_RECEIVER",
                 "RECORZ_MVP_METHOD_ENTRY_CONTEXT_DETAIL",
@@ -2029,13 +2031,14 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertIn("RECORZ_MVP_METHOD_ENTRY_WORKSPACE_INTERACTIVE_INPUT_MONITOR = 73,", header)
         self.assertIn("RECORZ_MVP_METHOD_ENTRY_WORKSPACE_EDIT_METHOD_OF_CLASS_NAMED = 74,", header)
         self.assertIn("RECORZ_MVP_METHOD_ENTRY_WORKSPACE_EDIT_PACKAGE_NAMED = 75,", header)
-        self.assertIn("RECORZ_MVP_METHOD_ENTRY_CONTEXT_SENDER = 76,", header)
-        self.assertIn("RECORZ_MVP_METHOD_ENTRY_CONTEXT_RECEIVER = 77,", header)
-        self.assertIn("RECORZ_MVP_METHOD_ENTRY_CONTEXT_DETAIL = 78,", header)
-        self.assertIn("RECORZ_MVP_METHOD_ENTRY_CONTEXT_ALIVE = 79,", header)
-        self.assertIn("RECORZ_MVP_METHOD_ENTRY_TEST_RUNNER_RUN_CLASS_NAMED = 80,", header)
-        self.assertIn("RECORZ_MVP_METHOD_ENTRY_TEST_RUNNER_LAST_LABEL = 85,", header)
-        self.assertIn("RECORZ_MVP_METHOD_ENTRY_COUNT = 86,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_WORKSPACE_EDIT_CURRENT = 76,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_CONTEXT_SENDER = 77,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_CONTEXT_RECEIVER = 78,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_CONTEXT_DETAIL = 79,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_CONTEXT_ALIVE = 80,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_TEST_RUNNER_RUN_CLASS_NAMED = 81,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_TEST_RUNNER_LAST_LABEL = 86,", header)
+        self.assertIn("RECORZ_MVP_METHOD_ENTRY_COUNT = 87,", header)
         self.assertIn("struct recorz_mvp_seed_class_source_record {", header)
         self.assertIn('"Workspace"', header)
         self.assertIn("RecorzKernelClass: #Workspace", header)
@@ -2103,9 +2106,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertIn("RECORZ_MVP_PRIMITIVE_WORKSPACE_INTERACTIVE_INPUT_MONITOR = 61,", header)
         self.assertIn("RECORZ_MVP_PRIMITIVE_WORKSPACE_EDIT_METHOD_OF_CLASS_NAMED = 62,", header)
         self.assertIn("RECORZ_MVP_PRIMITIVE_WORKSPACE_EDIT_PACKAGE_NAMED = 63,", header)
-        self.assertIn("RECORZ_MVP_PRIMITIVE_TEST_RUNNER_RUN_CLASS_NAMED = 64,", header)
-        self.assertIn("RECORZ_MVP_PRIMITIVE_TEST_RUNNER_RUN_PACKAGE_NAMED = 65,", header)
-        self.assertIn("RECORZ_MVP_PRIMITIVE_COUNT = 66,", header)
+        self.assertIn("RECORZ_MVP_PRIMITIVE_WORKSPACE_EDIT_CURRENT = 64,", header)
+        self.assertIn("RECORZ_MVP_PRIMITIVE_TEST_RUNNER_RUN_CLASS_NAMED = 65,", header)
+        self.assertIn("RECORZ_MVP_PRIMITIVE_TEST_RUNNER_RUN_PACKAGE_NAMED = 66,", header)
+        self.assertIn("RECORZ_MVP_PRIMITIVE_COUNT = 67,", header)
         self.assertIn(
             "[RECORZ_MVP_PRIMITIVE_KERNEL_INSTALLER_MEMORY_REPORT] = "
             "execute_entry_kernel_installer_memory_report,",
@@ -2273,6 +2277,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertIn(
             "[RECORZ_MVP_PRIMITIVE_WORKSPACE_RUN_CURRENT_TESTS] = execute_entry_workspace_run_current_tests,",
+            header,
+        )
+        self.assertIn(
+            "[RECORZ_MVP_PRIMITIVE_WORKSPACE_EDIT_CURRENT] = execute_entry_workspace_edit_current,",
             header,
         )
         self.assertIn(
