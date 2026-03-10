@@ -13,14 +13,14 @@ Reference:
 - Use [smalltalk80_ui_extraction_plan.md](/Users/david/repos/recorz/docs/smalltalk80_ui_extraction_plan.md) as a loose design guide for the primitive boundary, text stack, and first tool model.
 
 ## Primitive Boundary To Reach
-- [ ] `BitBlt>>copyBits`-class primitive path for bitmap copy, fill, clipping, and monochrome/color transfer
+- [x] `BitBlt>>copyBits`-class primitive path for bitmap copy, fill, clipping, and monochrome/color transfer
 - [x] `Form>>beDisplay`-class primitive path to bind a `Form` to the real framebuffer
 - [x] `Cursor>>beCursor`-class primitive path to install a cursor image
 - [x] `CharacterScanner`-class text scan primitive for glyph placement and stop conditions
 - [ ] line/shape primitive support comparable to `drawLoop` / line drawing support where useful
-- [ ] keyboard and serial event delivery as raw input primitives, not UI policy
-- [ ] snapshot/load/save and boot glue kept below the image
-- [ ] emergency panic/debug output kept below the image
+- [x] keyboard and serial event delivery as raw input primitives, not UI policy
+- [x] snapshot/load/save and boot glue kept below the image
+- [x] emergency panic/debug output kept below the image
 
 ## Current State
 - [x] RV32 framebuffer boot on QEMU
