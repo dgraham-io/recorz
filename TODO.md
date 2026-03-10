@@ -36,16 +36,16 @@ Reference:
 - [ ] Real native tool surfaces in the image
 
 ## Phase 1 - Lock The Primitive Contract
-- [ ] Complete Pass 1 from [smalltalk80_ui_extraction_plan.md](/Users/david/repos/recorz/docs/smalltalk80_ui_extraction_plan.md):
+- [x] Complete Pass 1 from [smalltalk80_ui_extraction_plan.md](/Users/david/repos/recorz/docs/smalltalk80_ui_extraction_plan.md):
   summarize `BitBlt`, `Form`, `Cursor`, `DisplayScreen`, and `CharacterScanner` into a Recorz primitive note
-- [ ] Decide and document the exact initial primitive surface Recorz will keep in C:
+- [x] Decide and document the exact initial primitive surface Recorz will keep in C:
   `copyBits`, display binding, cursor binding, text scan, input delivery, snapshot/persistence, panic/debug
-- [ ] Audit current C-side text/UI helpers and classify each one as:
+- [x] Audit current C-side text/UI helpers and classify each one as:
   primitive to keep, temporary scaffold to replace, or behavior that should move into the image immediately
 - [ ] Normalize existing bitmap/form operations so the future image-side renderer uses one coherent primitive path instead of multiple ad hoc text helpers
-- [ ] Add explicit clipping and transfer-mode decisions to the bitmap copy surface
-- [ ] Define how glyph blitting relates to `copyBits` so text rendering stays Smalltalk-shaped rather than hard-wired as a special VM text API
-- [ ] Document the RV32 performance assumptions for this primitive set
+- [x] Add explicit clipping and transfer-mode decisions to the bitmap copy surface
+- [x] Define how glyph blitting relates to `copyBits` so text rendering stays Smalltalk-shaped rather than hard-wired as a special VM text API
+- [x] Document the RV32 performance assumptions for this primitive set
 
 ## Phase 2 - Finish The Display / Form / Cursor Primitive Layer
 - [ ] Introduce a real `beDisplay`-style path so a `Form` can become the active screen surface from image code

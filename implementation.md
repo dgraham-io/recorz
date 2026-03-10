@@ -1,5 +1,12 @@
 # Implementation Log
 
+## 2026-03-10 - Define The Initial Recorz UI Primitive Contract
+- Added [recorz_ui_primitive_contract.md](/Users/david/repos/recorz/docs/recorz_ui_primitive_contract.md) to complete Pass 1 from [smalltalk80_ui_extraction_plan.md](/Users/david/repos/recorz/docs/smalltalk80_ui_extraction_plan.md). The new note summarizes the Smalltalk-80 roles of `BitBlt`, `Form`, `Cursor`, `DisplayScreen`, and `CharacterScanner`, but translates them into a Recorz-first primitive boundary instead of a historical porting plan.
+- Used the note to document the exact initial C-side surface Recorz will keep: bitmap transfer/fill, display binding, cursor binding, text scan, raw input delivery, persistence/recovery/debug, and later GC support. Everything above that line, including text composition, cursor behavior, workspace/browser rendering, and tool policy, is now explicitly called image-owned.
+- Audited the current RV32 helper families in [platform/qemu-riscv32/vm.c](/Users/david/repos/recorz/platform/qemu-riscv32/vm.c) and [platform/qemu-riscv32/display.c](/Users/david/repos/recorz/platform/qemu-riscv32/display.c) into three buckets: long-lived primitives/platform support, temporary bridging helpers, and behavior that still needs to move into the image. That makes the current C workspace/browser paths clearly transitional rather than implicitly permanent.
+- Recorded explicit decisions on clipping, transfer rules, glyph blitting, and RV32 performance assumptions in the same contract note. In particular, glyph drawing is now documented as something that should ultimately flow through `BitBlt`-class primitives under image-side scanner/composer control, not remain a bespoke VM text service.
+- Marked the corresponding Phase 1 documentation tasks complete in [TODO.md](/Users/david/repos/recorz/TODO.md). The remaining unchecked Phase 1 item is now the code step that follows from the contract: normalize the existing bitmap/form operations around that boundary.
+
 ## 2026-03-10 - Make 12-Point The Primary Font Reference
 - Updated [TODO.md](/Users/david/repos/recorz/TODO.md) so the image-owned UI roadmap now treats 12-point as the primary reference development font, with 16-point moved to a larger comfort mode instead of the baseline.
 - Updated [smalltalk80_ui_extraction_plan.md](/Users/david/repos/recorz/docs/smalltalk80_ui_extraction_plan.md) to match, so the extraction work now targets a 12-point primary font on RV32 rather than a 16-point baseline.
