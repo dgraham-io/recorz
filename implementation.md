@@ -1,5 +1,11 @@
 # Implementation Log
 
+## 2026-03-10 - Add A Smalltalk-80 UI Extraction Plan
+- Added [smalltalk80_ui_extraction_plan.md](/Users/david/repos/recorz/docs/smalltalk80_ui_extraction_plan.md) to turn the checked-in [Smalltalk-80.sources](/Users/david/repos/recorz/misc/Smalltalk-80.sources) file into a concrete Recorz-first study plan. The document explicitly treats Smalltalk-80 as a loose architectural guide rather than a porting target.
+- Grouped the relevant Smalltalk-80 classes into the extraction order Recorz actually needs: primitive/display boundary (`BitBlt`, `Form`, `Cursor`, `DisplayScreen`, `CharacterScanner`), text stack (`TextStyle`, `DisplayText`, `Paragraph`), editor/tool models (`ParagraphEditor`, `StringHolder`, `Browser`, `PopUpMenu`), and framework reference (`View`, `Controller`).
+- Mapped those classes onto current Recorz goals: RV32-first native tools, image-owned text composition and rendering, browser/workspace ownership in the image, and a tiny long-lived VM primitive set.
+- Added an explicit section on what not to copy directly from Smalltalk-80, so the plan stays aligned with Recorz's own architecture and long-term direction instead of collapsing into a literal MVC or object-memory transplant.
+
 ## 2026-03-10 - Rewrite The UI Roadmap Around Smalltalk-Style Primitives
 - Rewrote [TODO.md](/Users/david/repos/recorz/TODO.md) around a Smalltalk-80-style primitive boundary for the first native Recorz UI. The new roadmap now treats `copyBits`, display binding, cursor binding, text scanning, input delivery, and persistence/debug support as the long-lived VM/platform surface, with text composition, workspace/browser rendering, and tool behavior moving into the image.
 - Restructured the roadmap into explicit phases: primitive-contract cleanup, display/form/cursor primitives, text scan primitive, image-side composition, image-side renderer completion, image-owned UI primitives, C renderer replacement, first native workspace/browser surfaces, GC work if required for native tools, and finally source-owning the UI stack.
