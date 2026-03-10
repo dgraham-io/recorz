@@ -120,7 +120,7 @@ Extract from Smalltalk-80:
 Deliverables:
 - a Recorz `CharacterScanner` plan
 - a Recorz text run/composition model
-- a plan for 16-point baseline and 12-point dense rendering on RV32
+- a plan for 12-point primary rendering and an optional 16-point comfort mode on RV32
 
 ### Pass 3. Editor Model
 Goal: define the first native workspace editor behavior.

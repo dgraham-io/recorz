@@ -1,5 +1,9 @@
 # Implementation Log
 
+## 2026-03-10 - Make 12-Point The Primary Font Reference
+- Updated [TODO.md](/Users/david/repos/recorz/TODO.md) so the image-owned UI roadmap now treats 12-point as the primary reference development font, with 16-point moved to a larger comfort mode instead of the baseline.
+- Updated [smalltalk80_ui_extraction_plan.md](/Users/david/repos/recorz/docs/smalltalk80_ui_extraction_plan.md) to match, so the extraction work now targets a 12-point primary font on RV32 rather than a 16-point baseline.
+
 ## 2026-03-10 - Sync The TODO With The Smalltalk-80 Extraction Plan
 - Updated [TODO.md](/Users/david/repos/recorz/TODO.md) to explicitly reference [smalltalk80_ui_extraction_plan.md](/Users/david/repos/recorz/docs/smalltalk80_ui_extraction_plan.md) and to make the first extraction pass a concrete Phase 1 task. That keeps the main roadmap and the new study plan aligned instead of leaving the Smalltalk-80 work implicit.
 

@@ -66,8 +66,8 @@ Reference:
 - [ ] Replace VM-owned margin, wrap, tab, and line-height policy with image-owned text composition objects
 - [ ] Move line breaking, cursor x/y calculation, and visible line traversal into image code
 - [ ] Move status-line and feedback-line composition into image code
-- [ ] Make the baseline readable development font target a 16-point image-owned font
-- [ ] Add a denser 12-point image-owned mode for 1024x768 and similar targets
+- [ ] Make the primary reference development font a readable 12-point image-owned font
+- [ ] Add a larger 16-point comfort mode once the 12-point primary font is working well
 - [ ] Make text metrics configurable from the image instead of fixed in the VM
 - [ ] Keep a temporary C fallback only until image-side composition reaches parity
 
@@ -123,7 +123,7 @@ Reference:
 
 ## Near-Term Experiments
 - [ ] Add a temporary transcript/browser demo built directly on `beDisplay` + `copyBits` + image-side scanner code
-- [ ] Measure 16-point and 12-point text density on 1024x768 and current QEMU targets
+- [ ] Measure 12-point primary and 16-point comfort-mode text density on 1024x768 and current QEMU targets
 - [ ] Add a simple cursor-form proof using `beCursor`
 - [ ] Add a simple scanner proof that stops at wrap margin and tab/newline boundaries
 - [ ] Evaluate whether the first native UI should stay Smalltalk-pane-like or move toward a declarative surface after the primitive layer is proven
