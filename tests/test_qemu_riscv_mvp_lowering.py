@@ -609,12 +609,13 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["bitbltFillFormColor"], 1)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["glyphsAt"], 5)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formClear"], 8)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formWriteCodePointColor"], 11)
         self.assertEqual(
             mvp.PRIMITIVE_BINDING_VALUES["kernelInstallerInstallCompiledMethodOnClassSelectorIdArgumentCount"],
-            14,
+            15,
         )
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formWriteStyledText"], 10)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 71)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 72)
         self.assertEqual(
             mvp.PRIMITIVE_BINDING_BY_ENTRY_NAME["RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING"],
             mvp.PRIMITIVE_BINDING_VALUES["formWriteString"],
@@ -829,6 +830,8 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_LM", 150),
                 ("RECORZ_MVP_SELECTOR_W", 151),
                 ("RECORZ_MVP_SELECTOR_D_X_Y_S_F", 152),
+                ("RECORZ_MVP_SELECTOR_WRITE_CODE_POINT_COLOR", 153),
+                ("RECORZ_MVP_SELECTOR_TEXT_INDEX_STYLE_ON_FORM", 154),
             ],
         )
 
@@ -1980,14 +1983,14 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             399,
         )
         self.assertEqual(method_start_by_kind[mvp.SEED_OBJECT_CLASS], 399)
-        self.assertEqual(method_count_by_kind[mvp.SEED_OBJECT_FORM], 7)
+        self.assertEqual(method_count_by_kind[mvp.SEED_OBJECT_FORM], 8)
         self.assertEqual(
             method_seed_objects[0].fields,
             [
                 (mvp.SEED_FIELD_OBJECT_INDEX, 191),
                 (mvp.SEED_FIELD_SMALL_INTEGER, 0),
                 (mvp.SEED_FIELD_SMALL_INTEGER, mvp.SEED_OBJECT_CLASS),
-                (mvp.SEED_FIELD_OBJECT_INDEX, 301),
+                (mvp.SEED_FIELD_OBJECT_INDEX, 302),
             ],
         )
 

@@ -144,7 +144,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEXT_SELECTION
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_D_X_Y_S_F
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_TEXT_INDEX_STYLE_ON_FORM
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #define SOURCE_EVAL_ENV_LIMIT 32U
@@ -464,6 +464,12 @@ static const struct recorz_mvp_heap_object *default_form_object(void);
 static void form_clear(const struct recorz_mvp_heap_object *form);
 static void form_newline(const struct recorz_mvp_heap_object *form);
 static void form_write_string(const struct recorz_mvp_heap_object *form, const char *text);
+static void form_write_code_point_with_colors(
+    const struct recorz_mvp_heap_object *form,
+    uint8_t code_point,
+    uint32_t foreground_color,
+    uint32_t background_color
+);
 static uint32_t bitmap_storage_kind(const struct recorz_mvp_heap_object *bitmap);
 static uint32_t text_pixel_scale(void);
 static uint32_t text_foreground_color(void);
@@ -943,6 +949,10 @@ static const char *selector_name(uint8_t selector) {
             return "w:";
         case RECORZ_MVP_SELECTOR_D_X_Y_S_F:
             return "d:x:y:s:f:";
+        case RECORZ_MVP_SELECTOR_WRITE_CODE_POINT_COLOR:
+            return "writeCodePoint:color:";
+        case RECORZ_MVP_SELECTOR_TEXT_INDEX_STYLE_ON_FORM:
+            return "text:index:style:onForm:";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -8890,9 +8900,48 @@ static void form_newline(const struct recorz_mvp_heap_object *form) {
     }
 }
 
-static void form_write_string_with_colors(
-    const struct recorz_mvp_heap_object *form,
+static uint8_t form_has_image_side_styled_text_override(const struct recorz_mvp_heap_object *form) {
+    const struct recorz_mvp_live_method_source *source_record;
+    const struct recorz_mvp_heap_object *owner_class = 0;
+
+    source_record = live_method_source_for_class_chain(
+        class_object_for_heap_object(form),
+        RECORZ_MVP_SELECTOR_WRITE_STYLED_TEXT,
+        1U,
+        &owner_class
+    );
+    return (uint8_t)(
+        source_record != 0 &&
+        source_text_requires_live_evaluator(live_method_source_text(source_record))
+    );
+}
+
+static struct recorz_mvp_value image_text_renderer_styled_text_bridge_value(
     const char *text,
+    uint32_t foreground_color,
+    uint32_t background_color
+) {
+    uint16_t style_handle = named_object_handle_for_name("RecorzTextStyleBridge");
+    uint16_t styled_text_handle = named_object_handle_for_name("RecorzStyledTextBridge");
+
+    if (style_handle == 0U) {
+        style_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_TEXT_STYLE);
+        remember_named_object_handle(style_handle, "RecorzTextStyleBridge");
+    }
+    if (styled_text_handle == 0U) {
+        styled_text_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_STYLED_TEXT);
+        remember_named_object_handle(styled_text_handle, "RecorzStyledTextBridge");
+    }
+    heap_set_field(style_handle, TEXT_STYLE_FIELD_FOREGROUND_COLOR, small_integer_value((int32_t)foreground_color));
+    heap_set_field(style_handle, TEXT_STYLE_FIELD_BACKGROUND_COLOR, small_integer_value((int32_t)background_color));
+    heap_set_field(styled_text_handle, STYLED_TEXT_FIELD_TEXT, string_value(text == 0 ? "" : text));
+    heap_set_field(styled_text_handle, STYLED_TEXT_FIELD_STYLE, object_value(style_handle));
+    return object_value(styled_text_handle);
+}
+
+static void form_write_code_point_with_colors(
+    const struct recorz_mvp_heap_object *form,
+    uint8_t code_point,
     uint32_t foreground_color,
     uint32_t background_color
 ) {
@@ -8915,65 +8964,41 @@ static void form_write_string_with_colors(
             wrap_limit_x = configured_limit_x;
         }
     }
+    if (code_point == (uint8_t)'\n') {
+        form_newline(form);
+        return;
+    }
+    if (code_point == (uint8_t)'\t') {
+        uint32_t tab_width = text_tab_width();
+        uint32_t column = 0U;
+        uint32_t spaces_to_next_tab;
 
-    while (*text != '\0') {
-        const struct recorz_mvp_heap_object *glyph_bitmap;
+        if (cursor_x > left_margin && char_width() != 0U) {
+            column = (cursor_x - left_margin) / char_width();
+        }
+        spaces_to_next_tab = tab_width - (column % tab_width);
+        if (spaces_to_next_tab == 0U) {
+            spaces_to_next_tab = tab_width;
+        }
+        while (spaces_to_next_tab-- > 0U) {
+            form_write_code_point_with_colors(form, (uint8_t)' ', foreground_color, background_color);
+        }
+        if (echo_serial) {
+            machine_putc('\t');
+        }
+        if (capture_feedback) {
+            workspace_input_monitor_feedback_append_char('\t');
+        }
+        return;
+    }
+    if (text_line_break_mode() != 0U &&
+        wrap_limit_x != 0U &&
+        cursor_x + char_width() > wrap_limit_x) {
+        form_newline(form);
+    }
+    {
+        const struct recorz_mvp_heap_object *glyph_bitmap = glyph_bitmap_for_char((char)code_point);
 
-        if (*text == '\n') {
-            form_newline(form);
-            ++text;
-            continue;
-        }
-        if (*text == '\t') {
-            uint32_t tab_width = text_tab_width();
-            uint32_t column = 0U;
-            uint32_t spaces_to_next_tab;
-
-            if (cursor_x > left_margin && char_width() != 0U) {
-                column = (cursor_x - left_margin) / char_width();
-            }
-            spaces_to_next_tab = tab_width - (column % tab_width);
-            if (spaces_to_next_tab == 0U) {
-                spaces_to_next_tab = tab_width;
-            }
-            while (spaces_to_next_tab-- > 0U) {
-                if (text_line_break_mode() != 0U &&
-                    wrap_limit_x != 0U &&
-                    cursor_x + char_width() > wrap_limit_x) {
-                    form_newline(form);
-                }
-                glyph_bitmap = glyph_bitmap_for_char(' ');
-                bitblt_copy_mono_bitmap_to_form(
-                    glyph_bitmap,
-                    form,
-                    0U,
-                    0U,
-                    bitmap_width(glyph_bitmap),
-                    bitmap_height(glyph_bitmap),
-                    cursor_x,
-                    cursor_y,
-                    text_pixel_scale(),
-                    foreground_color,
-                    background_color,
-                    0U
-                );
-                cursor_x += char_width();
-            }
-            if (echo_serial) {
-                machine_putc('\t');
-            }
-            if (capture_feedback) {
-                workspace_input_monitor_feedback_append_char('\t');
-            }
-            ++text;
-            continue;
-        }
-        if (text_line_break_mode() != 0U &&
-            wrap_limit_x != 0U &&
-            cursor_x + char_width() > wrap_limit_x) {
-            form_newline(form);
-        }
-        glyph_bitmap = glyph_bitmap_for_char(*text);
         bitblt_copy_mono_bitmap_to_form(
             glyph_bitmap,
             form,
@@ -8988,13 +9013,38 @@ static void form_write_string_with_colors(
             background_color,
             0U
         );
-        cursor_x += char_width();
-        if (echo_serial) {
-            machine_putc(*text);
-        }
-        if (capture_feedback) {
-            workspace_input_monitor_feedback_append_char(*text);
-        }
+    }
+    cursor_x += char_width();
+    if (echo_serial) {
+        machine_putc((char)code_point);
+    }
+    if (capture_feedback) {
+        workspace_input_monitor_feedback_append_char((char)code_point);
+    }
+}
+
+static void form_write_string_with_colors(
+    const struct recorz_mvp_heap_object *form,
+    const char *text,
+    uint32_t foreground_color,
+    uint32_t background_color
+) {
+    if (form_has_image_side_styled_text_override(form)) {
+        struct recorz_mvp_value arguments[1];
+
+        arguments[0] = image_text_renderer_styled_text_bridge_value(text, foreground_color, background_color);
+        (void)perform_send_and_pop_result(
+            object_value(heap_handle_for_object(form)),
+            RECORZ_MVP_SELECTOR_WRITE_STYLED_TEXT,
+            1U,
+            arguments,
+            0
+        );
+        return;
+    }
+
+    while (*text != '\0') {
+        form_write_code_point_with_colors(form, (uint8_t)*text, foreground_color, background_color);
         ++text;
     }
 }
@@ -10606,6 +10656,28 @@ static void execute_entry_form_write_styled_text(
         text_value.string,
         styled_text_foreground_color(style_object),
         styled_text_background_color(style_object)
+    );
+    push(receiver);
+}
+
+static void execute_entry_form_write_code_point_color(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+        machine_panic("Form writeCodePoint:color: expects a small integer code point");
+    }
+    if (arguments[1].kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+        machine_panic("Form writeCodePoint:color: expects a small integer color");
+    }
+    form_write_code_point_with_colors(
+        object,
+        (uint8_t)arguments[0].integer,
+        (uint32_t)arguments[1].integer,
+        text_background_color()
     );
     push(receiver);
 }

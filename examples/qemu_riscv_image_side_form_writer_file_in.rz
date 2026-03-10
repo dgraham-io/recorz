@@ -1,0 +1,23 @@
+RecorzKernelClass: #TextRenderer superclass: #Object package: 'TextUI' instanceVariableNames: ''
+!
+drawStyledText: styledText onForm: form
+    | text style |
+    text := styledText text.
+    style := styledText style.
+    ^self text: text index: 1 style: style onForm: form
+!
+text: text index: index style: style onForm: form
+    | code |
+    index > text size ifTrue: [^form].
+    code := text at: index.
+    form writeCodePoint: code color: style foregroundColor.
+    ^self text: text index: index + 1 style: style onForm: form
+!
+RecorzKernelClass: #Form descriptorOrder: 10 objectKindOrder: 2 sourceBootOrder: 7 instanceVariableNames: 'bits'
+!
+writeStyledText: styledText
+    | rendererClass |
+    KernelInstaller rememberObject: true named: 'ImageTextRendererActive'.
+    rendererClass := KernelInstaller classNamed: 'TextRenderer'.
+    rendererClass new drawStyledText: styledText onForm: self.
+    ^self

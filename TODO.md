@@ -37,7 +37,7 @@ Get Recorz to the point where text rendering and the main development UI are own
 
 ## Phase 3 - Build Image-Side Text Rendering
 - [x] Add a Smalltalk-shaped text renderer that draws glyphs onto `Form`/`Bitmap` using existing primitives
-- [ ] Move string drawing policy out of the ad hoc C workspace/browser renderer
+- [x] Move string drawing policy out of the ad hoc C workspace/browser renderer
 - [ ] Render cursor, selection, status lines, and simple highlighted regions from image code
 - [ ] Make the first comfortable development font target a readable 16-point size for the framebuffer workspace/browser
 - [ ] Support at least two usable text sizes, with 16-point as the baseline development size and a smaller dense mode after that

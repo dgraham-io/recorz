@@ -15,6 +15,9 @@ writeString: text
 writeStyledText: styledText
     <primitive: #formWriteStyledText>
 !
+writeCodePoint: codePoint color: color
+    <primitive: #formWriteCodePointColor>
+!
 newline
     <primitive: #formNewline>
 !

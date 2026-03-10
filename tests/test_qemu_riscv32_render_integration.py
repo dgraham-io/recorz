@@ -12,6 +12,8 @@ PPM_PATH = BUILD_DIR / "recorz-qemu-riscv32-mvp.ppm"
 QEMU_LOG_PATH = BUILD_DIR / "qemu.log"
 GLYPH_EXAMPLE = ROOT / "examples" / "qemu_riscv_source_glyph_demo.rz"
 IMAGE_SIDE_TEXT_RENDERER_EXAMPLE = ROOT / "examples" / "qemu_riscv_image_side_text_renderer_demo.rz"
+IMAGE_SIDE_FORM_WRITER_EXAMPLE = ROOT / "examples" / "qemu_riscv_image_side_form_writer_demo.rz"
+IMAGE_SIDE_FORM_WRITER_FILE_IN = ROOT / "examples" / "qemu_riscv_image_side_form_writer_file_in.rz"
 
 
 def _read_ppm(path: Path) -> tuple[int, int, bytes]:
@@ -46,10 +48,17 @@ def _region_histogram(data: bytes, width: int, x0: int, y0: int, x1: int, y1: in
     "QEMU RV32 framebuffer integration test requires qemu-system-riscv32 and riscv64-unknown-elf-gcc",
 )
 class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
-    def render_example(self, example_path: Optional[Path] = None) -> tuple[str, int, int, bytes]:
+    def render_example(
+        self,
+        example_path: Optional[Path] = None,
+        *,
+        file_in_payload: Optional[Path] = None,
+    ) -> tuple[str, int, int, bytes]:
         command = ["make", "-C", str(ROOT / "platform" / "qemu-riscv32")]
         if example_path is not None:
             command.append(f"EXAMPLE={example_path}")
+        if file_in_payload is not None:
+            command.append(f"FILE_IN_PAYLOAD={file_in_payload}")
         command.extend(["clean", "screenshot"])
         result = subprocess.run(
             command,
@@ -101,6 +110,21 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         text_histogram = _region_histogram(data, width, 24, 24, 360, 140)
         self.assertGreater(text_histogram[(31, 41, 51)], 1800)
         self.assertGreater(text_histogram[(247, 243, 232)], 1800)
+
+    def test_shared_form_write_string_path_delegates_to_image_side_renderer(self) -> None:
+        qemu_log, width, height, data = self.render_example(
+            IMAGE_SIDE_FORM_WRITER_EXAMPLE,
+            file_in_payload=IMAGE_SIDE_FORM_WRITER_FILE_IN,
+        )
+
+        normalized_log = qemu_log.replace("\r", "")
+        self.assertIn("delegated path", normalized_log)
+        self.assertIn("OK", normalized_log)
+        self.assertEqual((width, height), (1024, 768))
+
+        text_histogram = _region_histogram(data, width, 24, 24, 360, 140)
+        self.assertGreater(text_histogram[(31, 41, 51)], 600)
+        self.assertGreater(text_histogram[(247, 243, 232)], 600)
 
 
 if __name__ == "__main__":
