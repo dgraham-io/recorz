@@ -131,6 +131,12 @@ SNAPSHOT_WORKSPACE_INPUT_MONITOR_FEEDBACK_OUTPUT_PATH = ROOT / "misc" / "qemu-ri
 SNAPSHOT_INTERACTIVE_DEV_LOOP_BUILD_DIR = ROOT / "misc" / "q32-devloop-save"
 SNAPSHOT_INTERACTIVE_DEV_LOOP_RELOAD_BUILD_DIR = ROOT / "misc" / "q32-devloop-reload"
 SNAPSHOT_INTERACTIVE_DEV_LOOP_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "interactive-dev-loop-live-image.bin"
+SNAPSHOT_PACKAGE_DEV_LOOP_BUILD_DIR = ROOT / "misc" / "q32-package-devloop-save"
+SNAPSHOT_PACKAGE_DEV_LOOP_RELOAD_BUILD_DIR = ROOT / "misc" / "q32-package-devloop-reload"
+SNAPSHOT_PACKAGE_DEV_LOOP_CONTINUE_BUILD_DIR = ROOT / "misc" / "q32-package-devloop-continue"
+SNAPSHOT_PACKAGE_DEV_LOOP_SECOND_RELOAD_BUILD_DIR = ROOT / "misc" / "q32-package-devloop-second-reload"
+SNAPSHOT_PACKAGE_DEV_LOOP_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "package-dev-loop-live-image.bin"
+SNAPSHOT_PACKAGE_DEV_LOOP_SECOND_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "package-dev-loop-second-live-image.bin"
 SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-workspace-regenerated-boot-source-test"
 SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-workspace-regenerated-boot-source-reload-test"
 SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "workspace-regenerated-boot-source-live-image.bin"
@@ -165,7 +171,9 @@ SNAPSHOT_WORKSPACE_SAVE_RECOVERY_DEMO_PATH = ROOT / "examples" / "qemu_riscv_wor
 SNAPSHOT_WORKSPACE_INPUT_MONITOR_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_save_and_reopen_demo.rz"
 SNAPSHOT_WORKSPACE_INPUT_MONITOR_EVALUATE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_evaluate_demo.rz"
 SNAPSHOT_INTERACTIVE_DEV_LOOP_DEMO_PATH = ROOT / "examples" / "qemu_riscv_workspace_edit_current_package_demo.rz"
+SNAPSHOT_PACKAGE_DEV_LOOP_DEMO_PATH = ROOT / "examples" / "qemu_riscv_workspace_package_dev_loop_demo.rz"
 SNAPSHOT_WORKSPACE_REGENERATED_BOOT_SOURCE_SAVE_DEMO_PATH = ROOT / "examples" / "qemu_riscv_workspace_regenerated_boot_source_save_demo.rz"
+SNAPSHOT_DEVELOPMENT_HOME_BOOT_DEMO_PATH = ROOT / "examples" / "qemu_riscv_image_development_home_boot.rz"
 
 
 @unittest.skipUnless(
@@ -266,6 +274,77 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             self.fail(f"interactive editor run did not emit a snapshot\nstdout:\n{output}")
         snapshot_output.parent.mkdir(parents=True, exist_ok=True)
         snapshot_output.write_bytes(snapshot)
+        (build_dir / "qemu.log").write_text(output, encoding="utf-8")
+        return output
+
+    def run_interactive_session(
+        self,
+        *,
+        build_dir: Path,
+        example_path: Path,
+        serial_input: str,
+        ready_marker: str,
+        snapshot_payload: Path | None = None,
+    ) -> str:
+        qemu_command = [
+            "qemu-system-riscv32",
+            "-machine",
+            "virt",
+            "-m",
+            "32M",
+            "-smp",
+            "1",
+        ]
+        elf_path = self.build_elf(build_dir=build_dir, example_path=example_path)
+        if snapshot_payload is not None:
+            qemu_command.extend(
+                [
+                    "-fw_cfg",
+                    f"name=opt/recorz-snapshot,file={snapshot_payload}",
+                ]
+            )
+        qemu_command.extend(
+            [
+                "-kernel",
+                str(elf_path),
+                "-serial",
+                "stdio",
+                "-monitor",
+                "none",
+                "-display",
+                "none",
+                "-device",
+                "ramfb",
+            ]
+        )
+        process = subprocess.Popen(
+            qemu_command,
+            cwd=ROOT,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        try:
+            try:
+                output = _read_until(process, ready_marker, timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write(serial_input)
+                process.stdin.flush()
+                process.stdin.close()
+                process.stdin = None
+                remaining_output, _ = process.communicate(timeout=20.0)
+                output += remaining_output
+            except subprocess.TimeoutExpired:
+                process.kill()
+                remaining_output, _ = process.communicate(timeout=5.0)
+                output += remaining_output
+        finally:
+            if process.stdout is not None:
+                process.stdout.close()
+            if process.stdin is not None:
+                process.stdin.close()
         (build_dir / "qemu.log").write_text(output, encoding="utf-8")
         return output
 
@@ -765,7 +844,7 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             output += _read_until(process, "STATUS: INSTALL COMPLETE", timeout=8.0)
             process.stdin.write("\x14")
             process.stdin.flush()
-            output += _read_until(process, "STATUS: TESTS COMPLETE", timeout=8.0)
+            output += _read_until(process, "SUMMARY Tests P=1 F=1 T=2", timeout=8.0)
             process.stdin.write("\x17")
             process.stdin.flush()
             process.stdin.close()
@@ -793,7 +872,7 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         (SNAPSHOT_INTERACTIVE_DEV_LOOP_BUILD_DIR / "qemu.log").write_text(output, encoding="utf-8")
 
         self.assertIn("STATUS: INSTALL COMPLETE", output)
-        self.assertIn("STATUS: TESTS COMPLETE", output)
+        self.assertIn("SUMMARY Tests P=1 F=1 T=2", output)
         self.assertIn("recorz qemu-riscv32 mvp: snapshot saved, shutting down", output)
         self.assertTrue(SNAPSHOT_INTERACTIVE_DEV_LOOP_OUTPUT_PATH.exists())
 
@@ -823,6 +902,157 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
 
         source_region = _region_histogram(data, width, 24, 126, 980, 700)
         self.assertGreater(source_region[TEXT_FOREGROUND], 1800)
+
+    def test_snapshot_proves_the_package_home_dev_loop_can_continue_repeatedly(self) -> None:
+        first_output = self.run_interactive_session(
+            build_dir=SNAPSHOT_PACKAGE_DEV_LOOP_BUILD_DIR,
+            example_path=SNAPSHOT_PACKAGE_DEV_LOOP_DEMO_PATH,
+            ready_marker="VIEW: PACKAGES",
+            serial_input="\x18\x14\x17",
+        )
+
+        first_snapshot = self.extract_snapshot_bytes(first_output)
+        if first_snapshot is None:
+            self.fail(f"package home dev loop did not emit an initial snapshot\nstdout:\n{first_output}")
+        SNAPSHOT_PACKAGE_DEV_LOOP_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        SNAPSHOT_PACKAGE_DEV_LOOP_OUTPUT_PATH.write_bytes(first_snapshot)
+
+        self.assertIn("VIEW: PACKAGES", first_output)
+        self.assertIn("VIEW: INPUT", first_output)
+        self.assertIn("SUMMARY Tests P=1 F=1 T=2", first_output)
+        self.assertIn("TinySpec", first_output)
+        self.assertIn("recorz qemu-riscv32 mvp: snapshot saved, shutting down", first_output)
+
+        first_workspace_summary = self.inspect_workspace_snapshot(
+            snapshot_path=SNAPSHOT_PACKAGE_DEV_LOOP_OUTPUT_PATH,
+        )
+        self.assertEqual(first_workspace_summary["current_view_kind"], 18)
+        first_input_monitor_state = first_workspace_summary.get("input_monitor_state")
+        self.assertIsInstance(first_input_monitor_state, dict)
+        assert isinstance(first_input_monitor_state, dict)
+        self.assertEqual(first_input_monitor_state["saved_target_name"], "Tests")
+        self.assertEqual(first_input_monitor_state["status"], "TESTS COMPLETE")
+
+        reload_log, width, height, data = self.render_demo(
+            build_dir=SNAPSHOT_PACKAGE_DEV_LOOP_RELOAD_BUILD_DIR,
+            example_path=SNAPSHOT_WORKSPACE_IDLE_DEMO_PATH,
+            snapshot_payload=SNAPSHOT_PACKAGE_DEV_LOOP_OUTPUT_PATH,
+        )
+
+        self.assertEqual((width, height), (1024, 768))
+        self.assertIn("recorz qemu-riscv32 mvp: loaded snapshot", reload_log)
+        self.assertIn("VIEW: INPUT", reload_log)
+        self.assertIn("STATUS: TESTS COMPLETE", reload_log)
+        self.assertIn("TinySpec", reload_log)
+        self.assertNotIn("panic:", reload_log)
+        self.assertGreater(
+            _region_histogram(data, width, 24, 126, 980, 700)[TEXT_FOREGROUND],
+            1800,
+        )
+
+        second_elf_path = self.build_elf(
+            build_dir=SNAPSHOT_PACKAGE_DEV_LOOP_CONTINUE_BUILD_DIR,
+            example_path=SNAPSHOT_DEVELOPMENT_HOME_BOOT_DEMO_PATH,
+        )
+        second_process = subprocess.Popen(
+            [
+                "qemu-system-riscv32",
+                "-machine",
+                "virt",
+                "-m",
+                "32M",
+                "-smp",
+                "1",
+                "-fw_cfg",
+                f"name=opt/recorz-snapshot,file={SNAPSHOT_PACKAGE_DEV_LOOP_OUTPUT_PATH}",
+                "-kernel",
+                str(second_elf_path),
+                "-serial",
+                "stdio",
+                "-monitor",
+                "none",
+                "-display",
+                "none",
+                "-device",
+                "ramfb",
+            ],
+            cwd=ROOT,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        try:
+            second_output = _read_until(
+                second_process,
+                "VIEW: INPUT",
+                timeout=8.0,
+            )
+            time.sleep(1.0)
+            if second_process.stdin is None:
+                self.fail("QEMU process stdin is not available")
+            second_process.stdin.write("\x14")
+            second_process.stdin.flush()
+            second_output += _read_until(
+                second_process,
+                "SUMMARY Tests P=1 F=1 T=2",
+                timeout=8.0,
+            )
+            second_process.stdin.write("\x17")
+            second_process.stdin.flush()
+            second_process.stdin.close()
+            second_process.stdin = None
+            remaining_output, _ = second_process.communicate(timeout=20.0)
+            second_output += remaining_output
+        except subprocess.TimeoutExpired:
+            second_process.kill()
+            remaining_output, _ = second_process.communicate(timeout=5.0)
+            second_output += remaining_output
+        finally:
+            if second_process.poll() is None:
+                second_process.kill()
+                second_process.wait(timeout=5.0)
+            if second_process.stdout is not None:
+                second_process.stdout.close()
+            if second_process.stdin is not None:
+                second_process.stdin.close()
+
+        second_snapshot = self.extract_snapshot_bytes(second_output)
+        if second_snapshot is None:
+            self.fail(f"package home dev loop did not emit a continuation snapshot\nstdout:\n{second_output}")
+        SNAPSHOT_PACKAGE_DEV_LOOP_SECOND_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        SNAPSHOT_PACKAGE_DEV_LOOP_SECOND_OUTPUT_PATH.write_bytes(second_snapshot)
+
+        self.assertIn("recorz qemu-riscv32 mvp: loaded snapshot", second_output)
+        self.assertIn("SUMMARY Tests P=1 F=1 T=2", second_output)
+        self.assertIn("recorz qemu-riscv32 mvp: snapshot saved, shutting down", second_output)
+
+        second_workspace_summary = self.inspect_workspace_snapshot(
+            snapshot_path=SNAPSHOT_PACKAGE_DEV_LOOP_SECOND_OUTPUT_PATH,
+        )
+        self.assertEqual(second_workspace_summary["current_view_kind"], 18)
+        second_input_monitor_state = second_workspace_summary.get("input_monitor_state")
+        self.assertIsInstance(second_input_monitor_state, dict)
+        assert isinstance(second_input_monitor_state, dict)
+        self.assertEqual(second_input_monitor_state["saved_target_name"], "Tests")
+        self.assertEqual(second_input_monitor_state["status"], "TESTS COMPLETE")
+
+        second_reload_log, second_width, second_height, second_data = self.render_demo(
+            build_dir=SNAPSHOT_PACKAGE_DEV_LOOP_SECOND_RELOAD_BUILD_DIR,
+            example_path=SNAPSHOT_WORKSPACE_IDLE_DEMO_PATH,
+            snapshot_payload=SNAPSHOT_PACKAGE_DEV_LOOP_SECOND_OUTPUT_PATH,
+        )
+
+        self.assertEqual((second_width, second_height), (1024, 768))
+        self.assertIn("recorz qemu-riscv32 mvp: loaded snapshot", second_reload_log)
+        self.assertIn("VIEW: INPUT", second_reload_log)
+        self.assertIn("STATUS: TESTS COMPLETE", second_reload_log)
+        self.assertIn("TinySpec", second_reload_log)
+        self.assertNotIn("panic:", second_reload_log)
+        self.assertGreater(
+            _region_histogram(second_data, second_width, 24, 126, 980, 700)[TEXT_FOREGROUND],
+            1800,
+        )
 
     def test_snapshot_can_reopen_workspace_class_source_browser_state_without_demo_specific_program(self) -> None:
         save_log = self.save_snapshot(

@@ -25,7 +25,7 @@ Get Recorz to the point where text rendering and the main development UI are own
 - [x] Improve editor help, status, and feedback so the current command surface is self-explanatory
 - [x] Tighten save/resume/recovery so continuing from a snapshot feels like a normal image action
 - [x] Make package-centered edit/test/save flow routine from inside the image
-- [ ] Prove the full RV32 loop repeatedly: browse, edit, accept, test, save, reboot, continue
+- [x] Prove the full RV32 loop repeatedly: browse, edit, accept, test, save, reboot, continue
 
 ## Phase 2 - Define The Image-Side Text Model
 - [ ] Add image-visible font objects rather than relying on VM-only font decisions
