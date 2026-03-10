@@ -11,6 +11,7 @@ import os
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORM_DIR = ROOT / "platform" / "qemu-riscv32"
 REGENERATION_EXAMPLE = ROOT / "examples" / "qemu_riscv_emit_regenerated_boot_source_demo.rz"
+REGENERATION_AFTER_CLASS_EDIT_EXAMPLE = ROOT / "examples" / "qemu_riscv_emit_regenerated_boot_source_after_class_edit_demo.rz"
 IMAGE_BUILDER = ROOT / "tools" / "build_qemu_riscv_mvp_image.py"
 RUNTIME_BINDINGS_GENERATOR = ROOT / "tools" / "generate_qemu_riscv_mvp_runtime_bindings_header.py"
 IMAGE_INSPECTOR = ROOT / "tools" / "inspect_qemu_riscv_mvp_image.py"
@@ -208,6 +209,24 @@ class QemuRiscv32RegenerationIntegrationTests(unittest.TestCase):
             self.assertIn("profile: RV64MVP1", inspect_output)
             self.assertIn("selector_objects=93", inspect_output)
             self.assertIn("method_entries=79", inspect_output)
+
+    def test_regenerated_kernel_source_reflects_seeded_class_edits_accepted_in_image(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="regen-", dir=ROOT / "misc") as temp_dir:
+            temp_root = Path(temp_dir)
+            (
+                regenerated_log,
+                _regenerated_source_path,
+                _regenerated_source,
+                _regenerated_kernel_source_path,
+                regenerated_kernel_source,
+            ) = self.regenerate_boot_source(
+                build_dir=temp_root / "regen-edit",
+                example_path=REGENERATION_AFTER_CLASS_EDIT_EXAMPLE,
+            )
+
+            self.assertIn("recorz-regenerated-kernel-source-begin", regenerated_log)
+            self.assertIn("RecorzKernelClass: #Display", regenerated_kernel_source)
+            self.assertIn("Transcript show: 'RGEN'.", regenerated_kernel_source)
 
 
 if __name__ == "__main__":

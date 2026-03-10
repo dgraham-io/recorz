@@ -1,0 +1,22 @@
+Display clear.
+Workspace fileOutClassNamed: 'Display'.
+Workspace setContents: 'RecorzKernelClass: #Display descriptorOrder: 2 objectKindOrder: 1 sourceBootOrder: 1 instanceVariableNames: ''''
+!
+defaultForm
+    ^Display defaultForm
+!
+clear
+    Display defaultForm clear.
+    ^self
+!
+writeString: text
+    Display defaultForm writeString: text.
+    ^self
+!
+newline
+    Transcript show: ''RGEN''.
+    Transcript cr.
+    ^self
+!'.
+Workspace acceptCurrent.
+Workspace emitRegeneratedBootSource.

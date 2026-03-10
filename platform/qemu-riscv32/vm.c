@@ -3517,43 +3517,45 @@ static const struct recorz_mvp_seed_class_source_record *seed_class_source_recor
     return 0;
 }
 
-static const char *workspace_method_source_text_for_browser_target(
-    const struct recorz_mvp_heap_object *method_owner_class_object,
-    const char *class_name,
+static uint8_t seed_class_method_chunk_for_selector(
+    const struct recorz_mvp_seed_class_source_record *seed_source,
     const char *selector_name_text,
-    uint8_t class_side
+    uint8_t class_side,
+    char chunk_out[],
+    uint32_t chunk_out_size,
+    char protocol_name_out[],
+    uint32_t protocol_name_out_size
 ) {
-    const struct recorz_mvp_live_method_source *source_record;
-    const struct recorz_mvp_seed_class_source_record *seed_source;
     const char *cursor;
-    uint8_t selector_id;
     uint8_t scanning_class_side = 0U;
     char chunk[METHOD_SOURCE_CHUNK_LIMIT];
+    char current_protocol[METHOD_SOURCE_NAME_LIMIT];
     char parsed_selector_name[METHOD_SOURCE_NAME_LIMIT];
     char argument_names[MAX_SEND_ARGS][METHOD_SOURCE_NAME_LIMIT];
     const char *body_cursor = 0;
     uint16_t argument_count = 0U;
 
-    selector_id = source_selector_id_for_name(selector_name_text);
-    if (selector_id == 0U) {
-        machine_panic("Workspace method source target uses an unknown selector");
-    }
-    source_record = live_method_source_for(heap_handle_for_object(method_owner_class_object), selector_id);
-    if (source_record != 0) {
-        return live_method_source_text(source_record);
-    }
-    seed_source = seed_class_source_record_for_name(class_name);
     if (seed_source == 0 || seed_source->canonical_source == 0) {
-        return 0;
+        return 0U;
+    }
+    current_protocol[0] = '\0';
+    if (protocol_name_out != 0 && protocol_name_out_size != 0U) {
+        protocol_name_out[0] = '\0';
     }
     cursor = seed_source->canonical_source;
     while (source_copy_next_chunk(&cursor, chunk, sizeof(chunk)) != 0U) {
         if (source_starts_with(chunk, "RecorzKernelClass:")) {
             scanning_class_side = 0U;
+            current_protocol[0] = '\0';
             continue;
         }
         if (source_starts_with(chunk, "RecorzKernelClassSide:")) {
             scanning_class_side = 1U;
+            current_protocol[0] = '\0';
+            continue;
+        }
+        if (source_starts_with(chunk, "RecorzKernelProtocol:")) {
+            source_parse_protocol_name_from_chunk(chunk, current_protocol, sizeof(current_protocol));
             continue;
         }
         if (scanning_class_side != class_side) {
@@ -3567,11 +3569,53 @@ static const char *workspace_method_source_text_for_browser_target(
                 &body_cursor) == 0) {
             continue;
         }
-        if (source_names_equal(parsed_selector_name, selector_name_text)) {
-            return runtime_string_allocate_copy(chunk);
+        if (!source_names_equal(parsed_selector_name, selector_name_text)) {
+            continue;
         }
+        source_copy_identifier(chunk_out, chunk_out_size, chunk);
+        if (protocol_name_out != 0 && protocol_name_out_size != 0U) {
+            source_copy_identifier(
+                protocol_name_out,
+                protocol_name_out_size,
+                current_protocol[0] == '\0' ? "UNFILED" : current_protocol
+            );
+        }
+        return 1U;
     }
-    return 0;
+    return 0U;
+}
+
+static const char *workspace_method_source_text_for_browser_target(
+    const struct recorz_mvp_heap_object *method_owner_class_object,
+    const char *class_name,
+    const char *selector_name_text,
+    uint8_t class_side
+) {
+    const struct recorz_mvp_live_method_source *source_record;
+    const struct recorz_mvp_seed_class_source_record *seed_source;
+    uint8_t selector_id;
+    char chunk[METHOD_SOURCE_CHUNK_LIMIT];
+
+    selector_id = source_selector_id_for_name(selector_name_text);
+    if (selector_id == 0U) {
+        machine_panic("Workspace method source target uses an unknown selector");
+    }
+    source_record = live_method_source_for(heap_handle_for_object(method_owner_class_object), selector_id);
+    if (source_record != 0) {
+        return live_method_source_text(source_record);
+    }
+    seed_source = seed_class_source_record_for_name(class_name);
+    if (!seed_class_method_chunk_for_selector(
+            seed_source,
+            selector_name_text,
+            class_side,
+            chunk,
+            sizeof(chunk),
+            0,
+            0U)) {
+        return 0;
+    }
+    return runtime_string_allocate_copy(chunk);
 }
 
 static const struct recorz_mvp_heap_object *default_form_object(void) {
@@ -5386,6 +5430,7 @@ static void workspace_render_regenerated_source_browser(
     form_clear(form);
     workspace_write_label_and_text(form, "VIEW", "REGEN");
     workspace_write_label_and_text(form, "SOURCE", source_name);
+    workspace_write_label_and_text(form, "CLOSE", "CTRL-O/D");
     if (source_value.kind != RECORZ_MVP_VALUE_STRING ||
         source_value.string == 0 ||
         source_value.string[0] == '\0') {
@@ -5428,7 +5473,7 @@ static void workspace_render_input_monitor_browser(
     workspace_write_label_and_text(form, "DOIT", "CTRL-D/R");
     workspace_write_label_and_text(form, "REVERT", "CTRL-Y");
     workspace_write_label_and_text(form, "TESTS", "CTRL-T");
-    workspace_write_label_and_text(form, "SAVE", "CTRL-W/K");
+    workspace_write_label_and_text(form, "SAVE", "CTRL-W/K REGEN:G");
     workspace_write_label_and_text(form, "CLOSE", "CTRL-O");
     workspace_write_label_and_text(form, "ACCEPT", "CTRL-X");
     cursor_index = workspace_input_monitor_cursor_index(workspace_object);
@@ -6761,6 +6806,63 @@ static uint8_t workspace_browse_input_monitor_context(
     return 1U;
 }
 
+static void workspace_view_regenerated_source_from_input_monitor(
+    const struct recorz_mvp_heap_object *workspace_object,
+    uint32_t regenerated_view_kind,
+    const char *source_name
+) {
+    uint16_t workspace_handle = heap_handle_for_object(workspace_object);
+    struct recorz_mvp_value saved_view_kind = heap_get_field(
+        workspace_object,
+        workspace_current_view_kind_field_index(workspace_object)
+    );
+    struct recorz_mvp_value saved_target_name = heap_get_field(
+        workspace_object,
+        workspace_current_target_name_field_index(workspace_object)
+    );
+    struct recorz_mvp_value saved_source = heap_get_field(
+        workspace_object,
+        workspace_current_source_field_index(workspace_object)
+    );
+
+    heap_set_field(
+        workspace_handle,
+        workspace_current_view_kind_field_index(workspace_object),
+        small_integer_value((int32_t)regenerated_view_kind)
+    );
+    heap_set_field(
+        workspace_handle,
+        workspace_current_source_field_index(workspace_object),
+        nil_value()
+    );
+    workspace_render_regenerated_source_browser(workspace_object, source_name);
+    while (1) {
+        char ch = machine_wait_getc();
+
+        if (ch == 0x0f || ch == 0x04) {
+            break;
+        }
+    }
+    heap_set_field(
+        workspace_handle,
+        workspace_current_view_kind_field_index(workspace_object),
+        saved_view_kind
+    );
+    heap_set_field(
+        workspace_handle,
+        workspace_current_target_name_field_index(workspace_object),
+        saved_target_name
+    );
+    heap_set_field(
+        workspace_handle,
+        workspace_current_source_field_index(workspace_object),
+        saved_source
+    );
+    workspace_bind_input_monitor_buffer(workspace_object);
+    workspace_bind_input_monitor_cursor_state(workspace_object);
+    workspace_render_input_monitor_browser(workspace_object);
+}
+
 static void workspace_run_interactive_input_monitor(
     const struct recorz_mvp_heap_object *workspace_object
 ) {
@@ -6851,6 +6953,14 @@ static void workspace_run_interactive_input_monitor(
         if (ch == 0x14) {
             workspace_run_input_monitor_tests(workspace_object);
             workspace_render_input_monitor_browser(workspace_object);
+            continue;
+        }
+        if (ch == 0x07) {
+            workspace_view_regenerated_source_from_input_monitor(
+                workspace_object,
+                WORKSPACE_VIEW_REGENERATED_KERNEL_SOURCE,
+                "KERNEL"
+            );
             continue;
         }
         if (ch == 0x0f) {
@@ -11754,39 +11864,214 @@ static void append_seeded_class_header_source(
     append_char_checked(buffer, buffer_size, offset, '\'');
 }
 
-static void append_live_method_source_chunks(
+static uint8_t seed_class_side_has_source_chunks(
+    const struct recorz_mvp_seed_class_source_record *seed_source,
+    uint16_t class_handle,
+    uint8_t class_side
+) {
+    const char *cursor;
+    uint8_t scanning_class_side = 0U;
+    char chunk[METHOD_SOURCE_CHUNK_LIMIT];
+    char parsed_selector_name[METHOD_SOURCE_NAME_LIMIT];
+    char argument_names[MAX_SEND_ARGS][METHOD_SOURCE_NAME_LIMIT];
+    const char *body_cursor = 0;
+    uint16_t argument_count = 0U;
+
+    if (live_method_source_count_for_class_handle(class_handle) != 0U) {
+        return 1U;
+    }
+    if (seed_source == 0 || seed_source->canonical_source == 0) {
+        return 0U;
+    }
+    cursor = seed_source->canonical_source;
+    while (source_copy_next_chunk(&cursor, chunk, sizeof(chunk)) != 0U) {
+        if (source_starts_with(chunk, "RecorzKernelClass:")) {
+            scanning_class_side = 0U;
+            continue;
+        }
+        if (source_starts_with(chunk, "RecorzKernelClassSide:")) {
+            scanning_class_side = 1U;
+            continue;
+        }
+        if (scanning_class_side != class_side) {
+            continue;
+        }
+        if (source_parse_method_header(
+                chunk,
+                parsed_selector_name,
+                argument_names,
+                &argument_count,
+                &body_cursor) != 0) {
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
+static void append_class_method_source_chunks(
     char buffer[],
     uint32_t buffer_size,
     uint32_t *offset,
-    uint16_t class_handle,
+    const struct recorz_mvp_heap_object *class_object,
+    const struct recorz_mvp_seed_class_source_record *seed_source,
+    const char *class_name,
+    uint8_t class_side,
     uint8_t *wrote_any_chunk
 ) {
-    const struct recorz_mvp_live_method_source *sorted_sources[LIVE_METHOD_SOURCE_LIMIT];
+    const struct recorz_mvp_heap_object *method_start_object = class_method_start_object(class_object);
+    uint32_t method_count = class_method_count(class_object);
     char current_protocol[METHOD_SOURCE_NAME_LIMIT];
-    uint16_t source_index;
-    uint16_t sorted_count = 0U;
+    uint32_t method_index;
 
+    (void)class_name;
     current_protocol[0] = '\0';
-    for (source_index = 0U; source_index < live_method_source_count; ++source_index) {
-        const struct recorz_mvp_live_method_source *source_record = &live_method_sources[source_index];
-        uint16_t insert_index;
+    if (seed_source != 0) {
+        const char *cursor = seed_source->canonical_source;
+        uint8_t scanning_class_side = 0U;
+        char chunk[METHOD_SOURCE_CHUNK_LIMIT];
+        char parsed_selector_name[METHOD_SOURCE_NAME_LIMIT];
+        char argument_names[MAX_SEND_ARGS][METHOD_SOURCE_NAME_LIMIT];
+        const char *body_cursor = 0;
+        uint16_t argument_count = 0U;
+        uint8_t emitted_live_sources[LIVE_METHOD_SOURCE_LIMIT];
 
-        if (source_record->class_handle != class_handle) {
-            continue;
+        for (method_index = 0U; method_index < LIVE_METHOD_SOURCE_LIMIT; ++method_index) {
+            emitted_live_sources[method_index] = 0U;
         }
-        insert_index = sorted_count;
-        while (insert_index != 0U &&
-               compare_method_source_records(source_record, sorted_sources[insert_index - 1U]) < 0) {
-            sorted_sources[insert_index] = sorted_sources[insert_index - 1U];
-            --insert_index;
+        while (source_copy_next_chunk(&cursor, chunk, sizeof(chunk)) != 0U) {
+            const struct recorz_mvp_live_method_source *source_record = 0;
+            const char *method_source = chunk;
+            const char *protocol_name;
+            uint8_t selector_id = 0U;
+
+            if (source_starts_with(chunk, "RecorzKernelClass:")) {
+                scanning_class_side = 0U;
+                current_protocol[0] = '\0';
+                continue;
+            }
+            if (source_starts_with(chunk, "RecorzKernelClassSide:")) {
+                scanning_class_side = 1U;
+                current_protocol[0] = '\0';
+                continue;
+            }
+            if (source_starts_with(chunk, "RecorzKernelProtocol:")) {
+                source_parse_protocol_name_from_chunk(chunk, current_protocol, sizeof(current_protocol));
+                continue;
+            }
+            if (scanning_class_side != class_side) {
+                continue;
+            }
+            if (source_parse_method_header(
+                    chunk,
+                    parsed_selector_name,
+                    argument_names,
+                    &argument_count,
+                    &body_cursor) == 0) {
+                continue;
+            }
+            selector_id = source_selector_id_for_name(parsed_selector_name);
+            if (selector_id == 0U) {
+                machine_panic("KernelInstaller fileOutClassNamed: canonical source uses an unknown selector");
+            }
+            source_record = live_method_source_for_selector_and_arity(
+                heap_handle_for_object(class_object),
+                selector_id,
+                (uint8_t)argument_count
+            );
+            if (source_record != 0) {
+                uint16_t source_index;
+
+                method_source = live_method_source_text(source_record);
+                for (source_index = 0U; source_index < live_method_source_count; ++source_index) {
+                    if (&live_method_sources[source_index] == source_record) {
+                        emitted_live_sources[source_index] = 1U;
+                        break;
+                    }
+                }
+                if (source_record->protocol_name[0] != '\0') {
+                    protocol_name = source_record->protocol_name;
+                } else {
+                    protocol_name = current_protocol[0] == '\0' ? "UNFILED" : current_protocol;
+                }
+            } else {
+                protocol_name = current_protocol[0] == '\0' ? "UNFILED" : current_protocol;
+            }
+            if (!source_names_equal(current_protocol, protocol_name)) {
+                source_copy_identifier(current_protocol, sizeof(current_protocol), protocol_name);
+                if (current_protocol[0] != '\0' && !source_names_equal(current_protocol, "UNFILED")) {
+                    append_protocol_chunk(buffer, buffer_size, offset, current_protocol, wrote_any_chunk);
+                }
+            }
+            append_chunk_text(buffer, buffer_size, offset, method_source, wrote_any_chunk);
         }
-        sorted_sources[insert_index] = source_record;
-        ++sorted_count;
+        {
+            const struct recorz_mvp_live_method_source *sorted_sources[LIVE_METHOD_SOURCE_LIMIT];
+            uint16_t sorted_count = 0U;
+            uint16_t source_index;
+
+            for (source_index = 0U; source_index < live_method_source_count; ++source_index) {
+                const struct recorz_mvp_live_method_source *source_record = &live_method_sources[source_index];
+                uint16_t insert_index;
+
+                if (source_record->class_handle != heap_handle_for_object(class_object) ||
+                    emitted_live_sources[source_index]) {
+                    continue;
+                }
+                insert_index = sorted_count;
+                while (insert_index != 0U &&
+                       compare_method_source_records(source_record, sorted_sources[insert_index - 1U]) < 0) {
+                    sorted_sources[insert_index] = sorted_sources[insert_index - 1U];
+                    --insert_index;
+                }
+                sorted_sources[insert_index] = source_record;
+                ++sorted_count;
+            }
+            for (source_index = 0U; source_index < sorted_count; ++source_index) {
+                const char *protocol_name = sorted_sources[source_index]->protocol_name[0] == '\0'
+                    ? "UNFILED"
+                    : sorted_sources[source_index]->protocol_name;
+
+                if (!source_names_equal(current_protocol, protocol_name)) {
+                    source_copy_identifier(current_protocol, sizeof(current_protocol), protocol_name);
+                    if (current_protocol[0] != '\0' && !source_names_equal(current_protocol, "UNFILED")) {
+                        append_protocol_chunk(buffer, buffer_size, offset, current_protocol, wrote_any_chunk);
+                    }
+                }
+                append_chunk_text(
+                    buffer,
+                    buffer_size,
+                    offset,
+                    live_method_source_text(sorted_sources[source_index]),
+                    wrote_any_chunk
+                );
+            }
+        }
+        return;
     }
-    for (source_index = 0U; source_index < sorted_count; ++source_index) {
-        if (!source_names_equal(current_protocol, sorted_sources[source_index]->protocol_name)) {
-            source_copy_identifier(current_protocol, sizeof(current_protocol), sorted_sources[source_index]->protocol_name);
-            if (current_protocol[0] != '\0') {
+    if (method_count == 0U) {
+        return;
+    }
+    if (method_start_object == 0) {
+        machine_panic("KernelInstaller fileOutClassNamed: method start is missing");
+    }
+    for (method_index = 0U; method_index < method_count; ++method_index) {
+        const struct recorz_mvp_heap_object *method_object = (const struct recorz_mvp_heap_object *)heap_object(
+            (uint16_t)(heap_handle_for_object(method_start_object) + method_index)
+        );
+        const struct recorz_mvp_live_method_source *source_record = live_method_source_for_selector_and_arity(
+            heap_handle_for_object(class_object),
+            (uint8_t)method_descriptor_selector(method_object),
+            (uint8_t)method_descriptor_argument_count(method_object)
+        );
+        const char *protocol_name;
+
+        if (source_record == 0) {
+            machine_panic("KernelInstaller fileOutClassNamed: method is missing source");
+        }
+        protocol_name = source_record->protocol_name[0] == '\0' ? "UNFILED" : source_record->protocol_name;
+        if (!source_names_equal(current_protocol, protocol_name)) {
+            source_copy_identifier(current_protocol, sizeof(current_protocol), protocol_name);
+            if (current_protocol[0] != '\0' && !source_names_equal(current_protocol, "UNFILED")) {
                 append_protocol_chunk(buffer, buffer_size, offset, current_protocol, wrote_any_chunk);
             }
         }
@@ -11794,7 +12079,7 @@ static void append_live_method_source_chunks(
             buffer,
             buffer_size,
             offset,
-            live_method_source_text(sorted_sources[source_index]),
+            live_method_source_text(source_record),
             wrote_any_chunk
         );
     }
@@ -11847,12 +12132,8 @@ static const char *file_out_class_source_text(
     }
     metaclass_object = class_side_lookup_target(class_object);
     metaclass_handle = heap_handle_for_object(metaclass_object);
-    if (dynamic_definition == 0 &&
-        (live_method_source_count_for_class_handle(class_handle) != class_method_count(class_object) ||
-         live_method_source_count_for_class_handle(metaclass_handle) != class_method_count(metaclass_object))) {
-        return runtime_string_allocate_copy(seed_source->canonical_source);
-    }
-    if (live_method_source_count_for_class_handle(class_handle) != class_method_count(class_object)) {
+    if (dynamic_definition != 0 &&
+        live_method_source_count_for_class_handle(class_handle) != class_method_count(class_object)) {
         machine_panic("KernelInstaller fileOutClassNamed: class contains methods without live source");
     }
     buffer[0] = '\0';
@@ -11872,18 +12153,23 @@ static const char *file_out_class_source_text(
         );
     }
     append_text_checked(buffer, buffer_size, &offset, "\n!\n");
-    append_live_method_source_chunks(
+    append_class_method_source_chunks(
         buffer,
         buffer_size,
         &offset,
-        class_handle,
+        class_object,
+        seed_source,
+        dynamic_definition != 0 ? dynamic_definition->class_name : seed_source->class_name,
+        0U,
         &wrote_any_chunk
     );
 
-    if (live_method_source_count_for_class_handle(metaclass_handle) != class_method_count(metaclass_object)) {
+    if (dynamic_definition != 0 &&
+        live_method_source_count_for_class_handle(metaclass_handle) != class_method_count(metaclass_object)) {
         machine_panic("KernelInstaller fileOutClassNamed: metaclass contains methods without live source");
     }
-    if (class_method_count(metaclass_object) != 0U) {
+    if ((dynamic_definition != 0 && class_method_count(metaclass_object) != 0U) ||
+        (dynamic_definition == 0 && seed_class_side_has_source_chunks(seed_source, metaclass_handle, 1U))) {
         append_text_checked(
             buffer,
             buffer_size,
@@ -11897,11 +12183,14 @@ static const char *file_out_class_source_text(
             dynamic_definition != 0 ? dynamic_definition->class_name : seed_source->class_name
         );
         append_text_checked(buffer, buffer_size, &offset, "\n!\n");
-        append_live_method_source_chunks(
+        append_class_method_source_chunks(
             buffer,
             buffer_size,
             &offset,
-            metaclass_handle,
+            metaclass_object,
+            seed_source,
+            dynamic_definition != 0 ? dynamic_definition->class_name : seed_source->class_name,
+            1U,
             &wrote_any_chunk
         );
     }
@@ -12233,12 +12522,18 @@ static void regenerated_boot_source_emit_kernel_source(
             if (quote_units) {
                 regenerated_boot_source_emit_quoted_string(
                     emitter,
-                    seed_source->builder_source
+                    file_out_class_source_text(
+                        seed_source->class_name,
+                        kernel_source_io_buffer,
+                        sizeof(kernel_source_io_buffer))
                 );
             } else {
                 regenerated_boot_source_emit_text(
                     emitter,
-                    seed_source->builder_source
+                    file_out_class_source_text(
+                        seed_source->class_name,
+                        kernel_source_io_buffer,
+                        sizeof(kernel_source_io_buffer))
                 );
             }
             emitted_any_unit = 1U;
