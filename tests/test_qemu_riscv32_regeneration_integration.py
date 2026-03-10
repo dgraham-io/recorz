@@ -217,8 +217,8 @@ class QemuRiscv32RegenerationIntegrationTests(unittest.TestCase):
             self.assertIn("RecorzKernelSelector: #show:", _regenerated_kernel_source)
             self.assertIn("RecorzKernelGlyphBitmapFamily:", _regenerated_kernel_source)
             self.assertIn("profile: RV64MVP1", inspect_output)
-            self.assertIn("selector_objects=100", inspect_output)
-            self.assertIn("method_entries=86", inspect_output)
+            self.assertIn("selector_objects=101", inspect_output)
+            self.assertIn("method_entries=87", inspect_output)
 
     def test_regenerated_kernel_source_reflects_seeded_class_edits_accepted_in_image(self) -> None:
         with tempfile.TemporaryDirectory(prefix="regen-", dir=ROOT / "misc") as temp_dir:

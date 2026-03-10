@@ -200,3 +200,5 @@ RecorzKernelSelector: #runCurrentTests order: 98
 !
 RecorzKernelSelector: #editCurrent order: 99
 !
+RecorzKernelSelector: #browseRegeneratedFileInSource order: 100
+!

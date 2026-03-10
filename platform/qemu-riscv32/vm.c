@@ -118,7 +118,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEST_RUNNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_EDIT_CURRENT
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_BROWSE_REGENERATED_FILE_IN_SOURCE
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_TEST_RUNNER
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #define SOURCE_EVAL_ENV_LIMIT 32U
@@ -144,6 +144,7 @@
 #define WORKSPACE_VIEW_REGENERATED_BOOT_SOURCE 16U
 #define WORKSPACE_VIEW_REGENERATED_KERNEL_SOURCE 17U
 #define WORKSPACE_VIEW_INPUT_MONITOR 18U
+#define WORKSPACE_VIEW_REGENERATED_FILE_IN_SOURCE 19U
 
 enum recorz_mvp_value_kind {
     RECORZ_MVP_VALUE_NIL = 0,
@@ -412,6 +413,7 @@ static void emit_regenerated_boot_source(const struct recorz_mvp_heap_object *wo
 static void emit_regenerated_kernel_source(void);
 static const char *regenerated_boot_source_text(const struct recorz_mvp_heap_object *workspace_object);
 static const char *regenerated_kernel_source_text(void);
+static const char *regenerated_file_in_source_text(void);
 static int compare_source_names(const char *left, const char *right);
 static const char *runtime_string_allocate_copy(const char *text);
 static struct recorz_mvp_value boolean_value(uint8_t condition);
@@ -800,6 +802,8 @@ static const char *selector_name(uint8_t selector) {
             return "browseRegeneratedBootSource";
         case RECORZ_MVP_SELECTOR_BROWSE_REGENERATED_KERNEL_SOURCE:
             return "browseRegeneratedKernelSource";
+        case RECORZ_MVP_SELECTOR_BROWSE_REGENERATED_FILE_IN_SOURCE:
+            return "browseRegeneratedFileInSource";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -4187,6 +4191,9 @@ static struct recorz_mvp_value workspace_current_source_value(
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_REGENERATED_KERNEL_SOURCE) {
         return string_value(regenerated_kernel_source_text());
     }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_REGENERATED_FILE_IN_SOURCE) {
+        return string_value(regenerated_file_in_source_text());
+    }
     return source_value;
 }
 
@@ -5481,6 +5488,7 @@ static void workspace_render_input_monitor_browser(
     workspace_write_label_and_text(form, "TESTS", "CTRL-T");
     workspace_write_label_and_text(form, "EMIT", "CTRL-U");
     workspace_write_label_and_text(form, "SAVE", "CTRL-W/K REGEN:G/L");
+    workspace_write_label_and_text(form, "FILEIN", "CTRL-Q");
     workspace_write_label_and_text(form, "CLOSE", "CTRL-O");
     workspace_write_label_and_text(form, "ACCEPT", "CTRL-X");
     cursor_index = workspace_input_monitor_cursor_index(workspace_object);
@@ -6989,6 +6997,14 @@ static void workspace_run_interactive_input_monitor(
                 workspace_object,
                 WORKSPACE_VIEW_REGENERATED_BOOT_SOURCE,
                 "BOOT"
+            );
+            continue;
+        }
+        if (ch == 0x11) {
+            workspace_view_regenerated_source_from_input_monitor(
+                workspace_object,
+                WORKSPACE_VIEW_REGENERATED_FILE_IN_SOURCE,
+                "FILEIN"
             );
             continue;
         }
@@ -12413,6 +12429,10 @@ static void regenerated_boot_source_emit_view_restore(
         regenerated_boot_source_emit_text(emitter, "Workspace browseRegeneratedKernelSource.\n");
         return;
     }
+    if (view_kind_value.integer == WORKSPACE_VIEW_REGENERATED_FILE_IN_SOURCE) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browseRegeneratedFileInSource.\n");
+        return;
+    }
     if (view_kind_value.integer == WORKSPACE_VIEW_INPUT_MONITOR) {
         regenerated_boot_source_emit_text(emitter, "Workspace browseInteractiveInput.\n");
         return;
@@ -12802,6 +12822,10 @@ static const char *regenerated_kernel_source_text(void) {
     regenerated_source_io_buffer[0] = '\0';
     regenerated_boot_source_emit_kernel_source(&emitter, 0U);
     return regenerated_source_io_buffer;
+}
+
+static const char *regenerated_file_in_source_text(void) {
+    return "RecorzKernelDoIt:\nWorkspace emitRegeneratedBootSource.\n";
 }
 
 static void execute_entry_kernel_installer_compiled_method_word0_word1_word2_word3_instruction_count(
@@ -14003,6 +14027,20 @@ static void execute_entry_workspace_browse_regenerated_kernel_source(
     push(receiver);
 }
 
+static void execute_entry_workspace_browse_regenerated_file_in_source(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    workspace_remember_current_source(object, 0);
+    workspace_remember_view(object, WORKSPACE_VIEW_REGENERATED_FILE_IN_SOURCE, 0);
+    workspace_render_regenerated_source_browser(object, "FILEIN");
+    push(receiver);
+}
+
 static void execute_entry_workspace_browse_interactive_input(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -14217,6 +14255,10 @@ static void workspace_reopen_in_place(
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_REGENERATED_KERNEL_SOURCE) {
         workspace_render_regenerated_source_browser(object, "KERNEL");
+        return;
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_REGENERATED_FILE_IN_SOURCE) {
+        workspace_render_regenerated_source_browser(object, "FILEIN");
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_INPUT_MONITOR) {

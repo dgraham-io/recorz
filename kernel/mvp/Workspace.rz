@@ -102,6 +102,9 @@ browseRegeneratedBootSource
 browseRegeneratedKernelSource
     <primitive: #workspaceBrowseRegeneratedKernelSource>
 !
+browseRegeneratedFileInSource
+    <primitive: #workspaceBrowseRegeneratedFileInSource>
+!
 seedBootContents: source
     <primitive: #workspaceSeedBootContents>
 !
