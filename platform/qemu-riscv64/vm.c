@@ -2918,14 +2918,15 @@ static uint8_t seed_class_method_chunk_for_selector(
     const char *body_cursor = 0;
     uint16_t argument_count = 0U;
 
-    if (seed_source == 0 || seed_source->canonical_source == 0) {
+    if (seed_source == 0 ||
+        (seed_source->builder_source == 0 && seed_source->canonical_source == 0)) {
         return 0U;
     }
     current_protocol[0] = '\0';
     if (protocol_name_out != 0 && protocol_name_out_size != 0U) {
         protocol_name_out[0] = '\0';
     }
-    cursor = seed_source->canonical_source;
+    cursor = seed_source->builder_source != 0 ? seed_source->builder_source : seed_source->canonical_source;
     while (source_copy_next_chunk(&cursor, chunk, sizeof(chunk)) != 0U) {
         if (source_starts_with(chunk, "RecorzKernelClass:")) {
             scanning_class_side = 0U;
@@ -2942,6 +2943,9 @@ static uint8_t seed_class_method_chunk_for_selector(
             continue;
         }
         if (scanning_class_side != class_side) {
+            continue;
+        }
+        if (source_starts_with(chunk, "RecorzKernel")) {
             continue;
         }
         if (source_parse_method_header(
@@ -10544,10 +10548,11 @@ static uint8_t seed_class_side_has_source_chunks(
     if (live_method_source_count_for_class_handle(class_handle) != 0U) {
         return 1U;
     }
-    if (seed_source == 0 || seed_source->canonical_source == 0) {
+    if (seed_source == 0 ||
+        (seed_source->builder_source == 0 && seed_source->canonical_source == 0)) {
         return 0U;
     }
-    cursor = seed_source->canonical_source;
+    cursor = seed_source->builder_source != 0 ? seed_source->builder_source : seed_source->canonical_source;
     while (source_copy_next_chunk(&cursor, chunk, sizeof(chunk)) != 0U) {
         if (source_starts_with(chunk, "RecorzKernelClass:")) {
             scanning_class_side = 0U;
@@ -10558,6 +10563,9 @@ static uint8_t seed_class_side_has_source_chunks(
             continue;
         }
         if (scanning_class_side != class_side) {
+            continue;
+        }
+        if (source_starts_with(chunk, "RecorzKernel")) {
             continue;
         }
         if (source_parse_method_header(
@@ -10590,7 +10598,7 @@ static void append_class_method_source_chunks(
     (void)class_name;
     current_protocol[0] = '\0';
     if (seed_source != 0) {
-        const char *cursor = seed_source->canonical_source;
+        const char *cursor = seed_source->builder_source != 0 ? seed_source->builder_source : seed_source->canonical_source;
         uint8_t scanning_class_side = 0U;
         char chunk[METHOD_SOURCE_CHUNK_LIMIT];
         char parsed_selector_name[METHOD_SOURCE_NAME_LIMIT];
@@ -10618,11 +10626,15 @@ static void append_class_method_source_chunks(
                 current_protocol[0] = '\0';
                 continue;
             }
+            if (scanning_class_side != class_side) {
+                continue;
+            }
             if (source_starts_with(chunk, "RecorzKernelProtocol:")) {
                 source_parse_protocol_name_from_chunk(chunk, current_protocol, sizeof(current_protocol));
                 continue;
             }
-            if (scanning_class_side != class_side) {
+            if (source_starts_with(chunk, "RecorzKernel")) {
+                append_chunk_text(buffer, buffer_size, offset, chunk, wrote_any_chunk);
                 continue;
             }
             if (source_parse_method_header(
@@ -10631,6 +10643,7 @@ static void append_class_method_source_chunks(
                     argument_names,
                     &argument_count,
                     &body_cursor) == 0) {
+                append_chunk_text(buffer, buffer_size, offset, chunk, wrote_any_chunk);
                 continue;
             }
             selector_id = source_selector_id_for_name(parsed_selector_name);
@@ -11669,6 +11682,12 @@ static void file_in_chunk_stream_source(const char *source) {
             workspace_evaluate_source(source_parse_do_it_chunk_body(chunk));
             current_protocol[0] = '\0';
             ++do_it_chunk_count;
+            continue;
+        }
+        if (source_starts_with(chunk, "RecorzKernelBootObject:") ||
+            source_starts_with(chunk, "RecorzKernelRoot:") ||
+            source_starts_with(chunk, "RecorzKernelSelector:") ||
+            source_starts_with(chunk, "RecorzKernelGlyphBitmapFamily:")) {
             continue;
         }
         if (install_class_object == 0) {

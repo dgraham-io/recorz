@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORM_DIR = ROOT / "platform" / "qemu-riscv32"
 IMAGE_FIRST_UPDATE_PATH = ROOT / "examples" / "qemu_riscv_image_first_transcript_show_noop_update.rz"
+REGENERATE_EXAMPLE = ROOT / "examples" / "qemu_riscv_emit_regenerated_boot_source_file_in.rz"
 
 
 class QemuRiscv32MakefileTests(unittest.TestCase):
@@ -206,6 +207,68 @@ class QemuRiscv32MakefileTests(unittest.TestCase):
             self.assertIn(f"DEV_SNAPSHOT={snapshot_path}", result.stdout)
             self.assertIn(f"SNAPSHOT_PAYLOAD={snapshot_path}", result.stdout)
             self.assertIn("continue-snapshot-interactive", result.stdout)
+
+    @unittest.skipUnless(shutil.which("make"), "make is required for QEMU RISC-V Makefile tests")
+    def test_dev_regenerate_boot_source_routes_through_regenerate_boot_source(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-makefile-dev-regenerate-") as temp_dir:
+            build_dir = Path(temp_dir)
+            snapshot_path = build_dir / "dev" / "live.bin"
+            result = subprocess.run(
+                [
+                    "make",
+                    "-n",
+                    "-C",
+                    str(PLATFORM_DIR),
+                    f"BUILD_DIR={build_dir}",
+                    f"DEV_SNAPSHOT={snapshot_path}",
+                    "dev-regenerate-boot-source",
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    "make -n dev-regenerate-boot-source failed\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            self.assertIn("qemu_riscv_image_first_boot.rz", result.stdout)
+            self.assertIn(f"SNAPSHOT_PAYLOAD={snapshot_path}", result.stdout)
+            self.assertIn(f"FILE_IN_PAYLOAD={REGENERATE_EXAMPLE}", result.stdout)
+            self.assertIn("regenerate-boot-source", result.stdout)
+
+    @unittest.skipUnless(shutil.which("make"), "make is required for QEMU RISC-V Makefile tests")
+    def test_dev_regenerate_image_routes_through_dev_regenerate_boot_source(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-makefile-dev-regenerate-image-") as temp_dir:
+            build_dir = Path(temp_dir)
+            snapshot_path = build_dir / "dev" / "live.bin"
+            result = subprocess.run(
+                [
+                    "make",
+                    "-n",
+                    "-C",
+                    str(PLATFORM_DIR),
+                    f"BUILD_DIR={build_dir}",
+                    f"DEV_SNAPSHOT={snapshot_path}",
+                    "dev-regenerate-image",
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    "make -n dev-regenerate-image failed\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            self.assertIn("dev-regenerate-boot-source", result.stdout)
+            self.assertIn(f"RECORZ_MVP_KERNEL_SOURCE_BUNDLE={build_dir / 'regenerated_kernel_source.rz'}", result.stdout)
+            self.assertIn(str(build_dir / "regenerated_boot_source.rz"), result.stdout)
+            self.assertIn(str(build_dir / "regenerated_image.bin"), result.stdout)
 
     @unittest.skipUnless(shutil.which("make"), "make is required for QEMU RISC-V Makefile tests")
     def test_dev_reset_reinitializes_the_default_snapshot_and_clears_backup(self) -> None:

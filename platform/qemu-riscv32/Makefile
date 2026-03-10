@@ -42,6 +42,7 @@ DEV_SNAPSHOT ?= $(ROOT)/misc/qemu-riscv32-dev/live.bin
 DEV_SNAPSHOT_BACKUP ?= $(DEV_SNAPSHOT).bak
 DEV_BOOT_EXAMPLE ?= $(ROOT)/examples/qemu_riscv_image_first_boot.rz
 DEV_SAVE_EXAMPLE ?= $(ROOT)/examples/qemu_riscv_image_first_save.rz
+DEV_REGENERATE_EXAMPLE ?= $(ROOT)/examples/qemu_riscv_emit_regenerated_boot_source_file_in.rz
 
 CFLAGS := -march=rv32im -mabi=ilp32 -mcmodel=medany -nostdlib -ffreestanding -O2 -Wall -Wextra -I$(CURDIR) -I$(BUILD_DIR)
 ifeq ($(RV32_PROFILE),dev)
@@ -73,7 +74,7 @@ OBJECTS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(filter %.c,$(SOURCES))) \
 	$(patsubst %.S,$(BUILD_DIR)/%.o,$(filter %.S,$(SOURCES))) \
 	$(GENERATED_IMAGE_OBJECT)
 
-.PHONY: all run run-interactive run-headless screenshot save-snapshot continue-snapshot continue-snapshot-interactive regenerate-boot-source regenerate-runtime-bindings regenerate-image dev-init dev-boot dev-interactive dev-screenshot dev-file-in dev-reset dev-restore inspect-image clean FORCE
+.PHONY: all run run-interactive run-headless screenshot save-snapshot continue-snapshot continue-snapshot-interactive regenerate-boot-source regenerate-runtime-bindings regenerate-image dev-init dev-boot dev-interactive dev-screenshot dev-file-in dev-regenerate-boot-source dev-regenerate-runtime-bindings dev-regenerate-image dev-reset dev-restore inspect-image clean FORCE
 
 all: $(ELF)
 
@@ -211,6 +212,22 @@ dev-file-in:
 	@test -f "$(DEV_SNAPSHOT)" || (echo "DEV_SNAPSHOT does not exist; run dev-init first" >&2; exit 1)
 	@test -n "$(strip $(FILE_IN_PAYLOAD) $(FILE_IN_PAYLOADS))" || (echo "FILE_IN_PAYLOAD or FILE_IN_PAYLOADS is required for dev-file-in" >&2; exit 1)
 	@$(MAKE) -C $(CURDIR) BUILD_DIR=$(BUILD_DIR) EXAMPLE=$(DEV_SAVE_EXAMPLE) SNAPSHOT_PAYLOAD=$(DEV_SNAPSHOT) $(if $(FILE_IN_PAYLOAD),FILE_IN_PAYLOAD=$(FILE_IN_PAYLOAD)) $(if $(strip $(FILE_IN_PAYLOADS)),FILE_IN_PAYLOADS="$(FILE_IN_PAYLOADS)") continue-snapshot
+
+dev-regenerate-boot-source:
+	@test -f "$(DEV_SNAPSHOT)" || (echo "DEV_SNAPSHOT does not exist; run dev-init first" >&2; exit 1)
+	@$(MAKE) -C $(CURDIR) BUILD_DIR=$(BUILD_DIR) EXAMPLE=$(DEV_BOOT_EXAMPLE) SNAPSHOT_PAYLOAD=$(DEV_SNAPSHOT) FILE_IN_PAYLOAD=$(DEV_REGENERATE_EXAMPLE) REGENERATED_BOOT_SOURCE_OUTPUT=$(REGENERATED_BOOT_SOURCE_OUTPUT) REGENERATED_KERNEL_SOURCE_OUTPUT=$(REGENERATED_KERNEL_SOURCE_OUTPUT) regenerate-boot-source
+
+dev-regenerate-runtime-bindings:
+	@test -f "$(DEV_SNAPSHOT)" || (echo "DEV_SNAPSHOT does not exist; run dev-init first" >&2; exit 1)
+	@$(MAKE) -C $(CURDIR) BUILD_DIR=$(BUILD_DIR) DEV_SNAPSHOT=$(DEV_SNAPSHOT) DEV_BOOT_EXAMPLE=$(DEV_BOOT_EXAMPLE) DEV_REGENERATE_EXAMPLE=$(DEV_REGENERATE_EXAMPLE) REGENERATED_BOOT_SOURCE_OUTPUT=$(REGENERATED_BOOT_SOURCE_OUTPUT) REGENERATED_KERNEL_SOURCE_OUTPUT=$(REGENERATED_KERNEL_SOURCE_OUTPUT) REGENERATED_RUNTIME_BINDINGS_OUTPUT=$(REGENERATED_RUNTIME_BINDINGS_OUTPUT) dev-regenerate-boot-source
+	@RECORZ_MVP_KERNEL_SOURCE_BUNDLE=$(REGENERATED_KERNEL_SOURCE_OUTPUT) PYTHONPATH=$(ROOT)/src $(PYTHON) $(GENERATED_BINDINGS_SCRIPT) $(REGENERATED_RUNTIME_BINDINGS_OUTPUT)
+	@echo "wrote $(REGENERATED_RUNTIME_BINDINGS_OUTPUT)"
+
+dev-regenerate-image:
+	@test -f "$(DEV_SNAPSHOT)" || (echo "DEV_SNAPSHOT does not exist; run dev-init first" >&2; exit 1)
+	@$(MAKE) -C $(CURDIR) BUILD_DIR=$(BUILD_DIR) DEV_SNAPSHOT=$(DEV_SNAPSHOT) DEV_BOOT_EXAMPLE=$(DEV_BOOT_EXAMPLE) DEV_REGENERATE_EXAMPLE=$(DEV_REGENERATE_EXAMPLE) REGENERATED_BOOT_SOURCE_OUTPUT=$(REGENERATED_BOOT_SOURCE_OUTPUT) REGENERATED_KERNEL_SOURCE_OUTPUT=$(REGENERATED_KERNEL_SOURCE_OUTPUT) dev-regenerate-boot-source
+	@RECORZ_MVP_KERNEL_SOURCE_BUNDLE=$(REGENERATED_KERNEL_SOURCE_OUTPUT) PYTHONPATH=$(ROOT)/src $(PYTHON) $(IMAGE_SCRIPT) $(REGENERATED_BOOT_SOURCE_OUTPUT) $(REGENERATED_IMAGE_OUTPUT)
+	@echo "wrote $(REGENERATED_IMAGE_OUTPUT)"
 
 dev-reset:
 	@rm -f "$(DEV_SNAPSHOT)" "$(DEV_SNAPSHOT_BACKUP)"

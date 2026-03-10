@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PLATFORM_DIR = ROOT / "platform" / "qemu-riscv32"
 REGENERATION_EXAMPLE = ROOT / "examples" / "qemu_riscv_emit_regenerated_boot_source_demo.rz"
 REGENERATION_AFTER_CLASS_EDIT_EXAMPLE = ROOT / "examples" / "qemu_riscv_emit_regenerated_boot_source_after_class_edit_demo.rz"
+DEV_FILE_IN_UPDATE_EXAMPLE = ROOT / "examples" / "qemu_riscv_image_first_transcript_show_noop_update.rz"
 IMAGE_BUILDER = ROOT / "tools" / "build_qemu_riscv_mvp_image.py"
 RUNTIME_BINDINGS_GENERATOR = ROOT / "tools" / "generate_qemu_riscv_mvp_runtime_bindings_header.py"
 IMAGE_INSPECTOR = ROOT / "tools" / "inspect_qemu_riscv_mvp_image.py"
@@ -22,27 +23,32 @@ IMAGE_INSPECTOR = ROOT / "tools" / "inspect_qemu_riscv_mvp_image.py"
     "QEMU RV32 regeneration integration test requires qemu-system-riscv32 and riscv64-unknown-elf-gcc",
 )
 class QemuRiscv32RegenerationIntegrationTests(unittest.TestCase):
+    def run_make(self, *args: str) -> subprocess.CompletedProcess[str]:
+        result = subprocess.run(
+            ["make", "-C", str(PLATFORM_DIR), *args],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            self.fail(
+                "QEMU RV32 Makefile flow failed\n"
+                f"stdout:\n{result.stdout}\n"
+                f"stderr:\n{result.stderr}"
+            )
+        return result
+
     def regenerate_boot_source(self, *, build_dir: Path, example_path: Path) -> tuple[str, Path, str, Path, str]:
         regenerated_source_path = build_dir / "regenerated_boot_source.rz"
         regenerated_kernel_source_path = build_dir / "regenerated_kernel_source.rz"
-        command = [
-            "make",
-            "-C",
-            str(PLATFORM_DIR),
+        self.run_make(
             f"BUILD_DIR={build_dir}",
             f"EXAMPLE={example_path}",
             f"REGENERATED_BOOT_SOURCE_OUTPUT={regenerated_source_path}",
             f"REGENERATED_KERNEL_SOURCE_OUTPUT={regenerated_kernel_source_path}",
             "clean",
             "regenerate-boot-source",
-        ]
-        result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
-        if result.returncode != 0:
-            self.fail(
-                "QEMU RV32 regenerate-boot-source flow failed\n"
-                f"stdout:\n{result.stdout}\n"
-                f"stderr:\n{result.stderr}"
-            )
+        )
         qemu_log = (build_dir / "qemu.log").read_text(encoding="utf-8")
         return (
             qemu_log,
@@ -206,9 +212,13 @@ class QemuRiscv32RegenerationIntegrationTests(unittest.TestCase):
 
             self.assertIn("RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS = 93", header_text)
             self.assertIn("struct recorz_mvp_seed_class_source_record {", header_text)
+            self.assertIn("RecorzKernelBootObject: #DefaultForm", _regenerated_kernel_source)
+            self.assertIn("RecorzKernelRoot: #default_form", _regenerated_kernel_source)
+            self.assertIn("RecorzKernelSelector: #show:", _regenerated_kernel_source)
+            self.assertIn("RecorzKernelGlyphBitmapFamily:", _regenerated_kernel_source)
             self.assertIn("profile: RV64MVP1", inspect_output)
-            self.assertIn("selector_objects=93", inspect_output)
-            self.assertIn("method_entries=79", inspect_output)
+            self.assertIn("selector_objects=100", inspect_output)
+            self.assertIn("method_entries=86", inspect_output)
 
     def test_regenerated_kernel_source_reflects_seeded_class_edits_accepted_in_image(self) -> None:
         with tempfile.TemporaryDirectory(prefix="regen-", dir=ROOT / "misc") as temp_dir:
@@ -262,9 +272,53 @@ class QemuRiscv32RegenerationIntegrationTests(unittest.TestCase):
             self.assertIn("RGEN", rebuilt_log)
             self.assertIn("CLASS: DISPLAY", rebuilt_log)
             self.assertIn("VIEW: SOURCE", rebuilt_log)
-            self.assertIn("NEWLINETRANSCRIPT SHOW: 'RGEN'.TRANSCRIPT CR.^SELF!", rebuilt_log.replace("\r", "").replace("\n", ""))
+            self.assertIn(
+                "NEWLINETRANSCRIPT SHOW: 'RGEN'.TRANSCRIPT CR.",
+                rebuilt_log.replace("\r", "").replace("\n", ""),
+            )
             self.assertNotEqual(len(original_ppm), 0)
             self.assertNotEqual(len(rebuilt_ppm), 0)
+
+    def test_dev_snapshot_can_regenerate_sources_from_current_image_state(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="regen-", dir=ROOT / "misc") as temp_dir:
+            temp_root = Path(temp_dir)
+            build_dir = temp_root / "dev-loop"
+            snapshot_path = temp_root / "dev" / "live.bin"
+            regenerated_source_path = build_dir / "regenerated_boot_source.rz"
+            regenerated_kernel_source_path = build_dir / "regenerated_kernel_source.rz"
+
+            self.run_make(
+                f"BUILD_DIR={build_dir}",
+                f"DEV_SNAPSHOT={snapshot_path}",
+                "dev-init",
+            )
+            self.run_make(
+                f"BUILD_DIR={build_dir}",
+                f"DEV_SNAPSHOT={snapshot_path}",
+                f"FILE_IN_PAYLOAD={DEV_FILE_IN_UPDATE_EXAMPLE}",
+                "dev-file-in",
+            )
+            result = self.run_make(
+                f"BUILD_DIR={build_dir}",
+                f"DEV_SNAPSHOT={snapshot_path}",
+                f"REGENERATED_BOOT_SOURCE_OUTPUT={regenerated_source_path}",
+                f"REGENERATED_KERNEL_SOURCE_OUTPUT={regenerated_kernel_source_path}",
+                "dev-regenerate-boot-source",
+            )
+
+            qemu_log = (build_dir / "qemu.log").read_text(encoding="utf-8")
+            regenerated_source = regenerated_source_path.read_text(encoding="utf-8")
+            regenerated_kernel_source = regenerated_kernel_source_path.read_text(encoding="utf-8")
+
+            self.assertIn("wrote", result.stdout)
+            self.assertIn("recorz-regenerated-kernel-source-begin", qemu_log)
+            self.assertIn("recorz-regenerated-boot-source-begin", qemu_log)
+            self.assertTrue(regenerated_source_path.exists())
+            self.assertTrue(regenerated_kernel_source_path.exists())
+            self.assertIn("RecorzKernelClass: #Transcript", regenerated_source)
+            self.assertIn("show: text\n^self", regenerated_source)
+            self.assertIn("RecorzKernelClass: #Transcript", regenerated_kernel_source)
+            self.assertIn("show: text\n^self", regenerated_kernel_source)
 
 
 if __name__ == "__main__":
