@@ -1,0 +1,18 @@
+RecorzKernelClass: #TextCursor descriptorOrder: 30 objectKindOrder: 30 sourceBootOrder: 24 instanceVariableNames: 'index line column topLine'
+!
+RecorzKernelBootObject: #WorkspaceCursor family: #afterGlyphs order: 4 class: #TextCursor
+fields: 'small:0 small:0 small:0 small:0'
+globalExports: 'WorkspaceCursor'
+!
+index
+    ^index
+!
+line
+    ^line
+!
+column
+    ^column
+!
+topLine
+    ^topLine
+!

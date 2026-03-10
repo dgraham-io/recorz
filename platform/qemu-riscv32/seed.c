@@ -65,7 +65,7 @@ const struct recorz_mvp_seed *recorz_mvp_seed_load(const uint8_t *blob, uint32_t
         machine_panic("seed manifest size mismatch");
     }
 
-    for (global_index = 0U; global_index <= RECORZ_MVP_GLOBAL_TEST_RUNNER; ++global_index) {
+    for (global_index = 0U; global_index <= RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION; ++global_index) {
         loaded_seed.global_object_indices[global_index] = RECORZ_MVP_SEED_INVALID_OBJECT_INDEX;
     }
     for (global_index = 0U; global_index <= RECORZ_MVP_SEED_ROOT_TRANSCRIPT_FONT; ++global_index) {
@@ -103,7 +103,7 @@ const struct recorz_mvp_seed *recorz_mvp_seed_load(const uint8_t *blob, uint32_t
         uint16_t binding_object_index = read_u16_le(blob + offset + 2U);
 
         offset += RECORZ_MVP_SEED_BINDING_SIZE;
-        if (binding_id < RECORZ_MVP_GLOBAL_TRANSCRIPT || binding_id > RECORZ_MVP_GLOBAL_TEST_RUNNER) {
+        if (binding_id < RECORZ_MVP_GLOBAL_TRANSCRIPT || binding_id > RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION) {
             machine_panic("seed manifest global binding id is out of range");
         }
         if (binding_object_index >= object_count) {
@@ -115,7 +115,7 @@ const struct recorz_mvp_seed *recorz_mvp_seed_load(const uint8_t *blob, uint32_t
         loaded_seed.global_object_indices[binding_id] = binding_object_index;
     }
 
-    for (object_index = RECORZ_MVP_GLOBAL_TRANSCRIPT; object_index <= RECORZ_MVP_GLOBAL_TEST_RUNNER; ++object_index) {
+    for (object_index = RECORZ_MVP_GLOBAL_TRANSCRIPT; object_index <= RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION; ++object_index) {
         if (loaded_seed.global_object_indices[object_index] == RECORZ_MVP_SEED_INVALID_OBJECT_INDEX) {
             machine_panic("seed manifest is missing a required global binding");
         }

@@ -1,0 +1,27 @@
+Display clear.
+Workspace setContents: ''.
+Workspace interactiveInputMonitor.
+Transcript show: 'INDEX='.
+Transcript show: Workspace cursor index printString.
+Transcript cr.
+Transcript show: 'LINE='.
+Transcript show: Workspace cursor line printString.
+Transcript cr.
+Transcript show: 'COLUMN='.
+Transcript show: Workspace cursor column printString.
+Transcript cr.
+Transcript show: 'TOP='.
+Transcript show: Workspace cursor topLine printString.
+Transcript cr.
+Transcript show: 'STARTLINE='.
+Transcript show: Workspace selection startLine printString.
+Transcript cr.
+Transcript show: 'STARTCOLUMN='.
+Transcript show: Workspace selection startColumn printString.
+Transcript cr.
+Transcript show: 'ENDLINE='.
+Transcript show: Workspace selection endLine printString.
+Transcript cr.
+Transcript show: 'ENDCOLUMN='.
+Transcript show: Workspace selection endColumn printString.
+Transcript cr.

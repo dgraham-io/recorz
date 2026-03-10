@@ -70,6 +70,14 @@
 #define TEXT_FLOW_FIELD_WRAP_WIDTH RECORZ_MVP_TEXT_FLOW_FIELD_WRAP_WIDTH
 #define TEXT_FLOW_FIELD_TAB_WIDTH RECORZ_MVP_TEXT_FLOW_FIELD_TAB_WIDTH
 #define TEXT_FLOW_FIELD_LINE_BREAK_MODE RECORZ_MVP_TEXT_FLOW_FIELD_LINE_BREAK_MODE
+#define TEXT_CURSOR_FIELD_INDEX RECORZ_MVP_TEXT_CURSOR_FIELD_INDEX
+#define TEXT_CURSOR_FIELD_LINE RECORZ_MVP_TEXT_CURSOR_FIELD_LINE
+#define TEXT_CURSOR_FIELD_COLUMN RECORZ_MVP_TEXT_CURSOR_FIELD_COLUMN
+#define TEXT_CURSOR_FIELD_TOP_LINE RECORZ_MVP_TEXT_CURSOR_FIELD_TOP_LINE
+#define TEXT_SELECTION_FIELD_START_LINE RECORZ_MVP_TEXT_SELECTION_FIELD_START_LINE
+#define TEXT_SELECTION_FIELD_START_COLUMN RECORZ_MVP_TEXT_SELECTION_FIELD_START_COLUMN
+#define TEXT_SELECTION_FIELD_END_LINE RECORZ_MVP_TEXT_SELECTION_FIELD_END_LINE
+#define TEXT_SELECTION_FIELD_END_COLUMN RECORZ_MVP_TEXT_SELECTION_FIELD_END_COLUMN
 #define TEXT_STYLE_FIELD_BACKGROUND_COLOR RECORZ_MVP_TEXT_STYLE_FIELD_BACKGROUND_COLOR
 #define TEXT_STYLE_FIELD_FOREGROUND_COLOR RECORZ_MVP_TEXT_STYLE_FIELD_FOREGROUND_COLOR
 #define STYLED_TEXT_FIELD_TEXT RECORZ_MVP_STYLED_TEXT_FIELD_TEXT
@@ -130,9 +138,9 @@
 #define BITMAP_STORAGE_FRAMEBUFFER RECORZ_MVP_BITMAP_STORAGE_FRAMEBUFFER
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
-#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEXT_FLOW
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_LINE_BREAK_MODE
-#define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_TEST_RUNNER
+#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEXT_SELECTION
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_END_COLUMN
+#define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
 #define WORKSPACE_VIEW_CLASSES 1U
@@ -398,6 +406,11 @@ static void workspace_input_monitor_cursor_line_and_column(
     uint32_t cursor_index,
     uint32_t *line_out,
     uint32_t *column_out
+);
+static void workspace_sync_input_monitor_text_state(
+    const struct recorz_mvp_heap_object *workspace_object,
+    uint32_t cursor_index,
+    uint32_t top_line
 );
 static uint32_t workspace_input_monitor_top_line(const struct recorz_mvp_heap_object *workspace_object);
 static const char *workspace_input_monitor_feedback_tail_start(
@@ -823,6 +836,26 @@ static const char *selector_name(uint8_t selector) {
             return "tabWidth";
         case RECORZ_MVP_SELECTOR_LINE_BREAK_MODE:
             return "lineBreakMode";
+        case RECORZ_MVP_SELECTOR_CURSOR:
+            return "cursor";
+        case RECORZ_MVP_SELECTOR_SELECTION:
+            return "selection";
+        case RECORZ_MVP_SELECTOR_INDEX:
+            return "index";
+        case RECORZ_MVP_SELECTOR_LINE:
+            return "line";
+        case RECORZ_MVP_SELECTOR_COLUMN:
+            return "column";
+        case RECORZ_MVP_SELECTOR_TOP_LINE:
+            return "topLine";
+        case RECORZ_MVP_SELECTOR_START_LINE:
+            return "startLine";
+        case RECORZ_MVP_SELECTOR_START_COLUMN:
+            return "startColumn";
+        case RECORZ_MVP_SELECTOR_END_LINE:
+            return "endLine";
+        case RECORZ_MVP_SELECTOR_END_COLUMN:
+            return "endColumn";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -875,6 +908,10 @@ static const char *object_kind_name(uint8_t kind) {
             return "TextMargins";
         case RECORZ_MVP_OBJECT_TEXT_FLOW:
             return "TextFlow";
+        case RECORZ_MVP_OBJECT_TEXT_CURSOR:
+            return "TextCursor";
+        case RECORZ_MVP_OBJECT_TEXT_SELECTION:
+            return "TextSelection";
         case RECORZ_MVP_OBJECT_TEXT_BEHAVIOR:
             return "TextBehavior";
         case RECORZ_MVP_OBJECT_CLASS:
@@ -5390,6 +5427,7 @@ static void workspace_store_input_monitor_state_with_context(
         workspace_current_target_name_field_index(workspace_object),
         string_value(workspace_input_monitor_cursor_state)
     );
+    workspace_sync_input_monitor_text_state(workspace_object, cursor_index, top_line);
 }
 
 static void workspace_store_input_monitor_state(
@@ -5516,6 +5554,72 @@ static void workspace_input_monitor_cursor_line_and_column(
     }
     *line_out = line;
     *column_out = column;
+}
+
+static struct recorz_mvp_heap_object *workspace_cursor_object(void) {
+    uint16_t handle = global_handles[RECORZ_MVP_GLOBAL_WORKSPACE_CURSOR];
+
+    if (handle == 0U || handle > heap_size) {
+        machine_panic("workspace cursor object is unavailable");
+    }
+    return (struct recorz_mvp_heap_object *)heap_object(handle);
+}
+
+static struct recorz_mvp_heap_object *workspace_selection_object(void) {
+    uint16_t handle = global_handles[RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION];
+
+    if (handle == 0U || handle > heap_size) {
+        machine_panic("workspace selection object is unavailable");
+    }
+    return (struct recorz_mvp_heap_object *)heap_object(handle);
+}
+
+static void workspace_sync_input_monitor_text_state(
+    const struct recorz_mvp_heap_object *workspace_object,
+    uint32_t cursor_index,
+    uint32_t top_line
+) {
+    struct recorz_mvp_value source_value = workspace_current_source_value(workspace_object);
+    const char *text =
+        (source_value.kind == RECORZ_MVP_VALUE_STRING && source_value.string != 0)
+            ? source_value.string
+            : "";
+    uint32_t text_length_value = text_length(text);
+    uint32_t line = 0U;
+    uint32_t column = 0U;
+    struct recorz_mvp_heap_object *cursor_object;
+    struct recorz_mvp_heap_object *selection_object;
+
+    if (cursor_index > text_length_value) {
+        cursor_index = text_length_value;
+    }
+    workspace_input_monitor_cursor_line_and_column(text, cursor_index, &line, &column);
+    cursor_object = workspace_cursor_object();
+    selection_object = workspace_selection_object();
+    heap_set_field(heap_handle_for_object(cursor_object), TEXT_CURSOR_FIELD_INDEX, small_integer_value((int32_t)cursor_index));
+    heap_set_field(heap_handle_for_object(cursor_object), TEXT_CURSOR_FIELD_LINE, small_integer_value((int32_t)line));
+    heap_set_field(heap_handle_for_object(cursor_object), TEXT_CURSOR_FIELD_COLUMN, small_integer_value((int32_t)column));
+    heap_set_field(heap_handle_for_object(cursor_object), TEXT_CURSOR_FIELD_TOP_LINE, small_integer_value((int32_t)top_line));
+    heap_set_field(
+        heap_handle_for_object(selection_object),
+        TEXT_SELECTION_FIELD_START_LINE,
+        small_integer_value((int32_t)line)
+    );
+    heap_set_field(
+        heap_handle_for_object(selection_object),
+        TEXT_SELECTION_FIELD_START_COLUMN,
+        small_integer_value((int32_t)column)
+    );
+    heap_set_field(
+        heap_handle_for_object(selection_object),
+        TEXT_SELECTION_FIELD_END_LINE,
+        small_integer_value((int32_t)line)
+    );
+    heap_set_field(
+        heap_handle_for_object(selection_object),
+        TEXT_SELECTION_FIELD_END_COLUMN,
+        small_integer_value((int32_t)column)
+    );
 }
 
 static uint32_t workspace_input_monitor_line_start(const char *text, uint32_t cursor_index) {

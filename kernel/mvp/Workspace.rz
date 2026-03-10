@@ -128,3 +128,9 @@ editCurrent
 !
 browsePackagesInteractive
     <primitive: #workspaceBrowsePackagesInteractive>
+!
+cursor
+    ^WorkspaceCursor
+!
+selection
+    ^WorkspaceSelection

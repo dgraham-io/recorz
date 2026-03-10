@@ -19,6 +19,7 @@ DISPLAY_FONT_EXAMPLE = ROOT / "examples" / "qemu_riscv_display_font_demo.rz"
 DISPLAY_FONT_METRICS_EXAMPLE = ROOT / "examples" / "qemu_riscv_display_font_metrics_demo.rz"
 DISPLAY_STYLED_TEXT_EXAMPLE = ROOT / "examples" / "qemu_riscv_display_styled_text_demo.rz"
 DISPLAY_LAYOUT_EXAMPLE = ROOT / "examples" / "qemu_riscv_display_layout_demo.rz"
+WORKSPACE_CURSOR_SELECTION_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_cursor_selection_demo.rz"
 MEMORY_REPORT_EXAMPLE = ROOT / "examples" / "qemu_riscv_memory_report_demo.rz"
 MULTISTATEMENT_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_multistatement_source_demo.rz"
 TEMPS_METHOD_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_temps_method_demo.rz"
@@ -586,6 +587,67 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("TOP: 1", output)
             self.assertIn("CLOSE: CTRL-O", output)
             self.assertIn("BUFFER=aCbD", output.replace("\n", ""))
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_cursor_and_selection_objects_are_visible_from_the_image(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-cursor-selection-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_CURSOR_SELECTION_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "VIEW: INPUT", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("ab\x02C\x0f")
+                process.stdin.flush()
+                time.sleep(1.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("INDEX=2", output)
+            self.assertIn("LINE=0", output)
+            self.assertIn("COLUMN=2", output)
+            self.assertIn("TOP=0", output)
+            self.assertIn("STARTLINE=0", output)
+            self.assertIn("STARTCOLUMN=2", output)
+            self.assertIn("ENDLINE=0", output)
+            self.assertIn("ENDCOLUMN=2", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_interactive_input_monitor_supports_vertical_cursor_movement(self) -> None:

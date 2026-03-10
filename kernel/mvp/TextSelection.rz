@@ -1,0 +1,18 @@
+RecorzKernelClass: #TextSelection descriptorOrder: 31 objectKindOrder: 31 sourceBootOrder: 25 instanceVariableNames: 'startLine startColumn endLine endColumn'
+!
+RecorzKernelBootObject: #WorkspaceSelection family: #afterGlyphs order: 5 class: #TextSelection
+fields: 'small:0 small:0 small:0 small:0'
+globalExports: 'WorkspaceSelection'
+!
+startLine
+    ^startLine
+!
+startColumn
+    ^startColumn
+!
+endLine
+    ^endLine
+!
+endColumn
+    ^endColumn
+!
