@@ -1,5 +1,8 @@
 # Implementation Log
 
+## 2026-03-10 - Sync The TODO With The Smalltalk-80 Extraction Plan
+- Updated [TODO.md](/Users/david/repos/recorz/TODO.md) to explicitly reference [smalltalk80_ui_extraction_plan.md](/Users/david/repos/recorz/docs/smalltalk80_ui_extraction_plan.md) and to make the first extraction pass a concrete Phase 1 task. That keeps the main roadmap and the new study plan aligned instead of leaving the Smalltalk-80 work implicit.
+
 ## 2026-03-10 - Add A Smalltalk-80 UI Extraction Plan
 - Added [smalltalk80_ui_extraction_plan.md](/Users/david/repos/recorz/docs/smalltalk80_ui_extraction_plan.md) to turn the checked-in [Smalltalk-80.sources](/Users/david/repos/recorz/misc/Smalltalk-80.sources) file into a concrete Recorz-first study plan. The document explicitly treats Smalltalk-80 as a loose architectural guide rather than a porting target.
 - Grouped the relevant Smalltalk-80 classes into the extraction order Recorz actually needs: primitive/display boundary (`BitBlt`, `Form`, `Cursor`, `DisplayScreen`, `CharacterScanner`), text stack (`TextStyle`, `DisplayText`, `Paragraph`), editor/tool models (`ParagraphEditor`, `StringHolder`, `Browser`, `PopUpMenu`), and framework reference (`View`, `Controller`).

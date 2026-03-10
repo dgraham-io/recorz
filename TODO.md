@@ -9,6 +9,9 @@ Build the first native Recorz development UI in the image using a Smalltalk-80-s
 
 The immediate target is not a full window system. It is a credible initial in-image workspace and browser built on the same kind of primitive boundary Smalltalk-80 used.
 
+Reference:
+- Use [smalltalk80_ui_extraction_plan.md](/Users/david/repos/recorz/docs/smalltalk80_ui_extraction_plan.md) as a loose design guide for the primitive boundary, text stack, and first tool model.
+
 ## Primitive Boundary To Reach
 - [ ] `BitBlt>>copyBits`-class primitive path for bitmap copy, fill, clipping, and monochrome/color transfer
 - [ ] `Form>>beDisplay`-class primitive path to bind a `Form` to the real framebuffer
@@ -33,6 +36,8 @@ The immediate target is not a full window system. It is a credible initial in-im
 - [ ] Real native tool surfaces in the image
 
 ## Phase 1 - Lock The Primitive Contract
+- [ ] Complete Pass 1 from [smalltalk80_ui_extraction_plan.md](/Users/david/repos/recorz/docs/smalltalk80_ui_extraction_plan.md):
+  summarize `BitBlt`, `Form`, `Cursor`, `DisplayScreen`, and `CharacterScanner` into a Recorz primitive note
 - [ ] Decide and document the exact initial primitive surface Recorz will keep in C:
   `copyBits`, display binding, cursor binding, text scan, input delivery, snapshot/persistence, panic/debug
 - [ ] Audit current C-side text/UI helpers and classify each one as:
