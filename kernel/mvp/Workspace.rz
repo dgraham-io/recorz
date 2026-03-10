@@ -75,6 +75,9 @@ reopen
 acceptCurrent
     <primitive: #workspaceAcceptCurrent>
 !
+revertCurrent
+    <primitive: #workspaceRevertCurrent>
+!
 saveAndReopen
     <primitive: #workspaceSaveAndReopen>
 !

@@ -194,3 +194,5 @@ RecorzKernelSelector: #editMethod:ofClassNamed: order: 95
 !
 RecorzKernelSelector: #editPackageNamed: order: 96
 !
+RecorzKernelSelector: #revertCurrent order: 97
+!

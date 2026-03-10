@@ -118,7 +118,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEST_RUNNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_EDIT_PACKAGE_NAMED
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_REVERT_CURRENT
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_TEST_RUNNER
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #define SOURCE_EVAL_ENV_LIMIT 32U
@@ -794,6 +794,12 @@ static const char *selector_name(uint8_t selector) {
             return "browseInteractiveInput";
         case RECORZ_MVP_SELECTOR_INTERACTIVE_INPUT_MONITOR:
             return "interactiveInputMonitor";
+        case RECORZ_MVP_SELECTOR_EDIT_METHOD_OF_CLASS_NAMED:
+            return "editMethod:ofClassNamed:";
+        case RECORZ_MVP_SELECTOR_EDIT_PACKAGE_NAMED:
+            return "editPackageNamed:";
+        case RECORZ_MVP_SELECTOR_REVERT_CURRENT:
+            return "revertCurrent";
     }
     return "unknown";
 }
@@ -5226,6 +5232,7 @@ static void workspace_render_input_monitor_browser(
     workspace_write_label_and_text(form, "HOME", "CTRL-A/E");
     workspace_write_label_and_text(form, "PRINT", "CTRL-P");
     workspace_write_label_and_text(form, "DOIT", "CTRL-D/R");
+    workspace_write_label_and_text(form, "REVERT", "CTRL-Y");
     workspace_write_label_and_text(form, "SAVE", "CTRL-W");
     workspace_write_label_and_text(form, "CLOSE", "CTRL-O");
     workspace_write_label_and_text(form, "ACCEPT", "CTRL-X");
@@ -5967,6 +5974,111 @@ static void workspace_accept_current_in_place(
     );
 }
 
+static void workspace_revert_current_in_place(
+    const struct recorz_mvp_heap_object *object
+) {
+    struct recorz_mvp_value view_kind_value;
+    struct recorz_mvp_value target_name_value;
+    const struct recorz_mvp_heap_object *class_object;
+    const char *source;
+    char class_name[METHOD_SOURCE_NAME_LIMIT];
+    char selector_name_text[METHOD_SOURCE_NAME_LIMIT];
+
+    view_kind_value = heap_get_field(object, workspace_current_view_kind_field_index(object));
+    if (view_kind_value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+        machine_panic("Workspace revertCurrent requires a source browser target");
+    }
+    if (object->field_count <= workspace_current_target_name_field_index(object)) {
+        machine_panic("Workspace revertCurrent is missing the current browser target");
+    }
+    target_name_value = heap_get_field(object, workspace_current_target_name_field_index(object));
+    if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
+        target_name_value.string == 0 ||
+        target_name_value.string[0] == '\0') {
+        machine_panic("Workspace revertCurrent is missing the current browser target");
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_SOURCE) {
+        workspace_remember_current_source(object, file_out_class_source_by_name(target_name_value.string));
+        workspace_render_class_source_browser(object, target_name_value.string);
+        return;
+    }
+    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PACKAGE_SOURCE) {
+        workspace_remember_current_source(object, file_out_package_source_by_name(target_name_value.string));
+        workspace_render_package_source_browser(object, target_name_value.string);
+        return;
+    }
+    if ((uint32_t)view_kind_value.integer != WORKSPACE_VIEW_METHOD &&
+        (uint32_t)view_kind_value.integer != WORKSPACE_VIEW_CLASS_METHOD) {
+        machine_panic("Workspace revertCurrent requires a source browser target");
+    }
+    if (!workspace_parse_method_target_name(
+            target_name_value.string,
+            class_name,
+            sizeof(class_name),
+            selector_name_text,
+            sizeof(selector_name_text))) {
+        machine_panic("Workspace revertCurrent current method target is invalid");
+    }
+    class_object = lookup_class_by_name(class_name);
+    if (class_object == 0) {
+        machine_panic("Workspace revertCurrent could not resolve the target class");
+    }
+    source = workspace_method_source_text_for_browser_target(
+        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_METHOD
+            ? class_object
+            : class_side_lookup_target(class_object),
+        class_name,
+        selector_name_text,
+        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_METHOD
+    );
+    workspace_remember_current_source(object, source);
+    workspace_render_method_browser(
+        object,
+        class_name,
+        selector_name_text,
+        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_METHOD ? "INST" : "CLASS"
+    );
+}
+
+static void workspace_revert_input_monitor_buffer(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    uint16_t workspace_handle = heap_handle_for_object(workspace_object);
+    uint32_t revert_view_kind = WORKSPACE_VIEW_NONE;
+    char revert_target_name[METHOD_SOURCE_CHUNK_LIMIT];
+
+    if (!workspace_input_monitor_accept_context(
+            workspace_object,
+            &revert_view_kind,
+            revert_target_name,
+            sizeof(revert_target_name))) {
+        workspace_input_monitor_set_status("REVERT NEEDS BROWSER");
+        return;
+    }
+    workspace_input_monitor_clear_feedback();
+    heap_set_field(
+        workspace_handle,
+        workspace_current_view_kind_field_index(workspace_object),
+        small_integer_value((int32_t)revert_view_kind)
+    );
+    heap_set_field(
+        workspace_handle,
+        workspace_current_target_name_field_index(workspace_object),
+        revert_target_name[0] == '\0' ? nil_value() : string_value(revert_target_name)
+    );
+    workspace_revert_current_in_place(workspace_object);
+    workspace_remember_input_monitor_view(workspace_object);
+    workspace_bind_input_monitor_buffer(workspace_object);
+    workspace_store_input_monitor_state_with_context(
+        workspace_object,
+        text_length(workspace_input_monitor_buffer),
+        0U,
+        revert_view_kind,
+        revert_target_name[0] == '\0' ? 0 : revert_target_name
+    );
+    workspace_input_monitor_set_status("REVERT OK");
+}
+
 static void workspace_accept_input_monitor_buffer(
     const struct recorz_mvp_heap_object *workspace_object
 ) {
@@ -6156,6 +6268,11 @@ static void workspace_run_interactive_input_monitor(
         }
         if (ch == 0x18) {
             workspace_accept_input_monitor_buffer(workspace_object);
+            workspace_render_input_monitor_browser(workspace_object);
+            continue;
+        }
+        if (ch == 0x19) {
+            workspace_revert_input_monitor_buffer(workspace_object);
             workspace_render_input_monitor_browser(workspace_object);
             continue;
         }
@@ -12382,6 +12499,18 @@ static void execute_entry_workspace_accept_current(
     (void)arguments;
     (void)text;
     workspace_accept_current_in_place(object);
+    push(receiver);
+}
+
+static void execute_entry_workspace_revert_current(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    workspace_revert_current_in_place(object);
     push(receiver);
 }
 
