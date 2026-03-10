@@ -40,7 +40,9 @@ CONTINUE_SNAPSHOT_BACKUP_OUTPUT := $(CONTINUE_SNAPSHOT_OUTPUT).bak
 QEMU_FILE_IN_DEP := $(if $(strip $(FILE_IN_PAYLOADS)),$(GENERATED_FILE_IN_PAYLOAD))
 DEV_SNAPSHOT ?= $(ROOT)/misc/qemu-riscv32-dev/live.bin
 DEV_SNAPSHOT_BACKUP ?= $(DEV_SNAPSHOT).bak
+DEV_INIT_EXAMPLE ?= $(ROOT)/examples/qemu_riscv_image_development_home_save.rz
 DEV_BOOT_EXAMPLE ?= $(ROOT)/examples/qemu_riscv_image_first_boot.rz
+DEV_INTERACTIVE_EXAMPLE ?= $(ROOT)/examples/qemu_riscv_image_development_home_boot.rz
 DEV_SAVE_EXAMPLE ?= $(ROOT)/examples/qemu_riscv_image_first_save.rz
 DEV_REGENERATE_EXAMPLE ?= $(ROOT)/examples/qemu_riscv_emit_regenerated_boot_source_file_in.rz
 
@@ -193,7 +195,7 @@ regenerate-image: regenerate-boot-source
 
 dev-init:
 	@mkdir -p $(dir $(DEV_SNAPSHOT))
-	@$(MAKE) -C $(CURDIR) BUILD_DIR=$(BUILD_DIR) EXAMPLE=$(DEV_SAVE_EXAMPLE) SNAPSHOT_OUTPUT=$(DEV_SNAPSHOT) save-snapshot
+	@$(MAKE) -C $(CURDIR) BUILD_DIR=$(BUILD_DIR) EXAMPLE=$(DEV_INIT_EXAMPLE) SNAPSHOT_OUTPUT=$(DEV_SNAPSHOT) save-snapshot
 
 dev-boot:
 	@test -f "$(DEV_SNAPSHOT)" || (echo "DEV_SNAPSHOT does not exist; run dev-init first" >&2; exit 1)
@@ -202,7 +204,7 @@ dev-boot:
 dev-interactive:
 	@mkdir -p $(dir $(DEV_SNAPSHOT))
 	@if [ ! -f "$(DEV_SNAPSHOT)" ]; then $(MAKE) -C $(CURDIR) BUILD_DIR=$(BUILD_DIR) DEV_SNAPSHOT=$(DEV_SNAPSHOT) dev-init; fi
-	@$(MAKE) -C $(CURDIR) BUILD_DIR=$(BUILD_DIR) EXAMPLE=$(DEV_BOOT_EXAMPLE) SNAPSHOT_PAYLOAD=$(DEV_SNAPSHOT) continue-snapshot-interactive
+	@$(MAKE) -C $(CURDIR) BUILD_DIR=$(BUILD_DIR) EXAMPLE=$(DEV_INTERACTIVE_EXAMPLE) SNAPSHOT_PAYLOAD=$(DEV_SNAPSHOT) continue-snapshot-interactive
 
 dev-screenshot:
 	@test -f "$(DEV_SNAPSHOT)" || (echo "DEV_SNAPSHOT does not exist; run dev-init first" >&2; exit 1)

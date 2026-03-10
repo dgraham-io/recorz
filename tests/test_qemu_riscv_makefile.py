@@ -221,8 +221,8 @@ class QemuRiscvMakefileTests(unittest.TestCase):
                     f"stderr:\n{result.stderr}"
                 )
 
-            self.assertIn("qemu_riscv_image_first_save.rz", result.stdout)
-            self.assertIn("qemu_riscv_image_first_boot.rz", result.stdout)
+            self.assertIn("qemu_riscv_image_development_home_save.rz", result.stdout)
+            self.assertIn("qemu_riscv_image_development_home_boot.rz", result.stdout)
             self.assertIn(f"DEV_SNAPSHOT={snapshot_path}", result.stdout)
             self.assertIn(f"SNAPSHOT_PAYLOAD={snapshot_path}", result.stdout)
             self.assertIn("continue-snapshot-interactive", result.stdout)

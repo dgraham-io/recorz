@@ -118,7 +118,7 @@
 #define BITMAP_STORAGE_GLYPH_MONO RECORZ_MVP_BITMAP_STORAGE_GLYPH_MONO
 #define BITMAP_STORAGE_HEAP_MONO 3U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_TEST_RUNNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_BROWSE_REGENERATED_FILE_IN_SOURCE
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_DEVELOPMENT_HOME
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_TEST_RUNNER
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #define SOURCE_EVAL_ENV_LIMIT 32U
@@ -414,6 +414,7 @@ static void emit_regenerated_kernel_source(void);
 static const char *regenerated_boot_source_text(const struct recorz_mvp_heap_object *workspace_object);
 static const char *regenerated_kernel_source_text(void);
 static const char *regenerated_file_in_source_text(void);
+static const char *development_home_initial_source_text(void);
 static int compare_source_names(const char *left, const char *right);
 static const char *runtime_string_allocate_copy(const char *text);
 static struct recorz_mvp_value boolean_value(uint8_t condition);
@@ -804,6 +805,8 @@ static const char *selector_name(uint8_t selector) {
             return "browseRegeneratedKernelSource";
         case RECORZ_MVP_SELECTOR_BROWSE_REGENERATED_FILE_IN_SOURCE:
             return "browseRegeneratedFileInSource";
+        case RECORZ_MVP_SELECTOR_DEVELOPMENT_HOME:
+            return "developmentHome";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -12828,6 +12831,10 @@ static const char *regenerated_file_in_source_text(void) {
     return "RecorzKernelDoIt:\nWorkspace emitRegeneratedBootSource.\n";
 }
 
+static const char *development_home_initial_source_text(void) {
+    return "Workspace browsePackages.";
+}
+
 static void execute_entry_kernel_installer_compiled_method_word0_word1_word2_word3_instruction_count(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -14038,6 +14045,40 @@ static void execute_entry_workspace_browse_regenerated_file_in_source(
     workspace_remember_current_source(object, 0);
     workspace_remember_view(object, WORKSPACE_VIEW_REGENERATED_FILE_IN_SOURCE, 0);
     workspace_render_regenerated_source_browser(object, "FILEIN");
+    push(receiver);
+}
+
+static void execute_entry_workspace_development_home(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    struct recorz_mvp_value source_value;
+    struct recorz_mvp_value view_kind_value;
+    uint8_t seed_initial_source = 0U;
+
+    (void)arguments;
+    (void)text;
+    source_value = workspace_current_source_value(object);
+    view_kind_value = heap_get_field(object, workspace_current_view_kind_field_index(object));
+    if (source_value.kind != RECORZ_MVP_VALUE_STRING ||
+        source_value.string == 0 ||
+        source_value.string[0] == '\0') {
+        seed_initial_source = 1U;
+    } else if (view_kind_value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER ||
+               (uint32_t)view_kind_value.integer != WORKSPACE_VIEW_INPUT_MONITOR) {
+        if (source_starts_with(source_value.string, "Display clear.\nWorkspace developmentHome.")) {
+            seed_initial_source = 1U;
+        }
+    }
+    if (seed_initial_source) {
+        workspace_remember_current_source(object, development_home_initial_source_text());
+    }
+    workspace_remember_input_monitor_view(object);
+    workspace_bind_input_monitor_buffer(object);
+    workspace_bind_input_monitor_cursor_state(object);
+    workspace_render_input_monitor_browser(object);
     push(receiver);
 }
 

@@ -202,3 +202,5 @@ RecorzKernelSelector: #editCurrent order: 99
 !
 RecorzKernelSelector: #browseRegeneratedFileInSource order: 100
 !
+RecorzKernelSelector: #developmentHome order: 101
+!

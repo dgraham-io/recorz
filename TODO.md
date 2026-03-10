@@ -21,7 +21,7 @@ Get Recorz to the point where text rendering and the main development UI are own
 - [ ] Emergency panic/debug output
 
 ## Phase 1 - Make The Native Development Loop Comfortable
-- [ ] Make the browser/editor workflow the default development path, not a special tool mode
+- [x] Make the browser/editor workflow the default development path, not a special tool mode
 - [ ] Improve editor help, status, and feedback so the current command surface is self-explanatory
 - [ ] Tighten save/resume/recovery so continuing from a snapshot feels like a normal image action
 - [ ] Make package-centered edit/test/save flow routine from inside the image
