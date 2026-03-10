@@ -5691,9 +5691,19 @@ static void workspace_evaluate_input_monitor_buffer(
         workspace_current_target_name_field_index(workspace_object)
     );
     const char *chunk_source;
+    uint32_t browser_view_kind = WORKSPACE_VIEW_NONE;
+    char browser_target_name[METHOD_SOURCE_CHUNK_LIMIT];
 
     if (workspace_input_monitor_buffer[0] == '\0') {
         workspace_input_monitor_set_status("EMPTY BUFFER");
+        return;
+    }
+    if (workspace_input_monitor_accept_context(
+            workspace_object,
+            &browser_view_kind,
+            browser_target_name,
+            sizeof(browser_target_name))) {
+        workspace_input_monitor_set_status("RUN USE CTRL-X");
         return;
     }
     workspace_input_monitor_clear_feedback();
