@@ -91,7 +91,7 @@ Reference:
 - [x] Keep event transport and primitive drawing in the VM only
 
 ## Phase 7 - Replace The C Workspace / Browser Renderer
-- [ ] Rebuild the workspace as an image-side editor component
+- [x] Rebuild the workspace as an image-side editor component
 - [ ] Rebuild the browser as image-side list/source components
 - [ ] Move do-it, print-it, accept, revert, test, save, and regenerate behind image-side tool objects
 - [ ] Make browser navigation and source editing use the same editor/view components

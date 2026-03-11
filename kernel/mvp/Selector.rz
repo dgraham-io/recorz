@@ -494,3 +494,13 @@ RecorzKernelSelector: #setView:status:feedback: order: 245
 !
 RecorzKernelSelector: #setView:commands:selectedIndex: order: 246
 !
+RecorzKernelSelector: #drawSource:status:feedback:onForm: order: 247
+!
+RecorzKernelSelector: #drawHeaderOnForm:bounds: order: 248
+!
+RecorzKernelSelector: #drawEditor:onForm:bounds: order: 249
+!
+RecorzKernelSelector: #drawStatus:feedback:onForm:bounds: order: 250
+!
+RecorzKernelSelector: #drawCommandsOnForm:bounds: order: 251
+!

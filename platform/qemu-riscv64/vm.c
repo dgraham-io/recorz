@@ -155,7 +155,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CHARACTER_SCANNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SET_VIEW_COMMANDS_SELECTED_INDEX
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_DRAW_COMMANDS_ON_FORM_BOUNDS
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -1132,6 +1132,16 @@ static const char *selector_name(uint8_t selector) {
             return "setView:status:feedback:";
         case RECORZ_MVP_SELECTOR_SET_VIEW_COMMANDS_SELECTED_INDEX:
             return "setView:commands:selectedIndex:";
+        case RECORZ_MVP_SELECTOR_DRAW_SOURCE_STATUS_FEEDBACK_ON_FORM:
+            return "drawSource:status:feedback:onForm:";
+        case RECORZ_MVP_SELECTOR_DRAW_HEADER_ON_FORM_BOUNDS:
+            return "drawHeaderOnForm:bounds:";
+        case RECORZ_MVP_SELECTOR_DRAW_EDITOR_ON_FORM_BOUNDS:
+            return "drawEditor:onForm:bounds:";
+        case RECORZ_MVP_SELECTOR_DRAW_STATUS_FEEDBACK_ON_FORM_BOUNDS:
+            return "drawStatus:feedback:onForm:bounds:";
+        case RECORZ_MVP_SELECTOR_DRAW_COMMANDS_ON_FORM_BOUNDS:
+            return "drawCommandsOnForm:bounds:";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:

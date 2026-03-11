@@ -117,3 +117,73 @@ redrawOnForm: form
     form writeString: commands.
     ^form
 !
+RecorzKernelClass: #WorkspaceEditorSurface superclass: #Object package: 'TextUI' instanceVariableNames: ''
+!
+drawSource: source status: status feedback: feedback onForm: form
+    | fullBounds |
+    Display clear.
+    fullBounds := (KernelInstaller classNamed: 'Rectangle') new.
+    fullBounds setLeft: 40 top: 60 width: 920 height: 620.
+    self drawHeaderOnForm: form bounds: fullBounds.
+    self drawEditor: source onForm: form bounds: fullBounds.
+    self drawStatus: status feedback: feedback onForm: form bounds: fullBounds.
+    self drawCommandsOnForm: form bounds: fullBounds.
+    ^form
+!
+drawHeaderOnForm: form bounds: fullBounds
+    | topLayout headerView headerWidget |
+    topLayout := (KernelInstaller classNamed: 'SplitLayout') new.
+    topLayout setVerticalBounds: fullBounds offset: 60 gap: 16.
+    headerView := (KernelInstaller classNamed: 'View') new.
+    headerView setBounds: fullBounds title: 'WORKSPACE'.
+    headerView setBounds: topLayout primaryBounds.
+    headerWidget := (KernelInstaller classNamed: 'LabelWidget') new.
+    headerWidget setView: headerView text: 'RECORZ WORKSPACE EDITOR'.
+    ^headerWidget redrawOnForm: form
+!
+drawEditor: source onForm: form bounds: fullBounds
+    | topLayout bottomLayout editorView editorWidget |
+    topLayout := (KernelInstaller classNamed: 'SplitLayout') new.
+    topLayout setVerticalBounds: fullBounds offset: 60 gap: 16.
+    bottomLayout := (KernelInstaller classNamed: 'SplitLayout') new.
+    bottomLayout setVerticalBounds: topLayout secondaryBounds offset: 456 gap: 16.
+    editorView := (KernelInstaller classNamed: 'View') new.
+    editorView setBounds: fullBounds title: 'SOURCE'.
+    editorView setBounds: bottomLayout primaryBounds.
+    editorWidget := (KernelInstaller classNamed: 'TextEditorWidget') new.
+    editorWidget setView: editorView text: source cursor: Workspace cursor selection: Workspace selection.
+    editorWidget takeFocus.
+    ^editorWidget redrawOnForm: form
+!
+drawStatus: status feedback: feedback onForm: form bounds: fullBounds
+    | topLayout bottomLayout footerLayout statusView statusWidget |
+    topLayout := (KernelInstaller classNamed: 'SplitLayout') new.
+    topLayout setVerticalBounds: fullBounds offset: 60 gap: 16.
+    bottomLayout := (KernelInstaller classNamed: 'SplitLayout') new.
+    bottomLayout setVerticalBounds: topLayout secondaryBounds offset: 456 gap: 16.
+    footerLayout := (KernelInstaller classNamed: 'SplitLayout') new.
+    footerLayout setHorizontalBounds: bottomLayout secondaryBounds offset: 420 gap: 16.
+    statusView := (KernelInstaller classNamed: 'View') new.
+    statusView setBounds: fullBounds title: 'STATUS'.
+    statusView setBounds: footerLayout primaryBounds.
+    statusWidget := (KernelInstaller classNamed: 'StatusAreaWidget') new.
+    statusWidget setView: statusView status: status feedback: feedback.
+    ^statusWidget redrawOnForm: form
+!
+drawCommandsOnForm: form bounds: fullBounds
+    | topLayout bottomLayout footerLayout commandView commandWidget |
+    topLayout := (KernelInstaller classNamed: 'SplitLayout') new.
+    topLayout setVerticalBounds: fullBounds offset: 60 gap: 16.
+    bottomLayout := (KernelInstaller classNamed: 'SplitLayout') new.
+    bottomLayout setVerticalBounds: topLayout secondaryBounds offset: 456 gap: 16.
+    footerLayout := (KernelInstaller classNamed: 'SplitLayout') new.
+    footerLayout setHorizontalBounds: bottomLayout secondaryBounds offset: 420 gap: 16.
+    commandView := (KernelInstaller classNamed: 'View') new.
+    commandView setBounds: fullBounds title: 'COMMANDS'.
+    commandView setBounds: footerLayout secondaryBounds.
+    commandWidget := (KernelInstaller classNamed: 'CommandSurfaceWidget') new.
+    commandWidget setView: commandView commands: 'D DoIt   P PrintIt   X Accept   Y Revert   T Tests' selectedIndex: 0.
+    ^commandWidget redrawOnForm: form
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: ((KernelInstaller classNamed: 'WorkspaceEditorSurface') new) named: 'BootWorkspaceEditorSurface'.
