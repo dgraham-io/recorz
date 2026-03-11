@@ -160,7 +160,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CHARACTER_SCANNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_DRAW_SELECTED_CODE_LINE_COLUMN_ON_FORM
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_DRAW_TITLE_ON_FORM
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -1155,6 +1155,30 @@ static const char *selector_name(uint8_t selector) {
             return "moveSourceCursorForLine:column:top:";
         case RECORZ_MVP_SELECTOR_DRAW_SELECTED_CODE_LINE_COLUMN_ON_FORM:
             return "drawSelectedCode:line:column:onForm:";
+        case RECORZ_MVP_SELECTOR_SET_LEFT_TOP_WIDTH_HEIGHT:
+            return "setLeft:top:width:height:";
+        case RECORZ_MVP_SELECTOR_CONTAINS_X_Y:
+            return "containsX:y:";
+        case RECORZ_MVP_SELECTOR_SET_BOUNDS_TITLE:
+            return "setBounds:title:";
+        case RECORZ_MVP_SELECTOR_INVALIDATE:
+            return "invalidate";
+        case RECORZ_MVP_SELECTOR_VALIDATE:
+            return "validate";
+        case RECORZ_MVP_SELECTOR_NEEDS_REDRAW:
+            return "needsRedraw";
+        case RECORZ_MVP_SELECTOR_TAKE_FOCUS:
+            return "takeFocus";
+        case RECORZ_MVP_SELECTOR_LOSE_FOCUS:
+            return "loseFocus";
+        case RECORZ_MVP_SELECTOR_HAS_FOCUS:
+            return "hasFocus";
+        case RECORZ_MVP_SELECTOR_REDRAW_ON_FORM:
+            return "redrawOnForm:";
+        case RECORZ_MVP_SELECTOR_DRAW_BORDER_ON_FORM_COLOR:
+            return "drawBorderOnForm:color:";
+        case RECORZ_MVP_SELECTOR_DRAW_TITLE_ON_FORM:
+            return "drawTitleOnForm:";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:

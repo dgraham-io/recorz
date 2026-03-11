@@ -9,6 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PLATFORM_DIR = ROOT / "platform" / "qemu-riscv32"
 IMAGE_FIRST_UPDATE_PATH = ROOT / "examples" / "qemu_riscv_image_first_transcript_show_noop_update.rz"
 REGENERATE_EXAMPLE = ROOT / "examples" / "qemu_riscv_emit_regenerated_boot_source_file_in.rz"
+TEXT_BOOTSTRAP_PAYLOAD = ROOT / "kernel" / "textui" / "TextRendererBootstrap.rz"
+VIEW_BOOTSTRAP_PAYLOAD = ROOT / "kernel" / "textui" / "ViewBootstrap.rz"
 
 
 class QemuRiscv32MakefileTests(unittest.TestCase):
@@ -42,7 +44,8 @@ class QemuRiscv32MakefileTests(unittest.TestCase):
             self.assertIn("-DRECORZ_MVP_PROFILE_DEV=1", result.stdout)
             self.assertIn("-device ramfb", result.stdout)
             self.assertIn("-fw_cfg name=opt/recorz-file-in,file=", result.stdout)
-            self.assertIn("kernel/textui/TextRendererBootstrap.rz", result.stdout)
+            self.assertIn(str(TEXT_BOOTSTRAP_PAYLOAD), result.stdout)
+            self.assertIn(str(VIEW_BOOTSTRAP_PAYLOAD), result.stdout)
 
     @unittest.skipUnless(shutil.which("make"), "make is required for QEMU RISC-V Makefile tests")
     def test_target_profile_can_be_selected_explicitly(self) -> None:

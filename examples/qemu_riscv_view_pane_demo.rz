@@ -1,0 +1,13 @@
+| leftBounds rightBounds leftView rightView |
+Display clear.
+leftBounds := (KernelInstaller classNamed: 'Rectangle') new.
+leftBounds setLeft: 40 top: 120 width: 360 height: 240.
+rightBounds := (KernelInstaller classNamed: 'Rectangle') new.
+rightBounds setLeft: 460 top: 120 width: 360 height: 240.
+leftView := (KernelInstaller classNamed: 'View') new.
+leftView setBounds: leftBounds title: 'WORKSPACE'.
+rightView := (KernelInstaller classNamed: 'View') new.
+rightView setBounds: rightBounds title: 'BROWSER'.
+leftView takeFocus.
+leftView redrawOnForm: Display defaultForm.
+rightView redrawOnForm: Display defaultForm.

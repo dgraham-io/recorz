@@ -432,3 +432,27 @@ RecorzKernelSelector: #moveSourceCursorForLine:column:top: order: 214
 !
 RecorzKernelSelector: #drawSelectedCode:line:column:onForm: order: 215
 !
+RecorzKernelSelector: #setLeft:top:width:height: order: 216
+!
+RecorzKernelSelector: #containsX:y: order: 217
+!
+RecorzKernelSelector: #setBounds:title: order: 218
+!
+RecorzKernelSelector: #invalidate order: 219
+!
+RecorzKernelSelector: #validate order: 220
+!
+RecorzKernelSelector: #needsRedraw order: 221
+!
+RecorzKernelSelector: #takeFocus order: 222
+!
+RecorzKernelSelector: #loseFocus order: 223
+!
+RecorzKernelSelector: #hasFocus order: 224
+!
+RecorzKernelSelector: #redrawOnForm: order: 225
+!
+RecorzKernelSelector: #drawBorderOnForm:color: order: 226
+!
+RecorzKernelSelector: #drawTitleOnForm: order: 227
+!

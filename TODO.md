@@ -83,7 +83,7 @@ Reference:
 ## Phase 6 - Introduce Image-Owned UI Primitives
 - [x] Decide the first image-side UI structure:
   minimal pane/window system or minimal declarative view tree on top of the same primitive layer
-- [ ] Add image-side view objects for bounds, invalidation, redraw, and focus
+- [x] Add image-side view objects for bounds, invalidation, redraw, and focus
 - [ ] Add image-side input routing for keyboard focus and command dispatch
 - [ ] Add image-side layout objects for vertical, horizontal, and split arrangements
 - [ ] Add core widgets needed for the first tools:

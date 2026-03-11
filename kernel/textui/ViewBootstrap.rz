@@ -1,0 +1,87 @@
+RecorzKernelClass: #Rectangle superclass: #Object package: 'TextUI' instanceVariableNames: 'left top width height'
+!
+left
+    ^left
+!
+top
+    ^top
+!
+width
+    ^width
+!
+height
+    ^height
+!
+right
+    ^left + width
+!
+bottom
+    ^top + height
+!
+setLeft: aLeft top: aTop width: aWidth height: aHeight
+    left := aLeft.
+    top := aTop.
+    width := aWidth.
+    height := aHeight.
+    ^self
+!
+containsX: x y: y
+    x < left ifTrue: [^false].
+    y < top ifTrue: [^false].
+    x > self right ifTrue: [^false].
+    y > self bottom ifTrue: [^false].
+    ^true
+!
+RecorzKernelClass: #View superclass: #Object package: 'TextUI' instanceVariableNames: 'bounds dirty focused title'
+!
+setBounds: aRectangle title: aString
+    bounds := aRectangle.
+    title := aString.
+    dirty := true.
+    focused := false.
+    ^self
+!
+invalidate
+    dirty := true.
+    ^self
+!
+validate
+    dirty := false.
+    ^self
+!
+needsRedraw
+    ^dirty
+!
+takeFocus
+    focused := true.
+    dirty := true.
+    ^self
+!
+loseFocus
+    focused := false.
+    dirty := true.
+    ^self
+!
+hasFocus
+    ^focused
+!
+redrawOnForm: form
+    self needsRedraw ifFalse: [^form].
+    self drawBorderOnForm: form color: Display style foregroundColor.
+    self hasFocus ifTrue: [self drawBorderOnForm: form color: 11393254].
+    self drawTitleOnForm: form.
+    self validate.
+    ^form
+!
+drawBorderOnForm: form color: color
+    BitBlt drawLineOnForm: form fromX: bounds left fromY: bounds top toX: bounds right toY: bounds top color: color.
+    BitBlt drawLineOnForm: form fromX: bounds left fromY: bounds top toX: bounds left toY: bounds bottom color: color.
+    BitBlt drawLineOnForm: form fromX: bounds right fromY: bounds top toX: bounds right toY: bounds bottom color: color.
+    BitBlt drawLineOnForm: form fromX: bounds left fromY: bounds bottom toX: bounds right toY: bounds bottom color: color.
+    ^form
+!
+drawTitleOnForm: form
+    Display moveTextCursorToX: bounds left + 12 y: bounds top + 12.
+    form writeString: title.
+    ^form
+!
