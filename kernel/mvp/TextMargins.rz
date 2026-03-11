@@ -1,7 +1,7 @@
 RecorzKernelClass: #TextMargins descriptorOrder: 28 objectKindOrder: 28 sourceBootOrder: 22 instanceVariableNames: 'left top right bottom'
 !
 RecorzKernelBootObject: #TranscriptMargins family: #beforeGlyphs order: 6 class: #TextMargins
-fields: 'small:24 small:24 small:24 small:24'
+fields: 'small:16 small:16 small:16 small:16'
 !
 left
     ^left

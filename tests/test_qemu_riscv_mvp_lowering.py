@@ -1343,16 +1343,20 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             mvp.TRANSCRIPT_LAYOUT_FIELD_SPECS,
             (
                 (mvp.FIELD_SPEC_OBJECT_REF, "TranscriptMargins"),
-                (mvp.FIELD_SPEC_SMALL_INTEGER, 4),
                 (mvp.FIELD_SPEC_SMALL_INTEGER, 2),
+                (mvp.FIELD_SPEC_SMALL_INTEGER, 1),
                 (mvp.FIELD_SPEC_OBJECT_REF, "TranscriptFlow"),
             ),
         )
-        self.assertEqual(mvp.TRANSCRIPT_MARGINS_FIELD_VALUES, (24, 24, 24, 24))
+        self.assertEqual(mvp.TRANSCRIPT_MARGINS_FIELD_VALUES, (16, 16, 16, 16))
         self.assertEqual(mvp.TRANSCRIPT_FLOW_FIELD_VALUES, (48, 4, 1))
         self.assertEqual(mvp.TRANSCRIPT_STYLE_FIELD_VALUES, (0x001F2933, 0x00F7F3E8))
         self.assertEqual(mvp.FRAMEBUFFER_BITMAP_FIELD_VALUES, (1024, 768, mvp.BITMAP_STORAGE_FRAMEBUFFER, 0))
         self.assertEqual(mvp.TRANSCRIPT_METRICS_FIELD_VALUES, (6, 8, 6))
+        self.assertEqual(
+            mvp.boot_object_small_integer_fields_in_order("TranscriptFont"),
+            (12,),
+        )
         self.assertEqual(
             mvp.DEFAULT_FORM_BOOT_FIELD_SPECS,
             ((mvp.FIELD_SPEC_OBJECT_REF, "FramebufferBitmap"),),
