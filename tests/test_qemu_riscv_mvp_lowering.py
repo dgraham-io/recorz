@@ -636,7 +636,8 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             20,
         )
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formWriteStyledText"], 14)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 77)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceBrowseInteractiveViews"], 70)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 78)
         self.assertEqual(
             mvp.PRIMITIVE_BINDING_BY_ENTRY_NAME["RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING"],
             mvp.PRIMITIVE_BINDING_VALUES["formWriteString"],
@@ -939,6 +940,12 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_REDRAW_ON_FORM", 226),
                 ("RECORZ_MVP_SELECTOR_DRAW_BORDER_ON_FORM_COLOR", 227),
                 ("RECORZ_MVP_SELECTOR_DRAW_TITLE_ON_FORM", 228),
+                ("RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_VIEWS", 229),
+                ("RECORZ_MVP_SELECTOR_SET_PRIMARY_SECONDARY", 230),
+                ("RECORZ_MVP_SELECTOR_HANDLE_BYTE_ON_FORM", 231),
+                ("RECORZ_MVP_SELECTOR_SWITCH_FOCUS", 232),
+                ("RECORZ_MVP_SELECTOR_DISPATCH_COMMAND_ON_FORM", 233),
+                ("RECORZ_MVP_SELECTOR_REPORT_STATE", 234),
             ],
         )
 
@@ -2352,6 +2359,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertIn(
             f"RECORZ_MVP_PRIMITIVE_WORKSPACE_BROWSE_INTERACTIVE_INPUT = {mvp.PRIMITIVE_BINDING_VALUES['workspaceBrowseInteractiveInput']},",
+            header,
+        )
+        self.assertIn(
+            f"RECORZ_MVP_PRIMITIVE_WORKSPACE_BROWSE_INTERACTIVE_VIEWS = {mvp.PRIMITIVE_BINDING_VALUES['workspaceBrowseInteractiveViews']},",
             header,
         )
         self.assertIn(

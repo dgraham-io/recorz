@@ -85,3 +85,60 @@ drawTitleOnForm: form
     form writeString: title.
     ^form
 !
+RecorzKernelClass: #ViewRouter superclass: #Object package: 'TextUI' instanceVariableNames: 'primary secondary focusIndex lastCommand'
+!
+setPrimary: aPrimary secondary: aSecondary
+    primary := aPrimary.
+    secondary := aSecondary.
+    focusIndex := 0.
+    lastCommand := 0.
+    primary takeFocus.
+    secondary loseFocus.
+    ^self
+!
+redrawOnForm: form
+    Display clear.
+    primary redrawOnForm: form.
+    secondary redrawOnForm: form.
+    ^form
+!
+handleByte: aByte onForm: form
+    aByte = 9 ifTrue: [
+        self switchFocus.
+        self redrawOnForm: form.
+        ^1].
+    aByte = 32 ifTrue: [
+        self dispatchCommandOnForm: form.
+        ^1].
+    aByte = 13 ifTrue: [
+        self dispatchCommandOnForm: form.
+        ^1].
+    ^0
+!
+switchFocus
+    focusIndex = 0 ifTrue: [
+        primary loseFocus.
+        secondary takeFocus.
+        focusIndex := 1.
+        ^self].
+    secondary loseFocus.
+    primary takeFocus.
+    focusIndex := 0.
+    ^self
+!
+dispatchCommandOnForm: form
+    lastCommand := 1.
+    focusIndex = 0 ifTrue: [primary invalidate].
+    focusIndex = 1 ifTrue: [secondary invalidate].
+    self redrawOnForm: form.
+    ^self
+!
+reportState
+    focusIndex = 0 ifTrue: [Transcript show: 'FOCUS: 1'].
+    focusIndex = 1 ifTrue: [Transcript show: 'FOCUS: 2'].
+    Transcript cr.
+    lastCommand = 0 ifTrue: [Transcript show: 'COMMAND: NONE'].
+    lastCommand = 1 ifTrue: [Transcript show: 'COMMAND: SPACE'].
+    Transcript cr.
+    ^self
+!

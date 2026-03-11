@@ -456,3 +456,15 @@ RecorzKernelSelector: #drawBorderOnForm:color: order: 226
 !
 RecorzKernelSelector: #drawTitleOnForm: order: 227
 !
+RecorzKernelSelector: #browseInteractiveViews order: 228
+!
+RecorzKernelSelector: #setPrimary:secondary: order: 229
+!
+RecorzKernelSelector: #handleByte:onForm: order: 230
+!
+RecorzKernelSelector: #switchFocus order: 231
+!
+RecorzKernelSelector: #dispatchCommandOnForm: order: 232
+!
+RecorzKernelSelector: #reportState order: 233
+!

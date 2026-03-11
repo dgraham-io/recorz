@@ -14,6 +14,8 @@ import re
 
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORM_DIR = ROOT / "platform" / "qemu-riscv32"
+TEXT_RENDERER_BOOTSTRAP = ROOT / "kernel" / "textui" / "TextRendererBootstrap.rz"
+VIEW_BOOTSTRAP = ROOT / "kernel" / "textui" / "ViewBootstrap.rz"
 DEFAULT_EXAMPLE = ROOT / "examples" / "qemu_riscv_fb_demo.rz"
 DISPLAY_FONT_EXAMPLE = ROOT / "examples" / "qemu_riscv_display_font_demo.rz"
 DISPLAY_FONT_METRICS_EXAMPLE = ROOT / "examples" / "qemu_riscv_display_font_metrics_demo.rz"
@@ -66,6 +68,7 @@ WORKSPACE_EDIT_CURRENT_CLASS_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace
 WORKSPACE_EDIT_CURRENT_METHOD_LIST_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_current_method_list_demo.rz"
 WORKSPACE_EDIT_CURRENT_PACKAGE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_current_package_demo.rz"
 WORKSPACE_EDIT_CURRENT_PROTOCOL_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_current_protocol_demo.rz"
+VIEW_ROUTER_EXAMPLE = ROOT / "examples" / "qemu_riscv_view_router_demo.rz"
 TEST_RUNNER_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_test_runner_demo.rz"
 METHOD_BLOCK_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_demo.rz"
 METHOD_BLOCK_CAPTURE_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_capture_demo.rz"
@@ -168,6 +171,15 @@ def _read_until_bytes(process: subprocess.Popen[bytes], marker: bytes, *, timeou
     return output.decode("utf-8", errors="replace")
 
 
+def _write_combined_file_in_payload(build_dir: Path, *payloads: Path) -> Path:
+    payload_path = build_dir / "external_file_in_payload.rz"
+    parts = []
+    for path in payloads:
+        parts.append(path.read_text(encoding="utf-8"))
+    payload_path.write_text("\n!\n".join(parts), encoding="utf-8")
+    return payload_path
+
+
 def _read_file_until(path: Path, marker: str, *, timeout: float) -> str:
     deadline = time.monotonic() + timeout
     output = ""
@@ -243,6 +255,68 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     process.stdin.close()
 
             self.assertIn("TOP: 1ASDF", output)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_browse_interactive_views_routes_focus_and_commands_from_image_code(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-view-router-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, VIEW_ROUTER_EXAMPLE)
+            file_in_payload = _write_combined_file_in_payload(
+                build_dir,
+                TEXT_RENDERER_BOOTSTRAP,
+                VIEW_BOOTSTRAP,
+            )
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                    "-fw_cfg",
+                    f"name=opt/recorz-file-in,file={file_in_payload}",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "WORKSPACE", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("\t \x04")
+                process.stdin.flush()
+                time.sleep(1.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertRegex(output, r"FOC\s*US:\s*2")
+            self.assertIn("COMMAND: SPACE", output)
             self.assertNotIn("panic:", output)
 
     def test_default_demo_boots_and_prints_transcript_over_serial(self) -> None:

@@ -160,7 +160,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CHARACTER_SCANNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_DRAW_TITLE_ON_FORM
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_REPORT_STATE
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -1179,6 +1179,18 @@ static const char *selector_name(uint8_t selector) {
             return "drawBorderOnForm:color:";
         case RECORZ_MVP_SELECTOR_DRAW_TITLE_ON_FORM:
             return "drawTitleOnForm:";
+        case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_VIEWS:
+            return "browseInteractiveViews";
+        case RECORZ_MVP_SELECTOR_SET_PRIMARY_SECONDARY:
+            return "setPrimary:secondary:";
+        case RECORZ_MVP_SELECTOR_HANDLE_BYTE_ON_FORM:
+            return "handleByte:onForm:";
+        case RECORZ_MVP_SELECTOR_SWITCH_FOCUS:
+            return "switchFocus";
+        case RECORZ_MVP_SELECTOR_DISPATCH_COMMAND_ON_FORM:
+            return "dispatchCommandOnForm:";
+        case RECORZ_MVP_SELECTOR_REPORT_STATE:
+            return "reportState";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -7775,6 +7787,47 @@ static void workspace_view_regenerated_source_from_input_monitor(
     workspace_render_input_monitor_browser(workspace_object);
 }
 
+static uint8_t workspace_view_router_redraw_from_image(void) {
+    uint16_t object_handle = named_object_handle_for_name("BootViewRouter");
+    struct recorz_mvp_value arguments[1];
+
+    if (object_handle == 0U) {
+        return 0U;
+    }
+    arguments[0] = object_value(heap_handle_for_object(default_form_object()));
+    (void)perform_send_and_pop_result(
+        object_value(object_handle),
+        RECORZ_MVP_SELECTOR_REDRAW_ON_FORM,
+        1U,
+        arguments,
+        0
+    );
+    return 1U;
+}
+
+static uint8_t workspace_view_router_handle_byte_from_image(char ch) {
+    uint16_t object_handle = named_object_handle_for_name("BootViewRouter");
+    struct recorz_mvp_value arguments[2];
+    struct recorz_mvp_value result;
+
+    if (object_handle == 0U) {
+        return 0U;
+    }
+    arguments[0] = small_integer_value((int32_t)(uint8_t)ch);
+    arguments[1] = object_value(heap_handle_for_object(default_form_object()));
+    result = perform_send_and_pop_result(
+        object_value(object_handle),
+        RECORZ_MVP_SELECTOR_HANDLE_BYTE_ON_FORM,
+        2U,
+        arguments,
+        0
+    );
+    return (uint8_t)(small_integer_u32(
+        result,
+        "BootViewRouter handleByte:onForm: did not return a small integer"
+    ) != 0U);
+}
+
 static void workspace_run_interactive_input_monitor(
     const struct recorz_mvp_heap_object *workspace_object
 ) {
@@ -7945,6 +7998,25 @@ static void workspace_run_interactive_input_monitor(
         }
         workspace_insert_input_monitor_character(workspace_object, ch);
         workspace_render_input_monitor_browser(workspace_object);
+    }
+}
+
+static void workspace_run_interactive_views(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    (void)workspace_object;
+    if (!workspace_view_router_redraw_from_image()) {
+        machine_panic("Workspace interactive views requires BootViewRouter");
+    }
+    while (1) {
+        char ch = machine_wait_getc();
+
+        if (workspace_view_router_handle_byte_from_image(ch)) {
+            continue;
+        }
+        if (ch == 0x04 || ch == 0x0f) {
+            break;
+        }
     }
 }
 
@@ -16535,6 +16607,18 @@ static void execute_entry_workspace_browse_interactive_input(
     workspace_bind_input_monitor_buffer(object);
     workspace_bind_input_monitor_cursor_state(object);
     workspace_render_input_monitor_browser(object);
+    push(receiver);
+}
+
+static void execute_entry_workspace_browse_interactive_views(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    workspace_run_interactive_views(object);
     push(receiver);
 }
 

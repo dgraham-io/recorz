@@ -114,6 +114,9 @@ seedBootContents: source
 browseInteractiveInput
     <primitive: #workspaceBrowseInteractiveInput>
 !
+browseInteractiveViews
+    <primitive: #workspaceBrowseInteractiveViews>
+!
 interactiveInputMonitor
     <primitive: #workspaceInteractiveInputMonitor>
 !
