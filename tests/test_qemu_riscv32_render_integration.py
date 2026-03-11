@@ -26,6 +26,7 @@ DISPLAY_TEXT_MODE_EXAMPLE = ROOT / "examples" / "qemu_riscv_display_text_mode_de
 TEXT_METRICS_MODE_EXAMPLE = ROOT / "examples" / "qemu_riscv_text_metrics_mode_demo.rz"
 WORKSPACE_SELECTION_HIGHLIGHT_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_selection_highlight_demo.rz"
 VIEW_PANE_EXAMPLE = ROOT / "examples" / "qemu_riscv_view_pane_demo.rz"
+SPLIT_LAYOUT_EXAMPLE = ROOT / "examples" / "qemu_riscv_split_layout_demo.rz"
 
 
 def _read_ppm(path: Path) -> tuple[int, int, bytes]:
@@ -223,6 +224,15 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         unfocused_border = _region_histogram(data, width, 458, 118, 824, 124)
         self.assertGreater(focused_border[(173, 216, 230)], 200)
         self.assertGreater(unfocused_border[(31, 41, 51)], 200)
+
+    def test_image_side_split_layout_can_arrange_nested_horizontal_and_vertical_panes(self) -> None:
+        qemu_log, width, height, data = self.render_example(SPLIT_LAYOUT_EXAMPLE)
+
+        self.assertRegex(qemu_log.replace("\r", ""), r"TOP=\s*100 BOTTOM=296 RIGHT=440")
+        self.assertEqual((width, height), (1024, 768))
+        self.assertEqual(_pixel(data, width, 120, 296), (31, 41, 51))
+        self.assertEqual(_pixel(data, width, 440, 200), (31, 41, 51))
+        self.assertEqual(_pixel(data, width, 80, 140), (247, 243, 232))
 
     def test_bitblt_line_primitive_draws_horizontal_vertical_and_diagonal_segments(self) -> None:
         qemu_log, width, height, data = self.render_example(BITBLT_DRAW_LINE_EXAMPLE)

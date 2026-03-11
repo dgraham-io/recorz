@@ -160,7 +160,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CHARACTER_SCANNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_REPORT_STATE
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SECONDARY_BOUNDS
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -1191,6 +1191,22 @@ static const char *selector_name(uint8_t selector) {
             return "dispatchCommandOnForm:";
         case RECORZ_MVP_SELECTOR_REPORT_STATE:
             return "reportState";
+        case RECORZ_MVP_SELECTOR_BOUNDS:
+            return "bounds";
+        case RECORZ_MVP_SELECTOR_SET_BOUNDS:
+            return "setBounds:";
+        case RECORZ_MVP_SELECTOR_SET_HORIZONTAL_BOUNDS_OFFSET_GAP:
+            return "setHorizontalBounds:offset:gap:";
+        case RECORZ_MVP_SELECTOR_SET_VERTICAL_BOUNDS_OFFSET_GAP:
+            return "setVerticalBounds:offset:gap:";
+        case RECORZ_MVP_SELECTOR_ARRANGE:
+            return "arrange";
+        case RECORZ_MVP_SELECTOR_APPLY_PRIMARY_SECONDARY:
+            return "applyPrimary:secondary:";
+        case RECORZ_MVP_SELECTOR_PRIMARY_BOUNDS:
+            return "primaryBounds";
+        case RECORZ_MVP_SELECTOR_SECONDARY_BOUNDS:
+            return "secondaryBounds";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:

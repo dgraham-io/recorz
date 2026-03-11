@@ -34,11 +34,19 @@ containsX: x y: y
 !
 RecorzKernelClass: #View superclass: #Object package: 'TextUI' instanceVariableNames: 'bounds dirty focused title'
 !
+bounds
+    ^bounds
+!
 setBounds: aRectangle title: aString
     bounds := aRectangle.
     title := aString.
     dirty := true.
     focused := false.
+    ^self
+!
+setBounds: aRectangle
+    bounds := aRectangle.
+    dirty := true.
     ^self
 !
 invalidate
@@ -141,4 +149,34 @@ reportState
     lastCommand = 1 ifTrue: [Transcript show: 'COMMAND: SPACE'].
     Transcript cr.
     ^self
+!
+RecorzKernelClass: #SplitLayout superclass: #Object package: 'TextUI' instanceVariableNames: 'primaryBounds secondaryBounds'
+!
+setHorizontalBounds: aRectangle offset: anOffset gap: aGap
+    primaryBounds := (KernelInstaller classNamed: 'Rectangle') new.
+    secondaryBounds := (KernelInstaller classNamed: 'Rectangle') new.
+    primaryBounds setLeft: aRectangle left top: aRectangle top width: anOffset height: aRectangle height.
+    secondaryBounds setLeft: aRectangle left + anOffset + aGap top: aRectangle top width: aRectangle width - anOffset - aGap height: aRectangle height.
+    ^self
+!
+setVerticalBounds: aRectangle offset: anOffset gap: aGap
+    primaryBounds := (KernelInstaller classNamed: 'Rectangle') new.
+    secondaryBounds := (KernelInstaller classNamed: 'Rectangle') new.
+    primaryBounds setLeft: aRectangle left top: aRectangle top width: aRectangle width height: anOffset.
+    secondaryBounds setLeft: aRectangle left top: aRectangle top + anOffset + aGap width: aRectangle width height: aRectangle height - anOffset - aGap.
+    ^self
+!
+arrange
+    ^self
+!
+applyPrimary: aPrimary secondary: aSecondary
+    aPrimary setBounds: primaryBounds.
+    aSecondary setBounds: secondaryBounds.
+    ^self
+!
+primaryBounds
+    ^primaryBounds
+!
+secondaryBounds
+    ^secondaryBounds
 !

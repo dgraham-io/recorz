@@ -1,0 +1,27 @@
+| screenBounds outerLayout innerLayout topView bottomView rightView |
+Display clear.
+screenBounds := (KernelInstaller classNamed: 'Rectangle') new.
+screenBounds setLeft: 40 top: 100 width: 840 height: 420.
+outerLayout := (KernelInstaller classNamed: 'SplitLayout') new.
+outerLayout setHorizontalBounds: screenBounds offset: 380 gap: 20.
+topView := (KernelInstaller classNamed: 'View') new.
+topView setBounds: screenBounds title: 'WORKSPACE'.
+bottomView := (KernelInstaller classNamed: 'View') new.
+bottomView setBounds: screenBounds title: 'TRANSCRIPT'.
+rightView := (KernelInstaller classNamed: 'View') new.
+rightView setBounds: screenBounds title: 'BROWSER'.
+innerLayout := (KernelInstaller classNamed: 'SplitLayout') new.
+innerLayout setVerticalBounds: outerLayout primaryBounds offset: 180 gap: 16.
+innerLayout applyPrimary: topView secondary: bottomView.
+rightView setBounds: outerLayout secondaryBounds.
+topView takeFocus.
+topView redrawOnForm: Display defaultForm.
+bottomView redrawOnForm: Display defaultForm.
+rightView redrawOnForm: Display defaultForm.
+Transcript show: 'TOP='.
+Transcript show: topView bounds top printString.
+Transcript show: ' BOTTOM='.
+Transcript show: bottomView bounds top printString.
+Transcript show: ' RIGHT='.
+Transcript show: rightView bounds left printString.
+Transcript cr.

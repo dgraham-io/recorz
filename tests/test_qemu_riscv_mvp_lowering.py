@@ -946,6 +946,14 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_SWITCH_FOCUS", 232),
                 ("RECORZ_MVP_SELECTOR_DISPATCH_COMMAND_ON_FORM", 233),
                 ("RECORZ_MVP_SELECTOR_REPORT_STATE", 234),
+                ("RECORZ_MVP_SELECTOR_BOUNDS", 235),
+                ("RECORZ_MVP_SELECTOR_SET_BOUNDS", 236),
+                ("RECORZ_MVP_SELECTOR_SET_HORIZONTAL_BOUNDS_OFFSET_GAP", 237),
+                ("RECORZ_MVP_SELECTOR_SET_VERTICAL_BOUNDS_OFFSET_GAP", 238),
+                ("RECORZ_MVP_SELECTOR_ARRANGE", 239),
+                ("RECORZ_MVP_SELECTOR_APPLY_PRIMARY_SECONDARY", 240),
+                ("RECORZ_MVP_SELECTOR_PRIMARY_BOUNDS", 241),
+                ("RECORZ_MVP_SELECTOR_SECONDARY_BOUNDS", 242),
             ],
         )
 

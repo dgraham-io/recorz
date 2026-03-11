@@ -468,3 +468,19 @@ RecorzKernelSelector: #dispatchCommandOnForm: order: 232
 !
 RecorzKernelSelector: #reportState order: 233
 !
+RecorzKernelSelector: #bounds order: 234
+!
+RecorzKernelSelector: #setBounds: order: 235
+!
+RecorzKernelSelector: #setHorizontalBounds:offset:gap: order: 236
+!
+RecorzKernelSelector: #setVerticalBounds:offset:gap: order: 237
+!
+RecorzKernelSelector: #arrange order: 238
+!
+RecorzKernelSelector: #applyPrimary:secondary: order: 239
+!
+RecorzKernelSelector: #primaryBounds order: 240
+!
+RecorzKernelSelector: #secondaryBounds order: 241
+!
