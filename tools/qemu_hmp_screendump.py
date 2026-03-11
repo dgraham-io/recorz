@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 def wait_for_socket(path: Path) -> None:
-    for _ in range(50):
+    for _ in range(100):
         if path.exists():
             return
         time.sleep(0.1)
@@ -41,9 +41,11 @@ def main(argv: list[str] | None = None) -> int:
     if len(args) == 4:
         if not wait_for_log_marker(Path(args[2]), args[3]):
             time.sleep(1.0)
+        else:
+            time.sleep(0.2)
 
     monitor = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    for _ in range(50):
+    for _ in range(150):
         try:
             monitor.connect(str(socket_path))
             break

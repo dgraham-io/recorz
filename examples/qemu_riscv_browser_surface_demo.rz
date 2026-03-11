@@ -1,0 +1,11 @@
+Workspace setContents: 'drawList: items source: source title: title status: status onForm: form'.
+Workspace cursor moveToIndex: 1 line: 0 column: 8 topLine: 0.
+Workspace selection collapseToLine: 0 column: 8.
+(KernelInstaller objectNamed: 'BootBrowserSurface')
+    drawList: '> Rectangle   View   SplitLayout   LabelWidget   TextEditorWidget'
+    source: Workspace contents
+    title: 'CLASS: BrowserSurface'
+    status: 'BROWSER READY'
+    onForm: Display defaultForm.
+Transcript show: 'BROWSER SURFACE'.
+Transcript cr.

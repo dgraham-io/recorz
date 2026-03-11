@@ -155,7 +155,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CHARACTER_SCANNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_DRAW_COMMANDS_ON_FORM_BOUNDS
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_DRAW_BROWSER_STATUS_ON_FORM_BOUNDS
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -1134,14 +1134,20 @@ static const char *selector_name(uint8_t selector) {
             return "setView:commands:selectedIndex:";
         case RECORZ_MVP_SELECTOR_DRAW_SOURCE_STATUS_FEEDBACK_ON_FORM:
             return "drawSource:status:feedback:onForm:";
-        case RECORZ_MVP_SELECTOR_DRAW_HEADER_ON_FORM_BOUNDS:
-            return "drawHeaderOnForm:bounds:";
-        case RECORZ_MVP_SELECTOR_DRAW_EDITOR_ON_FORM_BOUNDS:
-            return "drawEditor:onForm:bounds:";
-        case RECORZ_MVP_SELECTOR_DRAW_STATUS_FEEDBACK_ON_FORM_BOUNDS:
-            return "drawStatus:feedback:onForm:bounds:";
-        case RECORZ_MVP_SELECTOR_DRAW_COMMANDS_ON_FORM_BOUNDS:
-            return "drawCommandsOnForm:bounds:";
+        case RECORZ_MVP_SELECTOR_DRAW_WORKSPACE_CONTENT_ON_FORM_BOUNDS:
+            return "drawWorkspaceContentOnForm:bounds:";
+        case RECORZ_MVP_SELECTOR_DRAW_WORKSPACE_STATUS_ON_FORM_BOUNDS:
+            return "drawWorkspaceStatusOnForm:bounds:";
+        case RECORZ_MVP_SELECTOR_DRAW_LIST_SOURCE_TITLE_STATUS_ON_FORM:
+            return "drawList:source:title:status:onForm:";
+        case RECORZ_MVP_SELECTOR_DRAW_BROWSER_HEADER_TITLE_ON_FORM_BOUNDS:
+            return "drawBrowserHeaderTitle:onForm:bounds:";
+        case RECORZ_MVP_SELECTOR_DRAW_BROWSER_LIST_ON_FORM_BOUNDS:
+            return "drawBrowserListOnForm:bounds:";
+        case RECORZ_MVP_SELECTOR_DRAW_BROWSER_SOURCE_ON_FORM_BOUNDS:
+            return "drawBrowserSourceOnForm:bounds:";
+        case RECORZ_MVP_SELECTOR_DRAW_BROWSER_STATUS_ON_FORM_BOUNDS:
+            return "drawBrowserStatusOnForm:bounds:";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:

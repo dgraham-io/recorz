@@ -1,5 +1,7 @@
+import hashlib
 import shutil
 import subprocess
+import time
 import unittest
 from collections import Counter
 from pathlib import Path
@@ -29,6 +31,20 @@ VIEW_PANE_EXAMPLE = ROOT / "examples" / "qemu_riscv_view_pane_demo.rz"
 SPLIT_LAYOUT_EXAMPLE = ROOT / "examples" / "qemu_riscv_split_layout_demo.rz"
 WIDGET_SURFACE_EXAMPLE = ROOT / "examples" / "qemu_riscv_widget_surface_demo.rz"
 WORKSPACE_EDITOR_SURFACE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_editor_surface_demo.rz"
+BROWSER_SURFACE_EXAMPLE = ROOT / "examples" / "qemu_riscv_browser_surface_demo.rz"
+
+
+def _render_build_dir(example_path: Optional[Path], file_in_payload: Optional[Path]) -> Path:
+    key_parts = []
+    if example_path is not None:
+        key_parts.append(example_path.stem)
+    else:
+        key_parts.append("default")
+    if file_in_payload is not None:
+        key_parts.append(file_in_payload.stem)
+    digest = hashlib.sha1("|".join(key_parts).encode("utf-8")).hexdigest()[:10]
+    label = key_parts[0].replace("_", "-")[:24]
+    return ROOT / "misc" / f"qemu-rv32-render-{label}-{digest}"
 
 
 def _read_ppm(path: Path) -> tuple[int, int, bytes]:
@@ -69,22 +85,46 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         *,
         file_in_payload: Optional[Path] = None,
     ) -> tuple[str, int, int, bytes]:
-        command = ["make", "-C", str(ROOT / "platform" / "qemu-riscv32")]
+        build_dir = _render_build_dir(example_path, file_in_payload)
+        ppm_path = build_dir / "recorz-qemu-riscv32-mvp.ppm"
+        qemu_log_path = build_dir / "qemu.log"
+        command = [
+            "make",
+            "-C",
+            str(ROOT / "platform" / "qemu-riscv32"),
+            f"BUILD_DIR={build_dir}",
+        ]
         if example_path is not None:
             command.append(f"EXAMPLE={example_path}")
         if file_in_payload is not None:
             command.append(f"FILE_IN_PAYLOAD={file_in_payload}")
         command.extend(["clean", "screenshot"])
-        result = subprocess.run(
-            command,
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            self.fail(f"QEMU RV32 screenshot flow failed\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}")
-        qemu_log = QEMU_LOG_PATH.read_text(encoding="utf-8")
-        width, height, data = _read_ppm(PPM_PATH)
+        result: Optional[subprocess.CompletedProcess[str]] = None
+        for attempt in range(3):
+            result = subprocess.run(
+                command,
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                break
+            combined_output = "\n".join((result.stdout, result.stderr))
+            if attempt < 2 and (
+                "could not connect to QEMU monitor" in combined_output
+                or "BrokenPipeError" in combined_output
+            ):
+                time.sleep(1.0)
+                continue
+            self.fail(
+                "QEMU RV32 screenshot flow failed\n"
+                f"stdout:\n{result.stdout}\n"
+                f"stderr:\n{result.stderr}"
+            )
+        if result is None or result.returncode != 0:
+            self.fail("QEMU RV32 screenshot flow failed without a completed result")
+        qemu_log = qemu_log_path.read_text(encoding="utf-8")
+        width, height, data = _read_ppm(ppm_path)
         return qemu_log, width, height, data
 
     def test_demo_renders_expected_colors(self) -> None:
@@ -255,8 +295,18 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertEqual((width, height), (1024, 768))
         self.assertGreater(_region_histogram(data, width, 52, 84, 320, 112)[(31, 41, 51)], 120)
         self.assertGreater(_region_histogram(data, width, 52, 160, 520, 260)[(31, 41, 51)], 180)
-        self.assertGreater(_region_histogram(data, width, 52, 612, 260, 652)[(31, 41, 51)], 120)
-        self.assertGreater(_region_histogram(data, width, 488, 612, 820, 652)[(31, 41, 51)], 120)
+        self.assertGreater(_region_histogram(data, width, 52, 612, 860, 652)[(31, 41, 51)], 180)
+
+    def test_browser_surface_can_render_list_and_source_panes_in_image_code(self) -> None:
+        qemu_log, width, height, data = self.render_example(BROWSER_SURFACE_EXAMPLE)
+
+        normalized_log = " ".join(qemu_log.replace("\r", " ").split())
+        self.assertIn("BROWSER SURFACE", normalized_log)
+        self.assertEqual((width, height), (1024, 768))
+        self.assertGreater(_region_histogram(data, width, 52, 84, 320, 112)[(31, 41, 51)], 120)
+        self.assertGreater(_region_histogram(data, width, 52, 160, 276, 260)[(31, 41, 51)], 180)
+        self.assertGreater(_region_histogram(data, width, 340, 160, 720, 300)[(31, 41, 51)], 180)
+        self.assertGreater(_region_histogram(data, width, 52, 612, 860, 652)[(31, 41, 51)], 180)
 
     def test_bitblt_line_primitive_draws_horizontal_vertical_and_diagonal_segments(self) -> None:
         qemu_log, width, height, data = self.render_example(BITBLT_DRAW_LINE_EXAMPLE)

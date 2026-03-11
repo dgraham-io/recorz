@@ -496,11 +496,17 @@ RecorzKernelSelector: #setView:commands:selectedIndex: order: 246
 !
 RecorzKernelSelector: #drawSource:status:feedback:onForm: order: 247
 !
-RecorzKernelSelector: #drawHeaderOnForm:bounds: order: 248
+RecorzKernelSelector: #drawWorkspaceContentOnForm:bounds: order: 248
 !
-RecorzKernelSelector: #drawEditor:onForm:bounds: order: 249
+RecorzKernelSelector: #drawWorkspaceStatusOnForm:bounds: order: 249
 !
-RecorzKernelSelector: #drawStatus:feedback:onForm:bounds: order: 250
+RecorzKernelSelector: #drawList:source:title:status:onForm: order: 250
 !
-RecorzKernelSelector: #drawCommandsOnForm:bounds: order: 251
+RecorzKernelSelector: #drawBrowserHeaderTitle:onForm:bounds: order: 251
+!
+RecorzKernelSelector: #drawBrowserListOnForm:bounds: order: 252
+!
+RecorzKernelSelector: #drawBrowserSourceOnForm:bounds: order: 253
+!
+RecorzKernelSelector: #drawBrowserStatusOnForm:bounds: order: 254
 !
