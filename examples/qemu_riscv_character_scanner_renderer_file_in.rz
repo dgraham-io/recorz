@@ -1,18 +1,24 @@
 RecorzKernelClass: #TextRenderer superclass: #Object package: 'TextUI' instanceVariableNames: ''
 !
 drawStyledText: styled onForm: form
-    | scanner left top |
-    scanner := (KernelInstaller classNamed: 'CharacterScanner') new.
-    left := Display layout margins left.
-    top := Display layout margins top.
-    scanner scanText: styled text index: 1 x: left y: top style: styled style onForm: form right: (form width - left) selectionBoundary: 0 cursorBoundary: 0.
+    ((KernelInstaller classNamed: 'CharacterScanner') new)
+        scanText: styled text
+        index: 1
+        x: Display layout margins left
+        y: Display layout margins top
+        style: styled style
+        onForm: form
+        right: form width - Display layout margins left
+        selectionBoundary: 0
+        cursorBoundary: 0.
     ^form
 !
 RecorzKernelClass: #Form descriptorOrder: 10 objectKindOrder: 2 sourceBootOrder: 7 instanceVariableNames: 'bits'
 !
 writeStyledText: styled
-    | rendererClass |
     KernelInstaller rememberObject: true named: 'CharacterScannerRendererActive'.
-    rendererClass := KernelInstaller classNamed: 'TextRenderer'.
-    rendererClass new drawStyledText: styled onForm: self.
+    (KernelInstaller classNamed: 'TextRenderer') new drawStyledText: styled onForm: self.
     ^self
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: true named: 'CharacterScannerRendererActive'.

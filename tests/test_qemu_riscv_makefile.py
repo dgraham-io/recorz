@@ -123,10 +123,13 @@ class QemuRiscvMakefileTests(unittest.TestCase):
                 )
 
             combined_payload = build_dir / "external_file_in_payload.rz"
+            default_payload = build_dir / "default_file_in_payload.rz"
+            self.assertIn(str(default_payload), result.stdout)
             self.assertIn(
-                f"for path in {TEXT_BOOTSTRAP_PAYLOAD} {VIEW_BOOTSTRAP_PAYLOAD} {WIDGET_BOOTSTRAP_PAYLOAD} {file_in_path}; do",
+                f"for path in {TEXT_BOOTSTRAP_PAYLOAD} {VIEW_BOOTSTRAP_PAYLOAD} {WIDGET_BOOTSTRAP_PAYLOAD}; do",
                 result.stdout,
             )
+            self.assertIn(f"for path in {file_in_path}; do", result.stdout)
             self.assertIn(f"-fw_cfg name=opt/recorz-file-in,file={combined_payload}", result.stdout)
             self.assertIn(f"-fw_cfg name=opt/recorz-snapshot,file={snapshot_path}", result.stdout)
 
@@ -203,10 +206,13 @@ class QemuRiscvMakefileTests(unittest.TestCase):
                 )
 
             combined_payload = build_dir / "external_file_in_payload.rz"
+            default_payload = build_dir / "default_file_in_payload.rz"
+            self.assertIn(str(default_payload), result.stdout)
             self.assertIn(
-                f"for path in {TEXT_BOOTSTRAP_PAYLOAD} {VIEW_BOOTSTRAP_PAYLOAD} {WIDGET_BOOTSTRAP_PAYLOAD} {first_file} {second_file}; do",
+                f"for path in {TEXT_BOOTSTRAP_PAYLOAD} {VIEW_BOOTSTRAP_PAYLOAD} {WIDGET_BOOTSTRAP_PAYLOAD}; do",
                 result.stdout,
             )
+            self.assertIn(f"for path in {first_file} {second_file}; do", result.stdout)
             self.assertIn(f"cat $path >> {combined_payload}", result.stdout)
             self.assertIn(f"-fw_cfg name=opt/recorz-file-in,file={combined_payload}", result.stdout)
 

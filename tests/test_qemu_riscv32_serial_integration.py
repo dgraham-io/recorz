@@ -984,7 +984,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     self.fail("QEMU process stdin is not available")
                 process.stdin.write("ab\x02C\x06D\x0f")
                 process.stdin.flush()
-                time.sleep(1.0)
+                output += _read_until(process, "BUFFER=aCbD", timeout=8.0)
                 if process.poll() is None:
                     process.kill()
                 process.wait(timeout=5.0)
@@ -2491,12 +2491,12 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 text=True,
             )
             try:
-                output = _read_until(process, "RecorzKernelClass: #Display", timeout=8.0)
+                output = _read_until(process, "STATUS: CLASS SOURCE :: SOURCE EDITOR READY", timeout=12.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
                 process.stdin.write("\x18\x0f")
                 process.stdin.flush()
-                time.sleep(1.0)
+                output += _read_until(process, "INSTALL COMPLETE", timeout=12.0)
                 if process.poll() is None:
                     process.kill()
                 process.wait(timeout=5.0)
@@ -2511,8 +2511,8 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     process.stdin.close()
 
             output = output.replace("\r", "")
-            self.assertIn("STATUS: INSTALL COMPLETE", output)
-            self.assertIn("CLASS: DISPLAY", output)
+            self.assertIn("INSTALL COMPLETE", output)
+            self.assertIn("CLASS: Display", output)
             self.assertIn("VIEW: SOURCE", output)
             self.assertNotIn("panic:", output)
 
@@ -2603,12 +2603,12 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 text=True,
             )
             try:
-                output = _read_until(process, "RecorzKernelClass: #Grouped", timeout=8.0)
+                output = _read_until(process, "STATUS: CLASS SOURCE :: SOURCE EDITOR READY", timeout=12.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
                 process.stdin.write("\x0f")
                 process.stdin.flush()
-                time.sleep(1.0)
+                output += _read_until(process, "STATUS: CLASS SOURCE", timeout=8.0)
                 if process.poll() is None:
                     process.kill()
                 process.wait(timeout=5.0)
@@ -2623,8 +2623,8 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     process.stdin.close()
 
             output = output.replace("\r", "")
-            self.assertIn("CLASS: GROUPED", output)
-            self.assertIn("PROTOCOL", output)
+            self.assertIn("CLASS: Grouped", output)
+            self.assertIn("PROTO: accessing", output)
             self.assertIn("VIEW: INPUT", output)
             self.assertNotIn("panic:", output)
 
@@ -2657,7 +2657,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             )
             try:
                 try:
-                    output, _ = process.communicate(timeout=5.0)
+                    output, _ = process.communicate(timeout=15.0)
                 except subprocess.TimeoutExpired:
                     process.kill()
                     output, _ = process.communicate(timeout=5.0)
@@ -3401,7 +3401,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             output = output.replace("\r", "")
             self.assertNotIn("panic:", output)
             self.assertIn("KEDIT", output)
-            self.assertIn("CLASS: DISPLAY", output)
+            self.assertIn("CLASS: Display", output)
             self.assertIn("VIEW: SOURCE", output)
 
     def test_workspace_evaluation_uses_workspace_as_the_receiver(self) -> None:

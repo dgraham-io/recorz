@@ -1,3 +1,8 @@
 Workspace setContents: 'ABCDE'.
+Workspace cursor moveToIndex: 5 line: 0 column: 5 topLine: 0.
 Workspace selection setStartLine: 0 startColumn: 1 endLine: 0 endColumn: 4.
-Workspace browseInteractiveInput.
+(KernelInstaller objectNamed: 'BootWorkspaceEditorSurface')
+    drawSource: Workspace contents
+    status: 'READY'
+    feedback: 'OUT> SELECTION'
+    onForm: Display defaultForm.

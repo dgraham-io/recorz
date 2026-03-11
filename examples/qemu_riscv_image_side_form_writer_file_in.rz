@@ -21,3 +21,6 @@ writeStyledText: styledText
     rendererClass := KernelInstaller classNamed: 'TextRenderer'.
     rendererClass new drawStyledText: styledText onForm: self.
     ^self
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: true named: 'BootTextRendererWriteStringOverride'.

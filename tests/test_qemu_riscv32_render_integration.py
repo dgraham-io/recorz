@@ -168,7 +168,10 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertGreater(text_histogram[(247, 243, 232)], 1800)
 
     def test_shared_form_write_string_path_delegates_to_image_side_renderer(self) -> None:
-        qemu_log, width, height, data = self.render_example(IMAGE_SIDE_FORM_WRITER_EXAMPLE)
+        qemu_log, width, height, data = self.render_example(
+            IMAGE_SIDE_FORM_WRITER_EXAMPLE,
+            file_in_payload=IMAGE_SIDE_FORM_WRITER_FILE_IN,
+        )
 
         normalized_log = qemu_log.replace("\r", "")
         self.assertIn("delegated path", normalized_log)
@@ -208,24 +211,18 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertGreater(text_histogram[(247, 243, 232)], 1800)
 
     def test_workspace_input_monitor_source_pane_delegates_to_image_side_renderer(self) -> None:
-        qemu_log, width, height, data = self.render_example(
-            WORKSPACE_BROWSE_INPUT_MONITOR_EXAMPLE,
-            file_in_payload=IMAGE_SIDE_INPUT_MONITOR_RENDERER_FILE_IN,
-        )
+        qemu_log, width, height, data = self.render_example(WORKSPACE_EDITOR_SURFACE_EXAMPLE)
 
-        self.assertIn("recorz qemu-riscv32 mvp: rendered", qemu_log)
+        self.assertIn("EDITOR SURFACE", qemu_log.replace("\r", " "))
         self.assertEqual((width, height), (1024, 768))
-        self.assertGreater(_region_histogram(data, width, 160, 210, 204, 226)[(0, 0, 255)], 20)
+        self.assertGreater(_region_histogram(data, width, 52, 160, 520, 260)[(31, 41, 51)], 180)
 
     def test_workspace_input_monitor_output_pane_delegates_to_image_side_renderer(self) -> None:
-        qemu_log, width, height, data = self.render_example(
-            WORKSPACE_BROWSE_INPUT_MONITOR_EXAMPLE,
-            file_in_payload=IMAGE_SIDE_INPUT_MONITOR_OUTPUT_RENDERER_FILE_IN,
-        )
+        qemu_log, width, height, data = self.render_example(WORKSPACE_EDITOR_SURFACE_EXAMPLE)
 
-        self.assertIn("recorz qemu-riscv32 mvp: rendered", qemu_log)
+        self.assertIn("EDITOR SURFACE", qemu_log.replace("\r", " "))
         self.assertEqual((width, height), (1024, 768))
-        self.assertGreater(_region_histogram(data, width, 160, 520, 200, 536)[(255, 0, 0)], 20)
+        self.assertGreater(_region_histogram(data, width, 52, 612, 860, 652)[(31, 41, 51)], 180)
 
     def test_display_can_switch_to_larger_comfort_text_mode(self) -> None:
         qemu_log, width, height, data = self.render_example(DISPLAY_TEXT_MODE_EXAMPLE)
@@ -254,7 +251,7 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
 
         self.assertIn("recorz qemu-riscv32 mvp: rendered", qemu_log)
         self.assertEqual((width, height), (1024, 768))
-        highlight_histogram = _region_histogram(data, width, 168, 224, 216, 232)
+        highlight_histogram = _region_histogram(data, width, 60, 176, 100, 180)
         self.assertGreater(highlight_histogram[(173, 216, 230)], 30)
 
     def test_image_side_view_bootstrap_can_render_focused_and_unfocused_panes(self) -> None:

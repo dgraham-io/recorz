@@ -32,8 +32,8 @@ Reference:
 - [x] First image-side text renderer slice
 - [x] Shared `Form` string path can delegate to image-side rendering on RV32
 - [x] Display/input primitive boundary cleaned up around the Smalltalk-80 model
-- [ ] Image-owned workspace/browser rendering
-- [ ] Real native tool surfaces in the image
+- [x] Image-owned workspace/browser rendering
+- [x] Real native tool surfaces in the image
 
 ## Phase 1 - Lock The Primitive Contract
 - [x] Complete Pass 1 from [smalltalk80_ui_extraction_plan.md](/Users/david/repos/recorz/docs/smalltalk80_ui_extraction_plan.md):
@@ -95,15 +95,15 @@ Reference:
 - [x] Rebuild the browser as image-side list/source components
 - [x] Move do-it, print-it, accept, revert, test, save, and regenerate behind image-side tool objects
 - [x] Make browser navigation and source editing use the same editor/view components
-- [ ] Remove the special-case C workspace/browser renderers once the image-side tools reach parity
+- [x] Remove the special-case C workspace/browser renderers once the image-side tools reach parity
 
 ## Phase 8 - Reach The First Native UI
-- [ ] Support a functional workspace surface and a functional browser surface from inside the image
-- [ ] Allow switching between them without falling back to C-side tool policy
-- [ ] Preserve open tool state, focus, cursor, and scroll position across snapshot save/load
-- [ ] Make the normal development loop:
+- [x] Support a functional workspace surface and a functional browser surface from inside the image
+- [x] Allow switching between them without falling back to C-side tool policy
+- [x] Preserve open tool state, focus, cursor, and scroll position across snapshot save/load
+- [x] Make the normal development loop:
   browse, edit, do it / print it / accept, test, save, reboot, continue
-- [ ] Reopen into the same native tools after reboot
+- [x] Reopen into the same native tools after reboot
 
 ## Phase 9 - Garbage Collector Work Needed For Native Tools
 - [ ] Decide whether the current fixed heap is sufficient for the initial native tool milestone or whether GC must land first
@@ -131,13 +131,13 @@ Reference:
 ## Milestones To Watch
 - [x] Milestone A: Smalltalk-80-style primitive boundary documented and implemented
 - [x] Milestone B: image-owned text composition and rendering for the workspace
-- [ ] Milestone C: image-owned workspace and browser replacing the C renderer
-- [ ] Milestone D: native workspace and browser survive snapshot/reboot
+- [x] Milestone C: image-owned workspace and browser replacing the C renderer
+- [x] Milestone D: native workspace and browser survive snapshot/reboot
 - [ ] Milestone E: regenerated image boots directly into image-owned development tools
 
 ## Definition Of Done
-- [ ] Recorz UI drawing depends on a tiny primitive set comparable in spirit to Smalltalk-80
-- [ ] Text composition and rendering decisions come from image objects, not C-side UI policy
-- [ ] Workspace and browser are implemented as image-side tools
+- [x] Recorz UI drawing depends on a tiny primitive set comparable in spirit to Smalltalk-80
+- [x] Text composition and rendering decisions come from image objects, not C-side UI policy
+- [x] Workspace and browser are implemented as image-side tools
 - [ ] The VM provides only low-level drawing, display/cursor binding, input, GC/persistence support, and panic/debug paths
-- [ ] Development can continue from inside the image without depending on C-side workspace/browser behavior
+- [x] Development can continue from inside the image without depending on C-side workspace/browser behavior

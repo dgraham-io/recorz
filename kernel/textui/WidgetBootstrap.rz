@@ -60,10 +60,22 @@ loseFocus
     ^self
 !
 redrawOnForm: form
-    | x y height |
     view redrawOnForm: form.
     Display moveTextCursorToX: view bounds left + 12 y: view bounds top + 24.
     form writeString: text.
+    self drawCursorOnForm: form.
+    ^form
+!
+drawCursorOnForm: form
+    | x y height selectionStartX selectionEndX selectionY |
+    selection endLine = selection startLine ifTrue: [
+        selection endColumn > selection startColumn ifTrue: [
+            selectionStartX := view bounds left + 12 + (selection startColumn * Display font metrics cellWidth * Display layout scale).
+            selectionEndX := view bounds left + 12 + (selection endColumn * Display font metrics cellWidth * Display layout scale) - 1.
+            selectionY := view bounds top + 24 + ((selection startLine - cursor topLine + 1) * Display font metrics lineHeight * Display layout scale) - 2.
+            BitBlt drawLineOnForm: form fromX: selectionStartX fromY: selectionY toX: selectionEndX toY: selectionY color: 11393254
+        ]
+    ].
     x := view bounds left + 12 + (cursor column * Display font metrics cellWidth * Display layout scale).
     y := view bounds top + 24 + (cursor line * Display font metrics lineHeight * Display layout scale).
     height := (Display font metrics lineHeight * Display layout scale) - 1.
@@ -120,59 +132,59 @@ redrawOnForm: form
 RecorzKernelClass: #WorkspaceEditorSurface superclass: #Object package: 'TextUI' instanceVariableNames: 'sourceText statusText feedbackText'
 !
 drawSource: source status: status feedback: feedback onForm: form
-    | fullBounds topLayout headerView headerWidget |
-    Display clear.
+    | headerWidget sourceWidget statusWidget |
     sourceText := source.
     statusText := status.
     feedbackText := feedback.
-    fullBounds := (KernelInstaller classNamed: 'Rectangle') new.
-    fullBounds setLeft: 40 top: 60 width: 920 height: 620.
-    topLayout := (KernelInstaller classNamed: 'SplitLayout') new.
-    topLayout setVerticalBounds: fullBounds offset: 60 gap: 16.
-    headerView := (KernelInstaller classNamed: 'View') new.
-    headerView setBounds: fullBounds title: 'WORKSPACE'.
-    headerView setBounds: topLayout primaryBounds.
+    Display clear.
     headerWidget := (KernelInstaller classNamed: 'LabelWidget') new.
-    headerWidget setView: headerView text: 'RECORZ WORKSPACE EDITOR'.
+    headerWidget setView: (KernelInstaller objectNamed: 'BootWorkspaceHeaderView') text: 'RECORZ WORKSPACE EDITOR'.
     headerWidget redrawOnForm: form.
-    self drawWorkspaceContentOnForm: form bounds: fullBounds.
-    self drawWorkspaceStatusOnForm: form bounds: fullBounds.
+    sourceWidget := (KernelInstaller classNamed: 'TextEditorWidget') new.
+    sourceWidget setView: (KernelInstaller objectNamed: 'BootWorkspaceSourceView') text: sourceText cursor: Workspace cursor selection: Workspace selection.
+    sourceWidget takeFocus.
+    sourceWidget redrawOnForm: form.
+    statusWidget := (KernelInstaller classNamed: 'StatusAreaWidget') new.
+    statusWidget setView: (KernelInstaller objectNamed: 'BootWorkspaceStatusView') status: statusText feedback: feedbackText.
+    statusWidget redrawOnForm: form.
     ^form
 !
 drawWorkspaceContentOnForm: form bounds: fullBounds
-    | l v e top bottom view widget |
-    l := KernelInstaller classNamed: 'SplitLayout'.
-    v := KernelInstaller classNamed: 'View'.
-    e := KernelInstaller classNamed: 'TextEditorWidget'.
-    top := l new.
-    top setVerticalBounds: fullBounds offset: 60 gap: 16.
-    bottom := l new.
-    bottom setVerticalBounds: top secondaryBounds offset: 456 gap: 16.
-    view := v new.
-    view setBounds: fullBounds title: 'SOURCE'.
-    view setBounds: bottom primaryBounds.
-    widget := e new.
-    widget setView: view text: sourceText cursor: Workspace cursor selection: Workspace selection.
-    widget takeFocus.
-    ^widget redrawOnForm: form
+    | sourceWidget |
+    sourceWidget := (KernelInstaller classNamed: 'TextEditorWidget') new.
+    sourceWidget setView: (KernelInstaller objectNamed: 'BootWorkspaceSourceView') text: sourceText cursor: Workspace cursor selection: Workspace selection.
+    sourceWidget takeFocus.
+    ^sourceWidget redrawOnForm: form
 !
 drawWorkspaceStatusOnForm: form bounds: fullBounds
-    | l v s top bottom foot statusView statusWidget |
-    l := KernelInstaller classNamed: 'SplitLayout'.
-    v := KernelInstaller classNamed: 'View'.
-    s := KernelInstaller classNamed: 'StatusAreaWidget'.
-    top := l new.
-    top setVerticalBounds: fullBounds offset: 60 gap: 16.
-    bottom := l new.
-    bottom setVerticalBounds: top secondaryBounds offset: 456 gap: 16.
-    foot := l new.
-    foot setHorizontalBounds: bottom secondaryBounds offset: 904 gap: 16.
-    statusView := v new.
-    statusView setBounds: fullBounds title: 'STATUS'.
-    statusView setBounds: foot primaryBounds.
-    statusWidget := s new.
-    statusWidget setView: statusView status: statusText feedback: feedbackText.
+    | statusWidget |
+    statusWidget := (KernelInstaller classNamed: 'StatusAreaWidget') new.
+    statusWidget setView: (KernelInstaller objectNamed: 'BootWorkspaceStatusView') status: statusText feedback: feedbackText.
     ^statusWidget redrawOnForm: form
+!
+RecorzKernelDoIt:
+| rect view |
+rect := (KernelInstaller classNamed: 'Rectangle') new.
+rect setLeft: 40 top: 60 width: 920 height: 60.
+view := (KernelInstaller classNamed: 'View') new.
+view setBounds: rect title: 'WORKSPACE'.
+KernelInstaller rememberObject: view named: 'BootWorkspaceHeaderView'.
+!
+RecorzKernelDoIt:
+| rect view |
+rect := (KernelInstaller classNamed: 'Rectangle') new.
+rect setLeft: 40 top: 136 width: 920 height: 456.
+view := (KernelInstaller classNamed: 'View') new.
+view setBounds: rect title: 'SOURCE'.
+KernelInstaller rememberObject: view named: 'BootWorkspaceSourceView'.
+!
+RecorzKernelDoIt:
+| rect view |
+rect := (KernelInstaller classNamed: 'Rectangle') new.
+rect setLeft: 40 top: 608 width: 904 height: 72.
+view := (KernelInstaller classNamed: 'View') new.
+view setBounds: rect title: 'STATUS'.
+KernelInstaller rememberObject: view named: 'BootWorkspaceStatusView'.
 !
 RecorzKernelDoIt:
 KernelInstaller rememberObject: ((KernelInstaller classNamed: 'WorkspaceEditorSurface') new) named: 'BootWorkspaceEditorSurface'.
@@ -198,73 +210,62 @@ drawList: items source: source title: title status: status onForm: form
     ^form
 !
 drawBrowserHeaderTitle: title onForm: form bounds: fullBounds
-    | l v w top view widget |
-    l := KernelInstaller classNamed: 'SplitLayout'.
-    v := KernelInstaller classNamed: 'View'.
-    w := KernelInstaller classNamed: 'LabelWidget'.
-    top := l new.
-    top setVerticalBounds: fullBounds offset: 60 gap: 16.
-    view := v new.
-    view setBounds: fullBounds title: 'BROWSER'.
-    view setBounds: top primaryBounds.
-    widget := w new.
-    widget setView: view text: titleText.
-    ^widget redrawOnForm: form
+    | headerWidget |
+    headerWidget := (KernelInstaller classNamed: 'LabelWidget') new.
+    headerWidget setView: (KernelInstaller objectNamed: 'BootBrowserHeaderView') text: titleText.
+    ^headerWidget redrawOnForm: form
 !
 drawBrowserListOnForm: form bounds: fullBounds
-    | l v lw top bottom content listView listWidget |
-    l := KernelInstaller classNamed: 'SplitLayout'.
-    v := KernelInstaller classNamed: 'View'.
-    lw := KernelInstaller classNamed: 'ListWidget'.
-    top := l new.
-    top setVerticalBounds: fullBounds offset: 60 gap: 16.
-    bottom := l new.
-    bottom setVerticalBounds: top secondaryBounds offset: 456 gap: 16.
-    content := l new.
-    content setHorizontalBounds: bottom primaryBounds offset: 280 gap: 16.
-    listView := v new.
-    listView setBounds: fullBounds title: 'LIST'.
-    listView setBounds: content primaryBounds.
-    listWidget := lw new.
-    listWidget setView: listView items: listText selectedIndex: 0 topLine: 0.
+    | listWidget |
+    listWidget := (KernelInstaller classNamed: 'ListWidget') new.
+    listWidget setView: (KernelInstaller objectNamed: 'BootBrowserListView') items: listText selectedIndex: 0 topLine: 0.
     listWidget takeFocus.
     ^listWidget redrawOnForm: form
 !
 drawBrowserSourceOnForm: form bounds: fullBounds
-    | l v ew top bottom content sourceView sourceWidget |
-    l := KernelInstaller classNamed: 'SplitLayout'.
-    v := KernelInstaller classNamed: 'View'.
-    ew := KernelInstaller classNamed: 'TextEditorWidget'.
-    top := l new.
-    top setVerticalBounds: fullBounds offset: 60 gap: 16.
-    bottom := l new.
-    bottom setVerticalBounds: top secondaryBounds offset: 456 gap: 16.
-    content := l new.
-    content setHorizontalBounds: bottom primaryBounds offset: 280 gap: 16.
-    sourceView := v new.
-    sourceView setBounds: fullBounds title: 'SOURCE'.
-    sourceView setBounds: content secondaryBounds.
-    sourceWidget := ew new.
-    sourceWidget setView: sourceView text: sourceText cursor: Workspace cursor selection: Workspace selection.
+    | sourceWidget |
+    sourceWidget := (KernelInstaller classNamed: 'TextEditorWidget') new.
+    sourceWidget setView: (KernelInstaller objectNamed: 'BootBrowserSourceView') text: sourceText cursor: Workspace cursor selection: Workspace selection.
     ^sourceWidget redrawOnForm: form
 !
 drawBrowserStatusOnForm: form bounds: fullBounds
-    | l v s top bottom foot statusView statusWidget |
-    l := KernelInstaller classNamed: 'SplitLayout'.
-    v := KernelInstaller classNamed: 'View'.
-    s := KernelInstaller classNamed: 'StatusAreaWidget'.
-    top := l new.
-    top setVerticalBounds: fullBounds offset: 60 gap: 16.
-    bottom := l new.
-    bottom setVerticalBounds: top secondaryBounds offset: 456 gap: 16.
-    foot := l new.
-    foot setHorizontalBounds: bottom secondaryBounds offset: 904 gap: 16.
-    statusView := v new.
-    statusView setBounds: fullBounds title: 'STATUS'.
-    statusView setBounds: foot primaryBounds.
-    statusWidget := s new.
-    statusWidget setView: statusView status: statusText feedback: 'LIST FOCUS ACTIVE'.
+    | statusWidget |
+    statusWidget := (KernelInstaller classNamed: 'StatusAreaWidget') new.
+    statusWidget setView: (KernelInstaller objectNamed: 'BootBrowserStatusView') status: statusText feedback: 'LIST FOCUS ACTIVE'.
     ^statusWidget redrawOnForm: form
 !
 RecorzKernelDoIt:
+| rect view |
+rect := (KernelInstaller classNamed: 'Rectangle') new.
+rect setLeft: 40 top: 60 width: 920 height: 60.
+view := (KernelInstaller classNamed: 'View') new.
+view setBounds: rect title: 'BROWSER'.
+KernelInstaller rememberObject: view named: 'BootBrowserHeaderView'.
+!
+RecorzKernelDoIt:
+| rect view |
+rect := (KernelInstaller classNamed: 'Rectangle') new.
+rect setLeft: 40 top: 136 width: 280 height: 456.
+view := (KernelInstaller classNamed: 'View') new.
+view setBounds: rect title: 'LIST'.
+KernelInstaller rememberObject: view named: 'BootBrowserListView'.
+!
+RecorzKernelDoIt:
+| rect view |
+rect := (KernelInstaller classNamed: 'Rectangle') new.
+rect setLeft: 336 top: 136 width: 624 height: 456.
+view := (KernelInstaller classNamed: 'View') new.
+view setBounds: rect title: 'SOURCE'.
+KernelInstaller rememberObject: view named: 'BootBrowserSourceView'.
+!
+RecorzKernelDoIt:
+| rect view |
+rect := (KernelInstaller classNamed: 'Rectangle') new.
+rect setLeft: 40 top: 608 width: 904 height: 72.
+view := (KernelInstaller classNamed: 'View') new.
+view setBounds: rect title: 'STATUS'.
+KernelInstaller rememberObject: view named: 'BootBrowserStatusView'.
+!
+RecorzKernelDoIt:
 KernelInstaller rememberObject: ((KernelInstaller classNamed: 'BrowserSurface') new) named: 'BootBrowserSurface'.
+!

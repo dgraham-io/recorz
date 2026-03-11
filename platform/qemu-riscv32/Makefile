@@ -30,9 +30,10 @@ QEMU_WINDOW_INPUT_ARGS ?= -device virtio-keyboard-device
 comma := ,
 PYTHON_KERNEL_SOURCE_ENV := $(if $(KERNEL_SOURCE_BUNDLE),RECORZ_MVP_KERNEL_SOURCE_BUNDLE=$(KERNEL_SOURCE_BUNDLE))
 QEMU_UPDATE_ARGS := $(if $(UPDATE_PAYLOAD),-fw_cfg name=$(UPDATE_FW_CFG_NAME)$(comma)file=$(UPDATE_PAYLOAD))
+GENERATED_DEFAULT_FILE_IN_PAYLOAD := $(BUILD_DIR)/default_file_in_payload.rz
 GENERATED_FILE_IN_PAYLOAD := $(BUILD_DIR)/external_file_in_payload.rz
-ALL_FILE_IN_PAYLOADS := $(strip $(DEFAULT_FILE_IN_PAYLOADS) $(FILE_IN_PAYLOAD) $(FILE_IN_PAYLOADS))
-FILE_IN_EFFECTIVE_PAYLOAD := $(if $(ALL_FILE_IN_PAYLOADS),$(GENERATED_FILE_IN_PAYLOAD))
+EXTRA_FILE_IN_PAYLOADS := $(strip $(FILE_IN_PAYLOAD) $(FILE_IN_PAYLOADS))
+FILE_IN_EFFECTIVE_PAYLOAD := $(if $(EXTRA_FILE_IN_PAYLOADS),$(GENERATED_FILE_IN_PAYLOAD))
 QEMU_FILE_IN_ARGS := $(if $(FILE_IN_EFFECTIVE_PAYLOAD),-fw_cfg name=$(FILE_IN_FW_CFG_NAME)$(comma)file=$(FILE_IN_EFFECTIVE_PAYLOAD))
 QEMU_SNAPSHOT_ARGS := $(if $(SNAPSHOT_PAYLOAD),-fw_cfg name=$(SNAPSHOT_FW_CFG_NAME)$(comma)file=$(SNAPSHOT_PAYLOAD))
 QEMU_RUN_ARGS := $(QEMU_UPDATE_ARGS) $(QEMU_FILE_IN_ARGS) $(QEMU_SNAPSHOT_ARGS) $(QEMU_EXTRA_ARGS)
@@ -40,7 +41,7 @@ CONTINUE_SNAPSHOT_OUTPUT := $(SNAPSHOT_PAYLOAD)
 CONTINUE_SNAPSHOT_TEMP_OUTPUT := $(CONTINUE_SNAPSHOT_OUTPUT).tmp
 CONTINUE_SNAPSHOT_BACKUP_OUTPUT := $(CONTINUE_SNAPSHOT_OUTPUT).bak
 CONTINUE_SNAPSHOT_SIGNAL ?=
-QEMU_FILE_IN_DEP := $(if $(ALL_FILE_IN_PAYLOADS),$(GENERATED_FILE_IN_PAYLOAD))
+QEMU_FILE_IN_DEP := $(if $(EXTRA_FILE_IN_PAYLOADS),$(GENERATED_FILE_IN_PAYLOAD))
 DEV_SNAPSHOT ?= $(ROOT)/misc/qemu-riscv32-dev/live.bin
 DEV_SNAPSHOT_BACKUP ?= $(DEV_SNAPSHOT).bak
 DEV_LOOP_SIGNAL ?= $(BUILD_DIR)/dev-loop.snapshot
@@ -68,6 +69,8 @@ GENERATED_IMAGE := $(BUILD_DIR)/demo_image.bin
 GENERATED_BINDINGS_HEADER := $(BUILD_DIR)/recorz_mvp_generated_runtime_bindings.h
 GENERATED_IMAGE_ASM := $(BUILD_DIR)/demo_image_blob.S
 GENERATED_IMAGE_OBJECT := $(BUILD_DIR)/demo_image_blob.o
+GENERATED_DEFAULT_FILE_IN_ASM := $(BUILD_DIR)/default_file_in_blob.S
+GENERATED_DEFAULT_FILE_IN_OBJECT := $(BUILD_DIR)/default_file_in_blob.o
 ELF := $(BUILD_DIR)/recorz-qemu-riscv32-mvp.elf
 PPM := $(BUILD_DIR)/recorz-qemu-riscv32-mvp.ppm
 MONITOR_SOCK := $(BUILD_DIR)/monitor.sock
@@ -78,7 +81,8 @@ QEMU_INTERACTIVE_CHARDEV := -chardev stdio,id=recorzio,signal=off,logfile=$(QEMU
 SOURCES := start.S machine.c display.c vm.c program.c seed.c image.c main.c
 OBJECTS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(filter %.c,$(SOURCES))) \
 	$(patsubst %.S,$(BUILD_DIR)/%.o,$(filter %.S,$(SOURCES))) \
-	$(GENERATED_IMAGE_OBJECT)
+	$(GENERATED_IMAGE_OBJECT) \
+	$(GENERATED_DEFAULT_FILE_IN_OBJECT)
 
 .PHONY: all run run-interactive run-headless screenshot save-snapshot continue-snapshot continue-snapshot-interactive regenerate-boot-source regenerate-runtime-bindings regenerate-image dev-init dev-boot dev-interactive dev-loop dev-screenshot dev-file-in dev-regenerate-boot-source dev-regenerate-runtime-bindings dev-regenerate-image dev-reset dev-restore inspect-image clean FORCE
 
@@ -93,10 +97,19 @@ $(GENERATED_IMAGE): FORCE $(IMAGE_SCRIPT) $(EXAMPLE) $(KERNEL_MVP_SOURCES) $(ROO
 $(GENERATED_BINDINGS_HEADER): $(GENERATED_BINDINGS_SCRIPT) $(IMAGE_SCRIPT) $(KERNEL_MVP_SOURCES) $(ROOT)/platform/qemu-riscv64/runtime_spec.json $(ROOT)/src/recorz/parser.py $(ROOT)/src/recorz/ast.py $(ROOT)/src/recorz/compiler.py $(ROOT)/src/recorz/model.py | $(BUILD_DIR)
 	$(PYTHON_KERNEL_SOURCE_ENV) PYTHONPATH=$(ROOT)/src $(PYTHON) $(GENERATED_BINDINGS_SCRIPT) $(GENERATED_BINDINGS_HEADER)
 
-$(GENERATED_FILE_IN_PAYLOAD): $(DEFAULT_FILE_IN_PAYLOADS) $(FILE_IN_PAYLOAD) $(FILE_IN_PAYLOADS) | $(BUILD_DIR)
+$(GENERATED_DEFAULT_FILE_IN_PAYLOAD): $(DEFAULT_FILE_IN_PAYLOADS) | $(BUILD_DIR)
 	@rm -f $@
 	@first=1; \
-	for path in $(ALL_FILE_IN_PAYLOADS); do \
+	for path in $(DEFAULT_FILE_IN_PAYLOADS); do \
+		if [ $$first -eq 0 ]; then printf '\n!\n' >> $@; fi; \
+		cat $$path >> $@; \
+		first=0; \
+	done
+
+$(GENERATED_FILE_IN_PAYLOAD): $(FILE_IN_PAYLOAD) $(FILE_IN_PAYLOADS) | $(BUILD_DIR)
+	@rm -f $@
+	@first=1; \
+	for path in $(EXTRA_FILE_IN_PAYLOADS); do \
 		if [ $$first -eq 0 ]; then printf '\n!\n' >> $@; fi; \
 		cat $$path >> $@; \
 		first=0; \
@@ -119,6 +132,19 @@ $(GENERATED_IMAGE_ASM): $(GENERATED_IMAGE) | $(BUILD_DIR)
 		'recorz_demo_image_blob_end:' > $@
 
 $(GENERATED_IMAGE_OBJECT): $(GENERATED_IMAGE_ASM)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(GENERATED_DEFAULT_FILE_IN_ASM): $(GENERATED_DEFAULT_FILE_IN_PAYLOAD) | $(BUILD_DIR)
+	printf '%s\n' \
+		'.section .rodata' \
+		'.balign 8' \
+		'.global recorz_default_file_in_blob_start' \
+		'.global recorz_default_file_in_blob_end' \
+		'recorz_default_file_in_blob_start:' \
+		'.incbin "$(GENERATED_DEFAULT_FILE_IN_PAYLOAD)"' \
+		'recorz_default_file_in_blob_end:' > $@
+
+$(GENERATED_DEFAULT_FILE_IN_OBJECT): $(GENERATED_DEFAULT_FILE_IN_ASM)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(ELF): $(OBJECTS) $(CURDIR)/linker.ld
