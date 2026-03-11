@@ -106,7 +106,7 @@ Reference:
 - [x] Reopen into the same native tools after reboot
 
 ## Phase 9 - Garbage Collector Work Needed For Native Tools
-- [ ] Decide whether the current fixed heap is sufficient for the initial native tool milestone or whether GC must land first
+- [x] Decide whether the current fixed heap is sufficient for the initial native tool milestone or whether GC must land first
 - [ ] If needed, introduce a Smalltalk-appropriate managed heap/GC before the image-side UI becomes the default tool surface
 - [ ] Keep the collector compatible with:
   handles/object identity, snapshots, live method source tables, named objects, contexts, and display/cursor roots

@@ -2670,14 +2670,14 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("PROFILE DEV", output)
 
             expected_limits = {
-                "HEAP": 768,
+                "HEAP": 16384,
                 "DCLS": 24,
-                "NOBJ": 24,
+                "NOBJ": 48,
                 "MSRC": 128,
                 "MSRP": 32768,
-                "RSTR": 8192,
+                "RSTR": 32768,
                 "SSTR": 16384,
-                "SNAP": 65536,
+                "SNAP": 131072,
                 "MONO": 16,
             }
             for label, expected_limit in expected_limits.items():

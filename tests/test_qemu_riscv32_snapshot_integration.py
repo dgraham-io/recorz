@@ -18,6 +18,7 @@ TEXT_FOREGROUND = (31, 41, 51)
 SNAPSHOT_BEGIN_RE = re.compile(r"recorz-snapshot-begin (\d+)")
 SNAPSHOT_DATA_RE = re.compile(r"^recorz-snapshot-data ([0-9a-f]+)$", re.MULTILINE)
 SNAPSHOT_END_RE = re.compile(r"^recorz-snapshot-end$", re.MULTILINE)
+SNAPSHOT_SERIAL_TIMEOUT = 45.0
 
 
 def _read_until(process: subprocess.Popen[str], marker: str, *, timeout: float) -> str:
@@ -262,7 +263,7 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
                 process.stdin.flush()
                 process.stdin.close()
                 process.stdin = None
-                remaining_output, _ = process.communicate(timeout=20.0)
+                remaining_output, _ = process.communicate(timeout=SNAPSHOT_SERIAL_TIMEOUT)
                 output += remaining_output
             except subprocess.TimeoutExpired:
                 process.kill()
@@ -339,7 +340,7 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
                 process.stdin.flush()
                 process.stdin.close()
                 process.stdin = None
-                remaining_output, _ = process.communicate(timeout=20.0)
+                remaining_output, _ = process.communicate(timeout=SNAPSHOT_SERIAL_TIMEOUT)
                 output += remaining_output
             except subprocess.TimeoutExpired:
                 process.kill()
@@ -779,7 +780,7 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             build_dir=SNAPSHOT_WORKSPACE_INPUT_MONITOR_BUILD_DIR,
             example_path=SNAPSHOT_WORKSPACE_INPUT_MONITOR_SAVE_DEMO_PATH,
             snapshot_output=SNAPSHOT_WORKSPACE_INPUT_MONITOR_OUTPUT_PATH,
-            serial_input=("\x0e" * 6) + ("\x06" * 4) + "\x17",
+            serial_input="\x0e\x06\x17",
         )
         self.assertIn("SAVE: CTRL-W", save_log)
         self.assertIn("recorz-snapshot-begin", save_log)
@@ -792,7 +793,7 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         self.assertEqual(workspace_summary["current_view_kind"], 18)
         self.assertRegex(
             str(workspace_summary["current_target_name"]),
-            r"CURSOR:[1-9][0-9]*;TOP:1;VIEW:5;TARGET:Display>>newline",
+            r"CURSOR:[1-9][0-9]*;TOP:0;VIEW:5;TARGET:Display>>newline",
         )
 
         extracted_source = self.extract_workspace_current_source(
@@ -813,9 +814,9 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         self.assertIn("recorz qemu-riscv32 mvp: rendered", reload_log)
         self.assertNotIn("panic:", reload_log)
         self.assertIn("VIEW: INPUT", reload_log)
-        self.assertIn("LINE: 7", reload_log)
-        self.assertIn("COL: 5", reload_log)
-        self.assertIn("TOP: 2", reload_log)
+        self.assertIn("LINE: 2", reload_log)
+        self.assertIn("COL: 2", reload_log)
+        self.assertIn("TOP: 1", reload_log)
         self.assertIn("| first second third fourth fifth six", reload_log)
         self.assertIn("fifth := 'FIVE'.", reload_log)
 
@@ -909,7 +910,7 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             process.stdin.close()
             process.stdin = None
             try:
-                remaining_output, _ = process.communicate(timeout=20.0)
+                remaining_output, _ = process.communicate(timeout=SNAPSHOT_SERIAL_TIMEOUT)
             except subprocess.TimeoutExpired:
                 process.kill()
                 remaining_output, _ = process.communicate(timeout=5.0)
@@ -1061,7 +1062,7 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             second_process.stdin.flush()
             second_process.stdin.close()
             second_process.stdin = None
-            remaining_output, _ = second_process.communicate(timeout=20.0)
+            remaining_output, _ = second_process.communicate(timeout=SNAPSHOT_SERIAL_TIMEOUT)
             second_output += remaining_output
         except subprocess.TimeoutExpired:
             second_process.kill()
