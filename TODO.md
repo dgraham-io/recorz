@@ -65,7 +65,7 @@ Reference:
 ## Phase 4 - Move Text Layout And Composition Into The Image
 - [x] Replace VM-owned margin, wrap, tab, and line-height policy with image-owned text composition objects
 - [x] Move line breaking, cursor x/y calculation, and visible line traversal into image code
-- [ ] Move status-line and feedback-line composition into image code
+- [x] Move status-line and feedback-line composition into image code
 - [ ] Make the primary reference development font a readable 12-point image-owned font
 - [ ] Add a larger 16-point comfort mode once the 12-point primary font is working well
 - [ ] Make text metrics configurable from the image instead of fixed in the VM

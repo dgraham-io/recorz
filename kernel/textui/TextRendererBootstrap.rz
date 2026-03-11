@@ -97,6 +97,39 @@ drawCursorOnForm: form
     Cursor showCursor.
     ^form
 !
+drawStatus: status feedback: feedback onForm: form lines: lineCount
+    lineCount = 0 ifTrue: [^form].
+    form writeString: 'STATUS: '.
+    status size = 0 ifTrue: [form writeString: 'READY'] ifFalse: [form writeString: status].
+    form newline.
+    lineCount = 1 ifTrue: [^form].
+    feedback size = 0 ifTrue: [
+        form writeString: 'OUT> (no output)'.
+        form newline.
+        ^self padFeedback: lineCount - 2 onForm: form].
+    ^self drawFeedback: feedback index: 1 onForm: form remaining: lineCount - 1
+!
+drawFeedback: feedback index: index onForm: form remaining: remaining
+    remaining = 0 ifTrue: [^form].
+    form writeString: 'OUT> '.
+    ^self drawFeedbackLine: feedback index: index onForm: form remaining: remaining
+!
+drawFeedbackLine: feedback index: index onForm: form remaining: remaining
+    index > feedback size ifTrue: [
+        form newline.
+        ^self padFeedback: remaining - 1 onForm: form].
+    (feedback at: index) = 10 ifTrue: [
+        form newline.
+        ^self drawFeedback: feedback index: index + 1 onForm: form remaining: remaining - 1].
+    form writeCodePoint: (feedback at: index) color: Display style foregroundColor.
+    ^self drawFeedbackLine: feedback index: index + 1 onForm: form remaining: remaining
+!
+padFeedback: remaining onForm: form
+    remaining = 0 ifTrue: [^form].
+    form writeString: 'OUT>'.
+    form newline.
+    ^self padFeedback: remaining - 1 onForm: form
+!
 RecorzKernelClass: #TextCursor descriptorOrder: 30 objectKindOrder: 30 sourceBootOrder: 24 instanceVariableNames: 'index line column topLine'
 !
 moveToIndex: anIndex line: aLine column: aColumn topLine: aTopLine

@@ -388,3 +388,11 @@ RecorzKernelSelector: #padBlank:onForm: order: 192
 !
 RecorzKernelSelector: #drawCursorOnForm: order: 193
 !
+RecorzKernelSelector: #drawStatus:feedback:onForm:lines: order: 194
+!
+RecorzKernelSelector: #drawFeedback:index:onForm:remaining: order: 195
+!
+RecorzKernelSelector: #drawFeedbackLine:index:onForm:remaining: order: 196
+!
+RecorzKernelSelector: #padFeedback:onForm: order: 197
+!

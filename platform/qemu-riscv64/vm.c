@@ -155,7 +155,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CHARACTER_SCANNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_DRAW_CURSOR_ON_FORM
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_PAD_FEEDBACK_ON_FORM
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -490,6 +490,12 @@ static uint8_t workspace_parse_input_monitor_state(
     uint32_t status_out_size,
     char *feedback_out,
     uint32_t feedback_out_size
+);
+static uint8_t workspace_input_monitor_draw_output_from_image(
+    const struct recorz_mvp_heap_object *form,
+    const char *status,
+    const char *feedback,
+    uint32_t output_line_capacity
 );
 static void workspace_store_input_monitor_state_with_context(
     const struct recorz_mvp_heap_object *workspace_object,
@@ -1020,6 +1026,14 @@ static const char *selector_name(uint8_t selector) {
             return "padBlank:onForm:";
         case RECORZ_MVP_SELECTOR_DRAW_CURSOR_ON_FORM:
             return "drawCursorOnForm:";
+        case RECORZ_MVP_SELECTOR_DRAW_STATUS_FEEDBACK_ON_FORM_LINES:
+            return "drawStatus:feedback:onForm:lines:";
+        case RECORZ_MVP_SELECTOR_DRAW_FEEDBACK_INDEX_ON_FORM_REMAINING:
+            return "drawFeedback:index:onForm:remaining:";
+        case RECORZ_MVP_SELECTOR_DRAW_FEEDBACK_LINE_INDEX_ON_FORM_REMAINING:
+            return "drawFeedbackLine:index:onForm:remaining:";
+        case RECORZ_MVP_SELECTOR_PAD_FEEDBACK_ON_FORM:
+            return "padFeedback:onForm:";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -4617,6 +4631,32 @@ static void workspace_render_input_monitor_feedback(
     }
 }
 
+static uint8_t workspace_input_monitor_draw_output_from_image(
+    const struct recorz_mvp_heap_object *form,
+    const char *status,
+    const char *feedback,
+    uint32_t output_line_capacity
+) {
+    uint16_t object_handle = named_object_handle_for_name("BootInputMonitorRenderer");
+    struct recorz_mvp_value arguments[4];
+
+    if (object_handle == 0U) {
+        return 0U;
+    }
+    arguments[0] = string_value(status == 0 ? "" : status);
+    arguments[1] = string_value(feedback == 0 ? "" : feedback);
+    arguments[2] = object_value(heap_handle_for_object(form));
+    arguments[3] = small_integer_value((int32_t)output_line_capacity);
+    (void)perform_send_and_pop_result(
+        object_value(object_handle),
+        RECORZ_MVP_SELECTOR_DRAW_STATUS_FEEDBACK_ON_FORM_LINES,
+        4U,
+        arguments,
+        0
+    );
+    return 1U;
+}
+
 static void workspace_write_label_and_integer(
     const struct recorz_mvp_heap_object *form,
     const char *label,
@@ -5401,7 +5441,18 @@ static void workspace_render_input_monitor_browser(
          rendered_line_count < visible_line_capacity)) {
         workspace_write_raw_input_monitor_line(form, "", cursor_column, 1U);
     }
-    workspace_render_input_monitor_feedback(form, output_line_capacity);
+    if (!workspace_input_monitor_draw_output_from_image(
+            form,
+            workspace_input_monitor_status[0] == '\0' ? "" : workspace_input_monitor_status,
+            workspace_input_monitor_feedback[0] == '\0'
+                ? ""
+                : workspace_input_monitor_feedback_tail_start(
+                      workspace_input_monitor_feedback,
+                      output_line_capacity > 0U ? output_line_capacity - 1U : 0U
+                  ),
+            output_line_capacity)) {
+        workspace_render_input_monitor_feedback(form, output_line_capacity);
+    }
 }
 
 static void workspace_bind_input_monitor_buffer(

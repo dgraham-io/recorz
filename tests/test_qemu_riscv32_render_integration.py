@@ -17,6 +17,7 @@ IMAGE_SIDE_FORM_WRITER_FILE_IN = ROOT / "examples" / "qemu_riscv_image_side_form
 IMAGE_SIDE_TEXT_LAYOUT_EXAMPLE = ROOT / "examples" / "qemu_riscv_image_side_text_layout_demo.rz"
 IMAGE_SIDE_TEXT_LAYOUT_FILE_IN = ROOT / "examples" / "qemu_riscv_image_side_text_layout_file_in.rz"
 IMAGE_SIDE_INPUT_MONITOR_RENDERER_FILE_IN = ROOT / "examples" / "qemu_riscv_image_side_input_monitor_renderer_file_in.rz"
+IMAGE_SIDE_INPUT_MONITOR_OUTPUT_RENDERER_FILE_IN = ROOT / "examples" / "qemu_riscv_image_side_input_monitor_output_renderer_file_in.rz"
 CHARACTER_SCANNER_RENDERER_EXAMPLE = ROOT / "examples" / "qemu_riscv_character_scanner_renderer_demo.rz"
 CHARACTER_SCANNER_RENDERER_FILE_IN = ROOT / "examples" / "qemu_riscv_character_scanner_renderer_file_in.rz"
 BITBLT_DRAW_LINE_EXAMPLE = ROOT / "examples" / "qemu_riscv_bitblt_draw_line_demo.rz"
@@ -165,10 +166,19 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
             file_in_payload=IMAGE_SIDE_INPUT_MONITOR_RENDERER_FILE_IN,
         )
 
-        normalized_log = qemu_log.replace("\r", "")
-        self.assertIn("VIEW: INPUT", normalized_log)
+        self.assertIn("recorz qemu-riscv32 mvp: rendered", qemu_log)
         self.assertEqual((width, height), (1024, 768))
         self.assertGreater(_region_histogram(data, width, 160, 210, 204, 226)[(0, 0, 255)], 20)
+
+    def test_workspace_input_monitor_output_pane_delegates_to_image_side_renderer(self) -> None:
+        qemu_log, width, height, data = self.render_example(
+            WORKSPACE_BROWSE_INPUT_MONITOR_EXAMPLE,
+            file_in_payload=IMAGE_SIDE_INPUT_MONITOR_OUTPUT_RENDERER_FILE_IN,
+        )
+
+        self.assertIn("recorz qemu-riscv32 mvp: rendered", qemu_log)
+        self.assertEqual((width, height), (1024, 768))
+        self.assertGreater(_region_histogram(data, width, 160, 520, 200, 536)[(255, 0, 0)], 20)
 
     def test_bitblt_line_primitive_draws_horizontal_vertical_and_diagonal_segments(self) -> None:
         qemu_log, width, height, data = self.render_example(BITBLT_DRAW_LINE_EXAMPLE)
