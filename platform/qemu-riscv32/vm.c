@@ -160,7 +160,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CHARACTER_SCANNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_USE_COMFORT_TEXT_MODE
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SET_WRAP_WIDTH_TAB_WIDTH_LINE_BREAK_MODE
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -1129,6 +1129,12 @@ static const char *selector_name(uint8_t selector) {
             return "usePrimaryTextMode";
         case RECORZ_MVP_SELECTOR_USE_COMFORT_TEXT_MODE:
             return "useComfortTextMode";
+        case RECORZ_MVP_SELECTOR_SET_CELL_WIDTH_CELL_HEIGHT_BASELINE:
+            return "setCellWidth:cellHeight:baseline:";
+        case RECORZ_MVP_SELECTOR_SET_ASCENT_DESCENT_LINE_HEIGHT:
+            return "setAscent:descent:lineHeight:";
+        case RECORZ_MVP_SELECTOR_SET_WRAP_WIDTH_TAB_WIDTH_LINE_BREAK_MODE:
+            return "setWrapWidth:tabWidth:lineBreakMode:";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -9088,39 +9094,94 @@ static uint32_t transcript_clear_on_overflow(void) {
     );
 }
 
-static uint32_t char_width(void) {
+static uint32_t fallback_char_width(void) {
     return transcript_metrics_u32(
         TEXT_METRICS_FIELD_CELL_WIDTH,
         "text metrics cell width is not a small integer"
     ) * text_pixel_scale();
 }
 
-static uint32_t char_height(void) {
+static uint32_t char_width(void) {
+    return image_text_policy_u32_or_fallback(
+        "BootTextCharacterWidth",
+        RECORZ_MVP_SELECTOR_VALUE,
+        0U,
+        0,
+        fallback_char_width(),
+        "BootTextCharacterWidth did not return a small integer"
+    );
+}
+
+static uint32_t fallback_char_height(void) {
     return transcript_metrics_u32(
         TEXT_METRICS_FIELD_CELL_HEIGHT,
         "text metrics cell height is not a small integer"
     ) * text_pixel_scale();
 }
 
-static uint32_t text_baseline(void) {
+static uint32_t char_height(void) {
+    return image_text_policy_u32_or_fallback(
+        "BootTextCharacterHeight",
+        RECORZ_MVP_SELECTOR_VALUE,
+        0U,
+        0,
+        fallback_char_height(),
+        "BootTextCharacterHeight did not return a small integer"
+    );
+}
+
+static uint32_t fallback_text_baseline(void) {
     return transcript_metrics_u32(
         TEXT_METRICS_FIELD_BASELINE,
         "text metrics baseline is not a small integer"
     ) * text_pixel_scale();
 }
 
-static uint32_t text_ascent(void) {
+static uint32_t text_baseline(void) {
+    return image_text_policy_u32_or_fallback(
+        "BootTextBaseline",
+        RECORZ_MVP_SELECTOR_VALUE,
+        0U,
+        0,
+        fallback_text_baseline(),
+        "BootTextBaseline did not return a small integer"
+    );
+}
+
+static uint32_t fallback_text_ascent(void) {
     return transcript_vertical_metrics_u32(
         TEXT_VERTICAL_METRICS_FIELD_ASCENT,
         "text vertical metrics ascent is not a small integer"
     ) * text_pixel_scale();
 }
 
-static uint32_t text_descent(void) {
+static uint32_t text_ascent(void) {
+    return image_text_policy_u32_or_fallback(
+        "BootTextAscent",
+        RECORZ_MVP_SELECTOR_VALUE,
+        0U,
+        0,
+        fallback_text_ascent(),
+        "BootTextAscent did not return a small integer"
+    );
+}
+
+static uint32_t fallback_text_descent(void) {
     return transcript_vertical_metrics_u32(
         TEXT_VERTICAL_METRICS_FIELD_DESCENT,
         "text vertical metrics descent is not a small integer"
     ) * text_pixel_scale();
+}
+
+static uint32_t text_descent(void) {
+    return image_text_policy_u32_or_fallback(
+        "BootTextDescent",
+        RECORZ_MVP_SELECTOR_VALUE,
+        0U,
+        0,
+        fallback_text_descent(),
+        "BootTextDescent did not return a small integer"
+    );
 }
 
 static uint32_t fallback_text_line_height(void) {

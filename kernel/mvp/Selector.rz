@@ -406,3 +406,9 @@ RecorzKernelSelector: #usePrimaryTextMode order: 201
 !
 RecorzKernelSelector: #useComfortTextMode order: 202
 !
+RecorzKernelSelector: #setCellWidth:cellHeight:baseline: order: 203
+!
+RecorzKernelSelector: #setAscent:descent:lineHeight: order: 204
+!
+RecorzKernelSelector: #setWrapWidth:tabWidth:lineBreakMode: order: 205
+!

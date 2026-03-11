@@ -143,6 +143,30 @@ scale: aScale lineSpacing: aLineSpacing
     lineSpacing := aLineSpacing.
     ^self
 !
+RecorzKernelClass: #TextFlow instanceVariableNames: 'wrapWidth tabWidth lineBreakMode'
+!
+setWrapWidth: aWrapWidth tabWidth: aTabWidth lineBreakMode: aLineBreakMode
+    wrapWidth := aWrapWidth.
+    tabWidth := aTabWidth.
+    lineBreakMode := aLineBreakMode.
+    ^self
+!
+RecorzKernelClass: #TextMetrics instanceVariableNames: 'cellWidth cellHeight baseline verticalMetrics'
+!
+setCellWidth: aCellWidth cellHeight: aCellHeight baseline: aBaseline
+    cellWidth := aCellWidth.
+    cellHeight := aCellHeight.
+    baseline := aBaseline.
+    ^self
+!
+RecorzKernelClass: #TextVerticalMetrics instanceVariableNames: 'ascent descent lineHeight'
+!
+setAscent: anAscent descent: aDescent lineHeight: aLineHeight
+    ascent := anAscent.
+    descent := aDescent.
+    lineHeight := aLineHeight.
+    ^self
+!
 RecorzKernelClass: #TextMargins instanceVariableNames: 'left top right bottom'
 !
 left: leftMargin top: topMargin right: rightMargin bottom: bottomMargin
@@ -212,6 +236,21 @@ KernelInstaller rememberObject: [Display layout margins right] named: 'BootTextR
 !
 RecorzKernelDoIt:
 KernelInstaller rememberObject: [Display layout margins bottom] named: 'BootTextBottomMargin'.
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: [Display font metrics cellWidth * Display layout scale] named: 'BootTextCharacterWidth'.
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: [Display font metrics cellHeight * Display layout scale] named: 'BootTextCharacterHeight'.
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: [Display font metrics baseline * Display layout scale] named: 'BootTextBaseline'.
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: [Display font metrics ascent * Display layout scale] named: 'BootTextAscent'.
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: [Display font metrics descent * Display layout scale] named: 'BootTextDescent'.
 !
 RecorzKernelDoIt:
 KernelInstaller rememberObject: [Display font metrics lineHeight * Display layout scale] named: 'BootTextLineAdvance'.

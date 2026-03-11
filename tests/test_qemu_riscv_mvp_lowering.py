@@ -914,6 +914,9 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_LEFT_TOP_RIGHT_BOTTOM", 201),
                 ("RECORZ_MVP_SELECTOR_USE_PRIMARY_TEXT_MODE", 202),
                 ("RECORZ_MVP_SELECTOR_USE_COMFORT_TEXT_MODE", 203),
+                ("RECORZ_MVP_SELECTOR_SET_CELL_WIDTH_CELL_HEIGHT_BASELINE", 204),
+                ("RECORZ_MVP_SELECTOR_SET_ASCENT_DESCENT_LINE_HEIGHT", 205),
+                ("RECORZ_MVP_SELECTOR_SET_WRAP_WIDTH_TAB_WIDTH_LINE_BREAK_MODE", 206),
             ],
         )
 

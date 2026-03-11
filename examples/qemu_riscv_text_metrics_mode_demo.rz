@@ -1,0 +1,9 @@
+Display clear.
+Display usePrimaryTextMode.
+Display moveTextCursorToX: 24 y: 24.
+Display writeString: 'AA'.
+Display font metrics setCellWidth: 8 cellHeight: 8 baseline: 6.
+Display moveTextCursorToX: 24 y: 120.
+Display writeString: 'AA'.
+Transcript show: 'TEXT METRICS'.
+Transcript cr.

@@ -68,8 +68,8 @@ Reference:
 - [x] Move status-line and feedback-line composition into image code
 - [x] Make the primary reference development font a readable 12-point image-owned font
 - [x] Add a larger 16-point comfort mode once the 12-point primary font is working well
-- [ ] Make text metrics configurable from the image instead of fixed in the VM
-- [ ] Keep a temporary C fallback only until image-side composition reaches parity
+- [x] Make text metrics configurable from the image instead of fixed in the VM
+- [x] Keep a temporary C fallback only until image-side composition reaches parity
 
 ## Phase 5 - Complete The Image-Side Text Renderer
 - [ ] Rebuild the current transcript/workspace text painting path around image-side scanner/renderer objects
