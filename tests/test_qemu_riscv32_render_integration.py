@@ -27,6 +27,7 @@ TEXT_METRICS_MODE_EXAMPLE = ROOT / "examples" / "qemu_riscv_text_metrics_mode_de
 WORKSPACE_SELECTION_HIGHLIGHT_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_selection_highlight_demo.rz"
 VIEW_PANE_EXAMPLE = ROOT / "examples" / "qemu_riscv_view_pane_demo.rz"
 SPLIT_LAYOUT_EXAMPLE = ROOT / "examples" / "qemu_riscv_split_layout_demo.rz"
+WIDGET_SURFACE_EXAMPLE = ROOT / "examples" / "qemu_riscv_widget_surface_demo.rz"
 
 
 def _read_ppm(path: Path) -> tuple[int, int, bytes]:
@@ -233,6 +234,17 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertEqual(_pixel(data, width, 120, 296), (31, 41, 51))
         self.assertEqual(_pixel(data, width, 440, 200), (31, 41, 51))
         self.assertEqual(_pixel(data, width, 80, 140), (247, 243, 232))
+
+    def test_image_side_widgets_can_render_a_native_tool_surface(self) -> None:
+        qemu_log, width, height, data = self.render_example(WIDGET_SURFACE_EXAMPLE)
+
+        self.assertIn("WIDGETS", qemu_log.replace("\r", ""))
+        self.assertEqual((width, height), (1024, 768))
+        self.assertGreater(_region_histogram(data, width, 52, 84, 300, 112)[(31, 41, 51)], 120)
+        self.assertGreater(_region_histogram(data, width, 52, 160, 220, 220)[(31, 41, 51)], 120)
+        self.assertGreater(_region_histogram(data, width, 308, 160, 560, 220)[(31, 41, 51)], 120)
+        self.assertGreater(_region_histogram(data, width, 52, 596, 260, 644)[(31, 41, 51)], 120)
+        self.assertGreater(_region_histogram(data, width, 488, 596, 760, 644)[(31, 41, 51)], 120)
 
     def test_bitblt_line_primitive_draws_horizontal_vertical_and_diagonal_segments(self) -> None:
         qemu_log, width, height, data = self.render_example(BITBLT_DRAW_LINE_EXAMPLE)

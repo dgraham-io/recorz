@@ -484,3 +484,13 @@ RecorzKernelSelector: #primaryBounds order: 240
 !
 RecorzKernelSelector: #secondaryBounds order: 241
 !
+RecorzKernelSelector: #setView:text: order: 242
+!
+RecorzKernelSelector: #setView:items:selectedIndex:topLine: order: 243
+!
+RecorzKernelSelector: #setView:text:cursor:selection: order: 244
+!
+RecorzKernelSelector: #setView:status:feedback: order: 245
+!
+RecorzKernelSelector: #setView:commands:selectedIndex: order: 246
+!

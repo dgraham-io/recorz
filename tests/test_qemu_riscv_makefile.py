@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PLATFORM_DIR = ROOT / "platform" / "qemu-riscv64"
 TEXT_BOOTSTRAP_PAYLOAD = ROOT / "kernel" / "textui" / "TextRendererBootstrap.rz"
 VIEW_BOOTSTRAP_PAYLOAD = ROOT / "kernel" / "textui" / "ViewBootstrap.rz"
+WIDGET_BOOTSTRAP_PAYLOAD = ROOT / "kernel" / "textui" / "WidgetBootstrap.rz"
 DEFAULT_EXAMPLE = ROOT / "examples" / "qemu_riscv_fb_demo.rz"
 STATEFUL_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_stateful_class_demo.rz"
 
@@ -123,7 +124,7 @@ class QemuRiscvMakefileTests(unittest.TestCase):
 
             combined_payload = build_dir / "external_file_in_payload.rz"
             self.assertIn(
-                f"for path in {TEXT_BOOTSTRAP_PAYLOAD} {VIEW_BOOTSTRAP_PAYLOAD} {file_in_path}; do",
+                f"for path in {TEXT_BOOTSTRAP_PAYLOAD} {VIEW_BOOTSTRAP_PAYLOAD} {WIDGET_BOOTSTRAP_PAYLOAD} {file_in_path}; do",
                 result.stdout,
             )
             self.assertIn(f"-fw_cfg name=opt/recorz-file-in,file={combined_payload}", result.stdout)
@@ -203,7 +204,7 @@ class QemuRiscvMakefileTests(unittest.TestCase):
 
             combined_payload = build_dir / "external_file_in_payload.rz"
             self.assertIn(
-                f"for path in {TEXT_BOOTSTRAP_PAYLOAD} {VIEW_BOOTSTRAP_PAYLOAD} {first_file} {second_file}; do",
+                f"for path in {TEXT_BOOTSTRAP_PAYLOAD} {VIEW_BOOTSTRAP_PAYLOAD} {WIDGET_BOOTSTRAP_PAYLOAD} {first_file} {second_file}; do",
                 result.stdout,
             )
             self.assertIn(f"cat $path >> {combined_payload}", result.stdout)

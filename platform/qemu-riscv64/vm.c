@@ -155,7 +155,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CHARACTER_SCANNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SECONDARY_BOUNDS
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SET_VIEW_COMMANDS_SELECTED_INDEX
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -1122,6 +1122,16 @@ static const char *selector_name(uint8_t selector) {
             return "primaryBounds";
         case RECORZ_MVP_SELECTOR_SECONDARY_BOUNDS:
             return "secondaryBounds";
+        case RECORZ_MVP_SELECTOR_SET_VIEW_TEXT:
+            return "setView:text:";
+        case RECORZ_MVP_SELECTOR_SET_VIEW_ITEMS_SELECTED_INDEX_TOP_LINE:
+            return "setView:items:selectedIndex:topLine:";
+        case RECORZ_MVP_SELECTOR_SET_VIEW_TEXT_CURSOR_SELECTION:
+            return "setView:text:cursor:selection:";
+        case RECORZ_MVP_SELECTOR_SET_VIEW_STATUS_FEEDBACK:
+            return "setView:status:feedback:";
+        case RECORZ_MVP_SELECTOR_SET_VIEW_COMMANDS_SELECTED_INDEX:
+            return "setView:commands:selectedIndex:";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:

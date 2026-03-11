@@ -1,0 +1,49 @@
+| fullBounds topLayout bottomLayout mainLayout footerLayout headerView listView editorView statusView commandView headerWidget listWidget editorWidget statusWidget commandWidget cursor selection |
+Display clear.
+fullBounds := (KernelInstaller classNamed: 'Rectangle') new.
+fullBounds setLeft: 40 top: 60 width: 920 height: 620.
+topLayout := (KernelInstaller classNamed: 'SplitLayout') new.
+topLayout setVerticalBounds: fullBounds offset: 60 gap: 16.
+bottomLayout := (KernelInstaller classNamed: 'SplitLayout') new.
+bottomLayout setVerticalBounds: topLayout secondaryBounds offset: 420 gap: 16.
+mainLayout := (KernelInstaller classNamed: 'SplitLayout') new.
+mainLayout setHorizontalBounds: bottomLayout primaryBounds offset: 240 gap: 16.
+footerLayout := (KernelInstaller classNamed: 'SplitLayout') new.
+footerLayout setHorizontalBounds: bottomLayout secondaryBounds offset: 420 gap: 16.
+headerView := (KernelInstaller classNamed: 'View') new.
+headerView setBounds: fullBounds title: 'WORKSPACE'.
+headerView setBounds: topLayout primaryBounds.
+listView := (KernelInstaller classNamed: 'View') new.
+listView setBounds: fullBounds title: 'BROWSER'.
+listView setBounds: mainLayout primaryBounds.
+editorView := (KernelInstaller classNamed: 'View') new.
+editorView setBounds: fullBounds title: 'SOURCE'.
+editorView setBounds: mainLayout secondaryBounds.
+statusView := (KernelInstaller classNamed: 'View') new.
+statusView setBounds: fullBounds title: 'STATUS'.
+statusView setBounds: footerLayout primaryBounds.
+commandView := (KernelInstaller classNamed: 'View') new.
+commandView setBounds: fullBounds title: 'COMMANDS'.
+commandView setBounds: footerLayout secondaryBounds.
+headerWidget := (KernelInstaller classNamed: 'LabelWidget') new.
+headerWidget setView: headerView text: 'RECORZ / RV32 NATIVE TOOLS'.
+listWidget := (KernelInstaller classNamed: 'ListWidget') new.
+listWidget setView: listView items: 'Display  Workspace  Transcript  BitBlt' selectedIndex: 1 topLine: 0.
+cursor := (KernelInstaller classNamed: 'TextCursor') new.
+cursor moveToIndex: 1 line: 0 column: 8 topLine: 0.
+selection := (KernelInstaller classNamed: 'TextSelection') new.
+selection collapseToLine: 0 column: 8.
+editorWidget := (KernelInstaller classNamed: 'TextEditorWidget') new.
+editorWidget setView: editorView text: 'Display clear. Transcript show: ''HELLO''.' cursor: cursor selection: selection.
+statusWidget := (KernelInstaller classNamed: 'StatusAreaWidget') new.
+statusWidget setView: statusView status: 'READY' feedback: 'OUT> WORKSPACE OPEN'.
+commandWidget := (KernelInstaller classNamed: 'CommandSurfaceWidget') new.
+commandWidget setView: commandView commands: 'D DoIt   P PrintIt   X Accept   W Save' selectedIndex: 0.
+editorWidget takeFocus.
+headerWidget redrawOnForm: Display defaultForm.
+listWidget redrawOnForm: Display defaultForm.
+editorWidget redrawOnForm: Display defaultForm.
+statusWidget redrawOnForm: Display defaultForm.
+commandWidget redrawOnForm: Display defaultForm.
+Transcript show: 'WIDGETS'.
+Transcript cr.

@@ -86,7 +86,7 @@ Reference:
 - [x] Add image-side view objects for bounds, invalidation, redraw, and focus
 - [x] Add image-side input routing for keyboard focus and command dispatch
 - [x] Add image-side layout objects for vertical, horizontal, and split arrangements
-- [ ] Add core widgets needed for the first tools:
+- [x] Add core widgets needed for the first tools:
   label, list, text editor, status area, command surface
 - [ ] Keep event transport and primitive drawing in the VM only
 

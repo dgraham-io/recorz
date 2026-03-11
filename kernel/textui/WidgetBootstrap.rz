@@ -1,0 +1,119 @@
+RecorzKernelClass: #LabelWidget superclass: #Object package: 'TextUI' instanceVariableNames: 'view text'
+!
+setView: aView text: aText
+    view := aView.
+    text := aText.
+    ^self
+!
+takeFocus
+    view takeFocus.
+    ^self
+!
+loseFocus
+    view loseFocus.
+    ^self
+!
+redrawOnForm: form
+    view redrawOnForm: form.
+    Display moveTextCursorToX: view bounds left + 12 y: view bounds top + 24.
+    form writeString: text.
+    ^form
+!
+RecorzKernelClass: #ListWidget superclass: #Object package: 'TextUI' instanceVariableNames: 'view items selectedIndex topLine'
+!
+setView: aView items: itemText selectedIndex: anIndex topLine: aTopLine
+    view := aView.
+    items := itemText.
+    selectedIndex := anIndex.
+    topLine := aTopLine.
+    ^self
+!
+takeFocus
+    view takeFocus.
+    ^self
+!
+loseFocus
+    view loseFocus.
+    ^self
+!
+redrawOnForm: form
+    view redrawOnForm: form.
+    Display moveTextCursorToX: view bounds left + 12 y: view bounds top + 24.
+    form writeString: items.
+    ^form
+!
+RecorzKernelClass: #TextEditorWidget superclass: #Object package: 'TextUI' instanceVariableNames: 'view text cursor selection'
+!
+setView: aView text: aText cursor: aCursor selection: aSelection
+    view := aView.
+    text := aText.
+    cursor := aCursor.
+    selection := aSelection.
+    ^self
+!
+takeFocus
+    view takeFocus.
+    ^self
+!
+loseFocus
+    view loseFocus.
+    ^self
+!
+redrawOnForm: form
+    | x y height |
+    view redrawOnForm: form.
+    Display moveTextCursorToX: view bounds left + 12 y: view bounds top + 24.
+    form writeString: text.
+    x := view bounds left + 12 + (cursor column * Display font metrics cellWidth * Display layout scale).
+    y := view bounds top + 24 + (cursor line * Display font metrics lineHeight * Display layout scale).
+    height := (Display font metrics lineHeight * Display layout scale) - 1.
+    BitBlt drawLineOnForm: form fromX: x fromY: y toX: x toY: y + height color: 11393254.
+    ^form
+!
+RecorzKernelClass: #StatusAreaWidget superclass: #Object package: 'TextUI' instanceVariableNames: 'view status feedback'
+!
+setView: aView status: aStatus feedback: aFeedback
+    view := aView.
+    status := aStatus.
+    feedback := aFeedback.
+    ^self
+!
+takeFocus
+    view takeFocus.
+    ^self
+!
+loseFocus
+    view loseFocus.
+    ^self
+!
+redrawOnForm: form
+    view redrawOnForm: form.
+    Display moveTextCursorToX: view bounds left + 12 y: view bounds top + 24.
+    form writeString: 'STATUS: '.
+    form writeString: status.
+    form newline.
+    form writeString: feedback.
+    ^form
+!
+RecorzKernelClass: #CommandSurfaceWidget superclass: #Object package: 'TextUI' instanceVariableNames: 'view commands selectedIndex'
+!
+setView: aView commands: commandText selectedIndex: anIndex
+    view := aView.
+    commands := commandText.
+    selectedIndex := anIndex.
+    ^self
+!
+takeFocus
+    view takeFocus.
+    ^self
+!
+loseFocus
+    view loseFocus.
+    ^self
+!
+redrawOnForm: form
+    view redrawOnForm: form.
+    Display moveTextCursorToX: view bounds left + 12 y: view bounds top + 24.
+    form writeString: commands.
+    ^form
+!
