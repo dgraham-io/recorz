@@ -14807,9 +14807,6 @@ static void file_in_chunk_stream_source(const char *source) {
             struct recorz_mvp_live_class_definition definition;
 
             source_parse_class_definition_from_chunk(chunk, &definition);
-            if (definition.package_name[0] == '\0' && current_package[0] != '\0') {
-                source_copy_identifier(definition.package_name, sizeof(definition.package_name), current_package);
-            }
             class_object = ensure_class_defined(&definition);
             install_class_object = class_object;
             current_protocol[0] = '\0';

@@ -34,6 +34,8 @@
 #define NAMED_OBJECT_LIMIT RECORZ_MVP_NAMED_OBJECT_LIMIT
 #define LIVE_METHOD_SOURCE_LIMIT RECORZ_MVP_LIVE_METHOD_SOURCE_LIMIT
 #define LIVE_METHOD_SOURCE_POOL_LIMIT RECORZ_MVP_LIVE_METHOD_SOURCE_POOL_LIMIT
+#define LIVE_PACKAGE_DO_IT_SOURCE_LIMIT 64U
+#define LIVE_PACKAGE_DO_IT_SOURCE_POOL_LIMIT 32768U
 #define LIVE_STRING_LITERAL_LIMIT 64U
 #define RUNTIME_STRING_POOL_LIMIT RECORZ_MVP_RUNTIME_STRING_POOL_LIMIT
 #define SNAPSHOT_STRING_LIMIT RECORZ_MVP_SNAPSHOT_STRING_LIMIT
@@ -263,6 +265,12 @@ struct recorz_mvp_live_method_source {
     uint16_t source_length;
 };
 
+struct recorz_mvp_live_package_do_it_source {
+    char package_name[METHOD_SOURCE_NAME_LIMIT];
+    uint16_t source_offset;
+    uint16_t source_length;
+};
+
 struct recorz_mvp_live_string_literal {
     uint16_t class_handle;
     uint8_t selector_id;
@@ -335,9 +343,13 @@ static struct recorz_mvp_dynamic_class_definition dynamic_classes[DYNAMIC_CLASS_
 static struct recorz_mvp_live_package_definition live_packages[PACKAGE_LIMIT];
 static struct recorz_mvp_named_object_binding named_objects[NAMED_OBJECT_LIMIT];
 static struct recorz_mvp_live_method_source live_method_sources[LIVE_METHOD_SOURCE_LIMIT];
+static struct recorz_mvp_live_package_do_it_source live_package_do_it_sources[LIVE_PACKAGE_DO_IT_SOURCE_LIMIT];
 static struct recorz_mvp_live_string_literal live_string_literals[LIVE_STRING_LITERAL_LIMIT];
 static char live_method_source_pool[LIVE_METHOD_SOURCE_POOL_LIMIT];
 static uint16_t live_method_source_pool_used = 0U;
+static char live_package_do_it_source_pool[LIVE_PACKAGE_DO_IT_SOURCE_POOL_LIMIT];
+static uint16_t live_package_do_it_source_count = 0U;
+static uint16_t live_package_do_it_source_pool_used = 0U;
 static uint16_t default_form_handle = 0U;
 static uint16_t active_display_form_handle = 0U;
 static uint16_t active_cursor_handle = 0U;
@@ -9563,6 +9575,7 @@ static void reset_runtime_state(void) {
     package_count = 0U;
     named_object_count = 0U;
     live_method_source_count = 0U;
+    live_package_do_it_source_count = 0U;
     default_form_handle = 0U;
     active_display_form_handle = 0U;
     active_cursor_handle = 0U;
@@ -9582,6 +9595,8 @@ static void reset_runtime_state(void) {
     cursor_y = 0U;
     live_method_source_pool_used = 0U;
     live_method_source_pool[0] = '\0';
+    live_package_do_it_source_pool_used = 0U;
+    live_package_do_it_source_pool[0] = '\0';
     runtime_string_pool_offset = 0U;
     runtime_string_pool[0] = '\0';
     snapshot_string_pool[0] = '\0';
@@ -9623,6 +9638,11 @@ static void reset_runtime_state(void) {
         live_method_sources[named_index].protocol_name[0] = '\0';
         live_method_sources[named_index].source_offset = 0U;
         live_method_sources[named_index].source_length = 0U;
+    }
+    for (named_index = 0U; named_index < LIVE_PACKAGE_DO_IT_SOURCE_LIMIT; ++named_index) {
+        live_package_do_it_sources[named_index].package_name[0] = '\0';
+        live_package_do_it_sources[named_index].source_offset = 0U;
+        live_package_do_it_sources[named_index].source_length = 0U;
     }
     for (code_index = 0U; code_index < 128U; ++code_index) {
         glyph_bitmap_handles[code_index] = 0U;
@@ -11324,6 +11344,21 @@ static const char *live_method_source_text(const struct recorz_mvp_live_method_s
     return live_method_source_pool + source_record->source_offset;
 }
 
+static const char *live_package_do_it_source_text(
+    const struct recorz_mvp_live_package_do_it_source *source_record
+) {
+    if (source_record->source_length == 0U) {
+        return "";
+    }
+    if (source_record->source_offset + source_record->source_length >= LIVE_PACKAGE_DO_IT_SOURCE_POOL_LIMIT) {
+        machine_panic("live package do-it source offset is out of range");
+    }
+    if (live_package_do_it_source_pool[source_record->source_offset + source_record->source_length] != '\0') {
+        machine_panic("live package do-it source is not terminated");
+    }
+    return live_package_do_it_source_pool + source_record->source_offset;
+}
+
 static void repack_live_method_source_pool(void) {
     uint16_t source_index;
     uint16_t write_offset = 0U;
@@ -11354,6 +11389,84 @@ static void repack_live_method_source_pool(void) {
     live_method_source_pool_used = write_offset;
     if (live_method_source_pool_used < LIVE_METHOD_SOURCE_POOL_LIMIT) {
         live_method_source_pool[live_method_source_pool_used] = '\0';
+    }
+}
+
+static void repack_live_package_do_it_source_pool(void) {
+    uint16_t source_index;
+    uint16_t write_offset = 0U;
+
+    for (source_index = 0U; source_index < live_package_do_it_source_count; ++source_index) {
+        struct recorz_mvp_live_package_do_it_source *source_record = &live_package_do_it_sources[source_index];
+        uint16_t source_offset = source_record->source_offset;
+        uint16_t source_length = source_record->source_length;
+        uint16_t char_index;
+
+        if (source_length == 0U) {
+            source_record->source_offset = 0U;
+            continue;
+        }
+        if (source_offset + source_length >= LIVE_PACKAGE_DO_IT_SOURCE_POOL_LIMIT) {
+            machine_panic("live package do-it source offset is out of range");
+        }
+        if (write_offset + source_length + 1U > LIVE_PACKAGE_DO_IT_SOURCE_POOL_LIMIT) {
+            machine_panic("live package do-it source pool overflow");
+        }
+        for (char_index = 0U; char_index <= source_length; ++char_index) {
+            live_package_do_it_source_pool[write_offset + char_index] =
+                live_package_do_it_source_pool[source_offset + char_index];
+        }
+        source_record->source_offset = write_offset;
+        write_offset = (uint16_t)(write_offset + source_length + 1U);
+    }
+    live_package_do_it_source_pool_used = write_offset;
+    if (live_package_do_it_source_pool_used < LIVE_PACKAGE_DO_IT_SOURCE_POOL_LIMIT) {
+        live_package_do_it_source_pool[live_package_do_it_source_pool_used] = '\0';
+    }
+}
+
+static const struct recorz_mvp_live_package_do_it_source *live_package_do_it_source_for(
+    const char *package_name,
+    const char *source
+) {
+    uint16_t source_index;
+
+    for (source_index = 0U; source_index < live_package_do_it_source_count; ++source_index) {
+        const struct recorz_mvp_live_package_do_it_source *source_record = &live_package_do_it_sources[source_index];
+
+        if (!source_names_equal(source_record->package_name, package_name)) {
+            continue;
+        }
+        if (source_names_equal(live_package_do_it_source_text(source_record), source)) {
+            return source_record;
+        }
+    }
+    return 0;
+}
+
+static void clear_live_package_do_it_sources_for_package(const char *package_name) {
+    uint16_t source_index = 0U;
+
+    while (source_index < live_package_do_it_source_count) {
+        uint16_t move_index;
+
+        if (!source_names_equal(live_package_do_it_sources[source_index].package_name, package_name)) {
+            ++source_index;
+            continue;
+        }
+        for (move_index = (uint16_t)(source_index + 1U); move_index < live_package_do_it_source_count; ++move_index) {
+            source_copy_identifier(
+                live_package_do_it_sources[move_index - 1U].package_name,
+                sizeof(live_package_do_it_sources[move_index - 1U].package_name),
+                live_package_do_it_sources[move_index].package_name
+            );
+            live_package_do_it_sources[move_index - 1U].source_offset =
+                live_package_do_it_sources[move_index].source_offset;
+            live_package_do_it_sources[move_index - 1U].source_length =
+                live_package_do_it_sources[move_index].source_length;
+        }
+        --live_package_do_it_source_count;
+        repack_live_package_do_it_source_pool();
     }
 }
 
@@ -11473,6 +11586,42 @@ static void remember_live_method_source(
         live_method_source_pool[start++] = *source++;
     }
     live_method_source_pool[start] = '\0';
+}
+
+static void remember_live_package_do_it_source(const char *package_name, const char *source) {
+    struct recorz_mvp_live_package_do_it_source *source_record;
+    uint32_t length;
+    uint32_t start;
+
+    if (package_name == 0 || package_name[0] == '\0' || source == 0 || source[0] == '\0') {
+        return;
+    }
+    if (live_package_do_it_source_for(package_name, source) != 0) {
+        return;
+    }
+    length = text_length(source);
+    if (length + 1U > METHOD_SOURCE_CHUNK_LIMIT) {
+        machine_panic("live package do-it source exceeds chunk capacity");
+    }
+    if (live_package_do_it_source_count >= LIVE_PACKAGE_DO_IT_SOURCE_LIMIT) {
+        machine_panic("live package do-it source registry overflow");
+    }
+    if (live_package_do_it_source_pool_used + length + 1U > LIVE_PACKAGE_DO_IT_SOURCE_POOL_LIMIT) {
+        repack_live_package_do_it_source_pool();
+    }
+    if (live_package_do_it_source_pool_used + length + 1U > LIVE_PACKAGE_DO_IT_SOURCE_POOL_LIMIT) {
+        machine_panic("live package do-it source pool overflow");
+    }
+    source_record = &live_package_do_it_sources[live_package_do_it_source_count++];
+    source_copy_identifier(source_record->package_name, sizeof(source_record->package_name), package_name);
+    source_record->source_offset = live_package_do_it_source_pool_used;
+    source_record->source_length = (uint16_t)length;
+    start = live_package_do_it_source_pool_used;
+    live_package_do_it_source_pool_used = (uint16_t)(live_package_do_it_source_pool_used + length + 1U);
+    while (*source != '\0') {
+        live_package_do_it_source_pool[start++] = *source++;
+    }
+    live_package_do_it_source_pool[start] = '\0';
 }
 
 static void forget_live_string_literals(
@@ -15921,6 +16070,7 @@ static const char *file_out_package_source_text(
     const struct recorz_mvp_dynamic_class_definition *sorted_definitions[DYNAMIC_CLASS_LIMIT];
     uint16_t sorted_count = 0U;
     uint16_t dynamic_index;
+    uint16_t do_it_index;
     uint32_t offset = 0U;
 
     if (package_name == 0 || package_name[0] == '\0') {
@@ -15971,6 +16121,26 @@ static const char *file_out_package_source_text(
             buffer[offset - 1U] != '\n') {
             append_char_checked(buffer, buffer_size, &offset, '\n');
         }
+    }
+    for (do_it_index = 0U; do_it_index < live_package_do_it_source_count; ++do_it_index) {
+        const struct recorz_mvp_live_package_do_it_source *source_record = &live_package_do_it_sources[do_it_index];
+
+        if (!source_names_equal(source_record->package_name, package_name)) {
+            continue;
+        }
+        if (offset != 0U && buffer[offset - 1U] != '\n') {
+            append_char_checked(buffer, buffer_size, &offset, '\n');
+        }
+        append_text_checked(
+            buffer,
+            buffer_size,
+            &offset,
+            live_package_do_it_source_text(source_record)
+        );
+        if (buffer[offset - 1U] != '\n') {
+            append_char_checked(buffer, buffer_size, &offset, '\n');
+        }
+        append_text_checked(buffer, buffer_size, &offset, "!\n");
     }
     return buffer;
 }
@@ -16693,6 +16863,7 @@ static void file_in_chunk_stream_source(const char *source) {
             source_parse_package_definition_from_chunk(chunk, &package_definition, &has_comment);
             source_copy_identifier(current_package, sizeof(current_package), package_definition.package_name);
             remember_package_definition(package_definition.package_name, package_definition.package_comment, has_comment);
+            clear_live_package_do_it_sources_for_package(package_definition.package_name);
             current_protocol[0] = '\0';
             ++package_chunk_count;
             continue;
@@ -16701,8 +16872,8 @@ static void file_in_chunk_stream_source(const char *source) {
             struct recorz_mvp_live_class_definition definition;
 
             source_parse_class_definition_from_chunk(chunk, &definition);
-            if (definition.package_name[0] == '\0' && current_package[0] != '\0') {
-                source_copy_identifier(definition.package_name, sizeof(definition.package_name), current_package);
+            if (definition.package_name[0] != '\0') {
+                source_copy_identifier(current_package, sizeof(current_package), definition.package_name);
             }
             class_object = ensure_class_defined(&definition);
             install_class_object = class_object;
@@ -16735,6 +16906,7 @@ static void file_in_chunk_stream_source(const char *source) {
         }
         if (source_starts_with(chunk, "RecorzKernelDoIt:")) {
             workspace_evaluate_source(source_parse_do_it_chunk_body(chunk));
+            remember_live_package_do_it_source(current_package, chunk);
             current_protocol[0] = '\0';
             ++do_it_chunk_count;
             continue;

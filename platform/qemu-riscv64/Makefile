@@ -8,7 +8,7 @@ UPDATE_PAYLOAD ?=
 UPDATE_FW_CFG_NAME ?= opt/recorz-method-update
 FILE_IN_PAYLOAD ?=
 FILE_IN_PAYLOADS ?=
-DEFAULT_FILE_IN_PAYLOADS := $(ROOT)/kernel/textui/TextRendererBootstrap.rz $(ROOT)/kernel/textui/ViewBootstrap.rz $(ROOT)/kernel/textui/WidgetBootstrap.rz
+DEFAULT_FILE_IN_PAYLOADS ?= $(ROOT)/kernel/textui/TextRendererBootstrap.rz $(ROOT)/kernel/textui/ViewBootstrap.rz $(ROOT)/kernel/textui/WidgetBootstrap.rz
 KERNEL_SOURCE_BUNDLE ?=
 FILE_IN_FW_CFG_NAME ?= opt/recorz-file-in
 SNAPSHOT_PAYLOAD ?=
@@ -79,8 +79,8 @@ $(GENERATED_IMAGE): FORCE $(IMAGE_SCRIPT) $(EXAMPLE) $(KERNEL_MVP_SOURCES) $(ROO
 $(GENERATED_BINDINGS_HEADER): $(GENERATED_BINDINGS_SCRIPT) $(IMAGE_SCRIPT) $(KERNEL_MVP_SOURCES) $(ROOT)/platform/qemu-riscv64/runtime_spec.json $(ROOT)/src/recorz/parser.py $(ROOT)/src/recorz/ast.py $(ROOT)/src/recorz/compiler.py $(ROOT)/src/recorz/model.py | $(BUILD_DIR)
 	$(PYTHON_KERNEL_SOURCE_ENV) PYTHONPATH=$(ROOT)/src $(PYTHON) $(GENERATED_BINDINGS_SCRIPT) $(GENERATED_BINDINGS_HEADER)
 
-$(GENERATED_DEFAULT_FILE_IN_PAYLOAD): $(DEFAULT_FILE_IN_PAYLOADS) | $(BUILD_DIR)
-	@rm -f $@
+$(GENERATED_DEFAULT_FILE_IN_PAYLOAD): FORCE | $(BUILD_DIR)
+	@: > $@
 	@first=1; \
 	for path in $(DEFAULT_FILE_IN_PAYLOADS); do \
 		if [ $$first -eq 0 ]; then printf '\n!\n' >> $@; fi; \

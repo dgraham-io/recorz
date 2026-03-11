@@ -11,6 +11,9 @@ import os
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORM_DIR = ROOT / "platform" / "qemu-riscv32"
 REGENERATION_EXAMPLE = ROOT / "examples" / "qemu_riscv_emit_regenerated_boot_source_demo.rz"
+PACKAGE_HOME_REGENERATION_EXAMPLE = (
+    ROOT / "examples" / "qemu_riscv_emit_regenerated_boot_source_from_package_home_demo.rz"
+)
 REGENERATION_AFTER_CLASS_EDIT_EXAMPLE = ROOT / "examples" / "qemu_riscv_emit_regenerated_boot_source_after_class_edit_demo.rz"
 DEV_FILE_IN_UPDATE_EXAMPLE = ROOT / "examples" / "qemu_riscv_image_first_transcript_show_noop_update.rz"
 IMAGE_BUILDER = ROOT / "tools" / "build_qemu_riscv_mvp_image.py"
@@ -58,7 +61,13 @@ class QemuRiscv32RegenerationIntegrationTests(unittest.TestCase):
             regenerated_kernel_source_path.read_text(encoding="utf-8"),
         )
 
-    def render_demo(self, *, build_dir: Path, example_path: Path) -> tuple[str, bytes]:
+    def render_demo(
+        self,
+        *,
+        build_dir: Path,
+        example_path: Path,
+        extra_make_args: tuple[str, ...] = (),
+    ) -> tuple[str, bytes]:
         ppm_path = build_dir / "recorz-qemu-riscv32-mvp.ppm"
         command = [
             "make",
@@ -66,6 +75,7 @@ class QemuRiscv32RegenerationIntegrationTests(unittest.TestCase):
             str(PLATFORM_DIR),
             f"BUILD_DIR={build_dir}",
             f"EXAMPLE={example_path}",
+            *extra_make_args,
             "clean",
             "screenshot",
         ]
@@ -219,6 +229,68 @@ class QemuRiscv32RegenerationIntegrationTests(unittest.TestCase):
             self.assertIn("profile: RV64MVP1", inspect_output)
             self.assertIn("selector_objects=103", inspect_output)
             self.assertIn("method_entries=89", inspect_output)
+
+    def test_regenerated_boot_source_includes_textui_package_and_bootstrap_do_its(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="regen-", dir=ROOT / "misc") as temp_dir:
+            temp_root = Path(temp_dir)
+            (
+                regenerated_log,
+                _regenerated_source_path,
+                regenerated_source,
+                _regenerated_kernel_source_path,
+                _regenerated_kernel_source,
+            ) = self.regenerate_boot_source(
+                build_dir=temp_root / "regen-textui",
+                example_path=PACKAGE_HOME_REGENERATION_EXAMPLE,
+            )
+
+            self.assertIn("recorz-regenerated-boot-source-begin", regenerated_log)
+            self.assertIn("RecorzKernelPackage: ''TextUI''", regenerated_source)
+            self.assertIn("RecorzKernelClass: #WorkspaceEditorSurface", regenerated_source)
+            self.assertIn("RecorzKernelClass: #BrowserSurface", regenerated_source)
+            self.assertIn(
+                "KernelInstaller rememberObject: ((KernelInstaller classNamed: ''WorkspaceEditorSurface'') new) named: ''BootWorkspaceEditorSurface''.",
+                regenerated_source,
+            )
+            self.assertIn(
+                "KernelInstaller rememberObject: ((KernelInstaller classNamed: ''BrowserSurface'') new) named: ''BootBrowserSurface''.",
+                regenerated_source,
+            )
+            self.assertIn("Workspace browsePackages.", regenerated_source)
+
+    def test_regenerated_image_can_boot_directly_into_native_tools_without_default_textui_payloads(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="regen-", dir=ROOT / "misc") as temp_dir:
+            temp_root = Path(temp_dir)
+            (
+                _regenerated_log,
+                regenerated_source_path,
+                regenerated_source,
+                _regenerated_kernel_source_path,
+                _regenerated_kernel_source,
+            ) = self.regenerate_boot_source(
+                build_dir=temp_root / "regen-devhome",
+                example_path=PACKAGE_HOME_REGENERATION_EXAMPLE,
+            )
+
+            self.assertIn("RecorzKernelPackage: ''TextUI''", regenerated_source)
+            self.assertIn("KernelInstaller rememberObject:", regenerated_source)
+
+            original_log, original_ppm = self.render_demo(
+                build_dir=temp_root / "orig-devhome",
+                example_path=PACKAGE_HOME_REGENERATION_EXAMPLE,
+            )
+            rebuilt_log, rebuilt_ppm = self.render_demo(
+                build_dir=temp_root / "rebld-devhome",
+                example_path=regenerated_source_path,
+                extra_make_args=("DEFAULT_FILE_IN_PAYLOADS=",),
+            )
+
+            self.assertIn("recorz qemu-riscv32 mvp: rendered", original_log)
+            self.assertIn("recorz qemu-riscv32 mvp: rendered", rebuilt_log)
+            self.assertIn("VIEW: PACKAGES", rebuilt_log)
+            self.assertIn("Workspace browsePackages.", regenerated_source)
+            self.assertNotIn("panic:", rebuilt_log)
+            self.assertEqual(original_ppm, rebuilt_ppm)
 
     def test_regenerated_kernel_source_reflects_seeded_class_edits_accepted_in_image(self) -> None:
         with tempfile.TemporaryDirectory(prefix="regen-", dir=ROOT / "misc") as temp_dir:

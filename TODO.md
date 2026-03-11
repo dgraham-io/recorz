@@ -116,10 +116,10 @@ Reference:
 - [ ] Add recovery/debug tooling so UI work is not fragile while the collector matures
 
 ## Phase 10 - Source-Own The UI Stack
-- [ ] File out and file in the text/UI tool classes in canonical source form
-- [ ] Include the tool classes in regenerated kernel / boot source
-- [ ] Prove that a regenerated image boots directly into the native workspace/browser tools
-- [ ] Reduce remaining builder-side ownership of text and UI behavior
+- [x] File out and file in the text/UI tool classes in canonical source form
+- [x] Include the tool classes in regenerated kernel / boot source
+- [x] Prove that a regenerated image boots directly into the native workspace/browser tools
+- [x] Reduce remaining builder-side ownership of text and UI behavior
 
 ## Near-Term Experiments
 - [x] Add a temporary transcript/browser demo built directly on `beDisplay` + `copyBits` + image-side scanner code
@@ -133,7 +133,7 @@ Reference:
 - [x] Milestone B: image-owned text composition and rendering for the workspace
 - [x] Milestone C: image-owned workspace and browser replacing the C renderer
 - [x] Milestone D: native workspace and browser survive snapshot/reboot
-- [ ] Milestone E: regenerated image boots directly into image-owned development tools
+- [x] Milestone E: regenerated image boots directly into image-owned development tools
 
 ## Definition Of Done
 - [x] Recorz UI drawing depends on a tiny primitive set comparable in spirit to Smalltalk-80

@@ -1,0 +1,7 @@
+Workspace fileIn: 'RecorzKernelPackage: ''Tools'' comment: ''Shared utilities''
+!
+RecorzKernelClass: #PackageHomeAlpha superclass: #Object package: ''Tools'' instanceVariableNames: ''''
+!
+'.
+Workspace browsePackages.
+Workspace emitRegeneratedBootSource.
