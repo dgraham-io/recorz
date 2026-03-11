@@ -368,3 +368,23 @@ RecorzKernelSelector: #nextTabXFrom: order: 182
 !
 RecorzKernelSelector: #nextTabXFrom:step: order: 183
 !
+RecorzKernelSelector: #moveToIndex:line:column:topLine: order: 184
+!
+RecorzKernelSelector: #collapseToLine:column: order: 185
+!
+RecorzKernelSelector: #syncCursorText:index:top:visible: order: 186
+!
+RecorzKernelSelector: #syncRemaining:index:line:column:target:top:visible:cursor:selection:text: order: 187
+!
+RecorzKernelSelector: #finishCursor:selection:index:line:column:top:visible: order: 188
+!
+RecorzKernelSelector: #adjustTopForLine:requested:visible: order: 189
+!
+RecorzKernelSelector: #drawSource:onForm:visible: order: 190
+!
+RecorzKernelSelector: #drawText:index:line:top:remaining:onForm:open: order: 191
+!
+RecorzKernelSelector: #padBlank:onForm: order: 192
+!
+RecorzKernelSelector: #drawCursorOnForm: order: 193
+!

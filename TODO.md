@@ -64,7 +64,7 @@ Reference:
 
 ## Phase 4 - Move Text Layout And Composition Into The Image
 - [x] Replace VM-owned margin, wrap, tab, and line-height policy with image-owned text composition objects
-- [ ] Move line breaking, cursor x/y calculation, and visible line traversal into image code
+- [x] Move line breaking, cursor x/y calculation, and visible line traversal into image code
 - [ ] Move status-line and feedback-line composition into image code
 - [ ] Make the primary reference development font a readable 12-point image-owned font
 - [ ] Add a larger 16-point comfort mode once the 12-point primary font is working well
@@ -81,7 +81,7 @@ Reference:
 - [ ] Prove that normal workspace text output no longer depends on C-side text layout rules
 
 ## Phase 6 - Introduce Image-Owned UI Primitives
-- [ ] Decide the first image-side UI structure:
+- [x] Decide the first image-side UI structure:
   minimal pane/window system or minimal declarative view tree on top of the same primitive layer
 - [ ] Add image-side view objects for bounds, invalidation, redraw, and focus
 - [ ] Add image-side input routing for keyboard focus and command dispatch
@@ -126,7 +126,7 @@ Reference:
 - [ ] Measure 12-point primary and 16-point comfort-mode text density on 1024x768 and current QEMU targets
 - [x] Add a simple cursor-form proof using `beCursor`
 - [x] Add a simple scanner proof that stops at wrap margin and tab/newline boundaries
-- [ ] Evaluate whether the first native UI should stay Smalltalk-pane-like or move toward a declarative surface after the primitive layer is proven
+- [x] Evaluate whether the first native UI should stay Smalltalk-pane-like or move toward a declarative surface after the primitive layer is proven
 
 ## Milestones To Watch
 - [x] Milestone A: Smalltalk-80-style primitive boundary documented and implemented

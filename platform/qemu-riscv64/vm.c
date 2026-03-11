@@ -34,7 +34,7 @@
 #define NAMED_OBJECT_LIMIT 16U
 #define LIVE_METHOD_SOURCE_LIMIT 128U
 #define LIVE_STRING_LITERAL_LIMIT 64U
-#define RUNTIME_STRING_POOL_LIMIT 16384U
+#define RUNTIME_STRING_POOL_LIMIT 32768U
 #define SNAPSHOT_STRING_LIMIT 8192U
 #define SNAPSHOT_BUFFER_LIMIT 65536U
 
@@ -155,7 +155,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CHARACTER_SCANNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_NEXT_TAB_X_FROM_STEP
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_DRAW_CURSOR_ON_FORM
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -305,7 +305,7 @@ static char workspace_input_monitor_cursor_state[WORKSPACE_INPUT_MONITOR_STATE_L
 static char workspace_input_monitor_status[WORKSPACE_INPUT_MONITOR_STATUS_LIMIT];
 static char workspace_input_monitor_feedback[WORKSPACE_INPUT_MONITOR_FEEDBACK_LIMIT];
 static uint8_t workspace_input_monitor_capture_enabled = 0U;
-static char kernel_source_io_buffer[8193];
+static char kernel_source_io_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char package_source_io_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char regenerated_source_io_buffer[REGENERATED_SOURCE_BUFFER_LIMIT];
 static char runtime_string_pool[RUNTIME_STRING_POOL_LIMIT];
@@ -403,6 +403,7 @@ static const char *regenerated_kernel_source_text(void);
 static const char *regenerated_file_in_source_text(void);
 static const char *development_home_initial_source_text(void);
 static int compare_source_names(const char *left, const char *right);
+static const char *runtime_string_intern_copy(const char *text);
 static const char *runtime_string_allocate_copy(const char *text);
 static void forget_live_string_literals(uint16_t class_handle, uint8_t selector_id, uint8_t argument_count);
 static void append_text_checked(
@@ -999,6 +1000,26 @@ static const char *selector_name(uint8_t selector) {
             return "nextTabXFrom:";
         case RECORZ_MVP_SELECTOR_NEXT_TAB_X_FROM_STEP:
             return "nextTabXFrom:step:";
+        case RECORZ_MVP_SELECTOR_MOVE_TO_INDEX_LINE_COLUMN_TOP_LINE:
+            return "moveToIndex:line:column:topLine:";
+        case RECORZ_MVP_SELECTOR_COLLAPSE_TO_LINE_COLUMN:
+            return "collapseToLine:column:";
+        case RECORZ_MVP_SELECTOR_SYNC_CURSOR_TEXT_INDEX_TOP_VISIBLE:
+            return "syncCursorText:index:top:visible:";
+        case RECORZ_MVP_SELECTOR_SYNC_REMAINING_INDEX_LINE_COLUMN_TARGET_TOP_VISIBLE_CURSOR_SELECTION_TEXT:
+            return "syncRemaining:index:line:column:target:top:visible:cursor:selection:text:";
+        case RECORZ_MVP_SELECTOR_FINISH_CURSOR_SELECTION_INDEX_LINE_COLUMN_TOP_VISIBLE:
+            return "finishCursor:selection:index:line:column:top:visible:";
+        case RECORZ_MVP_SELECTOR_ADJUST_TOP_FOR_LINE_REQUESTED_VISIBLE:
+            return "adjustTopForLine:requested:visible:";
+        case RECORZ_MVP_SELECTOR_DRAW_SOURCE_ON_FORM_VISIBLE:
+            return "drawSource:onForm:visible:";
+        case RECORZ_MVP_SELECTOR_DRAW_TEXT_INDEX_LINE_TOP_REMAINING_ON_FORM_OPEN:
+            return "drawText:index:line:top:remaining:onForm:open:";
+        case RECORZ_MVP_SELECTOR_PAD_BLANK_ON_FORM:
+            return "padBlank:onForm:";
+        case RECORZ_MVP_SELECTOR_DRAW_CURSOR_ON_FORM:
+            return "drawCursorOnForm:";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -1725,6 +1746,18 @@ static uint8_t source_global_id_for_name(const char *name) {
     }
     if (source_names_equal(name, "false")) {
         return RECORZ_MVP_GLOBAL_FALSE;
+    }
+    if (source_names_equal(name, "TestRunner")) {
+        return RECORZ_MVP_GLOBAL_TEST_RUNNER;
+    }
+    if (source_names_equal(name, "Cursor")) {
+        return RECORZ_MVP_GLOBAL_CURSOR;
+    }
+    if (source_names_equal(name, "WorkspaceCursor")) {
+        return RECORZ_MVP_GLOBAL_WORKSPACE_CURSOR;
+    }
+    if (source_names_equal(name, "WorkspaceSelection")) {
+        return RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION;
     }
     return 0U;
 }
@@ -2705,7 +2738,7 @@ static uint16_t allocate_block_closure_from_source(
     heap_set_field(
         handle,
         BLOCK_CLOSURE_FIELD_SOURCE,
-        string_value(runtime_string_allocate_copy(source_text))
+        string_value(runtime_string_intern_copy(source_text))
     );
     heap_set_field(handle, BLOCK_CLOSURE_FIELD_HOME_RECEIVER, home_receiver);
     heap_set_field(handle, BLOCK_CLOSURE_FIELD_LEXICAL0, nil_value());
@@ -9049,6 +9082,37 @@ static uint32_t text_length(const char *text) {
         ++length;
     }
     return length;
+}
+
+static const char *runtime_string_intern_copy(const char *text) {
+    uint32_t length;
+    uint32_t offset = 0U;
+
+    if (text == 0) {
+        machine_panic("runtime string source is null");
+    }
+    length = text_length(text);
+    while (offset < runtime_string_pool_offset) {
+        const char *candidate = runtime_string_pool + offset;
+        uint32_t candidate_length = text_length(candidate);
+
+        if (candidate_length == length) {
+            uint32_t index;
+            uint8_t matches = 1U;
+
+            for (index = 0U; index < length; ++index) {
+                if (candidate[index] != text[index]) {
+                    matches = 0U;
+                    break;
+                }
+            }
+            if (matches) {
+                return candidate;
+            }
+        }
+        offset += candidate_length + 1U;
+    }
+    return runtime_string_allocate_copy(text);
 }
 
 static const char *runtime_string_allocate_copy(const char *text) {

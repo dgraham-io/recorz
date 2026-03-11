@@ -1,0 +1,3 @@
+Display clear.
+Workspace setContents: ''.
+Workspace browseInteractiveInput.

@@ -1,0 +1,12 @@
+RecorzKernelClass: #InputMonitorRenderer superclass: #Object package: 'TextUI' instanceVariableNames: ''
+!
+drawSource: text onForm: form visible: visibleLines
+    Display moveTextCursorToX: 160 y: 210.
+    form writeCodePoint: 73 color: 255.
+    form writeCodePoint: 77 color: 255.
+    form writeCodePoint: 65 color: 255.
+    form writeCodePoint: 71 color: 255.
+    form writeCodePoint: 69 color: 255.
+    Cursor hideCursor.
+    ^form
+!

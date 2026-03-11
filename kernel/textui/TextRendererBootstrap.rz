@@ -23,8 +23,97 @@ d: stopValue x: text y: index s: style f: form
     stopValue = 0 ifTrue: [^form].
     stopValue = 1 ifTrue: [form newline. ^self text: text index: index x: Display textCursorX y: Display textCursorY style: style onForm: form].
     stopValue = 2 ifTrue: [form writeCodePoint: 9 color: style foregroundColor. ^self text: text index: index + 1 x: Display textCursorX y: Display textCursorY style: style onForm: form].
-    stopValue = 3 ifTrue: [form newline. ^self text: text index: index + 1 x: Display textCursorX y: Display textCursorY style: style onForm: form].
+stopValue = 3 ifTrue: [form newline. ^self text: text index: index + 1 x: Display textCursorX y: Display textCursorY style: style onForm: form].
     ^form
+!
+RecorzKernelClass: #InputMonitorRenderer superclass: #Object package: 'TextUI' instanceVariableNames: ''
+!
+syncCursorText: text index: index top: topLine visible: visibleLines
+    | cursor selection |
+    cursor := Workspace cursor.
+    selection := Workspace selection.
+    ^self syncRemaining: index index: 1 line: 0 column: 0 target: index top: topLine visible: visibleLines cursor: cursor selection: selection text: text
+!
+syncRemaining: remaining index: i line: line column: column target: target top: top visible: visible cursor: cursor selection: selection text: text
+    | next nextRemaining |
+    remaining = 0 ifTrue: [^self finishCursor: cursor selection: selection index: target line: line column: column top: top visible: visible].
+    i > text size ifTrue: [^self finishCursor: cursor selection: selection index: target line: line column: column top: top visible: visible].
+    nextRemaining := remaining - 1.
+    next := i + 1.
+    (text at: i) = 10 ifTrue: [
+        ^self syncRemaining: nextRemaining index: next line: line + 1 column: 0 target: target top: top visible: visible cursor: cursor selection: selection text: text].
+    ^self syncRemaining: nextRemaining index: next line: line column: column + 1 target: target top: top visible: visible cursor: cursor selection: selection text: text
+!
+finishCursor: cursor selection: selection index: index line: line column: column top: topLine visible: visibleLines
+    | adjusted |
+    adjusted := self adjustTopForLine: line requested: topLine visible: visibleLines.
+    cursor moveToIndex: index line: line column: column topLine: adjusted.
+    selection collapseToLine: line column: column.
+    ^adjusted
+!
+adjustTopForLine: line requested: topLine visible: visibleLines
+    topLine > line ifTrue: [^line].
+    visibleLines = 0 ifTrue: [^line].
+    line > (topLine + visibleLines - 1) ifTrue: [^line - visibleLines + 1].
+    ^topLine
+!
+drawSource: text onForm: form visible: visibleLines
+    visibleLines = 0 ifTrue: [Cursor hideCursor. ^form].
+    ^self drawText: text index: 1 line: 0 top: Workspace cursor topLine remaining: visibleLines onForm: form open: false
+!
+drawText: text index: i line: line top: top remaining: remaining onForm: form open: open
+    | code lineHeight next |
+    remaining = 0 ifTrue: [self drawCursorOnForm: form. ^form].
+    i > text size ifTrue: [
+        open ifTrue: [form newline. ^self padBlank: remaining - 1 onForm: form].
+        ^self padBlank: remaining onForm: form].
+    next := i + 1.
+    line < top ifTrue: [
+        (text at: i) = 10 ifTrue: [^self drawText: text index: next line: line + 1 top: top remaining: remaining onForm: form open: false].
+        ^self drawText: text index: next line: line top: top remaining: remaining onForm: form open: false].
+    code := text at: i.
+    code = 10 ifTrue: [
+        form newline.
+        ^self drawText: text index: next line: line + 1 top: top remaining: remaining - 1 onForm: form open: false].
+    form writeCodePoint: code color: Display style foregroundColor.
+    ^self drawText: text index: next line: line top: top remaining: remaining onForm: form open: true
+!
+padBlank: remainingLines onForm: form
+    remainingLines = 0 ifTrue: [self drawCursorOnForm: form. ^form].
+    form newline.
+    ^self padBlank: remainingLines - 1 onForm: form
+!
+drawCursorOnForm: form
+    | cursor cursorX cursorY active lineHeight |
+    cursor := Workspace cursor.
+    cursorX := Display layout margins left + (cursor column * Display font metrics cellWidth * Display layout scale).
+    cursorY := Display layout margins top + ((cursor line - cursor topLine) * Display font metrics lineHeight * Display layout scale).
+    lineHeight := (Display font metrics lineHeight * Display layout scale) - 1.
+    active := Cursor current.
+    active = nil ifTrue: [
+        BitBlt drawLineOnForm: form fromX: cursorX fromY: cursorY toX: cursorX toY: cursorY + lineHeight color: Display style foregroundColor.
+        ^form].
+    Cursor moveCursorToX: cursorX y: cursorY.
+    Cursor showCursor.
+    ^form
+!
+RecorzKernelClass: #TextCursor descriptorOrder: 30 objectKindOrder: 30 sourceBootOrder: 24 instanceVariableNames: 'index line column topLine'
+!
+moveToIndex: anIndex line: aLine column: aColumn topLine: aTopLine
+    index := anIndex.
+    line := aLine.
+    column := aColumn.
+    topLine := aTopLine.
+    ^self
+!
+RecorzKernelClass: #TextSelection descriptorOrder: 31 objectKindOrder: 31 sourceBootOrder: 25 instanceVariableNames: 'startLine startColumn endLine endColumn'
+!
+collapseToLine: aLine column: aColumn
+    startLine := aLine.
+    startColumn := aColumn.
+    endLine := aLine.
+    endColumn := aColumn.
+    ^self
 !
 RecorzKernelClass: #Form descriptorOrder: 10 objectKindOrder: 2 sourceBootOrder: 7 instanceVariableNames: 'bits'
 !
@@ -36,6 +125,9 @@ writeStyledText: styledText
 !
 RecorzKernelDoIt:
 KernelInstaller rememberObject: ((KernelInstaller classNamed: 'TextRenderer') new) named: 'BootTextRenderer'.
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: ((KernelInstaller classNamed: 'InputMonitorRenderer') new) named: 'BootInputMonitorRenderer'.
 !
 RecorzKernelDoIt:
 KernelInstaller rememberObject: ((KernelInstaller classNamed: 'CharacterScanner') new) named: 'BootTextScanner'.
