@@ -396,3 +396,13 @@ RecorzKernelSelector: #drawFeedbackLine:index:onForm:remaining: order: 196
 !
 RecorzKernelSelector: #padFeedback:onForm: order: 197
 !
+RecorzKernelSelector: #setPointSize: order: 198
+!
+RecorzKernelSelector: #scale:lineSpacing: order: 199
+!
+RecorzKernelSelector: #left:top:right:bottom: order: 200
+!
+RecorzKernelSelector: #usePrimaryTextMode order: 201
+!
+RecorzKernelSelector: #useComfortTextMode order: 202
+!

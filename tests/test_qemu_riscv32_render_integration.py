@@ -22,6 +22,7 @@ CHARACTER_SCANNER_RENDERER_EXAMPLE = ROOT / "examples" / "qemu_riscv_character_s
 CHARACTER_SCANNER_RENDERER_FILE_IN = ROOT / "examples" / "qemu_riscv_character_scanner_renderer_file_in.rz"
 BITBLT_DRAW_LINE_EXAMPLE = ROOT / "examples" / "qemu_riscv_bitblt_draw_line_demo.rz"
 WORKSPACE_BROWSE_INPUT_MONITOR_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_browse_interactive_input_demo.rz"
+DISPLAY_TEXT_MODE_EXAMPLE = ROOT / "examples" / "qemu_riscv_display_text_mode_demo.rz"
 
 
 def _read_ppm(path: Path) -> tuple[int, int, bytes]:
@@ -179,6 +180,17 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertIn("recorz qemu-riscv32 mvp: rendered", qemu_log)
         self.assertEqual((width, height), (1024, 768))
         self.assertGreater(_region_histogram(data, width, 160, 520, 200, 536)[(255, 0, 0)], 20)
+
+    def test_display_can_switch_to_larger_comfort_text_mode(self) -> None:
+        qemu_log, width, height, data = self.render_example(DISPLAY_TEXT_MODE_EXAMPLE)
+
+        self.assertIn("recorz qemu-riscv32 mvp: rendered", qemu_log)
+        self.assertEqual((width, height), (1024, 768))
+        primary_dark = _region_histogram(data, width, 24, 24, 180, 56)[(31, 41, 51)]
+        comfort_dark = _region_histogram(data, width, 24, 120, 260, 170)[(31, 41, 51)]
+        self.assertGreater(primary_dark, 100)
+        self.assertGreater(comfort_dark, 300)
+        self.assertGreater(comfort_dark, primary_dark)
 
     def test_bitblt_line_primitive_draws_horizontal_vertical_and_diagonal_segments(self) -> None:
         qemu_log, width, height, data = self.render_example(BITBLT_DRAW_LINE_EXAMPLE)

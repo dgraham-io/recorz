@@ -1,0 +1,9 @@
+Display clear.
+Display usePrimaryTextMode.
+Display moveTextCursorToX: 24 y: 24.
+Display writeString: 'MODE SAMPLE'.
+Display useComfortTextMode.
+Display moveTextCursorToX: 24 y: 120.
+Display writeString: 'MODE SAMPLE'.
+Transcript show: 'TEXT MODES'.
+Transcript cr.

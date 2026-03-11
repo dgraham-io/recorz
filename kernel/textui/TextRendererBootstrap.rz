@@ -130,6 +130,42 @@ padFeedback: remaining onForm: form
     form newline.
     ^self padFeedback: remaining - 1 onForm: form
 !
+RecorzKernelClass: #Font instanceVariableNames: 'glyphs metrics behavior pointSize'
+!
+setPointSize: anInteger
+    pointSize := anInteger.
+    ^self
+!
+RecorzKernelClass: #TextLayout instanceVariableNames: 'margins scale lineSpacing flow'
+!
+scale: aScale lineSpacing: aLineSpacing
+    scale := aScale.
+    lineSpacing := aLineSpacing.
+    ^self
+!
+RecorzKernelClass: #TextMargins instanceVariableNames: 'left top right bottom'
+!
+left: leftMargin top: topMargin right: rightMargin bottom: bottomMargin
+    left := leftMargin.
+    top := topMargin.
+    right := rightMargin.
+    bottom := bottomMargin.
+    ^self
+!
+RecorzKernelClass: #Display
+!
+usePrimaryTextMode
+    Display font setPointSize: 12.
+    Display layout scale: 2 lineSpacing: 1.
+    Display layout margins left: 16 top: 16 right: 16 bottom: 16.
+    ^self
+!
+useComfortTextMode
+    Display font setPointSize: 16.
+    Display layout scale: 3 lineSpacing: 1.
+    Display layout margins left: 24 top: 24 right: 24 bottom: 24.
+    ^self
+!
 RecorzKernelClass: #TextCursor descriptorOrder: 30 objectKindOrder: 30 sourceBootOrder: 24 instanceVariableNames: 'index line column topLine'
 !
 moveToIndex: anIndex line: aLine column: aColumn topLine: aTopLine

@@ -160,7 +160,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CHARACTER_SCANNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_PAD_FEEDBACK_ON_FORM
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_USE_COMFORT_TEXT_MODE
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -1119,6 +1119,16 @@ static const char *selector_name(uint8_t selector) {
             return "drawFeedbackLine:index:onForm:remaining:";
         case RECORZ_MVP_SELECTOR_PAD_FEEDBACK_ON_FORM:
             return "padFeedback:onForm:";
+        case RECORZ_MVP_SELECTOR_SET_POINT_SIZE:
+            return "setPointSize:";
+        case RECORZ_MVP_SELECTOR_SCALE_LINE_SPACING:
+            return "scale:lineSpacing:";
+        case RECORZ_MVP_SELECTOR_LEFT_TOP_RIGHT_BOTTOM:
+            return "left:top:right:bottom:";
+        case RECORZ_MVP_SELECTOR_USE_PRIMARY_TEXT_MODE:
+            return "usePrimaryTextMode";
+        case RECORZ_MVP_SELECTOR_USE_COMFORT_TEXT_MODE:
+            return "useComfortTextMode";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
