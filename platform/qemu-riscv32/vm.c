@@ -160,7 +160,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CHARACTER_SCANNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_MOVE_TEXT_CURSOR_TO_X_Y
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_NEXT_TAB_X_FROM_STEP
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #define SOURCE_EVAL_ENV_LIMIT 128U
@@ -306,6 +306,8 @@ struct recorz_mvp_source_method_context {
     int16_t lexical_environment_index;
     int16_t home_context_index;
     uint16_t current_context_handle;
+    uint8_t selector_id;
+    uint8_t argument_count;
     uint8_t is_block;
 };
 
@@ -400,7 +402,7 @@ static uint32_t text_length(const char *text);
 static uint32_t text_left_margin(void);
 static uint32_t text_right_margin(void);
 static uint32_t text_bottom_margin(void);
-static uint32_t text_wrap_width(void);
+static uint32_t text_wrap_limit_x_for_form_width(uint32_t form_width);
 static uint32_t char_width(void);
 static uint32_t char_height(void);
 static uint32_t text_line_spacing(void);
@@ -469,6 +471,7 @@ static const char *regenerated_file_in_source_text(void);
 static const char *development_home_initial_source_text(void);
 static int compare_source_names(const char *left, const char *right);
 static const char *runtime_string_allocate_copy(const char *text);
+static const char *runtime_string_intern_copy(const char *text);
 static struct recorz_mvp_value boolean_value(uint8_t condition);
 static struct recorz_mvp_value object_value(uint16_t handle);
 static struct recorz_mvp_value string_value(const char *text);
@@ -1048,6 +1051,26 @@ static const char *selector_name(uint8_t selector) {
             return "textCursorY";
         case RECORZ_MVP_SELECTOR_MOVE_TEXT_CURSOR_TO_X_Y:
             return "moveTextCursorToX:y:";
+        case RECORZ_MVP_SELECTOR_LEFT_MARGIN:
+            return "leftMargin";
+        case RECORZ_MVP_SELECTOR_TOP_MARGIN:
+            return "topMargin";
+        case RECORZ_MVP_SELECTOR_RIGHT_MARGIN:
+            return "rightMargin";
+        case RECORZ_MVP_SELECTOR_BOTTOM_MARGIN:
+            return "bottomMargin";
+        case RECORZ_MVP_SELECTOR_CHARACTER_WIDTH:
+            return "characterWidth";
+        case RECORZ_MVP_SELECTOR_CHARACTER_HEIGHT:
+            return "characterHeight";
+        case RECORZ_MVP_SELECTOR_LINE_ADVANCE:
+            return "lineAdvance";
+        case RECORZ_MVP_SELECTOR_WRAP_LIMIT_FOR_FORM_WIDTH:
+            return "wrapLimitForFormWidth:";
+        case RECORZ_MVP_SELECTOR_NEXT_TAB_X_FROM:
+            return "nextTabXFrom:";
+        case RECORZ_MVP_SELECTOR_NEXT_TAB_X_FROM_STEP:
+            return "nextTabXFrom:step:";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -1445,7 +1468,8 @@ static int16_t source_allocate_home_context(
     struct recorz_mvp_value receiver,
     int16_t lexical_environment_index,
     uint16_t sender_context_handle,
-    const char *detail_text
+    const char *detail_text,
+    uint8_t allocate_context_object
 );
 static uint16_t allocate_source_context_object(
     uint16_t sender_context_handle,
@@ -2231,7 +2255,8 @@ static int16_t source_allocate_home_context(
     struct recorz_mvp_value receiver,
     int16_t lexical_environment_index,
     uint16_t sender_context_handle,
-    const char *detail_text
+    const char *detail_text,
+    uint8_t allocate_context_object
 ) {
     uint16_t home_index;
 
@@ -2242,11 +2267,14 @@ static int16_t source_allocate_home_context(
             source_eval_home_contexts[home_index].defining_class = defining_class;
             source_eval_home_contexts[home_index].receiver = receiver;
             source_eval_home_contexts[home_index].lexical_environment_index = lexical_environment_index;
-            source_eval_home_contexts[home_index].context_handle = allocate_source_context_object(
-                sender_context_handle,
-                receiver,
-                detail_text
-            );
+            source_eval_home_contexts[home_index].context_handle =
+                allocate_context_object != 0U ?
+                    allocate_source_context_object(
+                        sender_context_handle,
+                        receiver,
+                        detail_text
+                    ) :
+                    0U;
             return (int16_t)home_index;
         }
     }
@@ -2366,7 +2394,7 @@ static uint16_t allocate_source_context_object(
         heap_set_field(
             handle,
             CONTEXT_FIELD_DETAIL,
-            string_value(runtime_string_allocate_copy(detail_text))
+            string_value(runtime_string_intern_copy(detail_text))
         );
     }
     heap_set_field(handle, CONTEXT_FIELD_ALIVE, boolean_value(1U));
@@ -4827,14 +4855,18 @@ static uint32_t workspace_visible_columns(const struct recorz_mvp_heap_object *f
     uint32_t right_margin = text_right_margin();
     uint32_t width = bitmap_width(bitmap_for_form(form));
     uint32_t char_columns;
-    uint32_t wrap_width = text_wrap_width();
+    uint32_t wrap_limit_x = text_wrap_limit_x_for_form_width(width);
 
     if (width <= left_margin + right_margin || char_width() == 0U) {
         return 1U;
     }
     char_columns = (width - left_margin - right_margin) / char_width();
-    if (wrap_width != 0U && wrap_width < char_columns) {
-        char_columns = wrap_width;
+    if (wrap_limit_x != 0U && wrap_limit_x > left_margin) {
+        uint32_t wrapped_columns = (wrap_limit_x - left_margin) / char_width();
+
+        if (wrapped_columns != 0U && wrapped_columns < char_columns) {
+            char_columns = wrapped_columns;
+        }
     }
     return char_columns == 0U ? 1U : char_columns;
 }
@@ -8486,20 +8518,88 @@ static uint32_t transcript_flow_u32(uint8_t field_index, const char *message) {
     return small_integer_u32(heap_get_field(transcript_flow_object(), field_index), message);
 }
 
-static uint32_t text_left_margin(void) {
+static uint32_t image_text_policy_u32_or_fallback(
+    const char *object_name,
+    uint8_t selector_id,
+    uint16_t argument_count,
+    const struct recorz_mvp_value arguments[],
+    uint32_t fallback,
+    const char *message
+) {
+    uint16_t object_handle = named_object_handle_for_name(object_name);
+    struct recorz_mvp_value result;
+
+    if (object_handle == 0U) {
+        return fallback;
+    }
+    result = perform_send_and_pop_result(
+        object_value(object_handle),
+        selector_id,
+        argument_count,
+        arguments,
+        0
+    );
+    return small_integer_u32(result, message);
+}
+
+static uint32_t fallback_text_left_margin(void) {
     return transcript_margins_u32(TEXT_MARGINS_FIELD_LEFT, "text margins left is not a small integer");
 }
 
-static uint32_t text_top_margin(void) {
+static uint32_t text_left_margin(void) {
+    return image_text_policy_u32_or_fallback(
+        "BootTextLeftMargin",
+        RECORZ_MVP_SELECTOR_VALUE,
+        0U,
+        0,
+        fallback_text_left_margin(),
+        "BootTextLeftMargin did not return a small integer"
+    );
+}
+
+static uint32_t fallback_text_top_margin(void) {
     return transcript_margins_u32(TEXT_MARGINS_FIELD_TOP, "text margins top is not a small integer");
 }
 
-static uint32_t text_right_margin(void) {
+static uint32_t text_top_margin(void) {
+    return image_text_policy_u32_or_fallback(
+        "BootTextTopMargin",
+        RECORZ_MVP_SELECTOR_VALUE,
+        0U,
+        0,
+        fallback_text_top_margin(),
+        "BootTextTopMargin did not return a small integer"
+    );
+}
+
+static uint32_t fallback_text_right_margin(void) {
     return transcript_margins_u32(TEXT_MARGINS_FIELD_RIGHT, "text margins right is not a small integer");
 }
 
-static uint32_t text_bottom_margin(void) {
+static uint32_t text_right_margin(void) {
+    return image_text_policy_u32_or_fallback(
+        "BootTextRightMargin",
+        RECORZ_MVP_SELECTOR_VALUE,
+        0U,
+        0,
+        fallback_text_right_margin(),
+        "BootTextRightMargin did not return a small integer"
+    );
+}
+
+static uint32_t fallback_text_bottom_margin(void) {
     return transcript_margins_u32(TEXT_MARGINS_FIELD_BOTTOM, "text margins bottom is not a small integer");
+}
+
+static uint32_t text_bottom_margin(void) {
+    return image_text_policy_u32_or_fallback(
+        "BootTextBottomMargin",
+        RECORZ_MVP_SELECTOR_VALUE,
+        0U,
+        0,
+        fallback_text_bottom_margin(),
+        "BootTextBottomMargin did not return a small integer"
+    );
 }
 
 static uint32_t text_line_spacing(void) {
@@ -8515,24 +8615,82 @@ static uint32_t text_pixel_scale(void) {
     return scale;
 }
 
-static uint32_t text_wrap_width(void) {
-    return transcript_flow_u32(TEXT_FLOW_FIELD_WRAP_WIDTH, "text flow wrapWidth is not a small integer");
-}
-
-static uint32_t text_tab_width(void) {
-    uint32_t width = transcript_flow_u32(TEXT_FLOW_FIELD_TAB_WIDTH, "text flow tabWidth is not a small integer");
-
-    if (width == 0U) {
-        machine_panic("text flow tabWidth must be non-zero");
-    }
-    return width;
-}
-
-static uint32_t text_line_break_mode(void) {
-    return transcript_flow_u32(
+static uint32_t fallback_text_wrap_limit_x_for_form_width(uint32_t form_width) {
+    uint32_t left_margin = fallback_text_left_margin();
+    uint32_t right_margin = fallback_text_right_margin();
+    uint32_t wrap_limit_x = 0U;
+    uint32_t wrap_width = transcript_flow_u32(TEXT_FLOW_FIELD_WRAP_WIDTH, "text flow wrapWidth is not a small integer");
+    uint32_t line_break_mode = transcript_flow_u32(
         TEXT_FLOW_FIELD_LINE_BREAK_MODE,
         "text flow lineBreakMode is not a small integer"
     );
+
+    if (line_break_mode == 0U) {
+        return 0U;
+    }
+    if (form_width > right_margin) {
+        wrap_limit_x = form_width - right_margin;
+    }
+    if (wrap_width != 0U) {
+        uint32_t configured_limit_x = left_margin + (wrap_width * char_width());
+
+        if (wrap_limit_x == 0U || configured_limit_x < wrap_limit_x) {
+            wrap_limit_x = configured_limit_x;
+        }
+    }
+    return wrap_limit_x;
+}
+
+static uint32_t text_wrap_limit_x_for_form_width(uint32_t form_width) {
+    struct recorz_mvp_value arguments[1];
+
+    arguments[0] = small_integer_value((int32_t)form_width);
+    return image_text_policy_u32_or_fallback(
+        "BootTextWrapLimit",
+        RECORZ_MVP_SELECTOR_VALUE_ARG,
+        1U,
+        arguments,
+        fallback_text_wrap_limit_x_for_form_width(form_width),
+        "BootTextWrapLimit did not return a small integer"
+    );
+}
+
+static uint32_t fallback_text_next_tab_x(uint32_t current_x) {
+    uint32_t tab_width = transcript_flow_u32(TEXT_FLOW_FIELD_TAB_WIDTH, "text flow tabWidth is not a small integer");
+    uint32_t left_margin = fallback_text_left_margin();
+    uint32_t column = 0U;
+    uint32_t spaces_to_next_tab;
+
+    if (tab_width == 0U) {
+        machine_panic("text flow tabWidth must be non-zero");
+    }
+    if (current_x > left_margin && char_width() != 0U) {
+        column = (current_x - left_margin) / char_width();
+    }
+    spaces_to_next_tab = tab_width - (column % tab_width);
+    if (spaces_to_next_tab == 0U) {
+        spaces_to_next_tab = tab_width;
+    }
+    return current_x + (spaces_to_next_tab * char_width());
+}
+
+static uint32_t text_next_tab_x(uint32_t current_x) {
+    struct recorz_mvp_value arguments[1];
+    uint32_t next_x;
+
+    arguments[0] = small_integer_value((int32_t)current_x);
+    next_x = image_text_policy_u32_or_fallback(
+        "BootTextNextTabX",
+        RECORZ_MVP_SELECTOR_VALUE_ARG,
+        1U,
+        arguments,
+        fallback_text_next_tab_x(current_x),
+        "BootTextNextTabX did not return a small integer"
+    );
+    if (next_x <= current_x) {
+        machine_panic("text layout nextTabXFrom: must advance the cursor");
+    }
+    return next_x;
 }
 
 static const struct recorz_mvp_heap_object *transcript_font_object(void) {
@@ -8726,11 +8884,22 @@ static uint32_t text_descent(void) {
     ) * text_pixel_scale();
 }
 
-static uint32_t text_line_height(void) {
+static uint32_t fallback_text_line_height(void) {
     return transcript_vertical_metrics_u32(
         TEXT_VERTICAL_METRICS_FIELD_LINE_HEIGHT,
         "text vertical metrics line height is not a small integer"
     ) * text_pixel_scale();
+}
+
+static uint32_t text_line_height(void) {
+    return image_text_policy_u32_or_fallback(
+        "BootTextLineAdvance",
+        RECORZ_MVP_SELECTOR_VALUE,
+        0U,
+        0,
+        fallback_text_line_height(),
+        "BootTextLineAdvance did not return a small integer"
+    );
 }
 
 static void validate_transcript_text_metrics(const char *prefix) {
@@ -9280,42 +9449,20 @@ static void form_write_code_point_with_colors(
     uint32_t foreground_color,
     uint32_t background_color
 ) {
-    uint32_t form_width = bitmap_width(bitmap_for_form(form));
-    uint32_t left_margin = text_left_margin();
-    uint32_t right_margin = text_right_margin();
-    uint32_t wrap_width = text_wrap_width();
-    uint32_t wrap_limit_x = 0U;
+    uint32_t wrap_limit_x = text_wrap_limit_x_for_form_width(bitmap_width(bitmap_for_form(form)));
     uint8_t echo_serial = (uint8_t)(bitmap_storage_kind(bitmap_for_form(form)) == BITMAP_STORAGE_FRAMEBUFFER);
     uint8_t capture_feedback =
         (uint8_t)(workspace_input_monitor_capture_enabled &&
                   heap_handle_for_object(form) == active_display_form_handle);
 
-    if (form_width > right_margin) {
-        wrap_limit_x = form_width - right_margin;
-    }
-    if (wrap_width != 0U) {
-        uint32_t configured_limit_x = left_margin + (wrap_width * char_width());
-        if (wrap_limit_x == 0U || configured_limit_x < wrap_limit_x) {
-            wrap_limit_x = configured_limit_x;
-        }
-    }
     if (code_point == (uint8_t)'\n') {
         form_newline(form);
         return;
     }
     if (code_point == (uint8_t)'\t') {
-        uint32_t tab_width = text_tab_width();
-        uint32_t column = 0U;
-        uint32_t spaces_to_next_tab;
+        uint32_t next_tab_x = text_next_tab_x(cursor_x);
 
-        if (cursor_x > left_margin && char_width() != 0U) {
-            column = (cursor_x - left_margin) / char_width();
-        }
-        spaces_to_next_tab = tab_width - (column % tab_width);
-        if (spaces_to_next_tab == 0U) {
-            spaces_to_next_tab = tab_width;
-        }
-        while (spaces_to_next_tab-- > 0U) {
+        while (cursor_x < next_tab_x) {
             form_write_code_point_with_colors(form, (uint8_t)' ', foreground_color, background_color);
         }
         if (echo_serial) {
@@ -9326,8 +9473,7 @@ static void form_write_code_point_with_colors(
         }
         return;
     }
-    if (text_line_break_mode() != 0U &&
-        wrap_limit_x != 0U &&
+    if (wrap_limit_x != 0U &&
         cursor_x + char_width() > wrap_limit_x) {
         form_newline(form);
     }
@@ -9846,6 +9992,37 @@ static const char *runtime_string_allocate_copy(const char *text) {
     runtime_string_pool[start + length] = '\0';
     runtime_string_pool_offset += length + 1U;
     return runtime_string_pool + start;
+}
+
+static const char *runtime_string_intern_copy(const char *text) {
+    uint32_t length;
+    uint32_t offset = 0U;
+
+    if (text == 0) {
+        machine_panic("runtime string source is null");
+    }
+    length = text_length(text);
+    while (offset < runtime_string_pool_offset) {
+        const char *candidate = runtime_string_pool + offset;
+        uint32_t candidate_length = text_length(candidate);
+
+        if (candidate_length == length) {
+            uint32_t index;
+            uint8_t matches = 1U;
+
+            for (index = 0U; index < length; ++index) {
+                if (candidate[index] != text[index]) {
+                    matches = 0U;
+                    break;
+                }
+            }
+            if (matches) {
+                return candidate;
+            }
+        }
+        offset += candidate_length + 1U;
+    }
+    return runtime_string_allocate_copy(text);
 }
 
 static const char *live_method_source_text(const struct recorz_mvp_live_method_source *source_record) {
@@ -12947,7 +13124,20 @@ static struct recorz_mvp_source_eval_result source_evaluate_primary_expression(
         if (parsed_cursor == 0) {
             machine_panic("live source string literal is invalid");
         }
-        result = source_eval_value_result(string_value(runtime_string_allocate_copy(quoted_text)));
+        if (!context->is_block &&
+            context->defining_class != 0 &&
+            context->selector_id != 0U) {
+            uint16_t literal_slot = remember_live_string_literal(
+                heap_handle_for_object(context->defining_class),
+                context->selector_id,
+                context->argument_count,
+                quoted_text
+            );
+
+            result = source_eval_value_result(string_value(live_string_literals[literal_slot - 1U].text));
+        } else {
+            result = source_eval_value_result(string_value(runtime_string_intern_copy(quoted_text)));
+        }
         cursor = parsed_cursor;
     } else {
         parsed_cursor = source_parse_small_integer(cursor, &small_integer);
@@ -13107,6 +13297,7 @@ static struct recorz_mvp_source_eval_result source_execute_block_closure(
     const char *body_cursor;
     int16_t lexical_environment_index;
     uint16_t argument_index;
+    uint8_t allocate_context_object;
 
     if (primitive_kind_for_heap_object(object) != RECORZ_MVP_OBJECT_BLOCK_CLOSURE) {
         machine_panic("source block execution expects a block closure");
@@ -13135,18 +13326,25 @@ static struct recorz_mvp_source_eval_result source_execute_block_closure(
     for (argument_index = 0U; argument_index < argument_count; ++argument_index) {
         source_append_binding(lexical_environment_index, argument_names[argument_index], arguments[argument_index]);
     }
+    allocate_context_object = source_text_contains_identifier(source_value.string, "thisContext");
     context.defining_class = defining_class;
     context.receiver = home_receiver;
     context.lexical_environment_index = lexical_environment_index;
     context.home_context_index = block_state == 0 ? -1 : block_state->home_context_index;
-    context.current_context_handle = allocate_source_context_object(
-        sender_context_handle,
-        home_receiver,
-        "<block>"
-    );
+    context.current_context_handle = allocate_context_object != 0U ?
+        allocate_source_context_object(
+            sender_context_handle,
+            home_receiver,
+            "<block>"
+        ) :
+        0U;
+    context.selector_id = 0U;
+    context.argument_count = 0U;
     context.is_block = 1U;
     result = source_evaluate_statement_sequence(&context, body_cursor, 1U);
-    heap_set_field(context.current_context_handle, CONTEXT_FIELD_ALIVE, boolean_value(0U));
+    if (context.current_context_handle != 0U) {
+        heap_set_field(context.current_context_handle, CONTEXT_FIELD_ALIVE, boolean_value(0U));
+    }
     if (result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
         if (context.home_context_index < 0) {
             machine_panic("block attempted a non-local return without a live home context");
@@ -13248,6 +13446,7 @@ static void execute_live_source_method_with_sender(
     int16_t lexical_environment_index;
     int16_t home_context_index;
     uint16_t argument_index;
+    uint8_t allocate_context_object;
 
     if (source == 0 || source[0] == '\0') {
         machine_panic("live source method is empty");
@@ -13263,26 +13462,35 @@ static void execute_live_source_method_with_sender(
     if (parsed_argument_count != argument_count) {
         machine_panic("live source method argument count does not match send");
     }
+    context.selector_id = source_selector_id_for_name(selector_name);
+    if (context.selector_id == 0U) {
+        machine_panic("live source method uses an unknown selector");
+    }
     lexical_environment_index = source_allocate_lexical_environment(-1);
     for (argument_index = 0U; argument_index < argument_count; ++argument_index) {
         source_append_binding(lexical_environment_index, argument_names[argument_index], arguments[argument_index]);
     }
+    allocate_context_object = source_text_contains_identifier(source, "thisContext");
     home_context_index = source_allocate_home_context(
         class_object,
         receiver,
         lexical_environment_index,
         sender_context_handle,
-        selector_name
+        selector_name,
+        allocate_context_object
     );
     context.defining_class = class_object;
     context.receiver = receiver;
     context.lexical_environment_index = lexical_environment_index;
     context.home_context_index = home_context_index;
     context.current_context_handle = source_home_context_at(home_context_index)->context_handle;
+    context.argument_count = (uint8_t)argument_count;
     context.is_block = 0U;
     result = source_evaluate_statement_sequence(&context, body_cursor, 0U);
     source_home_context_at(home_context_index)->alive = 0U;
-    heap_set_field(context.current_context_handle, CONTEXT_FIELD_ALIVE, boolean_value(0U));
+    if (context.current_context_handle != 0U) {
+        heap_set_field(context.current_context_handle, CONTEXT_FIELD_ALIVE, boolean_value(0U));
+    }
     source_release_home_context_if_unused(home_context_index);
     source_release_lexical_environment_chain_if_unused(lexical_environment_index);
     push(result.value);
@@ -16702,7 +16910,8 @@ static struct recorz_mvp_value workspace_evaluate_source(const char *source) {
         workspace_receiver,
         -1,
         0U,
-        "<workspace>"
+        "<workspace>",
+        1U
     );
     uint16_t context_handle = source_home_context_at(home_context_index)->context_handle;
 
@@ -17334,7 +17543,8 @@ void recorz_mvp_vm_run(
         top_level_receiver,
         -1,
         0U,
-        "<program>"
+        "<program>",
+        1U
     );
     context_handle = source_home_context_at(home_context_index)->context_handle;
     executable.block_defining_class = class_object_for_heap_object(top_level_receiver_object);

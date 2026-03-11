@@ -882,6 +882,16 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_TEXT_CURSOR_X", 172),
                 ("RECORZ_MVP_SELECTOR_TEXT_CURSOR_Y", 173),
                 ("RECORZ_MVP_SELECTOR_MOVE_TEXT_CURSOR_TO_X_Y", 174),
+                ("RECORZ_MVP_SELECTOR_LEFT_MARGIN", 175),
+                ("RECORZ_MVP_SELECTOR_TOP_MARGIN", 176),
+                ("RECORZ_MVP_SELECTOR_RIGHT_MARGIN", 177),
+                ("RECORZ_MVP_SELECTOR_BOTTOM_MARGIN", 178),
+                ("RECORZ_MVP_SELECTOR_CHARACTER_WIDTH", 179),
+                ("RECORZ_MVP_SELECTOR_CHARACTER_HEIGHT", 180),
+                ("RECORZ_MVP_SELECTOR_LINE_ADVANCE", 181),
+                ("RECORZ_MVP_SELECTOR_WRAP_LIMIT_FOR_FORM_WIDTH", 182),
+                ("RECORZ_MVP_SELECTOR_NEXT_TAB_X_FROM", 183),
+                ("RECORZ_MVP_SELECTOR_NEXT_TAB_X_FROM_STEP", 184),
             ],
         )
 

@@ -1,6 +1,5 @@
 Display clear.
 Transcript show: 'delegated path'.
-KernelInstaller objectNamed: 'ImageTextRendererActive'.
 Transcript cr.
 Transcript show: 'OK'.
 Transcript cr.

@@ -14,6 +14,8 @@ GLYPH_EXAMPLE = ROOT / "examples" / "qemu_riscv_source_glyph_demo.rz"
 IMAGE_SIDE_TEXT_RENDERER_EXAMPLE = ROOT / "examples" / "qemu_riscv_image_side_text_renderer_demo.rz"
 IMAGE_SIDE_FORM_WRITER_EXAMPLE = ROOT / "examples" / "qemu_riscv_image_side_form_writer_demo.rz"
 IMAGE_SIDE_FORM_WRITER_FILE_IN = ROOT / "examples" / "qemu_riscv_image_side_form_writer_file_in.rz"
+IMAGE_SIDE_TEXT_LAYOUT_EXAMPLE = ROOT / "examples" / "qemu_riscv_image_side_text_layout_demo.rz"
+IMAGE_SIDE_TEXT_LAYOUT_FILE_IN = ROOT / "examples" / "qemu_riscv_image_side_text_layout_file_in.rz"
 CHARACTER_SCANNER_RENDERER_EXAMPLE = ROOT / "examples" / "qemu_riscv_character_scanner_renderer_demo.rz"
 CHARACTER_SCANNER_RENDERER_FILE_IN = ROOT / "examples" / "qemu_riscv_character_scanner_renderer_file_in.rz"
 BITBLT_DRAW_LINE_EXAMPLE = ROOT / "examples" / "qemu_riscv_bitblt_draw_line_demo.rz"
@@ -116,10 +118,7 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertGreater(text_histogram[(247, 243, 232)], 1800)
 
     def test_shared_form_write_string_path_delegates_to_image_side_renderer(self) -> None:
-        qemu_log, width, height, data = self.render_example(
-            IMAGE_SIDE_FORM_WRITER_EXAMPLE,
-            file_in_payload=IMAGE_SIDE_FORM_WRITER_FILE_IN,
-        )
+        qemu_log, width, height, data = self.render_example(IMAGE_SIDE_FORM_WRITER_EXAMPLE)
 
         normalized_log = qemu_log.replace("\r", "")
         self.assertIn("delegated path", normalized_log)
@@ -129,6 +128,19 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         text_histogram = _region_histogram(data, width, 24, 24, 360, 140)
         self.assertGreater(text_histogram[(31, 41, 51)], 600)
         self.assertGreater(text_histogram[(247, 243, 232)], 600)
+
+    def test_plain_form_text_path_uses_image_side_layout_policy(self) -> None:
+        qemu_log, width, height, data = self.render_example(
+            IMAGE_SIDE_TEXT_LAYOUT_EXAMPLE,
+            file_in_payload=IMAGE_SIDE_TEXT_LAYOUT_FILE_IN,
+        )
+
+        normalized_log = qemu_log.replace("\r", "")
+        self.assertIn("recorz qemu-riscv32 mvp: applied external file-in", normalized_log)
+        self.assertEqual((width, height), (1024, 768))
+        self.assertGreater(_region_histogram(data, width, 40, 30, 52, 46)[(255, 0, 0)], 10)
+        self.assertGreater(_region_histogram(data, width, 88, 30, 112, 46)[(0, 0, 255)], 10)
+        self.assertGreater(_region_histogram(data, width, 40, 120, 52, 136)[(255, 0, 255)], 10)
 
     def test_character_scanner_renderer_handles_workspace_text_with_wrap_and_tabs(self) -> None:
         qemu_log, width, height, data = self.render_example(

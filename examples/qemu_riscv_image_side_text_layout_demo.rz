@@ -1,0 +1,6 @@
+Display clear.
+Display defaultForm writeCodePoint: 65 color: 16711680.
+Display defaultForm writeCodePoint: 9 color: 16711680.
+Display defaultForm writeCodePoint: 66 color: 255.
+Display moveTextCursorToX: 116 y: 100.
+Display defaultForm writeCodePoint: 66 color: 16711935.

@@ -348,3 +348,23 @@ RecorzKernelSelector: #textCursorY order: 172
 !
 RecorzKernelSelector: #moveTextCursorToX:y: order: 173
 !
+RecorzKernelSelector: #leftMargin order: 174
+!
+RecorzKernelSelector: #topMargin order: 175
+!
+RecorzKernelSelector: #rightMargin order: 176
+!
+RecorzKernelSelector: #bottomMargin order: 177
+!
+RecorzKernelSelector: #characterWidth order: 178
+!
+RecorzKernelSelector: #characterHeight order: 179
+!
+RecorzKernelSelector: #lineAdvance order: 180
+!
+RecorzKernelSelector: #wrapLimitForFormWidth: order: 181
+!
+RecorzKernelSelector: #nextTabXFrom: order: 182
+!
+RecorzKernelSelector: #nextTabXFrom:step: order: 183
+!

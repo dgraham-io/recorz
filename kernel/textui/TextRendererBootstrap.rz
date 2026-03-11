@@ -7,30 +7,24 @@ drawStyledText: styledText onForm: form
     ^self text: text index: 1 x: Display textCursorX y: Display textCursorY style: style onForm: form
 !
 text: text index: index x: x y: y style: style onForm: form
-    | scanner stopValue |
+    | scanner |
     index > text size ifTrue: [Display moveTextCursorToX: x y: y. ^form].
     scanner := KernelInstaller objectNamed: 'BootTextScanner'.
     scanner scanText: text index: index x: x y: y style: style onForm: form right: (self w: form) selectionBoundary: 0 cursorBoundary: 0.
     Display moveTextCursorToX: scanner x y: scanner y.
-    stopValue := scanner stop.
-    stopValue = 0 ifTrue: [^form].
-    stopValue = 1 ifTrue: [form newline. ^self text: text index: scanner index x: Display textCursorX y: Display textCursorY style: style onForm: form].
-    stopValue = 2 ifTrue: [form writeCodePoint: 9 color: style foregroundColor. ^self text: text index: scanner index + 1 x: Display textCursorX y: Display textCursorY style: style onForm: form].
-    stopValue = 3 ifTrue: [form newline. ^self text: text index: scanner index + 1 x: Display textCursorX y: Display textCursorY style: style onForm: form].
-    ^form
+    ^self d: scanner stop x: text y: scanner index s: style f: form
 !
 w: form
-    | right configured |
-    right := form width - Display layout margins right.
-    Display layout flow wrapWidth = 0 ifTrue: [^right].
-    configured := Display layout margins left + (Display layout flow wrapWidth * self ca).
-    configured < right ifTrue: [^configured].
-    ^right
+    | wrapLimit |
+    wrapLimit := KernelInstaller objectNamed: 'BootTextWrapLimit'.
+    ^wrapLimit value: form width
 !
-ca
-    | metrics |
-    metrics := Display font metrics.
-    ^metrics cellWidth * Display layout scale
+d: stopValue x: text y: index s: style f: form
+    stopValue = 0 ifTrue: [^form].
+    stopValue = 1 ifTrue: [form newline. ^self text: text index: index x: Display textCursorX y: Display textCursorY style: style onForm: form].
+    stopValue = 2 ifTrue: [form writeCodePoint: 9 color: style foregroundColor. ^self text: text index: index + 1 x: Display textCursorX y: Display textCursorY style: style onForm: form].
+    stopValue = 3 ifTrue: [form newline. ^self text: text index: index + 1 x: Display textCursorX y: Display textCursorY style: style onForm: form].
+    ^form
 !
 RecorzKernelClass: #Form descriptorOrder: 10 objectKindOrder: 2 sourceBootOrder: 7 instanceVariableNames: 'bits'
 !
@@ -42,4 +36,42 @@ writeStyledText: styledText
 !
 RecorzKernelDoIt:
 KernelInstaller rememberObject: ((KernelInstaller classNamed: 'TextRenderer') new) named: 'BootTextRenderer'.
+!
+RecorzKernelDoIt:
 KernelInstaller rememberObject: ((KernelInstaller classNamed: 'CharacterScanner') new) named: 'BootTextScanner'.
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: [Display layout margins left] named: 'BootTextLeftMargin'.
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: [Display layout margins top] named: 'BootTextTopMargin'.
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: [Display layout margins right] named: 'BootTextRightMargin'.
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: [Display layout margins bottom] named: 'BootTextBottomMargin'.
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: [Display font metrics lineHeight * Display layout scale] named: 'BootTextLineAdvance'.
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: [:width | | characterWidth limit configured |
+    Display layout flow lineBreakMode = 0 ifTrue: [0] ifFalse: [
+        characterWidth := Display font metrics cellWidth * Display layout scale.
+        limit := width - Display layout margins right.
+        Display layout flow wrapWidth = 0 ifTrue: [limit] ifFalse: [
+            configured := Display layout margins left + (Display layout flow wrapWidth * characterWidth).
+            configured < limit ifTrue: [configured] ifFalse: [limit]]]] named: 'BootTextWrapLimit'.
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: [:x | | leftMargin tabWidth characterWidth column spaces |
+    leftMargin := Display layout margins left.
+    tabWidth := Display layout flow tabWidth.
+    characterWidth := Display font metrics cellWidth * Display layout scale.
+    column := 0.
+    x > leftMargin ifTrue: [column := (x - leftMargin) / characterWidth].
+    spaces := tabWidth - (column % tabWidth).
+    spaces = 0 ifTrue: [spaces := tabWidth].
+    x + (spaces * characterWidth)] named: 'BootTextNextTabX'.
+!

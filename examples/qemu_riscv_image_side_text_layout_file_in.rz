@@ -1,0 +1,20 @@
+RecorzKernelDoIt:
+KernelInstaller rememberObject: [40] named: 'BootTextLeftMargin'.
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: [30] named: 'BootTextTopMargin'.
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: [40] named: 'BootTextRightMargin'.
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: [24] named: 'BootTextBottomMargin'.
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: [20] named: 'BootTextLineAdvance'.
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: [:width | 124] named: 'BootTextWrapLimit'.
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: [:x | 88] named: 'BootTextNextTabX'.

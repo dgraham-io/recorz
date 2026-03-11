@@ -155,7 +155,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CHARACTER_SCANNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_MOVE_TEXT_CURSOR_TO_X_Y
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_NEXT_TAB_X_FROM_STEP
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -335,7 +335,7 @@ static uint32_t text_length(const char *text);
 static uint32_t text_left_margin(void);
 static uint32_t text_right_margin(void);
 static uint32_t text_bottom_margin(void);
-static uint32_t text_wrap_width(void);
+static uint32_t text_wrap_limit_x_for_form_width(uint32_t form_width);
 static uint32_t char_width(void);
 static uint32_t char_height(void);
 static uint32_t text_line_spacing(void);
@@ -979,6 +979,26 @@ static const char *selector_name(uint8_t selector) {
             return "textCursorY";
         case RECORZ_MVP_SELECTOR_MOVE_TEXT_CURSOR_TO_X_Y:
             return "moveTextCursorToX:y:";
+        case RECORZ_MVP_SELECTOR_LEFT_MARGIN:
+            return "leftMargin";
+        case RECORZ_MVP_SELECTOR_TOP_MARGIN:
+            return "topMargin";
+        case RECORZ_MVP_SELECTOR_RIGHT_MARGIN:
+            return "rightMargin";
+        case RECORZ_MVP_SELECTOR_BOTTOM_MARGIN:
+            return "bottomMargin";
+        case RECORZ_MVP_SELECTOR_CHARACTER_WIDTH:
+            return "characterWidth";
+        case RECORZ_MVP_SELECTOR_CHARACTER_HEIGHT:
+            return "characterHeight";
+        case RECORZ_MVP_SELECTOR_LINE_ADVANCE:
+            return "lineAdvance";
+        case RECORZ_MVP_SELECTOR_WRAP_LIMIT_FOR_FORM_WIDTH:
+            return "wrapLimitForFormWidth:";
+        case RECORZ_MVP_SELECTOR_NEXT_TAB_X_FROM:
+            return "nextTabXFrom:";
+        case RECORZ_MVP_SELECTOR_NEXT_TAB_X_FROM_STEP:
+            return "nextTabXFrom:step:";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -4123,14 +4143,18 @@ static uint32_t workspace_visible_columns(const struct recorz_mvp_heap_object *f
     uint32_t right_margin = text_right_margin();
     uint32_t width = bitmap_width(bitmap_for_form(form));
     uint32_t char_columns;
-    uint32_t wrap_width = text_wrap_width();
+    uint32_t wrap_limit_x = text_wrap_limit_x_for_form_width(width);
 
     if (width <= left_margin + right_margin || char_width() == 0U) {
         return 1U;
     }
     char_columns = (width - left_margin - right_margin) / char_width();
-    if (wrap_width != 0U && wrap_width < char_columns) {
-        char_columns = wrap_width;
+    if (wrap_limit_x != 0U && wrap_limit_x > left_margin) {
+        uint32_t wrapped_columns = (wrap_limit_x - left_margin) / char_width();
+
+        if (wrapped_columns != 0U && wrapped_columns < char_columns) {
+            char_columns = wrapped_columns;
+        }
     }
     return char_columns == 0U ? 1U : char_columns;
 }
@@ -7780,20 +7804,88 @@ static uint32_t transcript_flow_u32(uint8_t field_index, const char *message) {
     return small_integer_u32(heap_get_field(transcript_flow_object(), field_index), message);
 }
 
-static uint32_t text_left_margin(void) {
+static uint32_t image_text_policy_u32_or_fallback(
+    const char *object_name,
+    uint8_t selector_id,
+    uint16_t argument_count,
+    const struct recorz_mvp_value arguments[],
+    uint32_t fallback,
+    const char *message
+) {
+    uint16_t object_handle = named_object_handle_for_name(object_name);
+    struct recorz_mvp_value result;
+
+    if (object_handle == 0U) {
+        return fallback;
+    }
+    result = perform_send_and_pop_result(
+        object_value(object_handle),
+        selector_id,
+        argument_count,
+        arguments,
+        0
+    );
+    return small_integer_u32(result, message);
+}
+
+static uint32_t fallback_text_left_margin(void) {
     return transcript_margins_u32(TEXT_MARGINS_FIELD_LEFT, "text margins left is not a small integer");
 }
 
-static uint32_t text_top_margin(void) {
+static uint32_t text_left_margin(void) {
+    return image_text_policy_u32_or_fallback(
+        "BootTextLeftMargin",
+        RECORZ_MVP_SELECTOR_VALUE,
+        0U,
+        0,
+        fallback_text_left_margin(),
+        "BootTextLeftMargin did not return a small integer"
+    );
+}
+
+static uint32_t fallback_text_top_margin(void) {
     return transcript_margins_u32(TEXT_MARGINS_FIELD_TOP, "text margins top is not a small integer");
 }
 
-static uint32_t text_right_margin(void) {
+static uint32_t text_top_margin(void) {
+    return image_text_policy_u32_or_fallback(
+        "BootTextTopMargin",
+        RECORZ_MVP_SELECTOR_VALUE,
+        0U,
+        0,
+        fallback_text_top_margin(),
+        "BootTextTopMargin did not return a small integer"
+    );
+}
+
+static uint32_t fallback_text_right_margin(void) {
     return transcript_margins_u32(TEXT_MARGINS_FIELD_RIGHT, "text margins right is not a small integer");
 }
 
-static uint32_t text_bottom_margin(void) {
+static uint32_t text_right_margin(void) {
+    return image_text_policy_u32_or_fallback(
+        "BootTextRightMargin",
+        RECORZ_MVP_SELECTOR_VALUE,
+        0U,
+        0,
+        fallback_text_right_margin(),
+        "BootTextRightMargin did not return a small integer"
+    );
+}
+
+static uint32_t fallback_text_bottom_margin(void) {
     return transcript_margins_u32(TEXT_MARGINS_FIELD_BOTTOM, "text margins bottom is not a small integer");
+}
+
+static uint32_t text_bottom_margin(void) {
+    return image_text_policy_u32_or_fallback(
+        "BootTextBottomMargin",
+        RECORZ_MVP_SELECTOR_VALUE,
+        0U,
+        0,
+        fallback_text_bottom_margin(),
+        "BootTextBottomMargin did not return a small integer"
+    );
 }
 
 static uint32_t text_line_spacing(void) {
@@ -7809,24 +7901,82 @@ static uint32_t text_pixel_scale(void) {
     return scale;
 }
 
-static uint32_t text_wrap_width(void) {
-    return transcript_flow_u32(TEXT_FLOW_FIELD_WRAP_WIDTH, "text flow wrapWidth is not a small integer");
-}
-
-static uint32_t text_tab_width(void) {
-    uint32_t width = transcript_flow_u32(TEXT_FLOW_FIELD_TAB_WIDTH, "text flow tabWidth is not a small integer");
-
-    if (width == 0U) {
-        machine_panic("text flow tabWidth must be non-zero");
-    }
-    return width;
-}
-
-static uint32_t text_line_break_mode(void) {
-    return transcript_flow_u32(
+static uint32_t fallback_text_wrap_limit_x_for_form_width(uint32_t form_width) {
+    uint32_t left_margin = fallback_text_left_margin();
+    uint32_t right_margin = fallback_text_right_margin();
+    uint32_t wrap_limit_x = 0U;
+    uint32_t wrap_width = transcript_flow_u32(TEXT_FLOW_FIELD_WRAP_WIDTH, "text flow wrapWidth is not a small integer");
+    uint32_t line_break_mode = transcript_flow_u32(
         TEXT_FLOW_FIELD_LINE_BREAK_MODE,
         "text flow lineBreakMode is not a small integer"
     );
+
+    if (line_break_mode == 0U) {
+        return 0U;
+    }
+    if (form_width > right_margin) {
+        wrap_limit_x = form_width - right_margin;
+    }
+    if (wrap_width != 0U) {
+        uint32_t configured_limit_x = left_margin + (wrap_width * char_width());
+
+        if (wrap_limit_x == 0U || configured_limit_x < wrap_limit_x) {
+            wrap_limit_x = configured_limit_x;
+        }
+    }
+    return wrap_limit_x;
+}
+
+static uint32_t text_wrap_limit_x_for_form_width(uint32_t form_width) {
+    struct recorz_mvp_value arguments[1];
+
+    arguments[0] = small_integer_value((int32_t)form_width);
+    return image_text_policy_u32_or_fallback(
+        "BootTextWrapLimit",
+        RECORZ_MVP_SELECTOR_VALUE_ARG,
+        1U,
+        arguments,
+        fallback_text_wrap_limit_x_for_form_width(form_width),
+        "BootTextWrapLimit did not return a small integer"
+    );
+}
+
+static uint32_t fallback_text_next_tab_x(uint32_t current_x) {
+    uint32_t tab_width = transcript_flow_u32(TEXT_FLOW_FIELD_TAB_WIDTH, "text flow tabWidth is not a small integer");
+    uint32_t left_margin = fallback_text_left_margin();
+    uint32_t column = 0U;
+    uint32_t spaces_to_next_tab;
+
+    if (tab_width == 0U) {
+        machine_panic("text flow tabWidth must be non-zero");
+    }
+    if (current_x > left_margin && char_width() != 0U) {
+        column = (current_x - left_margin) / char_width();
+    }
+    spaces_to_next_tab = tab_width - (column % tab_width);
+    if (spaces_to_next_tab == 0U) {
+        spaces_to_next_tab = tab_width;
+    }
+    return current_x + (spaces_to_next_tab * char_width());
+}
+
+static uint32_t text_next_tab_x(uint32_t current_x) {
+    struct recorz_mvp_value arguments[1];
+    uint32_t next_x;
+
+    arguments[0] = small_integer_value((int32_t)current_x);
+    next_x = image_text_policy_u32_or_fallback(
+        "BootTextNextTabX",
+        RECORZ_MVP_SELECTOR_VALUE_ARG,
+        1U,
+        arguments,
+        fallback_text_next_tab_x(current_x),
+        "BootTextNextTabX did not return a small integer"
+    );
+    if (next_x <= current_x) {
+        machine_panic("text layout nextTabXFrom: must advance the cursor");
+    }
+    return next_x;
 }
 
 static const struct recorz_mvp_heap_object *transcript_font_object(void) {
@@ -8020,11 +8170,22 @@ static uint32_t text_descent(void) {
     ) * text_pixel_scale();
 }
 
-static uint32_t text_line_height(void) {
+static uint32_t fallback_text_line_height(void) {
     return transcript_vertical_metrics_u32(
         TEXT_VERTICAL_METRICS_FIELD_LINE_HEIGHT,
         "text vertical metrics line height is not a small integer"
     ) * text_pixel_scale();
+}
+
+static uint32_t text_line_height(void) {
+    return image_text_policy_u32_or_fallback(
+        "BootTextLineAdvance",
+        RECORZ_MVP_SELECTOR_VALUE,
+        0U,
+        0,
+        fallback_text_line_height(),
+        "BootTextLineAdvance did not return a small integer"
+    );
 }
 
 static void validate_transcript_text_metrics(const char *prefix) {
@@ -8531,41 +8692,19 @@ static void form_write_code_point_with_colors(
     uint32_t foreground_color,
     uint32_t background_color
 ) {
-    uint32_t form_width = bitmap_width(bitmap_for_form(form));
-    uint32_t left_margin = text_left_margin();
-    uint32_t right_margin = text_right_margin();
-    uint32_t wrap_width = text_wrap_width();
-    uint32_t wrap_limit_x = 0U;
+    uint32_t wrap_limit_x = text_wrap_limit_x_for_form_width(bitmap_width(bitmap_for_form(form)));
     uint8_t capture_feedback =
         (uint8_t)(workspace_input_monitor_capture_enabled &&
                   heap_handle_for_object(form) == active_display_form_handle);
 
-    if (form_width > right_margin) {
-        wrap_limit_x = form_width - right_margin;
-    }
-    if (wrap_width != 0U) {
-        uint32_t configured_limit_x = left_margin + (wrap_width * char_width());
-        if (wrap_limit_x == 0U || configured_limit_x < wrap_limit_x) {
-            wrap_limit_x = configured_limit_x;
-        }
-    }
     if (code_point == (uint8_t)'\n') {
         form_newline(form);
         return;
     }
     if (code_point == (uint8_t)'\t') {
-        uint32_t tab_width = text_tab_width();
-        uint32_t column = 0U;
-        uint32_t spaces_to_next_tab;
+        uint32_t next_tab_x = text_next_tab_x(cursor_x);
 
-        if (cursor_x > left_margin && char_width() != 0U) {
-            column = (cursor_x - left_margin) / char_width();
-        }
-        spaces_to_next_tab = tab_width - (column % tab_width);
-        if (spaces_to_next_tab == 0U) {
-            spaces_to_next_tab = tab_width;
-        }
-        while (spaces_to_next_tab-- > 0U) {
+        while (cursor_x < next_tab_x) {
             form_write_code_point_with_colors(form, (uint8_t)' ', foreground_color, background_color);
         }
         if (capture_feedback) {
@@ -8573,8 +8712,7 @@ static void form_write_code_point_with_colors(
         }
         return;
     }
-    if (text_line_break_mode() != 0U &&
-        wrap_limit_x != 0U &&
+    if (wrap_limit_x != 0U &&
         cursor_x + char_width() > wrap_limit_x) {
         form_newline(form);
     }

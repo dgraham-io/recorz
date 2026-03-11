@@ -19,6 +19,8 @@ DISPLAY_FONT_EXAMPLE = ROOT / "examples" / "qemu_riscv_display_font_demo.rz"
 DISPLAY_FONT_METRICS_EXAMPLE = ROOT / "examples" / "qemu_riscv_display_font_metrics_demo.rz"
 DISPLAY_STYLED_TEXT_EXAMPLE = ROOT / "examples" / "qemu_riscv_display_styled_text_demo.rz"
 DISPLAY_LAYOUT_EXAMPLE = ROOT / "examples" / "qemu_riscv_display_layout_demo.rz"
+IMAGE_SIDE_TEXT_LAYOUT_EXAMPLE = ROOT / "examples" / "qemu_riscv_image_side_text_layout_demo.rz"
+IMAGE_SIDE_TEXT_LAYOUT_FILE_IN = ROOT / "examples" / "qemu_riscv_image_side_text_layout_file_in.rz"
 FORM_BE_DISPLAY_EXAMPLE = ROOT / "examples" / "qemu_riscv_form_be_display_demo.rz"
 CURSOR_BE_CURSOR_EXAMPLE = ROOT / "examples" / "qemu_riscv_cursor_be_cursor_demo.rz"
 CURSOR_VISIBILITY_EXAMPLE = ROOT / "examples" / "qemu_riscv_cursor_visibility_demo.rz"
@@ -85,18 +87,26 @@ COMPILED_METHOD_CONTEXT_UPDATE_SOURCE = ROOT / "examples" / "qemu_riscv_object_d
 UPDATE_TOOL = ROOT / "tools" / "build_qemu_riscv_method_update.py"
 
 
-def _build_elf(build_dir: Path, example_path: Path = DEFAULT_EXAMPLE, *, profile: str = "dev") -> Path:
+def _build_elf(
+    build_dir: Path,
+    example_path: Path = DEFAULT_EXAMPLE,
+    *,
+    profile: str = "dev",
+    file_in_payload: Path | None = None,
+) -> Path:
+    command = [
+        "make",
+        "-C",
+        str(PLATFORM_DIR),
+        f"BUILD_DIR={build_dir}",
+        f"RV32_PROFILE={profile}",
+        f"EXAMPLE={example_path}",
+    ]
+    if file_in_payload is not None:
+        command.append(f"FILE_IN_PAYLOAD={file_in_payload}")
+    command.extend(["clean", "all"])
     result = subprocess.run(
-        [
-            "make",
-            "-C",
-            str(PLATFORM_DIR),
-            f"BUILD_DIR={build_dir}",
-            f"RV32_PROFILE={profile}",
-            f"EXAMPLE={example_path}",
-            "clean",
-            "all",
-        ],
+        command,
         cwd=ROOT,
         capture_output=True,
         text=True,
