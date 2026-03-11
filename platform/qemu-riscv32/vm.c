@@ -21,7 +21,7 @@
 #define CLASS_COMMENT_LIMIT 128U
 #define PACKAGE_COMMENT_LIMIT CLASS_COMMENT_LIMIT
 #define METHOD_SOURCE_CHUNK_LIMIT 1024U
-#define PACKAGE_SOURCE_BUFFER_LIMIT 16384U
+#define PACKAGE_SOURCE_BUFFER_LIMIT 65536U
 #define REGENERATED_SOURCE_BUFFER_LIMIT 65536U
 #define WORKSPACE_INPUT_MONITOR_STATE_LIMIT METHOD_SOURCE_CHUNK_LIMIT
 #define WORKSPACE_INPUT_MONITOR_STATUS_LIMIT 64U
@@ -160,7 +160,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CHARACTER_SCANNER
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SET_WRAP_WIDTH_TAB_WIDTH_LINE_BREAK_MODE
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_DRAW_SELECTED_CODE_LINE_COLUMN_ON_FORM
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -1135,6 +1135,26 @@ static const char *selector_name(uint8_t selector) {
             return "setAscent:descent:lineHeight:";
         case RECORZ_MVP_SELECTOR_SET_WRAP_WIDTH_TAB_WIDTH_LINE_BREAK_MODE:
             return "setWrapWidth:tabWidth:lineBreakMode:";
+        case RECORZ_MVP_SELECTOR_DRAW_TEXT_INDEX_LINE_COLUMN_TOP_REMAINING_ON_FORM_OPEN:
+            return "drawText:index:line:column:top:remaining:onForm:open:";
+        case RECORZ_MVP_SELECTOR_SELECTION_COVERS_LINE_COLUMN:
+            return "selectionCoversLine:column:";
+        case RECORZ_MVP_SELECTOR_SET_START_LINE_START_COLUMN_END_LINE_END_COLUMN:
+            return "setStartLine:startColumn:endLine:endColumn:";
+        case RECORZ_MVP_SELECTOR_CONTAINS_LINE_COLUMN:
+            return "containsLine:column:";
+        case RECORZ_MVP_SELECTOR_DRAW_TAIL_ON_FORM_OPEN:
+            return "drawTail:onForm:open:";
+        case RECORZ_MVP_SELECTOR_DRAW_CODE_TEXT_NEXT_INDEX_LINE_COLUMN_TOP_REMAINING_ON_FORM:
+            return "drawCode:text:nextIndex:line:column:top:remaining:onForm:";
+        case RECORZ_MVP_SELECTOR_DRAW_SKIPPED_CODE_TEXT_NEXT_INDEX_LINE_COLUMN_TOP_REMAINING_ON_FORM:
+            return "drawSkippedCode:text:nextIndex:line:column:top:remaining:onForm:";
+        case RECORZ_MVP_SELECTOR_UNDERLINE_CELL_LINE_COLUMN_ON_FORM:
+            return "underlineCellLine:column:onForm:";
+        case RECORZ_MVP_SELECTOR_MOVE_SOURCE_CURSOR_FOR_LINE_COLUMN_TOP:
+            return "moveSourceCursorForLine:column:top:";
+        case RECORZ_MVP_SELECTOR_DRAW_SELECTED_CODE_LINE_COLUMN_ON_FORM:
+            return "drawSelectedCode:line:column:onForm:";
         case RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS:
             return "seedBootContents:";
         case RECORZ_MVP_SELECTOR_BROWSE_INTERACTIVE_INPUT:
@@ -6676,15 +6696,6 @@ static struct recorz_mvp_heap_object *workspace_cursor_object(void) {
     return (struct recorz_mvp_heap_object *)heap_object(handle);
 }
 
-static struct recorz_mvp_heap_object *workspace_selection_object(void) {
-    uint16_t handle = global_handles[RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION];
-
-    if (handle == 0U || handle > heap_size) {
-        machine_panic("workspace selection object is unavailable");
-    }
-    return (struct recorz_mvp_heap_object *)heap_object(handle);
-}
-
 static void workspace_sync_input_monitor_text_state(
     const struct recorz_mvp_heap_object *workspace_object,
     uint32_t cursor_index,
@@ -6699,38 +6710,16 @@ static void workspace_sync_input_monitor_text_state(
     uint32_t line = 0U;
     uint32_t column = 0U;
     struct recorz_mvp_heap_object *cursor_object;
-    struct recorz_mvp_heap_object *selection_object;
 
     if (cursor_index > text_length_value) {
         cursor_index = text_length_value;
     }
     workspace_input_monitor_cursor_line_and_column(text, cursor_index, &line, &column);
     cursor_object = workspace_cursor_object();
-    selection_object = workspace_selection_object();
     heap_set_field(heap_handle_for_object(cursor_object), TEXT_CURSOR_FIELD_INDEX, small_integer_value((int32_t)cursor_index));
     heap_set_field(heap_handle_for_object(cursor_object), TEXT_CURSOR_FIELD_LINE, small_integer_value((int32_t)line));
     heap_set_field(heap_handle_for_object(cursor_object), TEXT_CURSOR_FIELD_COLUMN, small_integer_value((int32_t)column));
     heap_set_field(heap_handle_for_object(cursor_object), TEXT_CURSOR_FIELD_TOP_LINE, small_integer_value((int32_t)top_line));
-    heap_set_field(
-        heap_handle_for_object(selection_object),
-        TEXT_SELECTION_FIELD_START_LINE,
-        small_integer_value((int32_t)line)
-    );
-    heap_set_field(
-        heap_handle_for_object(selection_object),
-        TEXT_SELECTION_FIELD_START_COLUMN,
-        small_integer_value((int32_t)column)
-    );
-    heap_set_field(
-        heap_handle_for_object(selection_object),
-        TEXT_SELECTION_FIELD_END_LINE,
-        small_integer_value((int32_t)line)
-    );
-    heap_set_field(
-        heap_handle_for_object(selection_object),
-        TEXT_SELECTION_FIELD_END_COLUMN,
-        small_integer_value((int32_t)column)
-    );
 }
 
 static uint32_t workspace_input_monitor_line_start(const char *text, uint32_t cursor_index) {

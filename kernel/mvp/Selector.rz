@@ -412,3 +412,23 @@ RecorzKernelSelector: #setAscent:descent:lineHeight: order: 204
 !
 RecorzKernelSelector: #setWrapWidth:tabWidth:lineBreakMode: order: 205
 !
+RecorzKernelSelector: #drawText:index:line:column:top:remaining:onForm:open: order: 206
+!
+RecorzKernelSelector: #selectionCoversLine:column: order: 207
+!
+RecorzKernelSelector: #setStartLine:startColumn:endLine:endColumn: order: 208
+!
+RecorzKernelSelector: #containsLine:column: order: 209
+!
+RecorzKernelSelector: #drawTail:onForm:open: order: 210
+!
+RecorzKernelSelector: #drawCode:text:nextIndex:line:column:top:remaining:onForm: order: 211
+!
+RecorzKernelSelector: #drawSkippedCode:text:nextIndex:line:column:top:remaining:onForm: order: 212
+!
+RecorzKernelSelector: #underlineCellLine:column:onForm: order: 213
+!
+RecorzKernelSelector: #moveSourceCursorForLine:column:top: order: 214
+!
+RecorzKernelSelector: #drawSelectedCode:line:column:onForm: order: 215
+!

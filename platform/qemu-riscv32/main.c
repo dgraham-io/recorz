@@ -8,7 +8,7 @@ extern const uint8_t recorz_demo_image_blob_end[];
 #define RECORZ_MVP_SNAPSHOT_FW_CFG_NAME "opt/recorz-snapshot"
 #define RECORZ_MVP_SNAPSHOT_BUFFER_SIZE 65536U
 #define RECORZ_MVP_FILE_IN_FW_CFG_NAME "opt/recorz-file-in"
-#define RECORZ_MVP_FILE_IN_BUFFER_SIZE 16384U
+#define RECORZ_MVP_FILE_IN_BUFFER_SIZE 65536U
 
 void main(const void *fdt) {
     const struct recorz_mvp_boot_image *image;

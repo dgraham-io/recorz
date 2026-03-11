@@ -72,13 +72,13 @@ Reference:
 - [x] Keep a temporary C fallback only until image-side composition reaches parity
 
 ## Phase 5 - Complete The Image-Side Text Renderer
-- [ ] Rebuild the current transcript/workspace text painting path around image-side scanner/renderer objects
-- [ ] Render cursor, selection, status lines, and highlighted regions from image code
-- [ ] Support at least:
+- [x] Rebuild the current transcript/workspace text painting path around image-side scanner/renderer objects
+- [x] Render cursor, selection, status lines, and highlighted regions from image code
+- [x] Support at least:
   plain text, styled text, cursor painting, and single-region selection highlighting
-- [ ] Keep the VM at the primitive boundary:
+- [x] Keep the VM at the primitive boundary:
   bitmap copy, display/cursor binding, text scan, input delivery
-- [ ] Prove that normal workspace text output no longer depends on C-side text layout rules
+- [x] Prove that normal workspace text output no longer depends on C-side text layout rules
 
 ## Phase 6 - Introduce Image-Owned UI Primitives
 - [x] Decide the first image-side UI structure:
@@ -130,7 +130,7 @@ Reference:
 
 ## Milestones To Watch
 - [x] Milestone A: Smalltalk-80-style primitive boundary documented and implemented
-- [ ] Milestone B: image-owned text composition and rendering for the workspace
+- [x] Milestone B: image-owned text composition and rendering for the workspace
 - [ ] Milestone C: image-owned workspace and browser replacing the C renderer
 - [ ] Milestone D: native workspace and browser survive snapshot/reboot
 - [ ] Milestone E: regenerated image boots directly into image-owned development tools

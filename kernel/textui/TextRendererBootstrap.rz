@@ -48,7 +48,6 @@ finishCursor: cursor selection: selection index: index line: line column: column
     | adjusted |
     adjusted := self adjustTopForLine: line requested: topLine visible: visibleLines.
     cursor moveToIndex: index line: line column: column topLine: adjusted.
-    selection collapseToLine: line column: column.
     ^adjusted
 !
 adjustTopForLine: line requested: topLine visible: visibleLines
@@ -59,35 +58,67 @@ adjustTopForLine: line requested: topLine visible: visibleLines
 !
 drawSource: text onForm: form visible: visibleLines
     visibleLines = 0 ifTrue: [Cursor hideCursor. ^form].
-    ^self drawText: text index: 1 line: 0 top: Workspace cursor topLine remaining: visibleLines onForm: form open: false
+    ^self drawText: text index: 1 line: 0 column: 0 top: Workspace cursor topLine remaining: visibleLines onForm: form open: false
 !
-drawText: text index: i line: line top: top remaining: remaining onForm: form open: open
-    | code lineHeight next |
+drawText: text index: i line: line column: column top: top remaining: remaining onForm: form open: open
     remaining = 0 ifTrue: [self drawCursorOnForm: form. ^form].
-    i > text size ifTrue: [
-        open ifTrue: [form newline. ^self padBlank: remaining - 1 onForm: form].
-        ^self padBlank: remaining onForm: form].
-    next := i + 1.
-    line < top ifTrue: [
-        (text at: i) = 10 ifTrue: [^self drawText: text index: next line: line + 1 top: top remaining: remaining onForm: form open: false].
-        ^self drawText: text index: next line: line top: top remaining: remaining onForm: form open: false].
-    code := text at: i.
+    i > text size ifTrue: [^self drawTail: remaining onForm: form open: open].
+    ^self drawCode: (text at: i) text: text nextIndex: i + 1 line: line column: column top: top remaining: remaining onForm: form
+!
+drawTail: remaining onForm: form open: open
+    open ifTrue: [^self padBlank: remaining onForm: form].
+    ^self padBlank: remaining onForm: form
+!
+drawCode: code text: text nextIndex: next line: line column: column top: top remaining: remaining onForm: form
+    | selected |
+    line < top ifTrue: [^self drawSkippedCode: code text: text nextIndex: next line: line column: column top: top remaining: remaining onForm: form].
     code = 10 ifTrue: [
-        form newline.
-        ^self drawText: text index: next line: line + 1 top: top remaining: remaining - 1 onForm: form open: false].
+        ^self drawText: text index: next line: line + 1 column: 0 top: top remaining: remaining - 1 onForm: form open: false].
+    selected := self selectionCoversLine: line column: column.
+    self moveSourceCursorForLine: line column: column top: top.
+    selected ifTrue: [self drawSelectedCode: code line: line column: column onForm: form].
+    selected ifFalse: [form writeCodePoint: code color: Display style foregroundColor].
+    ^self drawText: text index: next line: line column: column + 1 top: top remaining: remaining onForm: form open: true
+!
+drawSkippedCode: code text: text nextIndex: next line: line column: column top: top remaining: remaining onForm: form
+    code = 10 ifTrue: [^self drawText: text index: next line: line + 1 column: 0 top: top remaining: remaining onForm: form open: false].
+    ^self drawText: text index: next line: line column: column + 1 top: top remaining: remaining onForm: form open: false
+!
+moveSourceCursorForLine: line column: column top: top
+    | width height |
+    width := Display font metrics cellWidth * Display layout scale.
+    height := Display font metrics lineHeight * Display layout scale.
+    Display moveTextCursorToX: 160 + (column * width) y: 210 + ((line - top) * height).
+    ^self
+!
+drawSelectedCode: code line: line column: column onForm: form
     form writeCodePoint: code color: Display style foregroundColor.
-    ^self drawText: text index: next line: line top: top remaining: remaining onForm: form open: true
+    self underlineCellLine: line column: column onForm: form.
+    ^form
+!
+underlineCellLine: line column: column onForm: form
+    | width height x y |
+    width := Display font metrics cellWidth * Display layout scale.
+    height := Display font metrics lineHeight * Display layout scale.
+    x := 160 + (column * width).
+    y := 210 + (((line - Workspace cursor topLine) + 1) * height) - 2.
+    BitBlt drawLineOnForm: form fromX: x fromY: y toX: x + width - 1 toY: y color: 11393254.
+    ^form
 !
 padBlank: remainingLines onForm: form
     remainingLines = 0 ifTrue: [self drawCursorOnForm: form. ^form].
-    form newline.
     ^self padBlank: remainingLines - 1 onForm: form
+!
+selectionCoversLine: line column: column
+    | selection |
+    selection := Workspace selection.
+    ^selection containsLine: line column: column
 !
 drawCursorOnForm: form
     | cursor cursorX cursorY active lineHeight |
     cursor := Workspace cursor.
-    cursorX := Display layout margins left + (cursor column * Display font metrics cellWidth * Display layout scale).
-    cursorY := Display layout margins top + ((cursor line - cursor topLine) * Display font metrics lineHeight * Display layout scale).
+    cursorX := 160 + (cursor column * Display font metrics cellWidth * Display layout scale).
+    cursorY := 210 + ((cursor line - cursor topLine) * Display font metrics lineHeight * Display layout scale).
     lineHeight := (Display font metrics lineHeight * Display layout scale) - 1.
     active := Cursor current.
     active = nil ifTrue: [
@@ -207,6 +238,22 @@ collapseToLine: aLine column: aColumn
     endLine := aLine.
     endColumn := aColumn.
     ^self
+!
+setStartLine: aStartLine startColumn: aStartColumn endLine: anEndLine endColumn: anEndColumn
+    startLine := aStartLine.
+    startColumn := aStartColumn.
+    endLine := anEndLine.
+    endColumn := anEndColumn.
+    ^self
+!
+containsLine: aLine column: aColumn
+    aLine < startLine ifTrue: [^false].
+    aLine > endLine ifTrue: [^false].
+    aLine = startLine ifTrue: [aColumn < startColumn ifTrue: [^false]].
+    aLine = endLine ifTrue: [
+        aColumn = endColumn ifTrue: [^false].
+        aColumn > endColumn ifTrue: [^false]].
+    ^true
 !
 RecorzKernelClass: #Form descriptorOrder: 10 objectKindOrder: 2 sourceBootOrder: 7 instanceVariableNames: 'bits'
 !
