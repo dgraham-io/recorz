@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PLATFORM_DIR = ROOT / "platform" / "qemu-riscv32"
 TEXT_RENDERER_BOOTSTRAP = ROOT / "kernel" / "textui" / "TextRendererBootstrap.rz"
 VIEW_BOOTSTRAP = ROOT / "kernel" / "textui" / "ViewBootstrap.rz"
+WIDGET_BOOTSTRAP = ROOT / "kernel" / "textui" / "WidgetBootstrap.rz"
 DEFAULT_EXAMPLE = ROOT / "examples" / "qemu_riscv_fb_demo.rz"
 DISPLAY_FONT_EXAMPLE = ROOT / "examples" / "qemu_riscv_display_font_demo.rz"
 DISPLAY_FONT_METRICS_EXAMPLE = ROOT / "examples" / "qemu_riscv_display_font_metrics_demo.rz"
@@ -69,6 +70,9 @@ WORKSPACE_EDIT_CURRENT_METHOD_LIST_EXAMPLE = ROOT / "examples" / "qemu_riscv_wor
 WORKSPACE_EDIT_CURRENT_PACKAGE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_current_package_demo.rz"
 WORKSPACE_EDIT_CURRENT_PROTOCOL_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_current_protocol_demo.rz"
 VIEW_ROUTER_EXAMPLE = ROOT / "examples" / "qemu_riscv_view_router_demo.rz"
+BROWSER_SURFACE_LIVE_BRIDGE_EXAMPLE = ROOT / "examples" / "qemu_riscv_browser_surface_live_bridge_demo.rz"
+WORKSPACE_EDITOR_SURFACE_LIVE_BRIDGE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_editor_surface_live_bridge_demo.rz"
+TEXTUI_COMPONENT_PROBE_FILE_IN = ROOT / "examples" / "qemu_riscv_textui_component_probe_file_in.rz"
 TEST_RUNNER_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_test_runner_demo.rz"
 METHOD_BLOCK_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_demo.rz"
 METHOD_BLOCK_CAPTURE_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_image_method_block_capture_demo.rz"
@@ -312,6 +316,126 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             output = output.replace("\r", "")
             self.assertRegex(output, r"FOC\s*US:\s*2")
             self.assertIn("COMMAND: SPACE", output)
+            self.assertNotIn("panic:", output)
+
+    def test_live_browser_navigation_routes_through_image_side_browser_surface(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-browser-surface-bridge-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, BROWSER_SURFACE_LIVE_BRIDGE_EXAMPLE)
+            file_in_payload = _write_combined_file_in_payload(
+                build_dir,
+                TEXT_RENDERER_BOOTSTRAP,
+                VIEW_BOOTSTRAP,
+                WIDGET_BOOTSTRAP,
+                TEXTUI_COMPONENT_PROBE_FILE_IN,
+            )
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                    "-fw_cfg",
+                    f"name=opt/recorz-file-in,file={file_in_payload}",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "TEXT EDITOR COMPONENT", timeout=8.0)
+                output += _read_until(process, "newline", timeout=8.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("TEXT EDITOR COMPONENT", output)
+            self.assertIn("newline", output)
+            self.assertNotIn("panic:", output)
+
+    def test_live_source_editor_routes_through_image_side_workspace_editor_surface(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-editor-surface-bridge-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_EDITOR_SURFACE_LIVE_BRIDGE_EXAMPLE)
+            file_in_payload = _write_combined_file_in_payload(
+                build_dir,
+                TEXT_RENDERER_BOOTSTRAP,
+                VIEW_BOOTSTRAP,
+                WIDGET_BOOTSTRAP,
+                TEXTUI_COMPONENT_PROBE_FILE_IN,
+            )
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                    "-fw_cfg",
+                    f"name=opt/recorz-file-in,file={file_in_payload}",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "TEXT EDITOR COMPONENT", timeout=8.0)
+                output += _read_until(process, "MODE: METHOD SOURCE", timeout=8.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("TEXT EDITOR COMPONENT", output)
+            self.assertIn("MODE: METHOD SOURCE", output)
             self.assertNotIn("panic:", output)
 
     def test_default_demo_boots_and_prints_transcript_over_serial(self) -> None:

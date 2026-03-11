@@ -1,0 +1,3 @@
+Display clear.
+Workspace browseMethod: 'newline' ofClassNamed: 'Display'.
+Workspace browseInteractiveInput.

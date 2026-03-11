@@ -94,7 +94,7 @@ Reference:
 - [x] Rebuild the workspace as an image-side editor component
 - [x] Rebuild the browser as image-side list/source components
 - [x] Move do-it, print-it, accept, revert, test, save, and regenerate behind image-side tool objects
-- [ ] Make browser navigation and source editing use the same editor/view components
+- [x] Make browser navigation and source editing use the same editor/view components
 - [ ] Remove the special-case C workspace/browser renderers once the image-side tools reach parity
 
 ## Phase 8 - Reach The First Native UI

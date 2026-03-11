@@ -154,7 +154,7 @@
 #define CHARACTER_SCANNER_STOP_CONTROL 4U
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
-#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_CHARACTER_SCANNER
+#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_TOOL
 #define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_DRAW_BROWSER_STATUS_ON_FORM_BOUNDS
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
@@ -304,6 +304,9 @@ static char workspace_input_monitor_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char workspace_input_monitor_cursor_state[WORKSPACE_INPUT_MONITOR_STATE_LIMIT];
 static char workspace_input_monitor_status[WORKSPACE_INPUT_MONITOR_STATUS_LIMIT];
 static char workspace_input_monitor_feedback[WORKSPACE_INPUT_MONITOR_FEEDBACK_LIMIT];
+static char workspace_surface_list_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
+static char workspace_surface_source_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
+static char workspace_surface_status_buffer[WORKSPACE_INPUT_MONITOR_FEEDBACK_LIMIT];
 static uint8_t workspace_input_monitor_capture_enabled = 0U;
 static char kernel_source_io_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char package_source_io_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
@@ -1251,6 +1254,8 @@ static const char *object_kind_name(uint8_t kind) {
             return "CursorFactory";
         case RECORZ_MVP_OBJECT_CHARACTER_SCANNER:
             return "CharacterScanner";
+        case RECORZ_MVP_OBJECT_WORKSPACE_TOOL:
+            return "WorkspaceTool";
     }
     return "UnknownObject";
 }
@@ -4881,6 +4886,116 @@ static void workspace_write_label_and_value(
     workspace_write_label_and_text(form, label, workspace_text_for_value(value, text, sizeof(text)));
 }
 
+static void workspace_surface_reset_buffer(char buffer[], uint32_t buffer_size) {
+    if (buffer != 0 && buffer_size != 0U) {
+        buffer[0] = '\0';
+    }
+}
+
+static void workspace_surface_append_line(
+    char buffer[],
+    uint32_t buffer_size,
+    uint32_t *offset,
+    const char *text
+) {
+    if (buffer == 0 || offset == 0 || buffer_size == 0U) {
+        return;
+    }
+    if (*offset != 0U && buffer[*offset - 1U] != '\n') {
+        append_text_checked(buffer, buffer_size, offset, "\n");
+    }
+    append_text_checked(buffer, buffer_size, offset, text == 0 ? "" : text);
+}
+
+static void workspace_surface_append_label_text(
+    char buffer[],
+    uint32_t buffer_size,
+    uint32_t *offset,
+    const char *label,
+    const char *text
+) {
+    char line[METHOD_SOURCE_LINE_LIMIT];
+    uint32_t line_offset = 0U;
+
+    line[0] = '\0';
+    append_text_checked(line, sizeof(line), &line_offset, label == 0 ? "" : label);
+    append_text_checked(line, sizeof(line), &line_offset, ": ");
+    append_text_checked(line, sizeof(line), &line_offset, text == 0 ? "" : text);
+    workspace_surface_append_line(buffer, buffer_size, offset, line);
+}
+
+static void workspace_surface_append_label_integer(
+    char buffer[],
+    uint32_t buffer_size,
+    uint32_t *offset,
+    const char *label,
+    uint32_t value
+) {
+    char line[METHOD_SOURCE_LINE_LIMIT];
+    uint32_t line_offset = 0U;
+
+    line[0] = '\0';
+    append_text_checked(line, sizeof(line), &line_offset, label == 0 ? "" : label);
+    append_text_checked(line, sizeof(line), &line_offset, ": ");
+    render_small_integer((int32_t)value);
+    append_text_checked(line, sizeof(line), &line_offset, print_buffer);
+    workspace_surface_append_line(buffer, buffer_size, offset, line);
+}
+
+static uint8_t workspace_draw_editor_surface_from_image(
+    const struct recorz_mvp_heap_object *form,
+    const char *source,
+    const char *status,
+    const char *feedback
+) {
+    uint16_t object_handle = named_object_handle_for_name("BootWorkspaceEditorSurface");
+    struct recorz_mvp_value arguments[4];
+
+    if (object_handle == 0U) {
+        return 0U;
+    }
+    arguments[0] = string_value(source == 0 ? "" : source);
+    arguments[1] = string_value(status == 0 ? "" : status);
+    arguments[2] = string_value(feedback == 0 ? "" : feedback);
+    arguments[3] = object_value(heap_handle_for_object(form));
+    (void)perform_send_and_pop_result(
+        object_value(object_handle),
+        RECORZ_MVP_SELECTOR_DRAW_SOURCE_STATUS_FEEDBACK_ON_FORM,
+        4U,
+        arguments,
+        0
+    );
+    return 1U;
+}
+
+static uint8_t workspace_draw_browser_surface_from_image(
+    const struct recorz_mvp_heap_object *form,
+    const char *list_text,
+    const char *source_text,
+    const char *title_text,
+    const char *status_text
+) {
+    uint16_t object_handle = named_object_handle_for_name("BootBrowserSurface");
+    struct recorz_mvp_value arguments[5];
+
+    if (object_handle == 0U) {
+        return 0U;
+    }
+    arguments[0] = string_value(list_text == 0 ? "" : list_text);
+    arguments[1] = string_value(source_text == 0 ? "" : source_text);
+    arguments[2] = string_value(title_text == 0 ? "" : title_text);
+    arguments[3] = string_value(status_text == 0 ? "" : status_text);
+    arguments[4] = object_value(heap_handle_for_object(form));
+    (void)perform_send_and_pop_result(
+        object_value(object_handle),
+        RECORZ_MVP_SELECTOR_DRAW_LIST_SOURCE_TITLE_STATUS_ON_FORM,
+        5U,
+        arguments,
+        0
+    );
+    return 1U;
+}
+
 static void workspace_render_class_browser(
     const struct recorz_mvp_heap_object *workspace_object,
     const struct recorz_mvp_heap_object *class_object,
@@ -4955,8 +5070,57 @@ static void workspace_render_package_list_browser(
     const struct recorz_mvp_live_package_definition *sorted_packages[PACKAGE_LIMIT];
     uint16_t package_index;
     uint16_t sorted_count;
+    uint32_t list_offset = 0U;
 
     (void)workspace_object;
+    workspace_surface_reset_buffer(workspace_surface_list_buffer, sizeof(workspace_surface_list_buffer));
+    workspace_surface_append_label_text(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "VIEW",
+        "PACKAGES"
+    );
+    workspace_surface_append_label_integer(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "PACKAGES",
+        workspace_package_count()
+    );
+    if (workspace_package_count() == 0U) {
+        workspace_surface_append_line(
+            workspace_surface_list_buffer,
+            sizeof(workspace_surface_list_buffer),
+            &list_offset,
+            "NO PACKAGES"
+        );
+    } else {
+        sorted_count = workspace_collect_sorted_packages(sorted_packages);
+        for (package_index = 0U; package_index < sorted_count; ++package_index) {
+            char line[METHOD_SOURCE_LINE_LIMIT];
+            uint32_t line_offset = 0U;
+
+            append_text_checked(line, sizeof(line), &line_offset, sorted_packages[package_index]->package_name);
+            append_text_checked(line, sizeof(line), &line_offset, " :: ");
+            render_small_integer((int32_t)workspace_package_class_count(sorted_packages[package_index]->package_name));
+            append_text_checked(line, sizeof(line), &line_offset, print_buffer);
+            workspace_surface_append_line(
+                workspace_surface_list_buffer,
+                sizeof(workspace_surface_list_buffer),
+                &list_offset,
+                line
+            );
+        }
+    }
+    if (workspace_draw_browser_surface_from_image(
+            form,
+            workspace_surface_list_buffer,
+            "Browse a package, then edit its source in the same tool flow.",
+            "PACKAGES",
+            "BROWSE PACKAGES")) {
+        return;
+    }
     form_clear(form);
     form_write_string(form, "WORKSPACE");
     form_newline(form);
@@ -4988,8 +5152,91 @@ static void workspace_render_interactive_package_list_browser(
 ) {
     const struct recorz_mvp_heap_object *form = default_form_object();
     uint16_t package_index;
+    uint32_t list_offset = 0U;
 
     (void)workspace_object;
+    workspace_surface_reset_buffer(workspace_surface_list_buffer, sizeof(workspace_surface_list_buffer));
+    workspace_surface_append_label_text(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "VIEW",
+        "PACKAGES"
+    );
+    workspace_surface_append_label_integer(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "PACKAGES",
+        sorted_count
+    );
+    workspace_surface_append_label_text(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "MOVE",
+        "ARROWS CTRL-N/P"
+    );
+    workspace_surface_append_label_text(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "EDIT",
+        "ENTER/CTRL-X"
+    );
+    workspace_surface_append_label_text(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "CLOSE",
+        "CTRL-O/D"
+    );
+    if (sorted_count == 0U) {
+        workspace_surface_append_line(
+            workspace_surface_list_buffer,
+            sizeof(workspace_surface_list_buffer),
+            &list_offset,
+            "NO PACKAGES"
+        );
+    } else {
+        if (selected_index >= sorted_count) {
+            selected_index = (uint16_t)(sorted_count - 1U);
+        }
+        for (package_index = 0U; package_index < sorted_count; ++package_index) {
+            char line[METHOD_SOURCE_LINE_LIMIT];
+            uint32_t line_offset = 0U;
+
+            append_text_checked(
+                line,
+                sizeof(line),
+                &line_offset,
+                package_index == selected_index ? "> " : "  "
+            );
+            append_text_checked(
+                line,
+                sizeof(line),
+                &line_offset,
+                sorted_packages[package_index]->package_name
+            );
+            append_text_checked(line, sizeof(line), &line_offset, " :: ");
+            render_small_integer((int32_t)workspace_package_class_count(sorted_packages[package_index]->package_name));
+            append_text_checked(line, sizeof(line), &line_offset, print_buffer);
+            workspace_surface_append_line(
+                workspace_surface_list_buffer,
+                sizeof(workspace_surface_list_buffer),
+                &list_offset,
+                line
+            );
+        }
+    }
+    if (workspace_draw_browser_surface_from_image(
+            form,
+            workspace_surface_list_buffer,
+            "Arrow keys move. Enter or Ctrl-X opens the selected package source.",
+            "PACKAGES",
+            "INTERACTIVE PACKAGE LIST")) {
+        return;
+    }
     form_clear(form);
     workspace_write_label_and_text(form, "VIEW", "PACKAGES");
     workspace_write_label_and_integer(form, "PACKAGES", sorted_count);
@@ -5034,8 +5281,63 @@ static void workspace_render_package_browser(
     const struct recorz_mvp_live_package_definition *package_definition = package_definition_for_name(package_name);
     uint16_t dynamic_index;
     uint32_t class_count = workspace_package_class_count(package_name);
+    uint32_t list_offset = 0U;
+    uint32_t source_offset = 0U;
 
     (void)workspace_object;
+    workspace_surface_reset_buffer(workspace_surface_list_buffer, sizeof(workspace_surface_list_buffer));
+    workspace_surface_reset_buffer(workspace_surface_source_buffer, sizeof(workspace_surface_source_buffer));
+    workspace_surface_append_label_integer(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "CLASSES",
+        class_count
+    );
+    if (class_count == 0U) {
+        workspace_surface_append_line(
+            workspace_surface_list_buffer,
+            sizeof(workspace_surface_list_buffer),
+            &list_offset,
+            "EMPTY PACKAGE"
+        );
+    } else {
+        for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
+            if (!source_names_equal(dynamic_classes[dynamic_index].package_name, package_name)) {
+                continue;
+            }
+            workspace_surface_append_line(
+                workspace_surface_list_buffer,
+                sizeof(workspace_surface_list_buffer),
+                &list_offset,
+                dynamic_classes[dynamic_index].class_name
+            );
+        }
+    }
+    workspace_surface_append_label_text(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer),
+        &source_offset,
+        "PACKAGE",
+        package_name
+    );
+    if (package_definition != 0 && package_definition->package_comment[0] != '\0') {
+        workspace_surface_append_label_text(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &source_offset,
+            "COMMENT",
+            package_definition->package_comment
+        );
+    }
+    if (workspace_draw_browser_surface_from_image(
+            form,
+            workspace_surface_list_buffer,
+            workspace_surface_source_buffer,
+            package_name,
+            "PACKAGE BROWSER")) {
+        return;
+    }
     form_clear(form);
     workspace_write_label_and_text(form, "PACKAGE", package_name);
     if (package_definition != 0 && package_definition->package_comment[0] != '\0') {
@@ -5061,8 +5363,56 @@ static void workspace_render_class_list_browser(
     uint8_t kind;
     uint16_t dynamic_index;
     uint32_t seeded_count = 0U;
+    uint32_t list_offset = 0U;
 
     (void)workspace_object;
+    for (kind = 1U; kind <= MAX_OBJECT_KIND; ++kind) {
+        if (class_descriptor_handles_by_kind[kind] != 0U) {
+            ++seeded_count;
+        }
+    }
+    workspace_surface_reset_buffer(workspace_surface_list_buffer, sizeof(workspace_surface_list_buffer));
+    workspace_surface_append_label_integer(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "SEEDED",
+        seeded_count
+    );
+    workspace_surface_append_label_integer(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "DYNAMIC",
+        dynamic_class_count
+    );
+    for (kind = 1U; kind <= MAX_OBJECT_KIND; ++kind) {
+        if (class_descriptor_handles_by_kind[kind] == 0U) {
+            continue;
+        }
+        workspace_surface_append_line(
+            workspace_surface_list_buffer,
+            sizeof(workspace_surface_list_buffer),
+            &list_offset,
+            object_kind_name(kind)
+        );
+    }
+    for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
+        workspace_surface_append_line(
+            workspace_surface_list_buffer,
+            sizeof(workspace_surface_list_buffer),
+            &list_offset,
+            dynamic_classes[dynamic_index].class_name
+        );
+    }
+    if (workspace_draw_browser_surface_from_image(
+            form,
+            workspace_surface_list_buffer,
+            "Browse a class, then open methods, protocols, or canonical source.",
+            "CLASSES",
+            "CLASS BROWSER")) {
+        return;
+    }
     form_clear(form);
     form_write_string(form, "WORKSPACE");
     form_newline(form);
@@ -5096,8 +5446,84 @@ static void workspace_render_method_list_browser(
     const struct recorz_mvp_heap_object *method_start_object = class_method_start_object(class_object);
     uint32_t method_count = class_method_count(class_object);
     uint32_t method_index;
+    uint32_t list_offset = 0U;
+    uint32_t source_offset = 0U;
 
     (void)workspace_object;
+    workspace_surface_reset_buffer(workspace_surface_list_buffer, sizeof(workspace_surface_list_buffer));
+    workspace_surface_reset_buffer(workspace_surface_source_buffer, sizeof(workspace_surface_source_buffer));
+    workspace_surface_append_label_integer(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "METHODS",
+        method_count
+    );
+    workspace_surface_append_label_text(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer),
+        &source_offset,
+        "CLASS",
+        class_name
+    );
+    workspace_surface_append_label_text(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer),
+        &source_offset,
+        "SIDE",
+        side_label
+    );
+    if (method_count == 0U) {
+        workspace_surface_append_line(
+            workspace_surface_list_buffer,
+            sizeof(workspace_surface_list_buffer),
+            &list_offset,
+            "NO METHODS"
+        );
+    } else {
+        if (method_start_object == 0) {
+            machine_panic("Workspace method list is missing a method start");
+        }
+        for (method_index = 0U; method_index < method_count; ++method_index) {
+            const struct recorz_mvp_heap_object *method_object = (const struct recorz_mvp_heap_object *)heap_object(
+                (uint16_t)(heap_handle_for_object(method_start_object) + method_index)
+            );
+            const struct recorz_mvp_live_method_source *source_record;
+            char line[METHOD_SOURCE_LINE_LIMIT];
+            uint32_t line_offset = 0U;
+
+            source_record = live_method_source_for_selector_and_arity(
+                heap_handle_for_object(class_object),
+                (uint8_t)method_descriptor_selector(method_object),
+                (uint8_t)method_descriptor_argument_count(method_object)
+            );
+            line[0] = '\0';
+            if (source_record != 0 && source_record->protocol_name[0] != '\0') {
+                append_text_checked(line, sizeof(line), &line_offset, source_record->protocol_name);
+                append_text_checked(line, sizeof(line), &line_offset, " :: ");
+            }
+            append_text_checked(
+                line,
+                sizeof(line),
+                &line_offset,
+                selector_name((uint8_t)method_descriptor_selector(method_object))
+            );
+            workspace_surface_append_line(
+                workspace_surface_list_buffer,
+                sizeof(workspace_surface_list_buffer),
+                &list_offset,
+                line
+            );
+        }
+    }
+    if (workspace_draw_browser_surface_from_image(
+            form,
+            workspace_surface_list_buffer,
+            workspace_surface_source_buffer,
+            class_name,
+            side_label)) {
+        return;
+    }
     form_clear(form);
     workspace_write_label_and_text(form, "CLASS", class_name);
     workspace_write_label_and_text(form, "SIDE", side_label);
@@ -5236,8 +5662,76 @@ static void workspace_render_protocol_list_browser(
     uint32_t method_count = class_method_count(class_object);
     uint32_t protocol_count = workspace_protocol_count(class_object);
     uint32_t method_index;
+    uint32_t list_offset = 0U;
+    uint32_t source_offset = 0U;
 
     (void)workspace_object;
+    workspace_surface_reset_buffer(workspace_surface_list_buffer, sizeof(workspace_surface_list_buffer));
+    workspace_surface_reset_buffer(workspace_surface_source_buffer, sizeof(workspace_surface_source_buffer));
+    workspace_surface_append_label_integer(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "PROTOCOLS",
+        protocol_count
+    );
+    workspace_surface_append_label_text(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer),
+        &source_offset,
+        "CLASS",
+        class_name
+    );
+    workspace_surface_append_label_text(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer),
+        &source_offset,
+        "SIDE",
+        side_label
+    );
+    if (method_count == 0U) {
+        workspace_surface_append_line(
+            workspace_surface_list_buffer,
+            sizeof(workspace_surface_list_buffer),
+            &list_offset,
+            "NO METHODS"
+        );
+    } else {
+        if (method_start_object == 0) {
+            machine_panic("Workspace protocol list is missing a method start");
+        }
+        for (method_index = 0U; method_index < method_count; ++method_index) {
+            const struct recorz_mvp_heap_object *method_object = (const struct recorz_mvp_heap_object *)heap_object(
+                (uint16_t)(heap_handle_for_object(method_start_object) + method_index)
+            );
+            const char *protocol_name = workspace_protocol_name_for_method(class_object, method_object);
+            char line[METHOD_SOURCE_LINE_LIMIT];
+            uint32_t line_offset = 0U;
+
+            if (workspace_protocol_seen_earlier(class_object, method_start_object, method_index, protocol_name)) {
+                continue;
+            }
+            append_text_checked(line, sizeof(line), &line_offset, protocol_name);
+            append_text_checked(line, sizeof(line), &line_offset, " (");
+            render_small_integer((int32_t)workspace_protocol_method_count(class_object, protocol_name));
+            append_text_checked(line, sizeof(line), &line_offset, print_buffer);
+            append_text_checked(line, sizeof(line), &line_offset, ")");
+            workspace_surface_append_line(
+                workspace_surface_list_buffer,
+                sizeof(workspace_surface_list_buffer),
+                &list_offset,
+                line
+            );
+        }
+    }
+    if (workspace_draw_browser_surface_from_image(
+            form,
+            workspace_surface_list_buffer,
+            workspace_surface_source_buffer,
+            class_name,
+            side_label)) {
+        return;
+    }
     form_clear(form);
     workspace_write_label_and_text(form, "CLASS", class_name);
     workspace_write_label_and_text(form, "SIDE", side_label);
@@ -5282,8 +5776,77 @@ static void workspace_render_protocol_method_list_browser(
     uint32_t method_count = class_method_count(class_object);
     uint32_t protocol_method_count = workspace_protocol_method_count(class_object, protocol_name);
     uint32_t method_index;
+    uint32_t list_offset = 0U;
+    uint32_t source_offset = 0U;
 
     (void)workspace_object;
+    workspace_surface_reset_buffer(workspace_surface_list_buffer, sizeof(workspace_surface_list_buffer));
+    workspace_surface_reset_buffer(workspace_surface_source_buffer, sizeof(workspace_surface_source_buffer));
+    workspace_surface_append_label_integer(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "METHODS",
+        protocol_method_count
+    );
+    workspace_surface_append_label_text(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer),
+        &source_offset,
+        "CLASS",
+        class_name
+    );
+    workspace_surface_append_label_text(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer),
+        &source_offset,
+        "SIDE",
+        side_label
+    );
+    workspace_surface_append_label_text(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer),
+        &source_offset,
+        "PROTO",
+        protocol_name
+    );
+    if (method_count == 0U || protocol_method_count == 0U) {
+        workspace_surface_append_line(
+            workspace_surface_list_buffer,
+            sizeof(workspace_surface_list_buffer),
+            &list_offset,
+            "NO METHODS"
+        );
+    } else {
+        if (method_start_object == 0) {
+            machine_panic("Workspace protocol browser is missing a method start");
+        }
+        for (method_index = 0U; method_index < method_count; ++method_index) {
+            const struct recorz_mvp_heap_object *method_object = (const struct recorz_mvp_heap_object *)heap_object(
+                (uint16_t)(heap_handle_for_object(method_start_object) + method_index)
+            );
+
+            if (!source_names_equal(
+                    workspace_protocol_name_for_method(class_object, method_object),
+                    protocol_name)) {
+                continue;
+            }
+            workspace_surface_append_line(
+                workspace_surface_list_buffer,
+                sizeof(workspace_surface_list_buffer),
+                &list_offset,
+                selector_name((uint8_t)method_descriptor_selector(method_object))
+            );
+        }
+    }
+    if (workspace_draw_browser_surface_from_image(
+            form,
+            workspace_surface_list_buffer,
+            workspace_surface_source_buffer,
+            protocol_name,
+            side_label)) {
+        return;
+    }
     form_clear(form);
     workspace_write_label_and_text(form, "CLASS", class_name);
     workspace_write_label_and_text(form, "SIDE", side_label);
@@ -5318,10 +5881,43 @@ static void workspace_render_method_browser(
 ) {
     const struct recorz_mvp_heap_object *form = default_form_object();
     struct recorz_mvp_value source_value = workspace_current_source_value(workspace_object);
+    uint32_t list_offset = 0U;
     const char *cursor;
     char line[METHOD_SOURCE_LINE_LIMIT];
     uint8_t wrote_line = 0U;
 
+    workspace_surface_reset_buffer(workspace_surface_list_buffer, sizeof(workspace_surface_list_buffer));
+    workspace_surface_append_label_text(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "CLASS",
+        class_name
+    );
+    workspace_surface_append_label_text(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "SIDE",
+        side_label
+    );
+    workspace_surface_append_label_text(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "METHOD",
+        selector_name_text
+    );
+    if (workspace_draw_browser_surface_from_image(
+            form,
+            workspace_surface_list_buffer,
+            (source_value.kind == RECORZ_MVP_VALUE_STRING && source_value.string != 0)
+                ? source_value.string
+                : "NO SOURCE BUFFER",
+            selector_name_text,
+            "METHOD SOURCE")) {
+        return;
+    }
     form_clear(form);
     workspace_write_label_and_text(form, "CLASS", class_name);
     workspace_write_label_and_text(form, "SIDE", side_label);
@@ -5348,10 +5944,36 @@ static void workspace_render_class_source_browser(
 ) {
     const struct recorz_mvp_heap_object *form = default_form_object();
     struct recorz_mvp_value source_value = workspace_current_source_value(workspace_object);
+    uint32_t list_offset = 0U;
     const char *cursor;
     char line[METHOD_SOURCE_LINE_LIMIT];
     uint8_t wrote_line = 0U;
 
+    workspace_surface_reset_buffer(workspace_surface_list_buffer, sizeof(workspace_surface_list_buffer));
+    workspace_surface_append_label_text(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "CLASS",
+        class_name
+    );
+    workspace_surface_append_label_text(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "VIEW",
+        "SOURCE"
+    );
+    if (workspace_draw_browser_surface_from_image(
+            form,
+            workspace_surface_list_buffer,
+            (source_value.kind == RECORZ_MVP_VALUE_STRING && source_value.string != 0)
+                ? source_value.string
+                : "NO SOURCE BUFFER",
+            class_name,
+            "CLASS SOURCE")) {
+        return;
+    }
     form_clear(form);
     workspace_write_label_and_text(form, "CLASS", class_name);
     workspace_write_label_and_text(form, "VIEW", "SOURCE");
@@ -5377,10 +5999,36 @@ static void workspace_render_package_source_browser(
 ) {
     const struct recorz_mvp_heap_object *form = default_form_object();
     struct recorz_mvp_value source_value = workspace_current_source_value(workspace_object);
+    uint32_t list_offset = 0U;
     const char *cursor;
     char line[METHOD_SOURCE_LINE_LIMIT];
     uint8_t wrote_line = 0U;
 
+    workspace_surface_reset_buffer(workspace_surface_list_buffer, sizeof(workspace_surface_list_buffer));
+    workspace_surface_append_label_text(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "PACKAGE",
+        package_name
+    );
+    workspace_surface_append_label_text(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "VIEW",
+        "SOURCE"
+    );
+    if (workspace_draw_browser_surface_from_image(
+            form,
+            workspace_surface_list_buffer,
+            (source_value.kind == RECORZ_MVP_VALUE_STRING && source_value.string != 0)
+                ? source_value.string
+                : "NO SOURCE BUFFER",
+            package_name,
+            "PACKAGE SOURCE")) {
+        return;
+    }
     form_clear(form);
     workspace_write_label_and_text(form, "PACKAGE", package_name);
     workspace_write_label_and_text(form, "VIEW", "SOURCE");
@@ -5406,10 +6054,43 @@ static void workspace_render_regenerated_source_browser(
 ) {
     const struct recorz_mvp_heap_object *form = default_form_object();
     struct recorz_mvp_value source_value = workspace_current_source_value(workspace_object);
+    uint32_t list_offset = 0U;
     const char *cursor;
     char line[METHOD_SOURCE_LINE_LIMIT];
     uint8_t wrote_line = 0U;
 
+    workspace_surface_reset_buffer(workspace_surface_list_buffer, sizeof(workspace_surface_list_buffer));
+    workspace_surface_append_label_text(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "VIEW",
+        "REGEN"
+    );
+    workspace_surface_append_label_text(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "SOURCE",
+        source_name
+    );
+    workspace_surface_append_label_text(
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer),
+        &list_offset,
+        "CLOSE",
+        "CTRL-O/D"
+    );
+    if (workspace_draw_browser_surface_from_image(
+            form,
+            workspace_surface_list_buffer,
+            (source_value.kind == RECORZ_MVP_VALUE_STRING && source_value.string != 0)
+                ? source_value.string
+                : "NO SOURCE BUFFER",
+            source_name,
+            "REGENERATED SOURCE")) {
+        return;
+    }
     form_clear(form);
     workspace_write_label_and_text(form, "VIEW", "REGEN");
     workspace_write_label_and_text(form, "SOURCE", source_name);
@@ -5560,6 +6241,190 @@ static void workspace_render_input_monitor_browser(
         top_line = cursor_line;
     }
     workspace_store_input_monitor_state(workspace_object, cursor_index, top_line);
+    {
+        uint32_t surface_status_offset = 0U;
+        uint32_t surface_feedback_offset = 0U;
+
+        workspace_surface_reset_buffer(workspace_surface_status_buffer, sizeof(workspace_surface_status_buffer));
+        append_text_checked(
+            workspace_surface_status_buffer,
+            sizeof(workspace_surface_status_buffer),
+            &surface_status_offset,
+            mode_text
+        );
+        append_text_checked(
+            workspace_surface_status_buffer,
+            sizeof(workspace_surface_status_buffer),
+            &surface_status_offset,
+            " :: "
+        );
+        append_text_checked(
+            workspace_surface_status_buffer,
+            sizeof(workspace_surface_status_buffer),
+            &surface_status_offset,
+            workspace_input_monitor_status[0] == '\0' ? "READY" : workspace_input_monitor_status
+        );
+        workspace_surface_reset_buffer(workspace_surface_source_buffer, sizeof(workspace_surface_source_buffer));
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            "VIEW: INPUT\nMODE: "
+        );
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            mode_text
+        );
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            "\nTARGET: "
+        );
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            target_text
+        );
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            "\nMOVE: ARROWS CTRL-B/F/N A/E\nPRINT: "
+        );
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            source_editor_mode ? "CTRL-P USES WORKSPACE MODE" : "CTRL-P"
+        );
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            "\nDOIT: "
+        );
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            source_editor_mode ? "CTRL-D/R USES WORKSPACE MODE" : "CTRL-D/R"
+        );
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            "\nREVERT: "
+        );
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            source_editor_mode ? "CTRL-Y RESTORES SOURCE" : "CTRL-Y NEEDS SOURCE"
+        );
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            "\nTESTS: "
+        );
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            source_editor_mode ? "CTRL-T RUNS TARGET" : "CTRL-T NEEDS TARGET"
+        );
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            "\nEMIT: CTRL-U\nSAVE: CTRL-W/K REGEN:G/L\nFILEIN: CTRL-Q\nCLOSE: "
+        );
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            source_editor_mode ? "CTRL-O RETURNS" : "CTRL-O EXITS"
+        );
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            "\nACCEPT: "
+        );
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            source_editor_mode ? "CTRL-X INSTALLS" : "CTRL-X NEEDS SOURCE"
+        );
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            "\nLINE: "
+        );
+        render_small_integer((int32_t)(cursor_line + 1U));
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            print_buffer
+        );
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            "\nCOL: "
+        );
+        render_small_integer((int32_t)(cursor_column + 1U));
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            print_buffer
+        );
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            "\nTOP: "
+        );
+        render_small_integer((int32_t)(top_line + 1U));
+        append_text_checked(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &surface_feedback_offset,
+            print_buffer
+        );
+        if (workspace_input_monitor_feedback[0] != '\0') {
+            append_text_checked(
+                workspace_surface_source_buffer,
+                sizeof(workspace_surface_source_buffer),
+                &surface_feedback_offset,
+                "\n\n"
+            );
+            append_text_checked(
+                workspace_surface_source_buffer,
+                sizeof(workspace_surface_source_buffer),
+                &surface_feedback_offset,
+                workspace_input_monitor_feedback_tail_start(
+                    workspace_input_monitor_feedback,
+                    output_line_capacity > 0U ? output_line_capacity - 1U : 0U
+                )
+            );
+        }
+    }
+    if (workspace_draw_editor_surface_from_image(
+            form,
+            source_value.kind == RECORZ_MVP_VALUE_STRING ? source_value.string : "",
+            workspace_surface_status_buffer,
+            workspace_surface_source_buffer)) {
+        return;
+    }
     workspace_write_label_and_integer(form, "LINE", cursor_line + 1U);
     workspace_write_label_and_integer(form, "COL", cursor_column + 1U);
     workspace_write_label_and_integer(form, "TOP", top_line + 1U);

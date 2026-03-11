@@ -1,0 +1,9 @@
+RecorzKernelClass: #TextEditorWidget superclass: #Object package: 'TextUI' instanceVariableNames: 'view text cursor selection'
+!
+RecorzKernelProtocol: 'drawing'
+!
+redrawOnForm: form
+    Transcript show: 'TEXT EDITOR COMPONENT'.
+    Transcript cr.
+    ^form
+!
