@@ -620,6 +620,14 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             "RECORZ_MVP_METHOD_ENTRY_FORM_FACTORY_FROM_BITS",
         )
 
+    def test_textui_bootstrap_files_keep_ui_policy_out_of_the_primitive_surface(self) -> None:
+        for path in (
+            ROOT / "kernel" / "textui" / "ViewBootstrap.rz",
+            ROOT / "kernel" / "textui" / "WidgetBootstrap.rz",
+        ):
+            source = path.read_text(encoding="utf-8")
+            self.assertNotIn("<primitive:", source)
+
     def test_derives_primitive_binding_ids_from_kernel_sources(self) -> None:
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["displayTextCursorX"], 1)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["displayTextCursorY"], 2)

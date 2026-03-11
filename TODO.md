@@ -88,7 +88,7 @@ Reference:
 - [x] Add image-side layout objects for vertical, horizontal, and split arrangements
 - [x] Add core widgets needed for the first tools:
   label, list, text editor, status area, command surface
-- [ ] Keep event transport and primitive drawing in the VM only
+- [x] Keep event transport and primitive drawing in the VM only
 
 ## Phase 7 - Replace The C Workspace / Browser Renderer
 - [ ] Rebuild the workspace as an image-side editor component
