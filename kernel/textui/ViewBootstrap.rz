@@ -141,15 +141,6 @@ dispatchCommandOnForm: form
     self redrawOnForm: form.
     ^self
 !
-reportState
-    focusIndex = 0 ifTrue: [Transcript show: 'FOCUS: 1'].
-    focusIndex = 1 ifTrue: [Transcript show: 'FOCUS: 2'].
-    Transcript cr.
-    lastCommand = 0 ifTrue: [Transcript show: 'COMMAND: NONE'].
-    lastCommand = 1 ifTrue: [Transcript show: 'COMMAND: SPACE'].
-    Transcript cr.
-    ^self
-!
 RecorzKernelClass: #SplitLayout superclass: #Object package: 'TextUI' instanceVariableNames: 'primaryBounds secondaryBounds'
 !
 setHorizontalBounds: aRectangle offset: anOffset gap: aGap

@@ -177,6 +177,9 @@ drawWorkspaceStatusOnForm: form bounds: fullBounds
 RecorzKernelDoIt:
 KernelInstaller rememberObject: ((KernelInstaller classNamed: 'WorkspaceEditorSurface') new) named: 'BootWorkspaceEditorSurface'.
 !
+RecorzKernelDoIt:
+KernelInstaller rememberObject: ((KernelInstaller classNamed: 'WorkspaceTool') new) named: 'BootWorkspaceTool'.
+!
 RecorzKernelClass: #BrowserSurface superclass: #Object package: 'TextUI' instanceVariableNames: 'listText sourceText titleText statusText'
 !
 drawList: items source: source title: title status: status onForm: form

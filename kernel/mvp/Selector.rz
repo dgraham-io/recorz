@@ -466,7 +466,7 @@ RecorzKernelSelector: #switchFocus order: 231
 !
 RecorzKernelSelector: #dispatchCommandOnForm: order: 232
 !
-RecorzKernelSelector: #reportState order: 233
+RecorzKernelSelector: #printCurrent order: 233
 !
 RecorzKernelSelector: #bounds order: 234
 !

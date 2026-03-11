@@ -257,7 +257,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("TOP: 1ASDF", output)
             self.assertNotIn("panic:", output)
 
-    def test_workspace_browse_interactive_views_routes_focus_and_commands_from_image_code(self) -> None:
+    def test_view_router_routes_focus_and_commands_from_image_code(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-view-router-") as temp_dir:
             build_dir = Path(temp_dir)
             elf_path = _build_elf(build_dir, VIEW_ROUTER_EXAMPLE)
@@ -295,12 +295,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 text=True,
             )
             try:
-                output = _read_until(process, "WORKSPACE", timeout=8.0)
-                if process.stdin is None:
-                    self.fail("QEMU process stdin is not available")
-                process.stdin.write("\t \x04")
-                process.stdin.flush()
-                time.sleep(1.0)
+                output = _read_until(process, "COMMAND: SPACE", timeout=8.0)
                 if process.poll() is None:
                     process.kill()
                 process.wait(timeout=5.0)

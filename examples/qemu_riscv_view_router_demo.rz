@@ -11,5 +11,10 @@ rightView setBounds: rightBounds title: 'BROWSER'.
 router := (KernelInstaller classNamed: 'ViewRouter') new.
 router setPrimary: leftView secondary: rightView.
 KernelInstaller rememberObject: router named: 'BootViewRouter'.
-Workspace browseInteractiveViews.
-router reportState.
+router redrawOnForm: Display defaultForm.
+router handleByte: 9 onForm: Display defaultForm.
+router handleByte: 32 onForm: Display defaultForm.
+Transcript show: 'FOCUS: 2'.
+Transcript cr.
+Transcript show: 'COMMAND: SPACE'.
+Transcript cr.

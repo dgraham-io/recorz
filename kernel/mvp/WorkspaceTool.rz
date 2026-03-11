@@ -1,0 +1,35 @@
+RecorzKernelClass: #WorkspaceTool descriptorOrder: 35 objectKindOrder: 35 sourceBootOrder: 29 instanceVariableNames: ''
+!
+evaluateCurrent
+    <primitive: #workspaceToolEvaluateCurrent>
+!
+printCurrent
+    <primitive: #workspaceToolPrintCurrent>
+!
+acceptCurrent
+    <primitive: #workspaceToolAcceptCurrent>
+!
+revertCurrent
+    <primitive: #workspaceToolRevertCurrent>
+!
+runCurrentTests
+    <primitive: #workspaceToolRunCurrentTests>
+!
+saveAndReopen
+    <primitive: #workspaceToolSaveAndReopen>
+!
+saveRecoverySnapshot
+    <primitive: #workspaceToolSaveRecoverySnapshot>
+!
+emitRegeneratedBootSource
+    <primitive: #workspaceToolEmitRegeneratedBootSource>
+!
+browseRegeneratedKernelSource
+    <primitive: #workspaceToolBrowseRegeneratedKernelSource>
+!
+browseRegeneratedBootSource
+    <primitive: #workspaceToolBrowseRegeneratedBootSource>
+!
+browseRegeneratedFileInSource
+    <primitive: #workspaceToolBrowseRegeneratedFileInSource>
+!
