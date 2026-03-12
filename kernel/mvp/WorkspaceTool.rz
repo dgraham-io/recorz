@@ -1,4 +1,4 @@
-RecorzKernelClass: #WorkspaceTool descriptorOrder: 35 objectKindOrder: 35 sourceBootOrder: 29 instanceVariableNames: ''
+RecorzKernelClass: #WorkspaceTool descriptorOrder: 35 objectKindOrder: 35 sourceBootOrder: 29 instanceVariableNames: 'statusText feedbackText name leftColumn'
 !
 evaluateCurrent
     <primitive: #workspaceToolEvaluateCurrent>
@@ -32,4 +32,10 @@ browseRegeneratedBootSource
 !
 browseRegeneratedFileInSource
     <primitive: #workspaceToolBrowseRegeneratedFileInSource>
+!
+statusText
+    <primitive: #workspaceToolStatusText>
+!
+feedbackText
+    <primitive: #workspaceToolFeedbackText>
 !

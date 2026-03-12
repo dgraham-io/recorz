@@ -9,6 +9,7 @@ void machine_init(const void *fdt);
 void machine_putc(char c);
 uint8_t machine_try_getc(char *out);
 char machine_wait_getc(void);
+void machine_discard_pending_input(void);
 void machine_puts(const char *text);
 void machine_wait_forever(void);
 void machine_shutdown(void);

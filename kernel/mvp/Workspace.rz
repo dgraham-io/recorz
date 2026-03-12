@@ -9,6 +9,18 @@ fileIn: source
 contents
     <primitive: #workspaceContents>
 !
+currentViewKind
+    ^currentViewKind
+!
+setCurrentViewKind: aViewKind
+    <primitive: #workspaceSetCurrentViewKind>
+!
+currentTargetName
+    ^currentTargetName
+!
+setCurrentTargetName: aTargetName
+    <primitive: #workspaceSetCurrentTargetName>
+!
 setContents: source
     <primitive: #workspaceSetContents>
 !
@@ -65,6 +77,21 @@ fileOutClassNamed: className
 !
 fileOutPackageNamed: packageName
     <primitive: #workspaceFileOutPackageNamed>
+!
+packageCount
+    <primitive: #workspacePackageCount>
+!
+packageNameAt: index
+    <primitive: #workspacePackageNameAt>
+!
+packageNamesVisibleFrom: firstIndex count: lineCount
+    <primitive: #workspacePackageNamesVisibleFromCount>
+!
+visibleContentsTop: topLine lines: lineCount columns: columnCount
+    <primitive: #workspaceVisibleContentsTopLinesColumns>
+!
+visibleContentsTop: topLine left: leftColumn lines: lineCount columns: columnCount
+    <primitive: #workspaceVisibleContentsTopLeftLinesColumns>
 !
 rerun
     <primitive: #workspaceRerun>
@@ -132,8 +159,33 @@ editCurrent
 browsePackagesInteractive
     <primitive: #workspaceBrowsePackagesInteractive>
 !
+moveCursorLeft
+    <primitive: #workspaceMoveCursorLeft>
+!
+moveCursorRight
+    <primitive: #workspaceMoveCursorRight>
+!
+moveCursorUp
+    <primitive: #workspaceMoveCursorUp>
+!
+moveCursorDown
+    <primitive: #workspaceMoveCursorDown>
+!
+moveCursorToLineStart
+    <primitive: #workspaceMoveCursorToLineStart>
+!
+moveCursorToLineEnd
+    <primitive: #workspaceMoveCursorToLineEnd>
+!
+insertCodePoint: codePoint
+    <primitive: #workspaceInsertCodePoint>
+!
+deleteBackward
+    <primitive: #workspaceDeleteBackward>
+!
 cursor
     ^WorkspaceCursor
 !
 selection
     ^WorkspaceSelection
+!

@@ -75,7 +75,7 @@
 #define VIRTIO_INPUT_QUEUE_SIZE 32U
 #define KEYBOARD_QUEUE_ALIGNMENT 4096U
 #define KEYBOARD_QUEUE_REGION_SIZE (KEYBOARD_QUEUE_ALIGNMENT * 2U)
-#define KEYBOARD_CHAR_QUEUE_SIZE 128U
+#define KEYBOARD_CHAR_QUEUE_SIZE 512U
 
 #define INPUT_EVENT_TYPE_SYN 0U
 #define INPUT_EVENT_TYPE_KEY 1U
@@ -542,7 +542,24 @@ static void keyboard_enqueue_byte(char ch) {
     keyboard_char_tail = next_tail;
 }
 
+static uint16_t keyboard_available_byte_capacity(void) {
+    if (keyboard_char_tail >= keyboard_char_head) {
+        return (uint16_t)(KEYBOARD_CHAR_QUEUE_SIZE - (keyboard_char_tail - keyboard_char_head) - 1U);
+    }
+    return (uint16_t)(keyboard_char_head - keyboard_char_tail - 1U);
+}
+
 static void keyboard_enqueue_escape_sequence(const char *sequence) {
+    uint16_t length = 0U;
+    const char *cursor = sequence;
+
+    while (*cursor != '\0') {
+        ++length;
+        ++cursor;
+    }
+    if (keyboard_available_byte_capacity() < length) {
+        return;
+    }
     while (*sequence != '\0') {
         keyboard_enqueue_byte(*sequence++);
     }
@@ -736,6 +753,40 @@ static void keyboard_poll_events(void) {
     }
     {
         uint32_t interrupt_status = mmio_read32(keyboard_mmio_base, VIRTIO_MMIO_REGISTER_INTERRUPT_STATUS);
+        if (interrupt_status != 0U) {
+            mmio_write32(keyboard_mmio_base, VIRTIO_MMIO_REGISTER_INTERRUPT_ACK, interrupt_status);
+        }
+    }
+}
+
+static void keyboard_discard_pending_events(void) {
+    uint16_t used_idx;
+
+    if (!keyboard_initialized || keyboard_used == 0) {
+        return;
+    }
+    used_idx = keyboard_used->idx;
+    while (keyboard_used_index != used_idx) {
+        uint16_t used_slot = (uint16_t)(keyboard_used_index % keyboard_queue_size);
+        uint16_t descriptor_index = (uint16_t)keyboard_used->ring[used_slot].id;
+        struct virtio_input_event event = keyboard_events[descriptor_index];
+
+        if (descriptor_index < keyboard_queue_size) {
+            if (event.type == INPUT_EVENT_TYPE_KEY) {
+                if (event.code == KEY_LEFTSHIFT || event.code == KEY_RIGHTSHIFT) {
+                    keyboard_shift_down = keyboard_modifier_is_pressed(event.value);
+                } else if (event.code == KEY_LEFTCTRL || event.code == KEY_RIGHTCTRL) {
+                    keyboard_ctrl_down = keyboard_modifier_is_pressed(event.value);
+                }
+            }
+            keyboard_submit_descriptor(descriptor_index);
+        }
+        keyboard_used_index = (uint16_t)(keyboard_used_index + 1U);
+        used_idx = keyboard_used->idx;
+    }
+    {
+        uint32_t interrupt_status = mmio_read32(keyboard_mmio_base, VIRTIO_MMIO_REGISTER_INTERRUPT_STATUS);
+
         if (interrupt_status != 0U) {
             mmio_write32(keyboard_mmio_base, VIRTIO_MMIO_REGISTER_INTERRUPT_ACK, interrupt_status);
         }
@@ -1082,6 +1133,12 @@ char machine_wait_getc(void) {
     while (!machine_try_getc(&ch)) {
     }
     return ch;
+}
+
+void machine_discard_pending_input(void) {
+    keyboard_char_head = keyboard_char_tail;
+    keyboard_discard_pending_events();
+    keyboard_char_head = keyboard_char_tail;
 }
 
 void machine_puts(const char *text) {

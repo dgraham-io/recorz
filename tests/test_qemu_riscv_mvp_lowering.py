@@ -645,8 +645,15 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             20,
         )
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formWriteStyledText"], 14)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceBrowseInteractiveViews"], 70)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 78)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceSetCurrentViewKind"], 35)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceSetCurrentTargetName"], 36)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspacePackageCount"], 56)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLinesColumns"], 59)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLeftLinesColumns"], 60)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceBrowseInteractiveViews"], 77)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 93)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceToolStatusText"], 115)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceToolFeedbackText"], 116)
         self.assertEqual(
             mvp.PRIMITIVE_BINDING_BY_ENTRY_NAME["RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING"],
             mvp.PRIMITIVE_BINDING_VALUES["formWriteString"],
@@ -976,6 +983,55 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_DRAW_BROWSER_LIST_ON_FORM_BOUNDS", 253),
                 ("RECORZ_MVP_SELECTOR_DRAW_BROWSER_SOURCE_ON_FORM_BOUNDS", 254),
                 ("RECORZ_MVP_SELECTOR_DRAW_BROWSER_STATUS_ON_FORM_BOUNDS", 255),
+                ("RECORZ_MVP_SELECTOR_CURRENT_VIEW_KIND", 256),
+                ("RECORZ_MVP_SELECTOR_SET_CURRENT_VIEW_KIND", 257),
+                ("RECORZ_MVP_SELECTOR_CURRENT_TARGET_NAME", 258),
+                ("RECORZ_MVP_SELECTOR_SET_CURRENT_TARGET_NAME", 259),
+                ("RECORZ_MVP_SELECTOR_PACKAGE_COUNT", 260),
+                ("RECORZ_MVP_SELECTOR_PACKAGE_NAME_AT", 261),
+                ("RECORZ_MVP_SELECTOR_PACKAGE_NAMES_VISIBLE_FROM_COUNT", 262),
+                ("RECORZ_MVP_SELECTOR_MOVE_CURSOR_LEFT", 263),
+                ("RECORZ_MVP_SELECTOR_MOVE_CURSOR_RIGHT", 264),
+                ("RECORZ_MVP_SELECTOR_MOVE_CURSOR_UP", 265),
+                ("RECORZ_MVP_SELECTOR_MOVE_CURSOR_DOWN", 266),
+                ("RECORZ_MVP_SELECTOR_MOVE_CURSOR_TO_LINE_START", 267),
+                ("RECORZ_MVP_SELECTOR_MOVE_CURSOR_TO_LINE_END", 268),
+                ("RECORZ_MVP_SELECTOR_INSERT_CODE_POINT", 269),
+                ("RECORZ_MVP_SELECTOR_DELETE_BACKWARD", 270),
+                ("RECORZ_MVP_SELECTOR_STATUS_TEXT", 271),
+                ("RECORZ_MVP_SELECTOR_FEEDBACK_TEXT", 272),
+                ("RECORZ_MVP_SELECTOR_DRAW_SELECTION_ON_FORM", 273),
+                ("RECORZ_MVP_SELECTOR_OPEN_ON_MODE", 274),
+                ("RECORZ_MVP_SELECTOR_REDRAW_BROWSER_ON_FORM", 275),
+                ("RECORZ_MVP_SELECTOR_REDRAW_EDITOR_ON_FORM", 276),
+                ("RECORZ_MVP_SELECTOR_VISIBLE_EDITOR_LINES", 277),
+                ("RECORZ_MVP_SELECTOR_VISIBLE_LIST_LINES", 278),
+                ("RECORZ_MVP_SELECTOR_MOVE_LIST_SELECTION_BY", 279),
+                ("RECORZ_MVP_SELECTOR_SELECTED_PACKAGE_NAME", 280),
+                ("RECORZ_MVP_SELECTOR_UPDATE_TOOL_STATUS", 281),
+                ("RECORZ_MVP_SELECTOR_CURRENT_STATUS_TEXT", 282),
+                ("RECORZ_MVP_SELECTOR_CURRENT_FEEDBACK_TEXT", 283),
+                ("RECORZ_MVP_SELECTOR_DRAW_VIEW_STATE_ON_FORM", 284),
+                ("RECORZ_MVP_SELECTOR_MOVE_LIST_SELECTION_PAGE_BY", 285),
+                ("RECORZ_MVP_SELECTOR_SOURCE_EDITOR_VIEW_ACTIVE", 286),
+                ("RECORZ_MVP_SELECTOR_SOURCE_EDITOR_STATUS_TEXT", 287),
+                ("RECORZ_MVP_SELECTOR_SCROLL_EDITOR_UP_REMAINING", 288),
+                ("RECORZ_MVP_SELECTOR_SCROLL_EDITOR_DOWN_REMAINING", 289),
+                ("RECORZ_MVP_SELECTOR_SCROLL_EDITOR_PAGE_BY", 290),
+                ("RECORZ_MVP_SELECTOR_HANDLE_ESCAPE_BYTE", 291),
+                ("RECORZ_MVP_SELECTOR_HANDLE_BROWSER_BYTE", 292),
+                ("RECORZ_MVP_SELECTOR_OPEN_SELECTED_PACKAGE_SOURCE", 293),
+                ("RECORZ_MVP_SELECTOR_HANDLE_EDITOR_BYTE_TOOL", 294),
+                ("RECORZ_MVP_SELECTOR_SYNC_EDITOR_CURSOR", 295),
+                ("RECORZ_MVP_SELECTOR_VISIBLE_CONTENTS_TOP_LINES_COLUMNS", 296),
+                ("RECORZ_MVP_SELECTOR_VISIBLE_EDITOR_COLUMNS", 297),
+                ("RECORZ_MVP_SELECTOR_DRAW_EDITOR_CURSOR_ON_FORM", 298),
+                ("RECORZ_MVP_SELECTOR_WORKSPACE_NAME", 299),
+                ("RECORZ_MVP_SELECTOR_SET_WORKSPACE_NAME", 300),
+                ("RECORZ_MVP_SELECTOR_VISIBLE_LEFT_COLUMN", 301),
+                ("RECORZ_MVP_SELECTOR_SET_VISIBLE_LEFT_COLUMN", 302),
+                ("RECORZ_MVP_SELECTOR_VISIBLE_CONTENTS_TOP_LEFT_LINES_COLUMNS", 303),
+                ("RECORZ_MVP_SELECTOR_ENSURE_EDITOR_CURSOR_VISIBLE", 304),
             ],
         )
 
@@ -1041,7 +1097,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_IN_DESCRIPTOR_ORDER[-1],
-            mvp.KernelClassHeader("WorkspaceTool", 35, 35, 29, ()),
+            mvp.KernelClassHeader("WorkspaceTool", 35, 35, 29, ("statusText", "feedbackText", "name", "leftColumn")),
         )
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_BY_NAME["Class"],
@@ -1106,7 +1162,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_BY_NAME["WorkspaceTool"],
-            mvp.KernelClassHeader("WorkspaceTool", 35, 35, 29, ()),
+            mvp.KernelClassHeader("WorkspaceTool", 35, 35, 29, ("statusText", "feedbackText", "name", "leftColumn")),
         )
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["BitBlt"], mvp.SEED_OBJECT_BITBLT)
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["CompiledMethod"], mvp.SEED_OBJECT_COMPILED_METHOD)
@@ -1265,49 +1321,41 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            mvp.METHOD_ENTRY_ORDER[-51:],
+            mvp.METHOD_ENTRY_ORDER[48:76],
             [
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_STYLE_BACKGROUND_COLOR",
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_STYLE_WITH_TEXT",
-                "RECORZ_MVP_METHOD_ENTRY_STYLED_TEXT_TEXT",
-                "RECORZ_MVP_METHOD_ENTRY_STYLED_TEXT_STYLE",
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_LAYOUT_MARGINS",
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_LAYOUT_SCALE",
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_LAYOUT_LINE_SPACING",
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_LAYOUT_FLOW",
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_MARGINS_LEFT",
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_MARGINS_TOP",
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_MARGINS_RIGHT",
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_MARGINS_BOTTOM",
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_FLOW_WRAP_WIDTH",
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_FLOW_TAB_WIDTH",
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_FLOW_LINE_BREAK_MODE",
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_CURSOR_INDEX",
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_CURSOR_LINE",
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_CURSOR_COLUMN",
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_CURSOR_TOP_LINE",
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_SELECTION_START_LINE",
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_SELECTION_START_COLUMN",
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_SELECTION_END_LINE",
-                "RECORZ_MVP_METHOD_ENTRY_TEXT_SELECTION_END_COLUMN",
-                "RECORZ_MVP_METHOD_ENTRY_CURSOR_BE_CURSOR",
-                "RECORZ_MVP_METHOD_ENTRY_CURSOR_BITS",
-                "RECORZ_MVP_METHOD_ENTRY_CURSOR_HOTSPOT_X",
-                "RECORZ_MVP_METHOD_ENTRY_CURSOR_HOTSPOT_Y",
-                "RECORZ_MVP_METHOD_ENTRY_CURSOR_FACTORY_FROM_BITS_HOTSPOT_X_HOTSPOT_Y",
-                "RECORZ_MVP_METHOD_ENTRY_CURSOR_FACTORY_CURRENT",
-                "RECORZ_MVP_METHOD_ENTRY_CURSOR_FACTORY_SHOW_CURSOR",
-                "RECORZ_MVP_METHOD_ENTRY_CURSOR_FACTORY_HIDE_CURSOR",
-                "RECORZ_MVP_METHOD_ENTRY_CURSOR_FACTORY_CURSOR_VISIBLE",
-                "RECORZ_MVP_METHOD_ENTRY_CURSOR_FACTORY_CURSOR_X",
-                "RECORZ_MVP_METHOD_ENTRY_CURSOR_FACTORY_CURSOR_Y",
-                "RECORZ_MVP_METHOD_ENTRY_CURSOR_FACTORY_MOVE_CURSOR_TO_X_Y",
-                "RECORZ_MVP_METHOD_ENTRY_CHARACTER_SCANNER_SCAN_TEXT_INDEX_X_Y_STYLE_ON_FORM_RIGHT_SELECTION_BOUNDARY_CURSOR_BOUNDARY",
-                "RECORZ_MVP_METHOD_ENTRY_CHARACTER_SCANNER_STOP",
-                "RECORZ_MVP_METHOD_ENTRY_CHARACTER_SCANNER_INDEX",
-                "RECORZ_MVP_METHOD_ENTRY_CHARACTER_SCANNER_X",
-                "RECORZ_MVP_METHOD_ENTRY_CHARACTER_SCANNER_Y",
-                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_EVALUATE_CURRENT",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_FILE_IN",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTENTS",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CURRENT_VIEW_KIND",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_SET_CURRENT_VIEW_KIND",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CURRENT_TARGET_NAME",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_SET_CURRENT_TARGET_NAME",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_SET_CONTENTS",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_EVALUATE",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_EVALUATE_CURRENT",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_FILE_IN_CURRENT",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_CLASSES",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_PACKAGES",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_METHODS_FOR_CLASS_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_PACKAGE_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_PROTOCOLS_FOR_CLASS_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_PROTOCOL_OF_CLASS_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_OBJECT_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_CLASS_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_METHOD_OF_CLASS_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_CLASS_METHODS_FOR_CLASS_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_CLASS_PROTOCOLS_FOR_CLASS_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_CLASS_PROTOCOL_OF_CLASS_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_CLASS_METHOD_OF_CLASS_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_FILE_OUT_CLASS_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_FILE_OUT_PACKAGE_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_PACKAGE_COUNT",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_PACKAGE_NAME_AT",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_PACKAGE_NAMES_VISIBLE_FROM_COUNT",
+            ],
+        )
+        self.assertEqual(
+            mvp.METHOD_ENTRY_ORDER[-12:],
+            [
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_PRINT_CURRENT",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_ACCEPT_CURRENT",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_REVERT_CURRENT",
@@ -1318,6 +1366,8 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_BROWSE_REGENERATED_KERNEL_SOURCE",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_BROWSE_REGENERATED_BOOT_SOURCE",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_BROWSE_REGENERATED_FILE_IN_SOURCE",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_STATUS_TEXT",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_FEEDBACK_TEXT",
             ],
         )
 
@@ -2050,7 +2100,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertEqual(len(dynamic_sections.class_seed_objects), 36)
         self.assertEqual(len(dynamic_sections.selector_seed_objects), len(mvp.SELECTOR_VALUE_ORDER))
-        self.assertEqual(len(dynamic_sections.compiled_method_seed_objects), 70)
+        self.assertEqual(len(dynamic_sections.compiled_method_seed_objects), 72)
         self.assertEqual(len(dynamic_sections.method_entry_seed_objects), len(mvp.METHOD_ENTRY_ORDER))
         self.assertEqual(len(dynamic_sections.method_seed_objects), len(mvp.METHOD_ENTRY_ORDER))
         self.assertEqual(

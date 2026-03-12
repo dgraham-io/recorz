@@ -14,9 +14,21 @@ loseFocus
     ^self
 !
 redrawOnForm: form
+    | margins oldLeft oldTop oldRight oldBottom leftMargin topMargin rightMargin bottomMargin |
     view redrawOnForm: form.
-    Display moveTextCursorToX: view bounds left + 12 y: view bounds top + 24.
+    margins := Display layout margins.
+    oldLeft := margins left.
+    oldTop := margins top.
+    oldRight := margins right.
+    oldBottom := margins bottom.
+    leftMargin := view bounds left + 12.
+    topMargin := view bounds top + 12 + (Display font metrics lineHeight * Display layout scale).
+    rightMargin := form width - (view bounds right - 12).
+    bottomMargin := form height - (view bounds bottom - 12).
+    margins left: leftMargin top: topMargin right: rightMargin bottom: bottomMargin.
+    Display moveTextCursorToX: leftMargin y: topMargin.
     form writeString: text.
+    margins left: oldLeft top: oldTop right: oldRight bottom: oldBottom.
     ^form
 !
 RecorzKernelClass: #ListWidget superclass: #Object package: 'TextUI' instanceVariableNames: 'view items selectedIndex topLine'
@@ -37,9 +49,33 @@ loseFocus
     ^self
 !
 redrawOnForm: form
+    | margins oldLeft oldTop oldRight oldBottom leftMargin topMargin rightMargin bottomMargin |
     view redrawOnForm: form.
-    Display moveTextCursorToX: view bounds left + 12 y: view bounds top + 24.
+    margins := Display layout margins.
+    oldLeft := margins left.
+    oldTop := margins top.
+    oldRight := margins right.
+    oldBottom := margins bottom.
+    leftMargin := view bounds left + 12.
+    topMargin := view bounds top + 12 + (Display font metrics lineHeight * Display layout scale).
+    rightMargin := form width - (view bounds right - 12).
+    bottomMargin := form height - (view bounds bottom - 12).
+    margins left: leftMargin top: topMargin right: rightMargin bottom: bottomMargin.
+    Display moveTextCursorToX: leftMargin y: topMargin.
     form writeString: items.
+    self drawSelectionOnForm: form.
+    margins left: oldLeft top: oldTop right: oldRight bottom: oldBottom.
+    ^form
+!
+drawSelectionOnForm: form
+    | row x y width |
+    selectedIndex < 0 ifTrue: [^form].
+    row := selectedIndex - topLine.
+    row < 0 ifTrue: [^form].
+    x := view bounds left + 12.
+    y := view bounds top + 12 + (((row + 2) * Display font metrics lineHeight * Display layout scale) - 2).
+    width := view bounds width - 24.
+    BitBlt drawLineOnForm: form fromX: x fromY: y toX: x + width toY: y color: 11393254.
     ^form
 !
 RecorzKernelClass: #TextEditorWidget superclass: #Object package: 'TextUI' instanceVariableNames: 'view text cursor selection'
@@ -60,10 +96,28 @@ loseFocus
     ^self
 !
 redrawOnForm: form
+    | margins oldLeft oldTop oldRight oldBottom leftMargin topMargin rightMargin bottomMargin visibleLines renderer lineHeight cellHeight usable |
     view redrawOnForm: form.
-    Display moveTextCursorToX: view bounds left + 12 y: view bounds top + 24.
-    form writeString: text.
-    self drawCursorOnForm: form.
+    margins := Display layout margins.
+    oldLeft := margins left.
+    oldTop := margins top.
+    oldRight := margins right.
+    oldBottom := margins bottom.
+    leftMargin := view bounds left + 12.
+    topMargin := view bounds top + 12 + (Display font metrics lineHeight * Display layout scale).
+    rightMargin := form width - (view bounds right - 12).
+    bottomMargin := form height - (view bounds bottom - 12).
+    margins left: leftMargin top: topMargin right: rightMargin bottom: bottomMargin.
+    Display moveTextCursorToX: leftMargin y: topMargin.
+    lineHeight := Display font metrics lineHeight * Display layout scale.
+    cellHeight := Display font metrics cellHeight * Display layout scale.
+    visibleLines := 0.
+    usable := view bounds height - 24 - cellHeight - 1.
+    usable > 0 ifTrue: [
+        lineHeight > 0 ifTrue: [visibleLines := usable / lineHeight]].
+    renderer := KernelInstaller objectNamed: 'BootInputMonitorRenderer'.
+    renderer drawSource: text onForm: form visible: visibleLines.
+    margins left: oldLeft top: oldTop right: oldRight bottom: oldBottom.
     ^form
 !
 drawCursorOnForm: form
@@ -72,12 +126,12 @@ drawCursorOnForm: form
         selection endColumn > selection startColumn ifTrue: [
             selectionStartX := view bounds left + 12 + (selection startColumn * Display font metrics cellWidth * Display layout scale).
             selectionEndX := view bounds left + 12 + (selection endColumn * Display font metrics cellWidth * Display layout scale) - 1.
-            selectionY := view bounds top + 24 + ((selection startLine - cursor topLine + 1) * Display font metrics lineHeight * Display layout scale) - 2.
+            selectionY := view bounds top + 12 + (((selection startLine - cursor topLine) + 2) * Display font metrics lineHeight * Display layout scale) - 2.
             BitBlt drawLineOnForm: form fromX: selectionStartX fromY: selectionY toX: selectionEndX toY: selectionY color: 11393254
         ]
     ].
     x := view bounds left + 12 + (cursor column * Display font metrics cellWidth * Display layout scale).
-    y := view bounds top + 24 + (cursor line * Display font metrics lineHeight * Display layout scale).
+    y := view bounds top + 12 + (Display font metrics lineHeight * Display layout scale) + ((cursor line - cursor topLine) * Display font metrics lineHeight * Display layout scale).
     height := (Display font metrics lineHeight * Display layout scale) - 1.
     BitBlt drawLineOnForm: form fromX: x fromY: y toX: x toY: y + height color: 11393254.
     ^form
@@ -99,12 +153,25 @@ loseFocus
     ^self
 !
 redrawOnForm: form
+    | margins oldLeft oldTop oldRight oldBottom leftMargin topMargin rightMargin bottomMargin secondLineTop |
     view redrawOnForm: form.
-    Display moveTextCursorToX: view bounds left + 12 y: view bounds top + 24.
+    margins := Display layout margins.
+    oldLeft := margins left.
+    oldTop := margins top.
+    oldRight := margins right.
+    oldBottom := margins bottom.
+    leftMargin := view bounds left + 12.
+    topMargin := view bounds top + 12 + (Display font metrics lineHeight * Display layout scale).
+    rightMargin := form width - (view bounds right - 12).
+    bottomMargin := form height - (view bounds bottom - 12).
+    margins left: leftMargin top: topMargin right: rightMargin bottom: bottomMargin.
+    Display moveTextCursorToX: leftMargin y: topMargin.
     form writeString: 'STATUS: '.
     form writeString: status.
-    form newline.
+    secondLineTop := topMargin + (Display font metrics lineHeight * Display layout scale).
+    Display moveTextCursorToX: leftMargin y: secondLineTop.
     form writeString: feedback.
+    margins left: oldLeft top: oldTop right: oldRight bottom: oldBottom.
     ^form
 !
 RecorzKernelClass: #CommandSurfaceWidget superclass: #Object package: 'TextUI' instanceVariableNames: 'view commands selectedIndex'
@@ -124,41 +191,48 @@ loseFocus
     ^self
 !
 redrawOnForm: form
+    | margins oldLeft oldTop oldRight oldBottom leftMargin topMargin rightMargin bottomMargin |
     view redrawOnForm: form.
-    Display moveTextCursorToX: view bounds left + 12 y: view bounds top + 24.
+    margins := Display layout margins.
+    oldLeft := margins left.
+    oldTop := margins top.
+    oldRight := margins right.
+    oldBottom := margins bottom.
+    leftMargin := view bounds left + 12.
+    topMargin := view bounds top + 12 + (Display font metrics lineHeight * Display layout scale).
+    rightMargin := form width - (view bounds right - 12).
+    bottomMargin := form height - (view bounds bottom - 12).
+    margins left: leftMargin top: topMargin right: rightMargin bottom: bottomMargin.
+    Display moveTextCursorToX: leftMargin y: topMargin.
     form writeString: commands.
+    margins left: oldLeft top: oldTop right: oldRight bottom: oldBottom.
     ^form
 !
 RecorzKernelClass: #WorkspaceEditorSurface superclass: #Object package: 'TextUI' instanceVariableNames: 'sourceText statusText feedbackText'
 !
 drawSource: source status: status feedback: feedback onForm: form
-    | headerWidget sourceWidget statusWidget |
+    | headerWidget |
     sourceText := source.
     statusText := status.
     feedbackText := feedback.
     Display clear.
-    headerWidget := (KernelInstaller classNamed: 'LabelWidget') new.
+    headerWidget := KernelInstaller objectNamed: 'BootWorkspaceHeaderWidget'.
     headerWidget setView: (KernelInstaller objectNamed: 'BootWorkspaceHeaderView') text: 'RECORZ WORKSPACE EDITOR'.
     headerWidget redrawOnForm: form.
-    sourceWidget := (KernelInstaller classNamed: 'TextEditorWidget') new.
-    sourceWidget setView: (KernelInstaller objectNamed: 'BootWorkspaceSourceView') text: sourceText cursor: Workspace cursor selection: Workspace selection.
-    sourceWidget takeFocus.
-    sourceWidget redrawOnForm: form.
-    statusWidget := (KernelInstaller classNamed: 'StatusAreaWidget') new.
-    statusWidget setView: (KernelInstaller objectNamed: 'BootWorkspaceStatusView') status: statusText feedback: feedbackText.
-    statusWidget redrawOnForm: form.
+    self drawWorkspaceContentOnForm: form bounds: nil.
+    self drawWorkspaceStatusOnForm: form bounds: nil.
     ^form
 !
 drawWorkspaceContentOnForm: form bounds: fullBounds
     | sourceWidget |
-    sourceWidget := (KernelInstaller classNamed: 'TextEditorWidget') new.
+    sourceWidget := KernelInstaller objectNamed: 'BootWorkspaceSourceWidget'.
     sourceWidget setView: (KernelInstaller objectNamed: 'BootWorkspaceSourceView') text: sourceText cursor: Workspace cursor selection: Workspace selection.
     sourceWidget takeFocus.
     ^sourceWidget redrawOnForm: form
 !
 drawWorkspaceStatusOnForm: form bounds: fullBounds
     | statusWidget |
-    statusWidget := (KernelInstaller classNamed: 'StatusAreaWidget') new.
+    statusWidget := KernelInstaller objectNamed: 'BootWorkspaceStatusWidget'.
     statusWidget setView: (KernelInstaller objectNamed: 'BootWorkspaceStatusView') status: statusText feedback: feedbackText.
     ^statusWidget redrawOnForm: form
 !
@@ -187,50 +261,98 @@ view setBounds: rect title: 'STATUS'.
 KernelInstaller rememberObject: view named: 'BootWorkspaceStatusView'.
 !
 RecorzKernelDoIt:
+| widget |
+widget := (KernelInstaller classNamed: 'LabelWidget') new.
+widget setView: (KernelInstaller objectNamed: 'BootWorkspaceHeaderView') text: 'RECORZ WORKSPACE EDITOR'.
+KernelInstaller rememberObject: widget named: 'BootWorkspaceHeaderWidget'.
+!
+RecorzKernelDoIt:
+| widget |
+widget := (KernelInstaller classNamed: 'TextEditorWidget') new.
+widget setView: (KernelInstaller objectNamed: 'BootWorkspaceSourceView') text: '' cursor: Workspace cursor selection: Workspace selection.
+widget takeFocus.
+KernelInstaller rememberObject: widget named: 'BootWorkspaceSourceWidget'.
+!
+RecorzKernelDoIt:
+| widget |
+widget := (KernelInstaller classNamed: 'CommandSurfaceWidget') new.
+widget setView: (KernelInstaller objectNamed: 'BootWorkspaceSourceView') commands: '' selectedIndex: -1.
+widget takeFocus.
+KernelInstaller rememberObject: widget named: 'BootWorkspaceViewportWidget'.
+!
+RecorzKernelDoIt:
+| widget |
+widget := (KernelInstaller classNamed: 'StatusAreaWidget') new.
+widget setView: (KernelInstaller objectNamed: 'BootWorkspaceStatusView') status: '' feedback: ''.
+KernelInstaller rememberObject: widget named: 'BootWorkspaceStatusWidget'.
+!
+RecorzKernelDoIt:
 KernelInstaller rememberObject: ((KernelInstaller classNamed: 'WorkspaceEditorSurface') new) named: 'BootWorkspaceEditorSurface'.
 !
 RecorzKernelDoIt:
-KernelInstaller rememberObject: ((KernelInstaller classNamed: 'WorkspaceTool') new) named: 'BootWorkspaceTool'.
+| tool |
+tool := (KernelInstaller classNamed: 'WorkspaceTool') new.
+KernelInstaller rememberObject: tool named: 'BootWorkspaceTool'.
+!
+RecorzKernelClass: #WorkspaceTool descriptorOrder: 35 objectKindOrder: 35 sourceBootOrder: 29 instanceVariableNames: 'statusText feedbackText name leftColumn'
+!
+workspaceName
+    ^name
+!
+setWorkspaceName: aWorkspaceName
+    name := aWorkspaceName.
+    ^name
+!
+visibleLeftColumn
+    leftColumn = nil ifTrue: [leftColumn := 0].
+    ^leftColumn
+!
+setVisibleLeftColumn: aColumn
+    leftColumn := aColumn.
+    ^leftColumn
+!
+RecorzKernelDoIt:
+| tool |
+tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+tool setWorkspaceName: 'Workspace'.
+tool setVisibleLeftColumn: 0.
 !
 RecorzKernelClass: #BrowserSurface superclass: #Object package: 'TextUI' instanceVariableNames: 'listText sourceText titleText statusText'
 !
 drawList: items source: source title: title status: status onForm: form
-    | fullBounds |
     Display clear.
     listText := items.
     sourceText := source.
     titleText := title.
     statusText := status.
-    fullBounds := (KernelInstaller classNamed: 'Rectangle') new.
-    fullBounds setLeft: 40 top: 60 width: 920 height: 620.
-    self drawBrowserHeaderTitle: title onForm: form bounds: fullBounds.
-    self drawBrowserListOnForm: form bounds: fullBounds.
-    self drawBrowserSourceOnForm: form bounds: fullBounds.
-    self drawBrowserStatusOnForm: form bounds: fullBounds.
+    self drawBrowserHeaderTitle: title onForm: form bounds: nil.
+    self drawBrowserListOnForm: form bounds: nil.
+    self drawBrowserSourceOnForm: form bounds: nil.
+    self drawBrowserStatusOnForm: form bounds: nil.
     ^form
 !
 drawBrowserHeaderTitle: title onForm: form bounds: fullBounds
     | headerWidget |
-    headerWidget := (KernelInstaller classNamed: 'LabelWidget') new.
+    headerWidget := KernelInstaller objectNamed: 'BootBrowserHeaderWidget'.
     headerWidget setView: (KernelInstaller objectNamed: 'BootBrowserHeaderView') text: titleText.
     ^headerWidget redrawOnForm: form
 !
 drawBrowserListOnForm: form bounds: fullBounds
     | listWidget |
-    listWidget := (KernelInstaller classNamed: 'ListWidget') new.
-    listWidget setView: (KernelInstaller objectNamed: 'BootBrowserListView') items: listText selectedIndex: 0 topLine: 0.
+    listWidget := KernelInstaller objectNamed: 'BootBrowserListWidget'.
+    listWidget setView: (KernelInstaller objectNamed: 'BootBrowserListView') items: listText selectedIndex: -1 topLine: 0.
     listWidget takeFocus.
     ^listWidget redrawOnForm: form
 !
 drawBrowserSourceOnForm: form bounds: fullBounds
     | sourceWidget |
-    sourceWidget := (KernelInstaller classNamed: 'TextEditorWidget') new.
+    sourceWidget := KernelInstaller objectNamed: 'BootBrowserSourceWidget'.
     sourceWidget setView: (KernelInstaller objectNamed: 'BootBrowserSourceView') text: sourceText cursor: Workspace cursor selection: Workspace selection.
     ^sourceWidget redrawOnForm: form
 !
 drawBrowserStatusOnForm: form bounds: fullBounds
     | statusWidget |
-    statusWidget := (KernelInstaller classNamed: 'StatusAreaWidget') new.
+    statusWidget := KernelInstaller objectNamed: 'BootBrowserStatusWidget'.
     statusWidget setView: (KernelInstaller objectNamed: 'BootBrowserStatusView') status: statusText feedback: 'LIST FOCUS ACTIVE'.
     ^statusWidget redrawOnForm: form
 !
@@ -267,5 +389,399 @@ view setBounds: rect title: 'STATUS'.
 KernelInstaller rememberObject: view named: 'BootBrowserStatusView'.
 !
 RecorzKernelDoIt:
+| widget |
+widget := (KernelInstaller classNamed: 'LabelWidget') new.
+widget setView: (KernelInstaller objectNamed: 'BootBrowserHeaderView') text: ''.
+KernelInstaller rememberObject: widget named: 'BootBrowserHeaderWidget'.
+!
+RecorzKernelDoIt:
+| widget |
+widget := (KernelInstaller classNamed: 'ListWidget') new.
+widget setView: (KernelInstaller objectNamed: 'BootBrowserListView') items: '' selectedIndex: -1 topLine: 0.
+widget takeFocus.
+KernelInstaller rememberObject: widget named: 'BootBrowserListWidget'.
+!
+RecorzKernelDoIt:
+| widget |
+widget := (KernelInstaller classNamed: 'TextEditorWidget') new.
+widget setView: (KernelInstaller objectNamed: 'BootBrowserSourceView') text: '' cursor: Workspace cursor selection: Workspace selection.
+KernelInstaller rememberObject: widget named: 'BootBrowserSourceWidget'.
+!
+RecorzKernelDoIt:
+| widget |
+widget := (KernelInstaller classNamed: 'StatusAreaWidget') new.
+widget setView: (KernelInstaller objectNamed: 'BootBrowserStatusView') status: '' feedback: 'LIST FOCUS ACTIVE'.
+KernelInstaller rememberObject: widget named: 'BootBrowserStatusWidget'.
+!
+RecorzKernelDoIt:
 KernelInstaller rememberObject: ((KernelInstaller classNamed: 'BrowserSurface') new) named: 'BootBrowserSurface'.
+!
+RecorzKernelClass: #WorkspaceSession superclass: #Object package: 'TextUI' instanceVariableNames: 'workspace selected listTop escape'
+!
+openOn: aWorkspace mode: aMode
+    | count tool |
+    workspace := aWorkspace.
+    escape := 0.
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    aMode = 0 ifTrue: [
+        selected = nil ifTrue: [selected := 0].
+        listTop = nil ifTrue: [listTop := 0].
+        count := workspace packageCount.
+        count = 0 ifTrue: [selected := 0].
+        count > 0 ifTrue: [
+            selected < 0 ifTrue: [selected := 0].
+            selected > (count - 1) ifTrue: [selected := count - 1]].
+        listTop < 0 ifTrue: [listTop := 0].
+        workspace setCurrentViewKind: 14.
+        workspace setCurrentTargetName: nil.
+        Workspace selection collapseToLine: 0 column: 0.
+        Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: 0.
+        tool setVisibleLeftColumn: 0.
+        ^4].
+    workspace currentViewKind = nil ifTrue: [workspace setCurrentViewKind: 18].
+    self ensureEditorCursorVisible.
+    ^1
+!
+redrawOnForm: form
+    workspace currentViewKind = 14 ifTrue: [^self redrawBrowserOnForm: form].
+    ^self redrawEditorOnForm: form
+!
+redrawBrowserOnForm: form
+    | headerWidget listWidget sourceWidget statusWidget visibleLines items headerView listView sourceView statusView statusText feedbackText |
+    visibleLines := self visibleListLines.
+    items := workspace packageNamesVisibleFrom: listTop + 1 count: visibleLines.
+    Display clear.
+    headerView := KernelInstaller objectNamed: 'BootBrowserHeaderView'.
+    listView := KernelInstaller objectNamed: 'BootBrowserListView'.
+    sourceView := KernelInstaller objectNamed: 'BootBrowserSourceView'.
+    statusView := KernelInstaller objectNamed: 'BootBrowserStatusView'.
+    headerView invalidate.
+    listView invalidate.
+    sourceView invalidate.
+    statusView invalidate.
+    headerWidget := KernelInstaller objectNamed: 'BootBrowserHeaderWidget'.
+    headerWidget setView: headerView text: 'PACKAGES'.
+    headerWidget redrawOnForm: form.
+    listWidget := KernelInstaller objectNamed: 'BootBrowserListWidget'.
+    listWidget setView: listView items: items selectedIndex: selected - listTop topLine: 0.
+    listWidget takeFocus.
+    listWidget redrawOnForm: form.
+    sourceWidget := KernelInstaller objectNamed: 'BootBrowserSourceWidget'.
+    sourceWidget setView: sourceView text: 'Arrows move. Ctrl-B/Ctrl-V and PgUp/PgDn page. Enter or Ctrl-X opens source.' cursor: Workspace cursor selection: Workspace selection.
+    sourceWidget redrawOnForm: form.
+    statusWidget := KernelInstaller objectNamed: 'BootBrowserStatusWidget'.
+    statusText := self currentStatusText.
+    feedbackText := self currentFeedbackText.
+    statusWidget setView: statusView status: statusText feedback: feedbackText.
+    ^statusWidget redrawOnForm: form
+!
+redrawEditorOnForm: form
+    | headerWidget sourceView statusWidget statusView headerView |
+    Display clear.
+    headerView := KernelInstaller objectNamed: 'BootWorkspaceHeaderView'.
+    sourceView := KernelInstaller objectNamed: 'BootWorkspaceSourceView'.
+    statusView := KernelInstaller objectNamed: 'BootWorkspaceStatusView'.
+    headerView invalidate.
+    sourceView invalidate.
+    statusView invalidate.
+    headerWidget := KernelInstaller objectNamed: 'BootWorkspaceHeaderWidget'.
+    headerWidget setView: headerView text: 'RECORZ WORKSPACE EDITOR'.
+    headerWidget redrawOnForm: form.
+    sourceView takeFocus.
+    sourceView redrawOnForm: form.
+    statusWidget := KernelInstaller objectNamed: 'BootWorkspaceStatusWidget'.
+    statusWidget setView: statusView status: self currentStatusText feedback: self currentFeedbackText.
+    statusWidget redrawOnForm: form.
+    ^self drawEditorCursorOnForm: form
+!
+visibleEditorLines
+    | view lineHeight cellHeight usable |
+    view := KernelInstaller objectNamed: 'BootWorkspaceSourceView'.
+    lineHeight := Display font metrics lineHeight * Display layout scale.
+    cellHeight := Display font metrics cellHeight * Display layout scale.
+    usable := view bounds height - 24 - cellHeight - 1.
+    usable < 1 ifTrue: [^0].
+    lineHeight < 1 ifTrue: [^0].
+    ^usable / lineHeight
+!
+visibleEditorColumns
+    | view cellWidth usable |
+    view := KernelInstaller objectNamed: 'BootWorkspaceSourceView'.
+    cellWidth := Display font metrics cellWidth * Display layout scale.
+    usable := view bounds width - 24.
+    usable < 1 ifTrue: [^0].
+    cellWidth < 1 ifTrue: [^0].
+    ^usable / cellWidth
+!
+visibleListLines
+    | view lineHeight cellHeight usable |
+    view := KernelInstaller objectNamed: 'BootBrowserListView'.
+    lineHeight := Display font metrics lineHeight * Display layout scale.
+    cellHeight := Display font metrics cellHeight * Display layout scale.
+    usable := view bounds height - 24 - cellHeight - 1.
+    usable < 1 ifTrue: [^0].
+    lineHeight < 1 ifTrue: [^0].
+    ^usable / lineHeight
+!
+moveListSelectionBy: delta
+    | visibleLines nextIndex count |
+    count := workspace packageCount.
+    count = 0 ifTrue: [^5].
+    nextIndex := selected + delta.
+    nextIndex < 0 ifTrue: [nextIndex := 0].
+    nextIndex > (count - 1) ifTrue: [nextIndex := count - 1].
+    selected := nextIndex.
+    visibleLines := self visibleListLines.
+    selected < listTop ifTrue: [listTop := selected].
+    visibleLines > 0 ifTrue: [
+        selected > (listTop + visibleLines - 1) ifTrue: [
+            listTop := selected - visibleLines + 1]].
+    listTop < 0 ifTrue: [listTop := 0].
+    ^5
+!
+moveListSelectionPageBy: delta
+    | step |
+    step := self visibleListLines.
+    step = 0 ifTrue: [step := 1].
+    step = 1 ifFalse: [step := step - 1].
+    ^self moveListSelectionBy: delta * step
+!
+selectedPackageName
+    workspace packageCount = 0 ifTrue: [^''].
+    ^workspace packageNameAt: selected + 1
+!
+updateToolStatus
+    ^self
+!
+sourceEditorViewActive
+    workspace currentViewKind = 5 ifTrue: [^true].
+    workspace currentViewKind = 7 ifTrue: [^true].
+    workspace currentViewKind = 8 ifTrue: [^true].
+    workspace currentViewKind = 13 ifTrue: [^true].
+    workspace currentViewKind = 16 ifTrue: [^true].
+    workspace currentViewKind = 17 ifTrue: [^true].
+    workspace currentViewKind = 19 ifTrue: [^true].
+    ^false
+!
+sourceEditorStatusText
+    workspace currentViewKind = 5 ifTrue: [^'METHOD SOURCE :: SOURCE EDITOR READY'].
+    workspace currentViewKind = 7 ifTrue: [^'CLASS METHOD :: SOURCE EDITOR READY'].
+    workspace currentViewKind = 8 ifTrue: [^'CLASS SOURCE :: SOURCE EDITOR READY'].
+    workspace currentViewKind = 13 ifTrue: [^'PACKAGE SOURCE :: SOURCE EDITOR READY'].
+    workspace currentViewKind = 16 ifTrue: [^'REGENERATED SOURCE :: SOURCE EDITOR READY'].
+    workspace currentViewKind = 17 ifTrue: [^'REGENERATED SOURCE :: SOURCE EDITOR READY'].
+    workspace currentViewKind = 19 ifTrue: [^'REGENERATED SOURCE :: SOURCE EDITOR READY'].
+    ^'WORKSPACE :: READY'
+!
+currentStatusText
+    | tool viewKind |
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    tool statusText size > 0 ifTrue: [^tool statusText].
+    viewKind := workspace currentViewKind.
+    viewKind = 14 ifTrue: [^'INTERACTIVE PACKAGE LIST'].
+    viewKind = 5 ifTrue: [^'METHOD SOURCE :: SOURCE EDITOR READY'].
+    viewKind = 7 ifTrue: [^'CLASS METHOD :: SOURCE EDITOR READY'].
+    viewKind = 8 ifTrue: [^'CLASS SOURCE :: SOURCE EDITOR READY'].
+    viewKind = 13 ifTrue: [^'PACKAGE SOURCE :: SOURCE EDITOR READY'].
+    viewKind = 16 ifTrue: [^'REGENERATED SOURCE :: SOURCE EDITOR READY'].
+    viewKind = 17 ifTrue: [^'REGENERATED SOURCE :: SOURCE EDITOR READY'].
+    viewKind = 19 ifTrue: [^'REGENERATED SOURCE :: SOURCE EDITOR READY'].
+    ^'WORKSPACE :: READY'
+!
+currentFeedbackText
+    | tool viewKind |
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    tool feedbackText size > 0 ifTrue: [^tool feedbackText].
+    viewKind := workspace currentViewKind.
+    viewKind = 14 ifTrue: [^'N/P MOVE  B/V PAGE  X OPEN  O CLOSE'].
+    viewKind = 5 ifTrue: [^'B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
+    viewKind = 7 ifTrue: [^'B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
+    viewKind = 8 ifTrue: [^'B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
+    viewKind = 13 ifTrue: [^'B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
+    viewKind = 16 ifTrue: [^'B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
+    viewKind = 17 ifTrue: [^'B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
+    viewKind = 19 ifTrue: [^'B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
+    ^'D DOIT  P PRINT  T TEST  W SAVE'
+!
+scrollEditorUpRemaining: remaining
+    remaining = 0 ifTrue: [^self].
+    workspace moveCursorUp.
+    ^self scrollEditorUpRemaining: remaining - 1
+!
+scrollEditorDownRemaining: remaining
+    remaining = 0 ifTrue: [^self].
+    workspace moveCursorDown.
+    ^self scrollEditorDownRemaining: remaining - 1
+!
+scrollEditorPageBy: delta
+    | step cursor oldTop oldRow newTop |
+    step := self visibleEditorLines.
+    step = 0 ifTrue: [step := 1].
+    step = 1 ifFalse: [step := step - 1].
+    cursor := Workspace cursor.
+    oldTop := cursor topLine.
+    oldRow := cursor line - oldTop.
+    delta < 0 ifTrue: [self scrollEditorUpRemaining: step].
+    delta < 0 ifFalse: [self scrollEditorDownRemaining: step].
+    cursor := Workspace cursor.
+    newTop := oldTop + (delta * step).
+    newTop < 0 ifTrue: [newTop := 0].
+    cursor line < (newTop + oldRow) ifTrue: [newTop := cursor line - oldRow].
+    newTop < 0 ifTrue: [newTop := 0].
+    Workspace cursor moveToIndex: cursor index line: cursor line column: cursor column topLine: newTop.
+    Workspace selection collapseToLine: cursor line column: cursor column.
+    ^2
+!
+handleByte: aByte onForm: form
+    | tool |
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    escape = 0 ifFalse: [^self handleEscapeByte: aByte].
+    aByte = 27 ifTrue: [escape := 1. ^0].
+    workspace currentViewKind = 14 ifTrue: [^self handleBrowserByte: aByte].
+    ^self handleEditorByte: aByte tool: tool
+!
+handleEscapeByte: aByte
+    escape = 3 ifTrue: [
+        escape := 0.
+        aByte = 126 ifTrue: [
+            workspace currentViewKind = 14 ifTrue: [^self moveListSelectionPageBy: -1].
+            ^self scrollEditorPageBy: -1].
+        ^0].
+    escape = 4 ifTrue: [
+        escape := 0.
+        aByte = 126 ifTrue: [
+            workspace currentViewKind = 14 ifTrue: [^self moveListSelectionPageBy: 1].
+            ^self scrollEditorPageBy: 1].
+        ^0].
+    escape = 1 ifTrue: [
+        aByte = 91 ifTrue: [escape := 2. ^0].
+        escape := 0.
+        ^0].
+    aByte = 53 ifTrue: [escape := 3. ^0].
+    aByte = 54 ifTrue: [escape := 4. ^0].
+    escape := 0.
+    workspace currentViewKind = 14 ifTrue: [
+        aByte = 65 ifTrue: [^self moveListSelectionBy: -1].
+        aByte = 66 ifTrue: [^self moveListSelectionBy: 1].
+        ^0].
+    aByte = 65 ifTrue: [workspace moveCursorUp. self ensureEditorCursorVisible. ^6].
+    aByte = 66 ifTrue: [workspace moveCursorDown. self ensureEditorCursorVisible. ^6].
+    aByte = 67 ifTrue: [workspace moveCursorRight. self ensureEditorCursorVisible. ^6].
+    aByte = 68 ifTrue: [workspace moveCursorLeft. self ensureEditorCursorVisible. ^6].
+    aByte = 72 ifTrue: [workspace moveCursorToLineStart. self ensureEditorCursorVisible. ^6].
+    aByte = 70 ifTrue: [workspace moveCursorToLineEnd. self ensureEditorCursorVisible. ^6].
+    ^0
+!
+handleBrowserByte: aByte
+    aByte = 14 ifTrue: [^self moveListSelectionBy: 1].
+    aByte = 16 ifTrue: [^self moveListSelectionBy: -1].
+    aByte = 2 ifTrue: [^self moveListSelectionPageBy: -1].
+    aByte = 22 ifTrue: [^self moveListSelectionPageBy: 1].
+    aByte = 13 ifTrue: [^self openSelectedPackageSource].
+    aByte = 24 ifTrue: [^self openSelectedPackageSource].
+    aByte = 15 ifTrue: [^9].
+    aByte = 4 ifTrue: [^9].
+    ^0
+!
+openSelectedPackageSource
+    | packageName source tool |
+    workspace packageCount = 0 ifTrue: [^4].
+    packageName := self selectedPackageName.
+    source := KernelInstaller fileOutPackageNamed: packageName.
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    workspace setContents: source.
+    workspace setCurrentViewKind: 13.
+    workspace setCurrentTargetName: packageName.
+    Workspace selection collapseToLine: 0 column: 0.
+    Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: 0.
+    tool setVisibleLeftColumn: 0.
+    ^1
+!
+handleEditorByte: aByte tool: tool
+    | viewKind |
+    aByte = 2 ifTrue: [^self scrollEditorPageBy: -1].
+    aByte = 1 ifTrue: [workspace moveCursorToLineStart. self ensureEditorCursorVisible. ^6].
+    aByte = 5 ifTrue: [workspace moveCursorToLineEnd. self ensureEditorCursorVisible. ^6].
+    aByte = 8 ifTrue: [workspace deleteBackward. self ensureEditorCursorVisible. ^2].
+    aByte = 22 ifTrue: [^self scrollEditorPageBy: 1].
+    aByte = 127 ifTrue: [workspace deleteBackward. self ensureEditorCursorVisible. ^2].
+    aByte = 24 ifTrue: [tool acceptCurrent. ^1].
+    aByte = 25 ifTrue: [tool revertCurrent. ^1].
+    aByte = 20 ifTrue: [tool runCurrentTests. ^1].
+    aByte = 16 ifTrue: [tool printCurrent. ^1].
+    aByte = 4 ifTrue: [tool evaluateCurrent. ^1].
+    aByte = 18 ifTrue: [tool evaluateCurrent. ^1].
+    aByte = 23 ifTrue: [tool saveAndReopen. ^9].
+    aByte = 11 ifTrue: [tool saveRecoverySnapshot. ^9].
+    aByte = 15 ifTrue: [
+        viewKind := workspace currentViewKind.
+        viewKind = 5 ifTrue: [workspace setCurrentViewKind: 14. workspace setCurrentTargetName: nil. ^4].
+        viewKind = 7 ifTrue: [workspace setCurrentViewKind: 14. workspace setCurrentTargetName: nil. ^4].
+        viewKind = 8 ifTrue: [workspace setCurrentViewKind: 14. workspace setCurrentTargetName: nil. ^4].
+        viewKind = 13 ifTrue: [workspace setCurrentViewKind: 14. workspace setCurrentTargetName: nil. ^4].
+        viewKind = 16 ifTrue: [workspace setCurrentViewKind: 14. workspace setCurrentTargetName: nil. ^4].
+        viewKind = 17 ifTrue: [workspace setCurrentViewKind: 14. workspace setCurrentTargetName: nil. ^4].
+        viewKind = 19 ifTrue: [workspace setCurrentViewKind: 14. workspace setCurrentTargetName: nil. ^4].
+        ^9].
+    aByte = 10 ifTrue: [workspace insertCodePoint: 10. self ensureEditorCursorVisible. ^2].
+    aByte = 13 ifTrue: [workspace insertCodePoint: 10. self ensureEditorCursorVisible. ^2].
+    aByte < 32 ifTrue: [^0].
+    aByte > 126 ifTrue: [^0].
+    workspace insertCodePoint: aByte.
+    self ensureEditorCursorVisible.
+    ^2
+!
+ensureEditorCursorVisible
+    | cursor visibleLines visibleColumns tool topLine leftColumn |
+    cursor := Workspace cursor.
+    visibleLines := self visibleEditorLines.
+    visibleColumns := self visibleEditorColumns.
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    topLine := cursor topLine.
+    cursor line < topLine ifTrue: [topLine := cursor line].
+    visibleLines > 0 ifTrue: [
+        cursor line > (topLine + visibleLines - 1) ifTrue: [
+            topLine := cursor line - visibleLines + 1]].
+    leftColumn := tool visibleLeftColumn.
+    cursor column < leftColumn ifTrue: [leftColumn := cursor column].
+    visibleColumns > 0 ifTrue: [
+        cursor column > (leftColumn + visibleColumns - 1) ifTrue: [
+            leftColumn := cursor column - visibleColumns + 1]].
+    topLine < 0 ifTrue: [topLine := 0].
+    leftColumn < 0 ifTrue: [leftColumn := 0].
+    Workspace cursor moveToIndex: cursor index line: cursor line column: cursor column topLine: topLine.
+    Workspace selection collapseToLine: cursor line column: cursor column.
+    tool setVisibleLeftColumn: leftColumn.
+    ^self
+!
+syncEditorCursor
+    | renderer visibleLines |
+    renderer := KernelInstaller objectNamed: 'BootInputMonitorRenderer'.
+    visibleLines := self visibleEditorLines.
+    renderer syncCursorText: workspace contents index: Workspace cursor index top: Workspace cursor topLine visible: visibleLines.
+    Workspace selection collapseToLine: Workspace cursor line column: Workspace cursor column.
+    ^self
+!
+drawEditorCursorOnForm: form
+    | view cursor visibleLines visibleColumns tool relativeColumn x y height |
+    view := KernelInstaller objectNamed: 'BootWorkspaceSourceView'.
+    cursor := Workspace cursor.
+    visibleLines := self visibleEditorLines.
+    visibleColumns := self visibleEditorColumns.
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    visibleLines < 1 ifTrue: [^form].
+    visibleColumns < 1 ifTrue: [^form].
+    cursor line < cursor topLine ifTrue: [^form].
+    cursor line > (cursor topLine + visibleLines - 1) ifTrue: [^form].
+    relativeColumn := cursor column - tool visibleLeftColumn.
+    relativeColumn < 0 ifTrue: [^form].
+    relativeColumn > (visibleColumns - 1) ifTrue: [^form].
+    x := view bounds left + 12 + (relativeColumn * Display font metrics cellWidth * Display layout scale).
+    y := view bounds top + 12 + (Display font metrics lineHeight * Display layout scale) + ((cursor line - cursor topLine) * Display font metrics lineHeight * Display layout scale).
+    height := (Display font metrics lineHeight * Display layout scale) - 1.
+    BitBlt drawLineOnForm: form fromX: x fromY: y toX: x toY: y + height color: 11393254.
+    ^form
+!
+RecorzKernelDoIt:
+KernelInstaller rememberObject: ((KernelInstaller classNamed: 'WorkspaceSession') new) named: 'BootWorkspaceSession'.
 !

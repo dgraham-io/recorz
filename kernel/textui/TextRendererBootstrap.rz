@@ -61,7 +61,7 @@ drawSource: text onForm: form visible: visibleLines
     ^self drawText: text index: 1 line: 0 column: 0 top: Workspace cursor topLine remaining: visibleLines onForm: form open: false
 !
 drawText: text index: i line: line column: column top: top remaining: remaining onForm: form open: open
-    remaining = 0 ifTrue: [self drawCursorOnForm: form. ^form].
+    remaining = 0 ifTrue: [^form].
     i > text size ifTrue: [^self drawTail: remaining onForm: form open: open].
     ^self drawCode: (text at: i) text: text nextIndex: i + 1 line: line column: column top: top remaining: remaining onForm: form
 !
@@ -70,10 +70,17 @@ drawTail: remaining onForm: form open: open
     ^self padBlank: remaining onForm: form
 !
 drawCode: code text: text nextIndex: next line: line column: column top: top remaining: remaining onForm: form
-    | selected |
+    | selected usableWidth cellWidth visibleColumns |
     line < top ifTrue: [^self drawSkippedCode: code text: text nextIndex: next line: line column: column top: top remaining: remaining onForm: form].
     code = 10 ifTrue: [
         ^self drawText: text index: next line: line + 1 column: 0 top: top remaining: remaining - 1 onForm: form open: false].
+    cellWidth := Display font metrics cellWidth * Display layout scale.
+    visibleColumns := 0.
+    cellWidth > 0 ifTrue: [
+        usableWidth := form width - Display layout margins left - Display layout margins right.
+        usableWidth > 0 ifTrue: [visibleColumns := usableWidth / cellWidth]].
+    column > (visibleColumns - 1) ifTrue: [
+        ^self drawSkippedCode: code text: text nextIndex: next line: line column: column top: top remaining: remaining onForm: form].
     selected := self selectionCoversLine: line column: column.
     self moveSourceCursorForLine: line column: column top: top.
     selected ifTrue: [self drawSelectedCode: code line: line column: column onForm: form].
@@ -85,10 +92,12 @@ drawSkippedCode: code text: text nextIndex: next line: line column: column top: 
     ^self drawText: text index: next line: line column: column + 1 top: top remaining: remaining onForm: form open: false
 !
 moveSourceCursorForLine: line column: column top: top
-    | width height |
+    | width height originX originY |
     width := Display font metrics cellWidth * Display layout scale.
     height := Display font metrics lineHeight * Display layout scale.
-    Display moveTextCursorToX: 160 + (column * width) y: 210 + ((line - top) * height).
+    originX := Display layout margins left.
+    originY := Display layout margins top.
+    Display moveTextCursorToX: originX + (column * width) y: originY + ((line - top) * height).
     ^self
 !
 drawSelectedCode: code line: line column: column onForm: form
@@ -97,16 +106,24 @@ drawSelectedCode: code line: line column: column onForm: form
     ^form
 !
 underlineCellLine: line column: column onForm: form
-    | width height x y |
+    | width height x y originX originY usableWidth cellWidth visibleColumns |
+    cellWidth := Display font metrics cellWidth * Display layout scale.
+    visibleColumns := 0.
+    cellWidth > 0 ifTrue: [
+        usableWidth := form width - Display layout margins left - Display layout margins right.
+        usableWidth > 0 ifTrue: [visibleColumns := usableWidth / cellWidth]].
+    column > (visibleColumns - 1) ifTrue: [^form].
     width := Display font metrics cellWidth * Display layout scale.
     height := Display font metrics lineHeight * Display layout scale.
-    x := 160 + (column * width).
-    y := 210 + (((line - Workspace cursor topLine) + 1) * height) - 2.
+    originX := Display layout margins left.
+    originY := Display layout margins top.
+    x := originX + (column * width).
+    y := originY + (((line - Workspace cursor topLine) + 1) * height) - 2.
     BitBlt drawLineOnForm: form fromX: x fromY: y toX: x + width - 1 toY: y color: 11393254.
     ^form
 !
 padBlank: remainingLines onForm: form
-    remainingLines = 0 ifTrue: [self drawCursorOnForm: form. ^form].
+    remainingLines = 0 ifTrue: [^form].
     ^self padBlank: remainingLines - 1 onForm: form
 !
 selectionCoversLine: line column: column
@@ -115,10 +132,19 @@ selectionCoversLine: line column: column
     ^selection containsLine: line column: column
 !
 drawCursorOnForm: form
-    | cursor cursorX cursorY active lineHeight |
+    | cursor cursorX cursorY active lineHeight originX originY usableWidth cellWidth visibleColumns |
     cursor := Workspace cursor.
-    cursorX := 160 + (cursor column * Display font metrics cellWidth * Display layout scale).
-    cursorY := 210 + ((cursor line - cursor topLine) * Display font metrics lineHeight * Display layout scale).
+    cellWidth := Display font metrics cellWidth * Display layout scale.
+    visibleColumns := 0.
+    cellWidth > 0 ifTrue: [
+        usableWidth := form width - Display layout margins left - Display layout margins right.
+        usableWidth > 0 ifTrue: [visibleColumns := usableWidth / cellWidth]].
+    visibleColumns = 0 ifTrue: [Cursor hideCursor. ^form].
+    cursor column > (visibleColumns - 1) ifTrue: [Cursor hideCursor. ^form].
+    originX := Display layout margins left.
+    originY := Display layout margins top.
+    cursorX := originX + (cursor column * Display font metrics cellWidth * Display layout scale).
+    cursorY := originY + ((cursor line - cursor topLine) * Display font metrics lineHeight * Display layout scale).
     lineHeight := (Display font metrics lineHeight * Display layout scale) - 1.
     active := Cursor current.
     active = nil ifTrue: [

@@ -155,7 +155,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_TOOL
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_DRAW_BROWSER_STATUS_ON_FORM_BOUNDS
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_ENSURE_EDITOR_CURSOR_VISIBLE
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -239,7 +239,7 @@ struct recorz_mvp_named_object_binding {
 
 struct recorz_mvp_live_method_source {
     uint16_t class_handle;
-    uint8_t selector_id;
+    uint16_t selector_id;
     uint8_t argument_count;
     char protocol_name[METHOD_SOURCE_NAME_LIMIT];
     char source[METHOD_SOURCE_CHUNK_LIMIT];
@@ -247,7 +247,7 @@ struct recorz_mvp_live_method_source {
 
 struct recorz_mvp_live_string_literal {
     uint16_t class_handle;
-    uint8_t selector_id;
+    uint16_t selector_id;
     uint8_t argument_count;
     const char *text;
 };
@@ -323,7 +323,7 @@ static uint32_t panic_pc = 0U;
 static struct recorz_mvp_instruction panic_instruction;
 static uint8_t panic_have_instruction = 0U;
 static uint8_t panic_have_send = 0U;
-static uint8_t panic_send_selector = 0U;
+static uint16_t panic_send_selector = 0U;
 static uint16_t panic_send_argument_count = 0U;
 static struct recorz_mvp_value panic_send_receiver;
 static struct recorz_mvp_value panic_send_arguments[MAX_SEND_ARGS];
@@ -370,7 +370,7 @@ static uint8_t workspace_parse_protocol_target_name(
 );
 static void install_compiled_method_update(
     const struct recorz_mvp_heap_object *class_object,
-    uint8_t selector,
+    uint16_t selector,
     uint16_t argument_count,
     uint16_t compiled_method_handle
 );
@@ -418,7 +418,7 @@ static const char *development_home_initial_source_text(void);
 static int compare_source_names(const char *left, const char *right);
 static const char *runtime_string_intern_copy(const char *text);
 static const char *runtime_string_allocate_copy(const char *text);
-static void forget_live_string_literals(uint16_t class_handle, uint8_t selector_id, uint8_t argument_count);
+static void forget_live_string_literals(uint16_t class_handle, uint16_t selector_id, uint8_t argument_count);
 static void append_text_checked(
     char buffer[],
     uint32_t buffer_size,
@@ -557,7 +557,7 @@ static void workspace_accept_input_monitor_buffer(
     const struct recorz_mvp_heap_object *workspace_object
 );
 static const struct recorz_mvp_heap_object *workspace_global_object(void);
-static uint8_t workspace_send_tool_selector(uint8_t selector);
+static uint8_t workspace_send_tool_selector(uint16_t selector);
 static void workspace_reopen_in_place(
     const struct recorz_mvp_heap_object *object
 );
@@ -567,7 +567,7 @@ static uint8_t workspace_browse_input_monitor_context(
 static struct recorz_mvp_heap_object *heap_object(uint16_t handle);
 static struct recorz_mvp_value perform_send_and_pop_result(
     struct recorz_mvp_value receiver,
-    uint8_t selector,
+    uint16_t selector,
     uint16_t send_argument_count,
     const struct recorz_mvp_value arguments[],
     const char *text
@@ -683,7 +683,7 @@ static const char *opcode_name(uint8_t opcode) {
     return "unknown";
 }
 
-static const char *selector_name(uint8_t selector) {
+static const char *selector_name(uint16_t selector) {
     switch (selector) {
         case RECORZ_MVP_SELECTOR_SHOW:
             return "show:";
@@ -1195,6 +1195,104 @@ static const char *selector_name(uint8_t selector) {
             return "runCurrentTests";
         case RECORZ_MVP_SELECTOR_EDIT_CURRENT:
             return "editCurrent";
+        case RECORZ_MVP_SELECTOR_CURRENT_VIEW_KIND:
+            return "currentViewKind";
+        case RECORZ_MVP_SELECTOR_SET_CURRENT_VIEW_KIND:
+            return "setCurrentViewKind:";
+        case RECORZ_MVP_SELECTOR_CURRENT_TARGET_NAME:
+            return "currentTargetName";
+        case RECORZ_MVP_SELECTOR_SET_CURRENT_TARGET_NAME:
+            return "setCurrentTargetName:";
+        case RECORZ_MVP_SELECTOR_PACKAGE_COUNT:
+            return "packageCount";
+        case RECORZ_MVP_SELECTOR_PACKAGE_NAME_AT:
+            return "packageNameAt:";
+        case RECORZ_MVP_SELECTOR_PACKAGE_NAMES_VISIBLE_FROM_COUNT:
+            return "packageNamesVisibleFrom:count:";
+        case RECORZ_MVP_SELECTOR_MOVE_CURSOR_LEFT:
+            return "moveCursorLeft";
+        case RECORZ_MVP_SELECTOR_MOVE_CURSOR_RIGHT:
+            return "moveCursorRight";
+        case RECORZ_MVP_SELECTOR_MOVE_CURSOR_UP:
+            return "moveCursorUp";
+        case RECORZ_MVP_SELECTOR_MOVE_CURSOR_DOWN:
+            return "moveCursorDown";
+        case RECORZ_MVP_SELECTOR_MOVE_CURSOR_TO_LINE_START:
+            return "moveCursorToLineStart";
+        case RECORZ_MVP_SELECTOR_MOVE_CURSOR_TO_LINE_END:
+            return "moveCursorToLineEnd";
+        case RECORZ_MVP_SELECTOR_INSERT_CODE_POINT:
+            return "insertCodePoint:";
+        case RECORZ_MVP_SELECTOR_DELETE_BACKWARD:
+            return "deleteBackward";
+        case RECORZ_MVP_SELECTOR_STATUS_TEXT:
+            return "statusText";
+        case RECORZ_MVP_SELECTOR_FEEDBACK_TEXT:
+            return "feedbackText";
+        case RECORZ_MVP_SELECTOR_DRAW_SELECTION_ON_FORM:
+            return "drawSelectionOnForm:";
+        case RECORZ_MVP_SELECTOR_OPEN_ON_MODE:
+            return "openOn:mode:";
+        case RECORZ_MVP_SELECTOR_REDRAW_BROWSER_ON_FORM:
+            return "redrawBrowserOnForm:";
+        case RECORZ_MVP_SELECTOR_REDRAW_EDITOR_ON_FORM:
+            return "redrawEditorOnForm:";
+        case RECORZ_MVP_SELECTOR_VISIBLE_EDITOR_LINES:
+            return "visibleEditorLines";
+        case RECORZ_MVP_SELECTOR_VISIBLE_LIST_LINES:
+            return "visibleListLines";
+        case RECORZ_MVP_SELECTOR_MOVE_LIST_SELECTION_BY:
+            return "moveListSelectionBy:";
+        case RECORZ_MVP_SELECTOR_SELECTED_PACKAGE_NAME:
+            return "selectedPackageName";
+        case RECORZ_MVP_SELECTOR_UPDATE_TOOL_STATUS:
+            return "updateToolStatus";
+        case RECORZ_MVP_SELECTOR_CURRENT_STATUS_TEXT:
+            return "currentStatusText";
+        case RECORZ_MVP_SELECTOR_CURRENT_FEEDBACK_TEXT:
+            return "currentFeedbackText";
+        case RECORZ_MVP_SELECTOR_DRAW_VIEW_STATE_ON_FORM:
+            return "drawViewStateOnForm:";
+        case RECORZ_MVP_SELECTOR_MOVE_LIST_SELECTION_PAGE_BY:
+            return "moveListSelectionPageBy:";
+        case RECORZ_MVP_SELECTOR_SOURCE_EDITOR_VIEW_ACTIVE:
+            return "sourceEditorViewActive";
+        case RECORZ_MVP_SELECTOR_SOURCE_EDITOR_STATUS_TEXT:
+            return "sourceEditorStatusText";
+        case RECORZ_MVP_SELECTOR_SCROLL_EDITOR_UP_REMAINING:
+            return "scrollEditorUpRemaining:";
+        case RECORZ_MVP_SELECTOR_SCROLL_EDITOR_DOWN_REMAINING:
+            return "scrollEditorDownRemaining:";
+        case RECORZ_MVP_SELECTOR_SCROLL_EDITOR_PAGE_BY:
+            return "scrollEditorPageBy:";
+        case RECORZ_MVP_SELECTOR_HANDLE_ESCAPE_BYTE:
+            return "handleEscapeByte:";
+        case RECORZ_MVP_SELECTOR_HANDLE_BROWSER_BYTE:
+            return "handleBrowserByte:";
+        case RECORZ_MVP_SELECTOR_OPEN_SELECTED_PACKAGE_SOURCE:
+            return "openSelectedPackageSource";
+        case RECORZ_MVP_SELECTOR_HANDLE_EDITOR_BYTE_TOOL:
+            return "handleEditorByte:tool:";
+        case RECORZ_MVP_SELECTOR_SYNC_EDITOR_CURSOR:
+            return "syncEditorCursor";
+        case RECORZ_MVP_SELECTOR_VISIBLE_CONTENTS_TOP_LINES_COLUMNS:
+            return "visibleContentsTop:lines:columns:";
+        case RECORZ_MVP_SELECTOR_VISIBLE_EDITOR_COLUMNS:
+            return "visibleEditorColumns";
+        case RECORZ_MVP_SELECTOR_DRAW_EDITOR_CURSOR_ON_FORM:
+            return "drawEditorCursorOnForm:";
+        case RECORZ_MVP_SELECTOR_WORKSPACE_NAME:
+            return "workspaceName";
+        case RECORZ_MVP_SELECTOR_SET_WORKSPACE_NAME:
+            return "setWorkspaceName:";
+        case RECORZ_MVP_SELECTOR_VISIBLE_LEFT_COLUMN:
+            return "visibleLeftColumn";
+        case RECORZ_MVP_SELECTOR_SET_VISIBLE_LEFT_COLUMN:
+            return "setVisibleLeftColumn:";
+        case RECORZ_MVP_SELECTOR_VISIBLE_CONTENTS_TOP_LEFT_LINES_COLUMNS:
+            return "visibleContentsTop:left:lines:columns:";
+        case RECORZ_MVP_SELECTOR_ENSURE_EDITOR_CURSOR_VISIBLE:
+            return "ensureEditorCursorVisible";
     }
     return "unknown";
 }
@@ -1314,7 +1412,7 @@ static void panic_put_value(struct recorz_mvp_value value) {
 }
 
 static void remember_send_context(
-    uint8_t selector,
+    uint16_t selector,
     uint16_t argument_count,
     struct recorz_mvp_value receiver,
     const struct recorz_mvp_value arguments[]
@@ -1547,12 +1645,12 @@ static const struct recorz_mvp_dynamic_class_definition *dynamic_class_definitio
 static struct recorz_mvp_dynamic_class_definition *mutable_dynamic_class_definition_for_handle(uint16_t class_handle);
 static const struct recorz_mvp_live_method_source *live_method_source_for(
     uint16_t class_handle,
-    uint8_t selector_id
+    uint16_t selector_id
 );
 static const char *live_method_source_text(const struct recorz_mvp_live_method_source *source_record);
 static const struct recorz_mvp_live_method_source *live_method_source_for_selector_and_arity(
     uint16_t class_handle,
-    uint8_t selector_id,
+    uint16_t selector_id,
     uint8_t argument_count
 );
 static const char *live_method_source_text(const struct recorz_mvp_live_method_source *source_record);
@@ -1947,7 +2045,7 @@ static uint8_t display_source_root_id_for_selector(
 }
 
 static uint8_t source_selector_id_for_name(const char *name) {
-    uint8_t selector;
+    uint16_t selector;
 
     for (selector = RECORZ_MVP_SELECTOR_SHOW;
          selector <= MAX_SELECTOR_ID;
@@ -2199,7 +2297,7 @@ static const char *workspace_compile_binary_expression_push(
 ) {
     char selector_buffer[2];
     const char *parsed_cursor;
-    uint8_t selector_id;
+    uint16_t selector_id;
 
     parsed_cursor = workspace_compile_operand_push(cursor, program);
     if (parsed_cursor == 0) {
@@ -2238,7 +2336,7 @@ static const char *workspace_compile_operand_push(
     const char *after_selector;
     uint8_t global_id;
     uint16_t literal_index;
-    uint8_t selector_id;
+    uint16_t selector_id;
 
     cursor = source_skip_statement_space(cursor);
     if (*cursor == '(') {
@@ -2333,7 +2431,7 @@ static const char *workspace_compile_expression_push(
     const char *parsed_cursor;
     uint16_t argument_count = 0U;
     uint32_t selector_length = 0U;
-    uint8_t selector_id;
+    uint16_t selector_id;
 
     parsed_cursor = workspace_compile_binary_expression_push(cursor, program);
     if (parsed_cursor == 0) {
@@ -2679,7 +2777,7 @@ static const struct recorz_mvp_heap_object *workspace_global_object(void) {
     return heap_object(workspace_handle);
 }
 
-static uint8_t workspace_send_tool_selector(uint8_t selector) {
+static uint8_t workspace_send_tool_selector(uint16_t selector) {
     uint16_t tool_handle = named_object_handle_for_name("BootWorkspaceTool");
 
     if (tool_handle == 0U) {
@@ -3095,7 +3193,7 @@ static struct recorz_mvp_heap_object *mutable_method_descriptor_entry_object(con
     return heap_object(heap_handle_for_object(method_descriptor_entry_object(method_object)));
 }
 
-static uint16_t selector_object_handle(uint8_t selector) {
+static uint16_t selector_object_handle(uint16_t selector) {
     if (selector == 0U || selector > MAX_SELECTOR_ID ||
         selector_handles_by_id[selector] == 0U) {
         machine_panic("selector handle is not installed");
@@ -3260,7 +3358,7 @@ static const struct recorz_mvp_heap_object *ensure_dedicated_metaclass_for_class
 
 static const struct recorz_mvp_heap_object *lookup_builtin_method_descriptor(
     const struct recorz_mvp_heap_object *class_object,
-    uint8_t selector,
+    uint16_t selector,
     uint16_t argument_count
 ) {
     const struct recorz_mvp_heap_object *selector_object;
@@ -3506,7 +3604,7 @@ static const char *workspace_method_source_text_for_browser_target(
 ) {
     const struct recorz_mvp_live_method_source *source_record;
     const struct recorz_mvp_seed_class_source_record *seed_source;
-    uint8_t selector_id;
+    uint16_t selector_id;
     char chunk[METHOD_SOURCE_CHUNK_LIMIT];
 
     selector_id = source_selector_id_for_name(selector_name_text);
@@ -3618,7 +3716,7 @@ static void test_runner_write_line(const char *text) {
 
 static void perform_send(
     struct recorz_mvp_value receiver,
-    uint8_t selector,
+    uint16_t selector,
     uint16_t send_argument_count,
     const struct recorz_mvp_value arguments[],
     const char *text
@@ -3626,7 +3724,7 @@ static void perform_send(
 
 static struct recorz_mvp_value perform_send_and_pop_result(
     struct recorz_mvp_value receiver,
-    uint8_t selector,
+    uint16_t selector,
     uint16_t send_argument_count,
     const struct recorz_mvp_value arguments[],
     const char *text
@@ -8858,7 +8956,7 @@ static uint32_t transcript_flow_u32(uint8_t field_index, const char *message) {
 
 static uint32_t image_text_policy_u32_or_fallback(
     const char *object_name,
-    uint8_t selector_id,
+    uint16_t selector_id,
     uint16_t argument_count,
     const struct recorz_mvp_value arguments[],
     uint32_t fallback,
@@ -10215,7 +10313,7 @@ static const char *runtime_string_allocate_copy(const char *text) {
 
 static struct recorz_mvp_live_method_source *mutable_live_method_source_for(
     uint16_t class_handle,
-    uint8_t selector_id,
+    uint16_t selector_id,
     uint8_t argument_count
 ) {
     uint16_t source_index;
@@ -10234,7 +10332,7 @@ static struct recorz_mvp_live_method_source *mutable_live_method_source_for(
 
 static const struct recorz_mvp_live_method_source *live_method_source_for(
     uint16_t class_handle,
-    uint8_t selector_id
+    uint16_t selector_id
 ) {
     uint16_t source_index;
 
@@ -10251,7 +10349,7 @@ static const struct recorz_mvp_live_method_source *live_method_source_for(
 
 static void forget_live_method_source(
     uint16_t class_handle,
-    uint8_t selector_id,
+    uint16_t selector_id,
     uint8_t argument_count
 ) {
     uint16_t source_index;
@@ -10287,7 +10385,7 @@ static void forget_live_method_source(
 
 static void remember_live_method_source(
     uint16_t class_handle,
-    uint8_t selector_id,
+    uint16_t selector_id,
     uint8_t argument_count,
     const char *protocol_name,
     const char *source
@@ -10323,7 +10421,7 @@ static void remember_live_method_source(
 
 static void forget_live_string_literals(
     uint16_t class_handle,
-    uint8_t selector_id,
+    uint16_t selector_id,
     uint8_t argument_count
 ) {
     uint16_t literal_index;
@@ -10344,7 +10442,7 @@ static void forget_live_string_literals(
 
 static uint16_t remember_live_string_literal(
     uint16_t class_handle,
-    uint8_t selector_id,
+    uint16_t selector_id,
     uint8_t argument_count,
     const char *text
 ) {
@@ -11067,7 +11165,7 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     for (named_index = 0U; named_index < saved_live_string_literal_count; ++named_index) {
         uint16_t slot_id = read_u16_le(blob + offset);
         uint16_t class_handle = read_u16_le(blob + offset + 2U);
-        uint8_t selector_id = blob[offset + 4U];
+        uint16_t selector_id = blob[offset + 4U];
         uint8_t argument_count = blob[offset + 5U];
         uint16_t text_length_value = read_u16_le(blob + offset + 6U);
         char literal_text[METHOD_SOURCE_CHUNK_LIMIT];
@@ -12090,7 +12188,7 @@ static const char *compile_source_binary_expression_push(
 ) {
     char selector_name_buffer[2];
     const char *parsed_cursor;
-    uint8_t selector_id;
+    uint16_t selector_id;
 
     parsed_cursor = compile_source_primary_push(
         class_object,
@@ -12153,7 +12251,7 @@ static const char *compile_source_primary_push(
     char token[METHOD_SOURCE_NAME_LIMIT];
     char special_selector[METHOD_SOURCE_NAME_LIMIT];
     const char *token_cursor;
-    uint8_t selector_id;
+    uint16_t selector_id;
     uint32_t root_id;
 
     cursor = source_skip_horizontal_space(cursor);
@@ -12324,7 +12422,7 @@ static const char *compile_source_expression_push(
     const char *parsed_cursor;
     uint16_t keyword_argument_count = 0U;
     uint32_t selector_length = 0U;
-    uint8_t selector_id;
+    uint16_t selector_id;
 
     parsed_cursor = compile_source_binary_expression_push(
         class_object,
@@ -12888,7 +12986,7 @@ static const char *source_parse_method_header(
 static uint16_t compile_source_method_and_allocate(
     const struct recorz_mvp_heap_object *class_object,
     const char *source,
-    uint8_t *selector_id_out,
+    uint16_t *selector_id_out,
     uint16_t *argument_count_out
 ) {
     char header_line[METHOD_SOURCE_LINE_LIMIT];
@@ -12902,7 +13000,7 @@ static uint16_t compile_source_method_and_allocate(
     const char *header_cursor;
     uint32_t instruction_words[COMPILED_METHOD_MAX_INSTRUCTIONS];
     uint8_t instruction_count = 0U;
-    uint8_t selector_id;
+    uint16_t selector_id;
     uint16_t argument_count = 0U;
     uint16_t temporary_count = 0U;
     uint8_t found_return = 0U;
@@ -13084,7 +13182,7 @@ static uint8_t remember_seeded_primitive_method_source(
     uint32_t selector_length = 0U;
     uint32_t part_length = 0U;
     uint16_t argument_count;
-    uint8_t selector_id;
+    uint16_t selector_id;
 
     argument_count = 0U;
     if (source_copy_trimmed_line(&cursor, header_line, sizeof(header_line)) == 0U) {
@@ -13184,7 +13282,7 @@ static void file_in_method_chunks_on_class(
     current_protocol[0] = '\0';
     while (source_copy_next_chunk(&cursor, chunk, sizeof(chunk)) != 0U) {
         uint16_t compiled_method_handle;
-        uint8_t selector_id;
+        uint16_t selector_id;
         uint16_t argument_count;
 
         if (source_starts_with(chunk, "RecorzKernelClass:") ||
@@ -13290,7 +13388,7 @@ static void install_method_chunk_on_class(
     const char *chunk
 ) {
     uint16_t compiled_method_handle;
-    uint8_t selector_id;
+    uint16_t selector_id;
     uint16_t argument_count;
 
     if (remember_seeded_primitive_method_source(class_object, protocol_name, chunk)) {
@@ -13313,7 +13411,7 @@ static void install_method_source_on_class(
     const char *source
 ) {
     uint16_t compiled_method_handle;
-    uint8_t selector_id;
+    uint16_t selector_id;
     uint16_t argument_count;
 
     compiled_method_handle = compile_source_method_and_allocate(class_object, source, &selector_id, &argument_count);
@@ -13763,7 +13861,7 @@ static void append_class_method_source_chunks(
             const struct recorz_mvp_live_method_source *source_record = 0;
             const char *method_source = chunk;
             const char *protocol_name;
-            uint8_t selector_id = 0U;
+            uint16_t selector_id = 0U;
 
             if (source_starts_with(chunk, "RecorzKernelClass:")) {
                 scanning_class_side = 0U;
@@ -13913,7 +14011,7 @@ static void append_class_method_source_chunks(
 
 static const struct recorz_mvp_live_method_source *live_method_source_for_selector_and_arity(
     uint16_t class_handle,
-    uint8_t selector_id,
+    uint16_t selector_id,
     uint8_t argument_count
 ) {
     uint16_t source_index;
@@ -14955,7 +15053,7 @@ static void execute_entry_kernel_installer_configure_startup_selector_named(
     const struct recorz_mvp_value arguments[],
     const char *text
 ) {
-    uint8_t selector_id;
+    uint16_t selector_id;
 
     (void)object;
     (void)text;
@@ -15126,6 +15224,43 @@ static void execute_entry_workspace_set_contents(
         machine_panic("Workspace setContents: expects a source string");
     }
     workspace_remember_current_source(object, arguments[0].string);
+    push(receiver);
+}
+
+static void execute_entry_workspace_set_current_view_kind(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+        machine_panic("Workspace setCurrentViewKind: expects a small integer");
+    }
+    heap_set_field(
+        heap_handle_for_object(object),
+        workspace_current_view_kind_field_index(object),
+        arguments[0]
+    );
+    push(receiver);
+}
+
+static void execute_entry_workspace_set_current_target_name(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_NIL &&
+        (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0)) {
+        machine_panic("Workspace setCurrentTargetName: expects a string or nil");
+    }
+    heap_set_field(
+        heap_handle_for_object(object),
+        workspace_current_target_name_field_index(object),
+        arguments[0].kind == RECORZ_MVP_VALUE_NIL ? nil_value() : arguments[0]
+    );
     push(receiver);
 }
 
@@ -15439,7 +15574,7 @@ static void execute_entry_workspace_browse_method_of_class_named(
 ) {
     const struct recorz_mvp_heap_object *class_object;
     const char *method_source;
-    uint8_t selector_id;
+    uint16_t selector_id;
 
     (void)text;
     if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
@@ -15485,7 +15620,7 @@ static void execute_entry_workspace_edit_method_of_class_named(
 ) {
     const struct recorz_mvp_heap_object *class_object;
     const char *method_source;
-    uint8_t selector_id;
+    uint16_t selector_id;
 
     (void)text;
     if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
@@ -15618,7 +15753,7 @@ static void execute_entry_workspace_browse_class_method_of_class_named(
     const struct recorz_mvp_heap_object *class_object;
     const struct recorz_mvp_heap_object *metaclass_object;
     const char *method_source;
-    uint8_t selector_id;
+    uint16_t selector_id;
 
     (void)text;
     if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
@@ -16314,7 +16449,7 @@ static const recorz_mvp_method_entry_handler primitive_binding_handlers[RECORZ_M
 
 static void perform_send(
     struct recorz_mvp_value receiver,
-    uint8_t selector,
+    uint16_t selector,
     uint16_t send_argument_count,
     const struct recorz_mvp_value arguments[],
     const char *text
@@ -16610,7 +16745,7 @@ static void execute_block_closure(const struct recorz_mvp_heap_object *object) {
 }
 
 static void dispatch_conditional_block_send(
-    uint8_t selector,
+    uint16_t selector,
     struct recorz_mvp_value receiver,
     const struct recorz_mvp_value arguments[]
 ) {
@@ -16708,7 +16843,7 @@ static uint16_t allocate_dynamic_method_entry(uint16_t compiled_method_handle) {
 
 static uint16_t allocate_method_descriptor(
     uint8_t class_kind,
-    uint8_t selector,
+    uint16_t selector,
     uint16_t argument_count,
     uint16_t entry_handle
 ) {
@@ -16745,7 +16880,7 @@ static uint16_t clone_method_descriptor(const struct recorz_mvp_heap_object *met
 
 static void append_compiled_method_to_class(
     const struct recorz_mvp_heap_object *class_object,
-    uint8_t selector,
+    uint16_t selector,
     uint16_t argument_count,
     uint16_t compiled_method_handle
 ) {
@@ -16783,7 +16918,7 @@ static void append_compiled_method_to_class(
 
 static void install_compiled_method_update(
     const struct recorz_mvp_heap_object *class_object,
-    uint8_t selector,
+    uint16_t selector,
     uint16_t argument_count,
     uint16_t compiled_method_handle
 ) {
@@ -16861,7 +16996,7 @@ static void apply_method_update_payload(const uint8_t *blob, uint32_t size) {
 
 static void dispatch_heap_object_send(
     const struct recorz_mvp_heap_object *object,
-    uint8_t selector,
+    uint16_t selector,
     uint16_t argument_count,
     struct recorz_mvp_value receiver,
     const struct recorz_mvp_value arguments[],
@@ -16925,7 +17060,7 @@ static void dispatch_heap_object_send(
 
 static void perform_send(
     struct recorz_mvp_value receiver,
-    uint8_t selector,
+    uint16_t selector,
     uint16_t send_argument_count,
     const struct recorz_mvp_value arguments[],
     const char *text

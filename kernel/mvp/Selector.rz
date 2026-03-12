@@ -510,3 +510,101 @@ RecorzKernelSelector: #drawBrowserSourceOnForm:bounds: order: 253
 !
 RecorzKernelSelector: #drawBrowserStatusOnForm:bounds: order: 254
 !
+RecorzKernelSelector: #currentViewKind order: 255
+!
+RecorzKernelSelector: #setCurrentViewKind: order: 256
+!
+RecorzKernelSelector: #currentTargetName order: 257
+!
+RecorzKernelSelector: #setCurrentTargetName: order: 258
+!
+RecorzKernelSelector: #packageCount order: 259
+!
+RecorzKernelSelector: #packageNameAt: order: 260
+!
+RecorzKernelSelector: #packageNamesVisibleFrom:count: order: 261
+!
+RecorzKernelSelector: #moveCursorLeft order: 262
+!
+RecorzKernelSelector: #moveCursorRight order: 263
+!
+RecorzKernelSelector: #moveCursorUp order: 264
+!
+RecorzKernelSelector: #moveCursorDown order: 265
+!
+RecorzKernelSelector: #moveCursorToLineStart order: 266
+!
+RecorzKernelSelector: #moveCursorToLineEnd order: 267
+!
+RecorzKernelSelector: #insertCodePoint: order: 268
+!
+RecorzKernelSelector: #deleteBackward order: 269
+!
+RecorzKernelSelector: #statusText order: 270
+!
+RecorzKernelSelector: #feedbackText order: 271
+!
+RecorzKernelSelector: #drawSelectionOnForm: order: 272
+!
+RecorzKernelSelector: #openOn:mode: order: 273
+!
+RecorzKernelSelector: #redrawBrowserOnForm: order: 274
+!
+RecorzKernelSelector: #redrawEditorOnForm: order: 275
+!
+RecorzKernelSelector: #visibleEditorLines order: 276
+!
+RecorzKernelSelector: #visibleListLines order: 277
+!
+RecorzKernelSelector: #moveListSelectionBy: order: 278
+!
+RecorzKernelSelector: #selectedPackageName order: 279
+!
+RecorzKernelSelector: #updateToolStatus order: 280
+!
+RecorzKernelSelector: #currentStatusText order: 281
+!
+RecorzKernelSelector: #currentFeedbackText order: 282
+!
+RecorzKernelSelector: #drawViewStateOnForm: order: 283
+!
+RecorzKernelSelector: #moveListSelectionPageBy: order: 284
+!
+RecorzKernelSelector: #sourceEditorViewActive order: 285
+!
+RecorzKernelSelector: #sourceEditorStatusText order: 286
+!
+RecorzKernelSelector: #scrollEditorUpRemaining: order: 287
+!
+RecorzKernelSelector: #scrollEditorDownRemaining: order: 288
+!
+RecorzKernelSelector: #scrollEditorPageBy: order: 289
+!
+RecorzKernelSelector: #handleEscapeByte: order: 290
+!
+RecorzKernelSelector: #handleBrowserByte: order: 291
+!
+RecorzKernelSelector: #openSelectedPackageSource order: 292
+!
+RecorzKernelSelector: #handleEditorByte:tool: order: 293
+!
+RecorzKernelSelector: #syncEditorCursor order: 294
+!
+RecorzKernelSelector: #visibleContentsTop:lines:columns: order: 295
+!
+RecorzKernelSelector: #visibleEditorColumns order: 296
+!
+RecorzKernelSelector: #drawEditorCursorOnForm: order: 297
+!
+RecorzKernelSelector: #workspaceName order: 298
+!
+RecorzKernelSelector: #setWorkspaceName: order: 299
+!
+RecorzKernelSelector: #visibleLeftColumn order: 300
+!
+RecorzKernelSelector: #setVisibleLeftColumn: order: 301
+!
+RecorzKernelSelector: #visibleContentsTop:left:lines:columns: order: 302
+!
+RecorzKernelSelector: #ensureEditorCursorVisible order: 303
+!

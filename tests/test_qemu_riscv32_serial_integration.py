@@ -2675,9 +2675,9 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 "NOBJ": 48,
                 "MSRC": 512,
                 "MSRP": 65536,
-                "RSTR": 32768,
+                "RSTR": 65536,
                 "SSTR": 16384,
-                "SNAP": 131072,
+                "SNAP": 151552,
                 "MONO": 16,
             }
             for label, expected_limit in expected_limits.items():
@@ -2755,6 +2755,77 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("setValue:", output)
             self.assertNotIn("panic: runtime string pool overflow", output)
             self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
+
+    def test_dev_profile_automatic_gc_reclaims_reinstalled_method_garbage_before_heap_overflow(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-gc-method-reinstall-") as temp_dir:
+            temp_path = Path(temp_dir)
+            example_path = temp_path / "automatic_gc_method_reinstall.rz"
+            repeated_source = ["RecorzKernelClass: #GcProbe superclass: #Object\n!\n"]
+            repeated_source.extend(
+                "contents\n    ^'x'\n!\n"
+                for _ in range(1024)
+            )
+            example_path.write_text(
+                "KernelInstaller fileInClassChunks: '"
+                + "".join(repeated_source).replace("'", "''")
+                + "'.\n"
+                + "Transcript show: KernelInstaller memoryReport.",
+                encoding="utf-8",
+            )
+            elf_path = _build_elf(
+                temp_path / "build",
+                example_path,
+                profile="dev",
+            )
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=18.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("MEMORY", output)
+            self.assertIn("recorz qemu-riscv32 mvp: created class GcProbe", output)
+            self.assertNotIn("panic: object heap overflow", output)
+            self.assertNotIn("panic: class method range contains a non-method descriptor", output)
+            gc_count_match = re.search(r"GCC (\d+)", output)
+            total_reclaimed_match = re.search(r"GCT (\d+)", output)
+            heap_match = re.search(r"HEAP (\d+)/(\d+)", output)
+            high_water_match = re.search(r"HWM (\d+)/(\d+)", output)
+            self.assertIsNotNone(gc_count_match, output)
+            self.assertIsNotNone(total_reclaimed_match, output)
+            self.assertIsNotNone(heap_match, output)
+            self.assertIsNotNone(high_water_match, output)
+            self.assertGreater(int(gc_count_match.group(1)), 0, output)
+            self.assertGreater(int(total_reclaimed_match.group(1)), 0, output)
+            self.assertGreater(int(high_water_match.group(1)), int(heap_match.group(1)), output)
 
     def test_in_image_source_compiler_supports_multistatement_methods_and_unary_expression_chains(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-multistatement-source-") as temp_dir:

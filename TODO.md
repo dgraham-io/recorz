@@ -107,13 +107,15 @@ Reference:
 
 ## Phase 9 - Garbage Collector Work Needed For Native Tools
 - [x] Decide whether the current fixed heap is sufficient for the initial native tool milestone or whether GC must land first
-- [ ] If needed, introduce a Smalltalk-appropriate managed heap/GC before the image-side UI becomes the default tool surface
-- [ ] Keep the collector compatible with:
+Note:
+the RV32 native-tool path now has a managed VM-side collector plus updated snapshot budgeting, so the native image can keep browsing/editing/file-in workloads below the image boundary without depending on a fixed-heap-only assumption.
+- [x] If needed, introduce a Smalltalk-appropriate managed heap/GC before the image-side UI becomes the default tool surface
+- [x] Keep the collector compatible with:
   handles/object identity, snapshots, live method source tables, named objects, contexts, and display/cursor roots
-- [ ] Ensure the collector can trace:
+- [x] Ensure the collector can trace:
   activation/context stacks, live editor state, source buffers, text/layout objects, and view trees
-- [ ] Keep GC policy below the image, but make the image-side tool set safe to run under it
-- [ ] Add recovery/debug tooling so UI work is not fragile while the collector matures
+- [x] Keep GC policy below the image, but make the image-side tool set safe to run under it
+- [x] Add recovery/debug tooling so UI work is not fragile while the collector matures
 
 ## Phase 10 - Source-Own The UI Stack
 - [x] File out and file in the text/UI tool classes in canonical source form
@@ -123,7 +125,7 @@ Reference:
 
 ## Near-Term Experiments
 - [x] Add a temporary transcript/browser demo built directly on `beDisplay` + `copyBits` + image-side scanner code
-- [ ] Measure 12-point primary and 16-point comfort-mode text density on 1024x768 and current QEMU targets
+- [x] Measure 12-point primary and 16-point comfort-mode text density on 1024x768 and current QEMU targets
 - [x] Add a simple cursor-form proof using `beCursor`
 - [x] Add a simple scanner proof that stops at wrap margin and tab/newline boundaries
 - [x] Evaluate whether the first native UI should stay Smalltalk-pane-like or move toward a declarative surface after the primitive layer is proven
@@ -139,5 +141,6 @@ Reference:
 - [x] Recorz UI drawing depends on a tiny primitive set comparable in spirit to Smalltalk-80
 - [x] Text composition and rendering decisions come from image objects, not C-side UI policy
 - [x] Workspace and browser are implemented as image-side tools
-- [ ] The VM provides only low-level drawing, display/cursor binding, input, GC/persistence support, and panic/debug paths
+- [x] The VM provides only low-level drawing, display/cursor binding, input, GC/persistence support, and panic/debug paths
+- [x] Add a real scrollable source/list view owned by image objects so large package/class sources keep stable visible origin during interactive browsing and editing
 - [x] Development can continue from inside the image without depending on C-side workspace/browser behavior

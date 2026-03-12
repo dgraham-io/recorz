@@ -1,4 +1,6 @@
 import hashlib
+import re
+import socket
 import shutil
 import subprocess
 import time
@@ -32,6 +34,7 @@ SPLIT_LAYOUT_EXAMPLE = ROOT / "examples" / "qemu_riscv_split_layout_demo.rz"
 WIDGET_SURFACE_EXAMPLE = ROOT / "examples" / "qemu_riscv_widget_surface_demo.rz"
 WORKSPACE_EDITOR_SURFACE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_editor_surface_demo.rz"
 BROWSER_SURFACE_EXAMPLE = ROOT / "examples" / "qemu_riscv_browser_surface_demo.rz"
+WORKSPACE_PACKAGE_HOME_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_package_home_demo.rz"
 
 
 def _render_build_dir(example_path: Optional[Path], file_in_payload: Optional[Path]) -> Path:
@@ -72,6 +75,51 @@ def _region_histogram(data: bytes, width: int, x0: int, y0: int, x1: int, y1: in
         for x in range(x0, x1):
             histogram[_pixel(data, width, x, y)] += 1
     return histogram
+
+
+def _region_diff_pixels(
+    data_a: bytes,
+    data_b: bytes,
+    width: int,
+    x0: int,
+    y0: int,
+    x1: int,
+    y1: int,
+) -> int:
+    diff = 0
+    for y in range(y0, y1):
+        for x in range(x0, x1):
+            index = (y * width + x) * 3
+            if data_a[index : index + 3] != data_b[index : index + 3]:
+                diff += 1
+    return diff
+
+
+def _render_counters(log: str) -> dict[str, int]:
+    matches = re.findall(
+        r"recorz-render-counters "
+        r"editor_full=(\d+) editor_pane=(\d+) editor_cursor=(\d+) "
+        r"browser_full=(\d+) browser_list=(\d+)",
+        log,
+    )
+    if not matches:
+        raise AssertionError("expected recorz-render-counters in QEMU log")
+    editor_full, editor_pane, editor_cursor, browser_full, browser_list = matches[-1]
+    return {
+        "editor_full": int(editor_full),
+        "editor_pane": int(editor_pane),
+        "editor_cursor": int(editor_cursor),
+        "browser_full": int(browser_full),
+        "browser_list": int(browser_list),
+    }
+
+
+def _last_log_segment(log: str, marker: str, *, max_chars: int = 2500) -> str:
+    normalized = log.replace("\r", "")
+    index = normalized.rfind(marker)
+    if index < 0:
+        return normalized[-max_chars:]
+    return normalized[index : index + max_chars]
 
 
 @unittest.skipUnless(
@@ -124,6 +172,136 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         if result is None or result.returncode != 0:
             self.fail("QEMU RV32 screenshot flow failed without a completed result")
         qemu_log = qemu_log_path.read_text(encoding="utf-8")
+        width, height, data = _read_ppm(ppm_path)
+        return qemu_log, width, height, data
+
+    def render_interactive_example(
+        self,
+        example_path: Path,
+        input_chunks: tuple[bytes, ...],
+        *,
+        post_input_chunks: tuple[bytes, ...] = (),
+        monitor_commands: tuple[str, ...] = (),
+        monitor_command_delay: float = 0.8,
+        final_monitor_delay: float = 4.0,
+    ) -> tuple[str, int, int, bytes]:
+        digest_key = (
+            f"{example_path.stem}|interactive|{input_chunks!r}|{post_input_chunks!r}|{monitor_commands!r}|"
+            f"{monitor_command_delay}|{final_monitor_delay}"
+        )
+        digest = hashlib.sha1(digest_key.encode("utf-8")).hexdigest()[:10]
+        build_dir = ROOT / "misc" / f"qirv32-{digest}"
+        ppm_path = build_dir / "recorz-qemu-riscv32-mvp.ppm"
+        qemu_log_path = build_dir / "qemu.log"
+        monitor_sock = build_dir / "monitor.sock"
+        elf_path = build_dir / "recorz-qemu-riscv32-mvp.elf"
+        build_command = [
+            "make",
+            "-C",
+            str(ROOT / "platform" / "qemu-riscv32"),
+            f"BUILD_DIR={build_dir}",
+            f"EXAMPLE={example_path}",
+            "clean",
+            "all",
+        ]
+        build_result = subprocess.run(
+            build_command,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        if build_result.returncode != 0:
+            self.fail(
+                "QEMU RV32 interactive build failed\n"
+                f"stdout:\n{build_result.stdout}\n"
+                f"stderr:\n{build_result.stderr}"
+            )
+        build_dir.mkdir(parents=True, exist_ok=True)
+        for path in (ppm_path, qemu_log_path, monitor_sock):
+            if path.exists():
+                path.unlink()
+        qemu_command = [
+            "qemu-system-riscv32",
+            "-machine",
+            "virt",
+            "-m",
+            "32M",
+            "-smp",
+            "1",
+            "-kernel",
+            str(elf_path),
+            "-serial",
+            "stdio",
+            "-display",
+            "none",
+            "-device",
+            "ramfb",
+            "-device",
+            "virtio-keyboard-device",
+            "-monitor",
+            f"unix:{monitor_sock},server,nowait",
+        ]
+        with qemu_log_path.open("w", encoding="utf-8") as log_file:
+            process = subprocess.Popen(
+                qemu_command,
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+            )
+            try:
+                monitor = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                time.sleep(2.0 if monitor_commands else 1.0)
+                for chunk in input_chunks:
+                    assert process.stdin is not None
+                    process.stdin.write(chunk)
+                    process.stdin.flush()
+                    time.sleep(0.35)
+                if input_chunks:
+                    time.sleep(4.0)
+                try:
+                    for _ in range(100):
+                        if monitor_sock.exists():
+                            break
+                        time.sleep(0.1)
+                    for _ in range(100):
+                        try:
+                            monitor.connect(str(monitor_sock))
+                            break
+                        except OSError:
+                            time.sleep(0.1)
+                    else:
+                        self.fail("QEMU RV32 interactive monitor socket did not accept a connection")
+                    for index, command in enumerate(monitor_commands):
+                        monitor.sendall(f"{command}\n".encode("utf-8"))
+                        time.sleep(
+                            final_monitor_delay if index + 1 == len(monitor_commands) else monitor_command_delay
+                        )
+                    for chunk in post_input_chunks:
+                        assert process.stdin is not None
+                        process.stdin.write(chunk)
+                        process.stdin.flush()
+                        time.sleep(0.35)
+                    if post_input_chunks:
+                        time.sleep(1.0)
+                    monitor.sendall(f"screendump {ppm_path}\n".encode("utf-8"))
+                    time.sleep(0.7)
+                    monitor.sendall(b"quit\n")
+                    time.sleep(0.7)
+                finally:
+                    monitor.close()
+            finally:
+                if process.poll() is None:
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait(timeout=5)
+                else:
+                    process.wait(timeout=5)
+                if process.stdin is not None:
+                    process.stdin.close()
+        qemu_log = qemu_log_path.read_text(encoding="utf-8", errors="ignore")
         width, height, data = _read_ppm(ppm_path)
         return qemu_log, width, height, data
 
@@ -304,6 +482,224 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertGreater(_region_histogram(data, width, 52, 160, 276, 260)[(31, 41, 51)], 180)
         self.assertGreater(_region_histogram(data, width, 340, 160, 720, 300)[(31, 41, 51)], 180)
         self.assertGreater(_region_histogram(data, width, 52, 612, 860, 652)[(31, 41, 51)], 180)
+
+    def test_interactive_package_browser_can_open_a_package_source_without_wiping_the_editor_surface(self) -> None:
+        qemu_log, width, height, data = self.render_interactive_example(
+            WORKSPACE_PACKAGE_HOME_EXAMPLE,
+            (b"\x18",),
+        )
+
+        normalized_log = qemu_log.replace("\r", "")
+        self.assertNotIn("selector is not understood", normalized_log)
+        self.assertNotIn("panic:", normalized_log)
+        self.assertEqual((width, height), (1024, 768))
+        self.assertGreater(_region_histogram(data, width, 40, 136, 960, 592)[(31, 41, 51)], 5000)
+        self.assertLess(_region_histogram(data, width, 332, 160, 340, 560)[(31, 41, 51)], 200)
+
+    def test_interactive_textui_package_editor_stays_anchored_at_the_top_after_cursor_move(self) -> None:
+        qemu_log, width, height, data = self.render_interactive_example(
+            WORKSPACE_PACKAGE_HOME_EXAMPLE,
+            (b"\x18", b"\x0e"),
+        )
+
+        normalized_log = qemu_log.replace("\r", "")
+        editor_segment = _last_log_segment(qemu_log, "WORKSPACERECORZ WORKSPACE EDITOR")
+        self.assertNotIn("selector is not understood", normalized_log)
+        self.assertNotIn("panic:", normalized_log)
+        self.assertEqual((width, height), (1024, 768))
+        self.assertIn("RecorzKernelPackage: 'TextUI'", editor_segment)
+        self.assertGreater(_region_histogram(data, width, 40, 136, 960, 592)[(31, 41, 51)], 900)
+
+    def test_interactive_textui_package_editor_stays_anchored_at_the_top_after_arrow_up(self) -> None:
+        qemu_log, width, height, data = self.render_interactive_example(
+            WORKSPACE_PACKAGE_HOME_EXAMPLE,
+            (b"\x18", b"\x1b[A"),
+        )
+
+        normalized_log = qemu_log.replace("\r", "")
+        editor_segment = _last_log_segment(qemu_log, "WORKSPACERECORZ WORKSPACE EDITOR")
+        self.assertNotIn("selector is not understood", normalized_log)
+        self.assertNotIn("panic:", normalized_log)
+        self.assertEqual((width, height), (1024, 768))
+        self.assertIn("RecorzKernelPackage: 'TextUI'", editor_segment)
+        self.assertGreater(_region_histogram(data, width, 40, 136, 960, 592)[(31, 41, 51)], 100)
+
+    def test_interactive_textui_page_down_changes_the_visible_source_slice_on_first_press(self) -> None:
+        initial_log, initial_width, initial_height, initial_data = self.render_interactive_example(
+            WORKSPACE_PACKAGE_HOME_EXAMPLE,
+            (b"\x18",),
+        )
+        paged_log, paged_width, paged_height, paged_data = self.render_interactive_example(
+            WORKSPACE_PACKAGE_HOME_EXAMPLE,
+            (b"\x18", b"\x16"),
+        )
+
+        normalized_initial_log = initial_log.replace("\r", "")
+        normalized_paged_log = paged_log.replace("\r", "")
+        self.assertNotIn("selector is not understood", normalized_initial_log)
+        self.assertNotIn("panic:", normalized_initial_log)
+        self.assertNotIn("selector is not understood", normalized_paged_log)
+        self.assertNotIn("panic:", normalized_paged_log)
+        self.assertEqual((initial_width, initial_height), (1024, 768))
+        self.assertEqual((paged_width, paged_height), (1024, 768))
+        self.assertGreater(
+            _region_diff_pixels(initial_data, paged_data, initial_width, 56, 160, 952, 560),
+            2500,
+        )
+
+    def test_interactive_package_open_via_window_enter_discards_pending_key_burst(self) -> None:
+        qemu_log, width, height, data = self.render_interactive_example(
+            WORKSPACE_PACKAGE_HOME_EXAMPLE,
+            (),
+            monitor_commands=("sendkey ret",) * 12,
+            monitor_command_delay=0.01,
+            final_monitor_delay=2.0,
+        )
+
+        editor_segment = _last_log_segment(qemu_log, "WORKSPACERECORZ WORKSPACE EDITOR")
+        self.assertEqual((width, height), (1024, 768))
+        self.assertNotIn("panic:", qemu_log.replace("\r", ""))
+        self.assertIn("RecorzKernelPackage: 'TextUI'", editor_segment)
+        self.assertNotIn("SOURCE\n\n\n", editor_segment)
+        self.assertGreater(_region_histogram(data, width, 40, 136, 960, 592)[(31, 41, 51)], 2500)
+
+    def test_interactive_package_browser_can_repeatedly_open_and_close_source_without_runtime_string_pool_overflow(self) -> None:
+        command_pairs = tuple(
+            command
+            for _ in range(16)
+            for command in ("sendkey ctrl-x", "sendkey ctrl-o")
+        )
+        qemu_log, width, height, data = self.render_interactive_example(
+            WORKSPACE_PACKAGE_HOME_EXAMPLE,
+            (),
+            monitor_commands=command_pairs,
+            monitor_command_delay=0.25,
+            final_monitor_delay=3.0,
+        )
+
+        normalized_log = qemu_log.replace("\r", "")
+        self.assertEqual((width, height), (1024, 768))
+        self.assertNotIn("runtime string pool overflow", normalized_log)
+        self.assertNotIn("panic:", normalized_log)
+        self.assertGreater(_region_histogram(data, width, 40, 60, 320, 120)[(31, 41, 51)], 120)
+        self.assertGreater(_region_histogram(data, width, 40, 136, 320, 592)[(31, 41, 51)], 600)
+        self.assertGreater(_region_histogram(data, width, 336, 136, 960, 592)[(31, 41, 51)], 600)
+
+    def test_interactive_package_open_then_arrow_up_via_live_window_keeps_editor_surface_intact(self) -> None:
+        opened_log, opened_width, opened_height, opened_data = self.render_interactive_example(
+            WORKSPACE_PACKAGE_HOME_EXAMPLE,
+            (),
+            monitor_commands=("sendkey ctrl-x",),
+            final_monitor_delay=6.0,
+        )
+        moved_log, moved_width, moved_height, moved_data = self.render_interactive_example(
+            WORKSPACE_PACKAGE_HOME_EXAMPLE,
+            (),
+            monitor_commands=("sendkey ctrl-x", "sendkey up"),
+            monitor_command_delay=0.4,
+            final_monitor_delay=6.0,
+        )
+
+        self.assertEqual((opened_width, opened_height), (1024, 768))
+        self.assertEqual((moved_width, moved_height), (1024, 768))
+        self.assertNotIn("panic:", opened_log.replace("\r", ""))
+        self.assertNotIn("panic:", moved_log.replace("\r", ""))
+        self.assertGreater(_region_histogram(moved_data, moved_width, 40, 60, 320, 120)[(31, 41, 51)], 120)
+        self.assertGreater(_region_histogram(moved_data, moved_width, 40, 608, 944, 680)[(31, 41, 51)], 120)
+        self.assertGreater(_region_histogram(moved_data, moved_width, 40, 136, 960, 592)[(31, 41, 51)], 5000)
+        self.assertLess(
+            _region_diff_pixels(opened_data, moved_data, opened_width, 40, 60, 960, 680),
+            1000,
+        )
+
+    def test_interactive_editor_cursor_move_uses_cursor_only_redraw_path(self) -> None:
+        qemu_log, width, height, data = self.render_interactive_example(
+            WORKSPACE_PACKAGE_HOME_EXAMPLE,
+            (b"\x18", b"\x1b[B", b"\x1f"),
+        )
+
+        counters = _render_counters(qemu_log)
+        self.assertEqual((width, height), (1024, 768))
+        self.assertNotIn("panic:", qemu_log.replace("\r", ""))
+        self.assertEqual(counters["browser_full"], 1)
+        self.assertEqual(counters["editor_full"], 1)
+        self.assertEqual(counters["editor_pane"], 0)
+        self.assertEqual(counters["editor_cursor"], 1)
+        self.assertEqual(counters["browser_list"], 0)
+        self.assertGreater(_region_histogram(data, width, 40, 136, 960, 592)[(31, 41, 51)], 5000)
+
+    def test_interactive_textui_package_editor_survives_keyboard_repeat_burst(self) -> None:
+        qemu_log, width, height, data = self.render_interactive_example(
+            WORKSPACE_PACKAGE_HOME_EXAMPLE,
+            (b"\x0e", b"\x18"),
+            monitor_commands=("sendkey down",) * 400,
+            monitor_command_delay=0.01,
+            final_monitor_delay=2.5,
+        )
+
+        normalized_log = qemu_log.replace("\r", "")
+        editor_segment = _last_log_segment(qemu_log, "WORKSPACERECORZ WORKSPACE EDITOR")
+        self.assertNotIn("selector is not understood", normalized_log)
+        self.assertNotIn("panic:", normalized_log)
+        self.assertEqual((width, height), (1024, 768))
+        self.assertIn("RecorzKernelPackage:", editor_segment)
+        self.assertGreater(_region_histogram(data, width, 40, 136, 960, 592)[(31, 41, 51)], 100)
+
+    def test_interactive_package_browser_starts_with_separate_title_and_content_bands(self) -> None:
+        qemu_log, width, height, data = self.render_interactive_example(
+            WORKSPACE_PACKAGE_HOME_EXAMPLE,
+            (),
+        )
+
+        normalized_log = qemu_log.replace("\r", "")
+        self.assertNotIn("panic:", normalized_log)
+        self.assertEqual((width, height), (1024, 768))
+        self.assertGreater(_region_histogram(data, width, 40, 136, 320, 592)[(31, 41, 51)], 600)
+        self.assertGreater(_region_histogram(data, width, 40, 136, 320, 592)[(173, 216, 230)], 100)
+        self.assertGreater(_region_histogram(data, width, 336, 136, 960, 592)[(31, 41, 51)], 600)
+
+    def test_interactive_package_browser_can_move_selection_without_full_surface_failure(self) -> None:
+        qemu_log, width, height, data = self.render_interactive_example(
+            WORKSPACE_PACKAGE_HOME_EXAMPLE,
+            (),
+            monitor_commands=("sendkey down",) * 20,
+            monitor_command_delay=0.03,
+            final_monitor_delay=2.0,
+        )
+
+        normalized_log = qemu_log.replace("\r", "")
+        self.assertNotIn("panic:", normalized_log)
+        self.assertEqual((width, height), (1024, 768))
+        self.assertGreater(_region_histogram(data, width, 40, 136, 320, 592)[(31, 41, 51)], 600)
+        self.assertGreater(_region_histogram(data, width, 40, 136, 320, 592)[(173, 216, 230)], 100)
+        self.assertGreater(_region_histogram(data, width, 336, 136, 960, 592)[(31, 41, 51)], 600)
+
+    def test_interactive_package_browser_can_open_large_tools_package_source_without_blank_tail_screen(self) -> None:
+        qemu_log, width, height, data = self.render_interactive_example(
+            WORKSPACE_PACKAGE_HOME_EXAMPLE,
+            (b"\x0e", b"\x18"),
+        )
+
+        normalized_log = qemu_log.replace("\r", "")
+        self.assertNotIn("selector is not understood", normalized_log)
+        self.assertNotIn("panic:", normalized_log)
+        self.assertEqual((width, height), (1024, 768))
+        self.assertGreater(_region_histogram(data, width, 40, 136, 960, 592)[(31, 41, 51)], 5000)
+        self.assertLess(_region_histogram(data, width, 332, 160, 340, 560)[(31, 41, 51)], 200)
+
+    def test_interactive_package_browser_can_open_large_tools_package_source_with_window_enter_without_overflowing(self) -> None:
+        qemu_log, width, height, data = self.render_interactive_example(
+            WORKSPACE_PACKAGE_HOME_EXAMPLE,
+            (),
+            monitor_commands=("sendkey down", "sendkey ret"),
+        )
+
+        normalized_log = qemu_log.replace("\r", "")
+        self.assertNotIn("selector is not understood", normalized_log)
+        self.assertNotIn("panic:", normalized_log)
+        self.assertEqual((width, height), (1024, 768))
+        self.assertGreater(_region_histogram(data, width, 40, 136, 960, 592)[(31, 41, 51)], 5000)
+        self.assertLess(_region_histogram(data, width, 332, 160, 340, 560)[(31, 41, 51)], 200)
 
     def test_bitblt_line_primitive_draws_horizontal_vertical_and_diagonal_segments(self) -> None:
         qemu_log, width, height, data = self.render_example(BITBLT_DRAW_LINE_EXAMPLE)

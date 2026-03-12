@@ -11,7 +11,7 @@ extern const uint8_t recorz_default_file_in_blob_end[];
 #define RECORZ_MVP_SNAPSHOT_FW_CFG_NAME "opt/recorz-snapshot"
 #define RECORZ_MVP_SNAPSHOT_BUFFER_SIZE RECORZ_MVP_SNAPSHOT_BUFFER_LIMIT
 #define RECORZ_MVP_FILE_IN_FW_CFG_NAME "opt/recorz-file-in"
-#define RECORZ_MVP_FILE_IN_BUFFER_SIZE 65536U
+#define RECORZ_MVP_FILE_IN_BUFFER_SIZE 131072U
 #define RECORZ_MVP_FILE_IN_SEPARATOR_SIZE 3U
 
 static uint32_t append_file_in_blob(
