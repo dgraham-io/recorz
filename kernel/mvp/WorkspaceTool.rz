@@ -39,3 +39,6 @@ statusText
 feedbackText
     <primitive: #workspaceToolFeedbackText>
 !
+namedObjectOrNil: name
+    <primitive: #workspaceToolNamedObjectOrNil>
+!

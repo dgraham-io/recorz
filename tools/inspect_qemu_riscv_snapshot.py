@@ -19,7 +19,8 @@ import build_qemu_riscv_mvp_image as mvp  # noqa: E402
 
 
 SNAPSHOT_MAGIC = b"RCZT"
-SNAPSHOT_VERSION = 6
+SNAPSHOT_VERSION = 7
+SUPPORTED_SNAPSHOT_VERSIONS = {7}
 SNAPSHOT_HEADER_SIZE = 52
 SNAPSHOT_VALUE_SIZE = 8
 OBJECT_FIELD_LIMIT = 4
@@ -34,8 +35,8 @@ SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE = (
 )
 SNAPSHOT_PACKAGE_RECORD_SIZE = METHOD_SOURCE_NAME_LIMIT + CLASS_COMMENT_LIMIT
 SNAPSHOT_NAMED_OBJECT_RECORD_SIZE = 2 + METHOD_SOURCE_NAME_LIMIT
-SNAPSHOT_LIVE_METHOD_SOURCE_RECORD_SIZE = 8 + METHOD_SOURCE_NAME_LIMIT
-SNAPSHOT_LIVE_STRING_LITERAL_RECORD_SIZE = 8
+SNAPSHOT_LIVE_METHOD_SOURCE_RECORD_SIZE = 9 + METHOD_SOURCE_NAME_LIMIT
+SNAPSHOT_LIVE_STRING_LITERAL_RECORD_SIZE = 9
 MONO_BITMAP_MAX_HEIGHT = 64
 GLYPH_BITMAP_COUNT = 128
 
@@ -50,10 +51,28 @@ WORKSPACE_FIELD_CURRENT_VIEW_KIND = 0
 WORKSPACE_FIELD_CURRENT_TARGET_NAME = 1
 WORKSPACE_FIELD_CURRENT_SOURCE = 2
 WORKSPACE_FIELD_LAST_SOURCE = 3
+WORKSPACE_TOOL_FIELD_STATUS_TEXT = 0
+WORKSPACE_TOOL_FIELD_FEEDBACK_TEXT = 1
+WORKSPACE_TOOL_FIELD_NAME = 2
+WORKSPACE_TOOL_FIELD_LEFT_COLUMN = 3
+WORKSPACE_SESSION_FIELD_WORKSPACE = 0
+WORKSPACE_SESSION_FIELD_SELECTED = 1
+WORKSPACE_SESSION_FIELD_LIST_TOP = 2
+WORKSPACE_SESSION_FIELD_ESCAPE = 3
+TEXT_CURSOR_FIELD_INDEX = 0
+TEXT_CURSOR_FIELD_LINE = 1
+TEXT_CURSOR_FIELD_COLUMN = 2
+TEXT_CURSOR_FIELD_TOP_LINE = 3
+TEXT_SELECTION_FIELD_START_LINE = 0
+TEXT_SELECTION_FIELD_START_COLUMN = 1
+TEXT_SELECTION_FIELD_END_LINE = 2
+TEXT_SELECTION_FIELD_END_COLUMN = 3
 
 MAX_GLOBAL_ID = max(mvp.GLOBAL_VALUES.values())
 MAX_ROOT_ID = max(mvp.SEED_ROOT_VALUES.values())
 WORKSPACE_GLOBAL_ID = mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_WORKSPACE"]
+WORKSPACE_CURSOR_GLOBAL_ID = mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_WORKSPACE_CURSOR"]
+WORKSPACE_SELECTION_GLOBAL_ID = mvp.GLOBAL_VALUES["RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION"]
 
 
 class SnapshotInspectionError(RuntimeError):
@@ -105,6 +124,7 @@ class ParsedSnapshot:
     header: SnapshotHeader
     objects: tuple[SnapshotObject, ...]
     global_handles: tuple[int, ...]
+    named_objects: tuple[tuple[int, str], ...]
 
 
 def _read_u16_le(blob: bytes, offset: int) -> int:
@@ -167,7 +187,7 @@ def parse_snapshot(blob: bytes) -> ParsedSnapshot:
         active_cursor_y=_read_u16_le(blob, 46),
         total_size=_read_u32_le(blob, 48),
     )
-    if header.version != SNAPSHOT_VERSION:
+    if header.version not in SUPPORTED_SNAPSHOT_VERSIONS:
         raise SnapshotInspectionError("snapshot version mismatch")
     if header.object_count == 0:
         raise SnapshotInspectionError("snapshot object count is zero")
@@ -217,8 +237,35 @@ def parse_snapshot(blob: bytes) -> ParsedSnapshot:
         _read_u16_le(blob, offset + (global_index * 2))
         for global_index in range(MAX_GLOBAL_ID)
     )
+    offset += MAX_GLOBAL_ID * 2
+    offset += MAX_ROOT_ID * 2
+    offset += GLYPH_BITMAP_COUNT * 2
+    offset += header.dynamic_class_count * SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE
+    offset += header.package_count * SNAPSHOT_PACKAGE_RECORD_SIZE
 
-    return ParsedSnapshot(header=header, objects=tuple(objects), global_handles=global_handles)
+    named_objects: list[tuple[int, str]] = []
+    for _named_index in range(header.named_object_count):
+        handle = _read_u16_le(blob, offset)
+        name_bytes = blob[offset + 2 : offset + SNAPSHOT_NAMED_OBJECT_RECORD_SIZE]
+
+        offset += SNAPSHOT_NAMED_OBJECT_RECORD_SIZE
+        if handle == 0 or handle > header.object_count:
+            raise SnapshotInspectionError("snapshot named object handle is out of range")
+        try:
+            terminator = name_bytes.index(0)
+        except ValueError as exc:
+            raise SnapshotInspectionError("snapshot named object name is not terminated") from exc
+        name = name_bytes[:terminator].decode("utf-8")
+        if not name:
+            raise SnapshotInspectionError("snapshot named object name is empty")
+        named_objects.append((handle, name))
+
+    return ParsedSnapshot(
+        header=header,
+        objects=tuple(objects),
+        global_handles=global_handles,
+        named_objects=tuple(named_objects),
+    )
 
 
 def _hex_value(ch: str) -> int:
@@ -322,6 +369,99 @@ def _workspace_summary(snapshot: ParsedSnapshot) -> dict[str, object] | None:
     }
 
 
+def _global_object(snapshot: ParsedSnapshot, global_id: int) -> tuple[int, SnapshotObject] | None:
+    handle = snapshot.global_handles[global_id - 1]
+    if handle == 0:
+        return None
+    if handle > len(snapshot.objects):
+        raise SnapshotInspectionError("snapshot global handle is out of range")
+    return handle, snapshot.objects[handle - 1]
+
+
+def _named_object(snapshot: ParsedSnapshot, name: str) -> tuple[int, SnapshotObject] | None:
+    for handle, candidate in snapshot.named_objects:
+        if candidate == name:
+            if handle > len(snapshot.objects):
+                raise SnapshotInspectionError("snapshot named object handle is out of range")
+            return handle, snapshot.objects[handle - 1]
+    return None
+
+
+def _workspace_cursor_summary(snapshot: ParsedSnapshot) -> dict[str, object] | None:
+    cursor = _global_object(snapshot, WORKSPACE_CURSOR_GLOBAL_ID)
+    if cursor is None:
+        return None
+    handle, cursor_object = cursor
+    fields = cursor_object.fields
+    return {
+        "handle": handle,
+        "kind": cursor_object.kind,
+        "field_count": cursor_object.field_count,
+        "class_handle": cursor_object.class_handle,
+        "index": fields[TEXT_CURSOR_FIELD_INDEX].value,
+        "line": fields[TEXT_CURSOR_FIELD_LINE].value,
+        "column": fields[TEXT_CURSOR_FIELD_COLUMN].value,
+        "top_line": fields[TEXT_CURSOR_FIELD_TOP_LINE].value,
+    }
+
+
+def _workspace_selection_summary(snapshot: ParsedSnapshot) -> dict[str, object] | None:
+    selection = _global_object(snapshot, WORKSPACE_SELECTION_GLOBAL_ID)
+    if selection is None:
+        return None
+    handle, selection_object = selection
+    fields = selection_object.fields
+    return {
+        "handle": handle,
+        "kind": selection_object.kind,
+        "field_count": selection_object.field_count,
+        "class_handle": selection_object.class_handle,
+        "start_line": fields[TEXT_SELECTION_FIELD_START_LINE].value,
+        "start_column": fields[TEXT_SELECTION_FIELD_START_COLUMN].value,
+        "end_line": fields[TEXT_SELECTION_FIELD_END_LINE].value,
+        "end_column": fields[TEXT_SELECTION_FIELD_END_COLUMN].value,
+    }
+
+
+def _workspace_tool_summary(snapshot: ParsedSnapshot) -> dict[str, object] | None:
+    tool = _named_object(snapshot, "BootWorkspaceTool")
+    if tool is None:
+        return None
+    handle, tool_object = tool
+    fields = tool_object.fields
+    return {
+        "handle": handle,
+        "kind": tool_object.kind,
+        "field_count": tool_object.field_count,
+        "class_handle": tool_object.class_handle,
+        "status_text": fields[WORKSPACE_TOOL_FIELD_STATUS_TEXT].value,
+        "feedback_text": fields[WORKSPACE_TOOL_FIELD_FEEDBACK_TEXT].value,
+        "workspace_name": fields[WORKSPACE_TOOL_FIELD_NAME].value,
+        "visible_left_column": fields[WORKSPACE_TOOL_FIELD_LEFT_COLUMN].value,
+    }
+
+
+def _workspace_session_summary(snapshot: ParsedSnapshot) -> dict[str, object] | None:
+    session = _named_object(snapshot, "BootWorkspaceSession")
+    workspace = _workspace_summary(snapshot)
+    if session is None:
+        return None
+    handle, session_object = session
+    fields = session_object.fields
+    workspace_handle = fields[WORKSPACE_SESSION_FIELD_WORKSPACE].value
+    return {
+        "handle": handle,
+        "kind": session_object.kind,
+        "field_count": session_object.field_count,
+        "class_handle": session_object.class_handle,
+        "workspace_handle": workspace_handle,
+        "workspace_matches_global": workspace is not None and workspace_handle == workspace["handle"],
+        "selected": fields[WORKSPACE_SESSION_FIELD_SELECTED].value,
+        "list_top": fields[WORKSPACE_SESSION_FIELD_LIST_TOP].value,
+        "escape": fields[WORKSPACE_SESSION_FIELD_ESCAPE].value,
+    }
+
+
 def inspect_snapshot(blob: bytes) -> dict[str, object]:
     snapshot = parse_snapshot(blob)
     return {
@@ -350,6 +490,10 @@ def inspect_snapshot(blob: bytes) -> dict[str, object]:
             "total_size": snapshot.header.total_size,
         },
         "workspace": _workspace_summary(snapshot),
+        "workspace_tool": _workspace_tool_summary(snapshot),
+        "workspace_session": _workspace_session_summary(snapshot),
+        "workspace_cursor": _workspace_cursor_summary(snapshot),
+        "workspace_selection": _workspace_selection_summary(snapshot),
     }
 
 

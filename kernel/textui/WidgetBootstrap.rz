@@ -291,8 +291,10 @@ KernelInstaller rememberObject: ((KernelInstaller classNamed: 'WorkspaceEditorSu
 !
 RecorzKernelDoIt:
 | tool |
-tool := (KernelInstaller classNamed: 'WorkspaceTool') new.
-KernelInstaller rememberObject: tool named: 'BootWorkspaceTool'.
+tool := ((KernelInstaller classNamed: 'WorkspaceTool') new) namedObjectOrNil: 'BootWorkspaceTool'.
+tool = nil ifTrue: [
+    tool := (KernelInstaller classNamed: 'WorkspaceTool') new.
+    KernelInstaller rememberObject: tool named: 'BootWorkspaceTool'].
 !
 RecorzKernelClass: #WorkspaceTool descriptorOrder: 35 objectKindOrder: 35 sourceBootOrder: 29 instanceVariableNames: 'statusText feedbackText name leftColumn'
 !
@@ -322,8 +324,8 @@ setVisibleLeftColumn: aColumn
 RecorzKernelDoIt:
 | tool |
 tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
-tool setWorkspaceName: 'Workspace'.
-tool setVisibleLeftColumn: 0.
+tool workspaceName = nil ifTrue: [tool setWorkspaceName: 'Workspace'].
+tool visibleLeftColumn = nil ifTrue: [tool setVisibleLeftColumn: 0].
 !
 RecorzKernelClass: #Workspace descriptorOrder: 19 objectKindOrder: 19 sourceBootOrder: 11 instanceVariableNames: 'currentViewKind currentTargetName currentSource lastSource'
 !
@@ -900,5 +902,6 @@ drawEditorCursorOnForm: form
     ^form
 !
 RecorzKernelDoIt:
-KernelInstaller rememberObject: ((KernelInstaller classNamed: 'WorkspaceSession') new) named: 'BootWorkspaceSession'.
+(((KernelInstaller classNamed: 'WorkspaceTool') new) namedObjectOrNil: 'BootWorkspaceSession') = nil ifTrue: [
+    KernelInstaller rememberObject: ((KernelInstaller classNamed: 'WorkspaceSession') new) named: 'BootWorkspaceSession'].
 !

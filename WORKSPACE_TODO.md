@@ -55,11 +55,11 @@ Notes:
 - [ ] Ensure the workspace remains usable at both the primary and comfort text densities
 
 ## Phase 5 - Persistence And Reopen
-- [ ] Make workspace reopen restore the image-owned workspace session instead of reconstructing a VM-owned tool mode
-- [ ] Preserve buffer contents, cursor, selection, visible origin, status, and feedback across snapshot/reboot
-- [ ] Distinguish reopening a plain workspace buffer from reopening a browser-backed source editor
+- [x] Make workspace reopen restore the image-owned workspace session instead of reconstructing a VM-owned tool mode
+- [x] Preserve buffer contents, cursor, selection, visible origin, status, and feedback across snapshot/reboot
+- [x] Distinguish reopening a plain workspace buffer from reopening a browser-backed source editor
 - [ ] Add recovery behavior for malformed or stale workspace session state
-- [ ] Keep snapshot format expectations explicit and covered by tests
+- [x] Keep snapshot format expectations explicit and covered by tests
 
 ## Phase 6 - Workflow Integration
 - [ ] Make the workspace the default place to stage and run exploratory code from inside the image
@@ -78,7 +78,7 @@ Notes:
 ## Proof And Regression Coverage
 - [ ] Add framebuffer integration tests for:
   workspace open, edit, scroll, page movement, save/reopen, and snapshot restore
-- [ ] Add snapshot tests proving workspace buffer, cursor, and visible origin survive reboot
+- [x] Add snapshot tests proving workspace buffer, cursor, and visible origin survive reboot
 - [ ] Add stress tests for held-key repeat on large workspace buffers
 - [ ] Add outcome tests for command behavior:
   do-it, print-it, accept, revert, test, save, reopen
@@ -88,5 +88,5 @@ Notes:
 - [ ] The workspace is an image-owned tool object with a stable editor/session model
 - [ ] The visible origin is owned by workspace/image objects and remains stable under scrolling and editing
 - [ ] Workspace command behavior is owned by image-side tool objects, not VM-side mode policy
-- [ ] Reopen/snapshot restore lands back in the same workspace session with correct buffer, cursor, and viewport state
+- [x] Reopen/snapshot restore lands back in the same workspace session with correct buffer, cursor, and viewport state
 - [ ] The workspace is covered by live RV32 framebuffer proofs for open, edit, scroll, save, and restore

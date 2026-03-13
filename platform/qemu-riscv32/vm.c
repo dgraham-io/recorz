@@ -187,7 +187,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_TOOL
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_CURRENT_HEADER_TEXT
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_NAMED_OBJECT_OR_NIL
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -1520,6 +1520,8 @@ static const char *selector_name(uint16_t selector) {
             return "moveListSelectionToVisibleBottom";
         case RECORZ_MVP_SELECTOR_CURRENT_HEADER_TEXT:
             return "currentHeaderText";
+        case RECORZ_MVP_SELECTOR_NAMED_OBJECT_OR_NIL:
+            return "namedObjectOrNil:";
     }
     return "unknown";
 }
@@ -20368,6 +20370,28 @@ static void execute_entry_workspace_tool_feedback_text(
     (void)text;
     workspace_tool_sync_feedback_field();
     push(workspace_tool_string_field_value(object, WORKSPACE_TOOL_FIELD_FEEDBACK_TEXT));
+}
+
+static void execute_entry_workspace_tool_named_object_or_nil(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint16_t object_handle;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("WorkspaceTool namedObjectOrNil: expects a name string");
+    }
+    object_handle = named_object_handle_for_name(arguments[0].string);
+    if (object_handle == 0U) {
+        push(nil_value());
+        return;
+    }
+    push(object_value(object_handle));
 }
 
 static void execute_entry_workspace_tool_browse_regenerated_boot_source(

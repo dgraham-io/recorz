@@ -6,11 +6,15 @@ import unittest
 from tools.inspect_qemu_riscv_snapshot import (
     MAX_GLOBAL_ID,
     MAX_ROOT_ID,
+    METHOD_SOURCE_NAME_LIMIT,
     SNAPSHOT_HEADER_SIZE,
     SNAPSHOT_MAGIC,
+    SNAPSHOT_NAMED_OBJECT_RECORD_SIZE,
     SNAPSHOT_OBJECT_SIZE,
     SNAPSHOT_VERSION,
+    WORKSPACE_CURSOR_GLOBAL_ID,
     WORKSPACE_GLOBAL_ID,
+    WORKSPACE_SELECTION_GLOBAL_ID,
     extract_workspace_current_source,
     inspect_snapshot,
 )
@@ -29,49 +33,103 @@ def _encode_string(offset: int, text: str) -> bytes:
     return bytes([2, 0]) + struct.pack("<H", len(encoded)) + struct.pack("<I", offset)
 
 
-def _build_workspace_snapshot(*, view_kind: int, target_name: str, current_source: str, last_source: str) -> bytes:
-    string_section = bytearray()
-    offsets: dict[str, int] = {}
-    for label, text in (
-        ("target_name", target_name),
-        ("current_source", current_source),
-        ("last_source", last_source),
-    ):
-        offsets[label] = len(string_section)
-        string_section.extend(text.encode("utf-8"))
-        string_section.append(0)
+def _encode_object_reference(handle: int) -> bytes:
+    return bytes([1, 0, 0, 0]) + struct.pack("<I", handle)
 
-    object_record = bytearray(SNAPSHOT_OBJECT_SIZE)
-    object_record[0] = 42
-    object_record[1] = 4
-    struct.pack_into("<H", object_record, 2, 1)
-    object_record[4:12] = _encode_small_integer(view_kind)
-    object_record[12:20] = _encode_string(offsets["target_name"], target_name)
-    object_record[20:28] = _encode_string(offsets["current_source"], current_source)
-    object_record[28:36] = _encode_string(offsets["last_source"], last_source)
+
+def _encode_field(field: object, string_section: bytearray) -> bytes:
+    if field is None:
+        return _encode_nil()
+    if isinstance(field, int):
+        return _encode_small_integer(field)
+    if isinstance(field, str):
+        offset = len(string_section)
+        string_section.extend(field.encode("utf-8"))
+        string_section.append(0)
+        return _encode_string(offset, field)
+    if isinstance(field, tuple) and len(field) == 2 and field[0] == "object":
+        return _encode_object_reference(int(field[1]))
+    raise AssertionError(f"unsupported snapshot field {field!r}")
+
+
+def _build_snapshot(
+    *,
+    objects: list[tuple[int, int, tuple[object, ...]]],
+    global_handles: dict[int, int] | None = None,
+    named_objects: list[tuple[int, str]] | None = None,
+) -> bytes:
+    string_section = bytearray()
+    object_section = bytearray()
+    global_handles = {} if global_handles is None else global_handles
+    named_objects = [] if named_objects is None else named_objects
+
+    for kind, class_handle, fields in objects:
+        if len(fields) > 4:
+            raise AssertionError("snapshot test helper only supports up to 4 object fields")
+        object_record = bytearray(SNAPSHOT_OBJECT_SIZE)
+        object_record[0] = kind
+        object_record[1] = len(fields)
+        struct.pack_into("<H", object_record, 2, class_handle)
+        for field_index, field in enumerate(fields):
+            start = 4 + (field_index * 8)
+            object_record[start : start + 8] = _encode_field(field, string_section)
+        object_section.extend(object_record)
 
     global_section = bytearray(MAX_GLOBAL_ID * 2)
-    struct.pack_into("<H", global_section, (WORKSPACE_GLOBAL_ID - 1) * 2, 1)
+    for global_id, handle in global_handles.items():
+        struct.pack_into("<H", global_section, (global_id - 1) * 2, handle)
 
     root_section = bytearray(MAX_ROOT_ID * 2)
     glyph_section = bytearray(128 * 2)
+    named_object_section = bytearray()
+    for handle, name in named_objects:
+        encoded_name = name.encode("utf-8")
+        if len(encoded_name) >= METHOD_SOURCE_NAME_LIMIT:
+            raise AssertionError("named object name exceeds snapshot capacity")
+        record = bytearray(SNAPSHOT_NAMED_OBJECT_RECORD_SIZE)
+        struct.pack_into("<H", record, 0, handle)
+        record[2 : 2 + len(encoded_name)] = encoded_name
+        named_object_section.extend(record)
 
     total_size = (
         SNAPSHOT_HEADER_SIZE
-        + len(object_record)
+        + len(object_section)
         + len(global_section)
         + len(root_section)
         + len(glyph_section)
+        + len(named_object_section)
         + len(string_section)
     )
     header = bytearray(SNAPSHOT_HEADER_SIZE)
     header[0:4] = SNAPSHOT_MAGIC
     struct.pack_into("<H", header, 4, SNAPSHOT_VERSION)
-    struct.pack_into("<H", header, 6, 1)
+    struct.pack_into("<H", header, 6, len(objects))
+    struct.pack_into("<H", header, 12, len(named_objects))
     struct.pack_into("<I", header, 18, len(string_section))
     struct.pack_into("<I", header, 48, total_size)
 
-    return bytes(header + object_record + global_section + root_section + glyph_section + string_section)
+    return bytes(
+        header
+        + object_section
+        + global_section
+        + root_section
+        + glyph_section
+        + named_object_section
+        + string_section
+    )
+
+
+def _build_workspace_snapshot(*, view_kind: int, target_name: str, current_source: str, last_source: str) -> bytes:
+    return _build_snapshot(
+        objects=[
+            (
+                42,
+                1,
+                (view_kind, target_name, current_source, last_source),
+            )
+        ],
+        global_handles={WORKSPACE_GLOBAL_ID: 1},
+    )
 
 
 class QemuRiscvSnapshotInspectorTests(unittest.TestCase):
@@ -119,6 +177,66 @@ class QemuRiscvSnapshotInspectorTests(unittest.TestCase):
         self.assertEqual(input_monitor_state["saved_target_name"], "Display>>newline")
         self.assertEqual(input_monitor_state["status"], "PRINT COMPLETE")
         self.assertEqual(input_monitor_state["feedback"], "OUT> 3\nOUT> READY")
+
+    def test_inspect_snapshot_reports_workspace_tool_session_cursor_and_selection_state(self) -> None:
+        snapshot = _build_snapshot(
+            objects=[
+                (
+                    42,
+                    1,
+                    (
+                        18,
+                        "CURSOR:123;TOP:7;VIEW:0;STATUS:WORKSPACE READY",
+                        "first\nsecond\nthird",
+                        "first\nsecond\nthird",
+                    ),
+                ),
+                (35, 1, ("WORKSPACE READY", "OUT> READY", "Workspace", 17)),
+                (36, 1, (("object", 1), 0, 0, 0)),
+                (30, 1, (123, 23, 88, 7)),
+                (31, 1, (23, 88, 23, 88)),
+            ],
+            global_handles={
+                WORKSPACE_GLOBAL_ID: 1,
+                WORKSPACE_CURSOR_GLOBAL_ID: 4,
+                WORKSPACE_SELECTION_GLOBAL_ID: 5,
+            },
+            named_objects=[
+                (2, "BootWorkspaceTool"),
+                (3, "BootWorkspaceSession"),
+            ],
+        )
+
+        inspection = inspect_snapshot(snapshot)
+
+        workspace_tool = inspection["workspace_tool"]
+        assert isinstance(workspace_tool, dict)
+        self.assertEqual(workspace_tool["workspace_name"], "Workspace")
+        self.assertEqual(workspace_tool["status_text"], "WORKSPACE READY")
+        self.assertEqual(workspace_tool["feedback_text"], "OUT> READY")
+        self.assertEqual(workspace_tool["visible_left_column"], 17)
+
+        workspace_session = inspection["workspace_session"]
+        assert isinstance(workspace_session, dict)
+        self.assertEqual(workspace_session["workspace_handle"], 1)
+        self.assertTrue(workspace_session["workspace_matches_global"])
+        self.assertEqual(workspace_session["selected"], 0)
+        self.assertEqual(workspace_session["list_top"], 0)
+        self.assertEqual(workspace_session["escape"], 0)
+
+        workspace_cursor = inspection["workspace_cursor"]
+        assert isinstance(workspace_cursor, dict)
+        self.assertEqual(workspace_cursor["index"], 123)
+        self.assertEqual(workspace_cursor["line"], 23)
+        self.assertEqual(workspace_cursor["column"], 88)
+        self.assertEqual(workspace_cursor["top_line"], 7)
+
+        workspace_selection = inspection["workspace_selection"]
+        assert isinstance(workspace_selection, dict)
+        self.assertEqual(workspace_selection["start_line"], 23)
+        self.assertEqual(workspace_selection["start_column"], 88)
+        self.assertEqual(workspace_selection["end_line"], 23)
+        self.assertEqual(workspace_selection["end_column"], 88)
 
     def test_extract_workspace_current_source_returns_image_visible_source(self) -> None:
         source_text = "RecorzKernelClass: #Exported superclass: #Object"

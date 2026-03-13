@@ -6,6 +6,7 @@ import select
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
 from collections import Counter
@@ -41,6 +42,35 @@ def _read_until(process: subprocess.Popen[str], marker: str, *, timeout: float) 
     if marker not in output:
         raise AssertionError(f"did not observe {marker!r}\ncurrent output:\n{output}")
     return output
+
+
+def _read_until_any(process: subprocess.Popen[str], markers: tuple[str, ...], *, timeout: float) -> tuple[str, str]:
+    if process.stdout is None:
+        raise AssertionError("QEMU process stdout is not available")
+
+    output = ""
+    deadline = time.monotonic() + timeout
+    while True:
+        for marker in markers:
+            if marker in output:
+                return output, marker
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise AssertionError(
+                "timed out waiting for one of "
+                f"{markers!r}\ncurrent output:\n{output}"
+            )
+        ready, _, _ = select.select([process.stdout], [], [], remaining)
+        if not ready:
+            continue
+        chunk = process.stdout.read(1)
+        if chunk == "":
+            break
+        output += chunk
+    for marker in markers:
+        if marker in output:
+            return output, marker
+    raise AssertionError(f"did not observe any of {markers!r}\ncurrent output:\n{output}")
 
 
 def _read_ppm(path: Path) -> tuple[int, int, bytes]:
@@ -256,7 +286,14 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         )
         try:
             try:
-                output = _read_until(process, "VIEW: INPUT", timeout=8.0)
+                output, _ = _read_until_any(
+                    process,
+                    (
+                        "X ACCEPT  Y REVERT",
+                        "T TEST  W SAVE",
+                    ),
+                    timeout=8.0,
+                )
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
                 process.stdin.write(serial_input)
@@ -782,19 +819,29 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             snapshot_output=SNAPSHOT_WORKSPACE_INPUT_MONITOR_OUTPUT_PATH,
             serial_input="\x0e\x06\x17",
         )
-        self.assertIn("SAVE: CTRL-W", save_log)
         self.assertIn("recorz-snapshot-begin", save_log)
         self.assertIn("recorz qemu-riscv32 mvp: snapshot saved, shutting down", save_log)
         self.assertTrue(SNAPSHOT_WORKSPACE_INPUT_MONITOR_OUTPUT_PATH.exists())
 
-        workspace_summary = self.inspect_workspace_snapshot(
+        snapshot_summary = self.inspect_snapshot_summary(
             snapshot_path=SNAPSHOT_WORKSPACE_INPUT_MONITOR_OUTPUT_PATH,
         )
-        self.assertEqual(workspace_summary["current_view_kind"], 18)
-        self.assertRegex(
-            str(workspace_summary["current_target_name"]),
-            r"CURSOR:[1-9][0-9]*;TOP:0;VIEW:5;TARGET:Display>>newline",
-        )
+        workspace_summary = snapshot_summary.get("workspace")
+        self.assertIsInstance(workspace_summary, dict)
+        assert isinstance(workspace_summary, dict)
+        self.assertEqual(workspace_summary["current_view_kind"], 5)
+        self.assertEqual(workspace_summary["current_target_name"], "Display>>newline")
+        self.assertIsNone(workspace_summary["input_monitor_state"])
+        self.assertEqual(snapshot_summary["workspace_tool"]["workspace_name"], "Workspace")
+        self.assertEqual(snapshot_summary["workspace_tool"]["visible_left_column"], 0)
+        self.assertIsNone(snapshot_summary["workspace_tool"]["status_text"])
+        self.assertIsNone(snapshot_summary["workspace_tool"]["feedback_text"])
+        self.assertTrue(snapshot_summary["workspace_session"]["workspace_matches_global"])
+        self.assertEqual(snapshot_summary["workspace_session"]["workspace_handle"], workspace_summary["handle"])
+        self.assertEqual(snapshot_summary["workspace_cursor"]["index"], 0)
+        self.assertEqual(snapshot_summary["workspace_cursor"]["top_line"], 0)
+        self.assertEqual(snapshot_summary["workspace_selection"]["start_line"], 0)
+        self.assertEqual(snapshot_summary["workspace_selection"]["end_line"], 0)
 
         extracted_source = self.extract_workspace_current_source(
             snapshot_path=SNAPSHOT_WORKSPACE_INPUT_MONITOR_OUTPUT_PATH,
@@ -811,22 +858,106 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
 
         self.assertEqual((width, height), (1024, 768))
         self.assertIn("recorz qemu-riscv32 mvp: loaded snapshot", reload_log)
-        self.assertIn("recorz qemu-riscv32 mvp: rendered", reload_log)
         self.assertNotIn("panic:", reload_log)
-        self.assertIn("VIEW: INPUT", reload_log)
-        self.assertIn("LINE: 2", reload_log)
-        self.assertIn("COL: 2", reload_log)
-        self.assertIn("TOP: 1", reload_log)
+        self.assertIn("Display>>newline", reload_log)
+        self.assertIn("SOURCE EDITOR :: MODIFIED", reload_log)
         self.assertIn("| first second third fourth fifth six", reload_log)
         self.assertIn("fifth := 'FIVE'.", reload_log)
 
-        line_1 = _region_histogram(data, width, 24, 24, 420, 56)
-        line_2 = _region_histogram(data, width, 24, 58, 420, 90)
         source_region = _region_histogram(data, width, 24, 126, 980, 700)
 
-        self.assertGreater(line_1[TEXT_FOREGROUND], 240)
-        self.assertGreater(line_2[TEXT_FOREGROUND], 160)
-        self.assertGreater(source_region[TEXT_FOREGROUND], 2000)
+        self.assertGreater(source_region[TEXT_FOREGROUND], 12000)
+
+    def test_snapshot_preserves_plain_workspace_buffer_cursor_selection_and_viewport_state(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-plain-session-") as temp_dir:
+            temp_path = Path(temp_dir)
+            build_dir = ROOT / "misc" / "q32-plain-ws-save"
+            reload_build_dir = ROOT / "misc" / "q32-plain-ws-reload"
+            snapshot_output = ROOT / "misc" / "qemu-riscv32-snapshots" / "plain-workspace-live-image.bin"
+            example_path = temp_path / "plain_workspace_snapshot_demo.rz"
+            buffer_lines = [f"line{index:02d}" for index in range(1, 13)]
+            buffer_lines.append("ABCDEFGHIJKLMNOPQRSTUVWXYZ" * 4)
+            buffer_text = "\n".join(buffer_lines)
+            escaped_buffer_text = buffer_text.replace("'", "''")
+            cursor_line = len(buffer_lines) - 1
+            cursor_column = len(buffer_lines[-1])
+            top_line = 5
+            left_column = 24
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "Display clear.",
+                        f"Workspace setContents: '{escaped_buffer_text}'.",
+                        f"Workspace cursor moveToIndex: {len(buffer_text)} line: {cursor_line} column: {cursor_column} topLine: {top_line}.",
+                        f"Workspace selection collapseToLine: {cursor_line} column: {cursor_column}.",
+                        f"Workspace setVisibleOriginTop: {top_line} left: {left_column}.",
+                        "Workspace interactiveInputMonitor.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            save_log = self.save_snapshot_from_interactive_editor(
+                build_dir=build_dir,
+                example_path=example_path,
+                snapshot_output=snapshot_output,
+                serial_input="\x17",
+            )
+            self.assertIn("recorz-snapshot-begin", save_log)
+            self.assertTrue(snapshot_output.exists())
+
+            snapshot_summary = self.inspect_snapshot_summary(snapshot_path=snapshot_output)
+            workspace_summary = snapshot_summary.get("workspace")
+            workspace_tool = snapshot_summary.get("workspace_tool")
+            workspace_session = snapshot_summary.get("workspace_session")
+            workspace_cursor = snapshot_summary.get("workspace_cursor")
+            workspace_selection = snapshot_summary.get("workspace_selection")
+            self.assertIsInstance(workspace_summary, dict)
+            self.assertIsInstance(workspace_tool, dict)
+            self.assertIsInstance(workspace_session, dict)
+            self.assertIsInstance(workspace_cursor, dict)
+            self.assertIsInstance(workspace_selection, dict)
+            assert isinstance(workspace_summary, dict)
+            assert isinstance(workspace_tool, dict)
+            assert isinstance(workspace_session, dict)
+            assert isinstance(workspace_cursor, dict)
+            assert isinstance(workspace_selection, dict)
+
+            self.assertEqual(workspace_summary["current_view_kind"], 18)
+            self.assertIsNone(workspace_summary["current_target_name"])
+            self.assertIn("line12", str(workspace_summary["current_source"]))
+            self.assertIn("ABCDEFGHIJKLMNOPQRSTUVWXYZ", str(workspace_summary["current_source"]))
+            self.assertIsNone(workspace_summary["input_monitor_state"])
+
+            self.assertEqual(workspace_tool["workspace_name"], "Workspace")
+            self.assertGreaterEqual(workspace_tool["visible_left_column"], left_column)
+            self.assertLess(workspace_tool["visible_left_column"], cursor_column)
+
+            self.assertEqual(workspace_session["workspace_handle"], workspace_summary["handle"])
+            self.assertTrue(workspace_session["workspace_matches_global"])
+            self.assertEqual(workspace_session["escape"], 0)
+
+            self.assertEqual(workspace_cursor["line"], cursor_line)
+            self.assertEqual(workspace_cursor["column"], cursor_column)
+            self.assertEqual(workspace_cursor["top_line"], top_line)
+            self.assertEqual(workspace_selection["start_line"], cursor_line)
+            self.assertEqual(workspace_selection["start_column"], cursor_column)
+            self.assertEqual(workspace_selection["end_line"], cursor_line)
+            self.assertEqual(workspace_selection["end_column"], cursor_column)
+
+            reload_log, width, height, data = self.render_demo(
+                build_dir=reload_build_dir,
+                example_path=SNAPSHOT_WORKSPACE_IDLE_DEMO_PATH,
+                snapshot_payload=snapshot_output,
+            )
+
+            self.assertEqual((width, height), (1024, 768))
+            self.assertIn("recorz qemu-riscv32 mvp: loaded snapshot", reload_log)
+            self.assertNotIn("panic:", reload_log)
+            self.assertGreater(
+                _region_histogram(data, width, 24, 126, 980, 700)[TEXT_FOREGROUND],
+                1800,
+            )
 
     def test_snapshot_preserves_input_monitor_status_and_feedback_tail(self) -> None:
         save_log = self.save_snapshot_from_interactive_editor(
@@ -835,18 +966,27 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             snapshot_output=SNAPSHOT_WORKSPACE_INPUT_MONITOR_FEEDBACK_OUTPUT_PATH,
             serial_input="1 + 2\x10\x17",
         )
-        self.assertIn("PRINT: CTRL-P", save_log)
         self.assertIn("recorz-snapshot-begin", save_log)
         self.assertTrue(SNAPSHOT_WORKSPACE_INPUT_MONITOR_FEEDBACK_OUTPUT_PATH.exists())
 
-        workspace_summary = self.inspect_workspace_snapshot(
+        snapshot_summary = self.inspect_snapshot_summary(
             snapshot_path=SNAPSHOT_WORKSPACE_INPUT_MONITOR_FEEDBACK_OUTPUT_PATH,
         )
-        input_monitor_state = workspace_summary.get("input_monitor_state")
-        self.assertIsInstance(input_monitor_state, dict)
-        assert isinstance(input_monitor_state, dict)
-        self.assertEqual(input_monitor_state["status"], "PRINT COMPLETE")
-        self.assertEqual(input_monitor_state["feedback"], "3")
+        workspace_summary = snapshot_summary.get("workspace")
+        self.assertIsInstance(workspace_summary, dict)
+        assert isinstance(workspace_summary, dict)
+        self.assertEqual(workspace_summary["current_view_kind"], 18)
+        self.assertIsNone(workspace_summary["current_target_name"])
+        self.assertEqual(workspace_summary["current_source"], "1 + 2")
+        self.assertEqual(workspace_summary["last_source"], "RecorzKernelDoIt:\n1 + 2")
+        self.assertIsNone(workspace_summary["input_monitor_state"])
+        self.assertEqual(snapshot_summary["workspace_tool"]["status_text"], "PRINT COMPLETE")
+        self.assertEqual(snapshot_summary["workspace_tool"]["feedback_text"], "3")
+        self.assertTrue(snapshot_summary["workspace_session"]["workspace_matches_global"])
+        self.assertEqual(snapshot_summary["workspace_cursor"]["index"], 5)
+        self.assertEqual(snapshot_summary["workspace_cursor"]["column"], 5)
+        self.assertEqual(snapshot_summary["workspace_selection"]["start_column"], 5)
+        self.assertEqual(snapshot_summary["workspace_selection"]["end_column"], 5)
 
         reload_log, width, height, data = self.render_demo(
             build_dir=SNAPSHOT_WORKSPACE_INPUT_MONITOR_FEEDBACK_RELOAD_BUILD_DIR,
@@ -856,10 +996,9 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
 
         self.assertEqual((width, height), (1024, 768))
         self.assertIn("recorz qemu-riscv32 mvp: loaded snapshot", reload_log)
-        self.assertIn("VIEW: INPUT", reload_log)
-        self.assertIn("STATUS: PRINT COMPLETE", reload_log)
-        self.assertIn("OUT> 3", reload_log)
         self.assertNotIn("panic:", reload_log)
+        self.assertIn("PRINT COMPLETE", reload_log)
+        self.assertIn("1 + 2", reload_log)
 
         feedback_region = _region_histogram(data, width, 24, 652, 980, 744)
         self.assertGreater(feedback_region[TEXT_FOREGROUND], 250)

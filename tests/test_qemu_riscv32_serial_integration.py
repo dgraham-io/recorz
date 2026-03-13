@@ -2973,7 +2973,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 "MSRP": 65536,
                 "RSTR": 65536,
                 "SSTR": 16384,
-                "SNAP": 151552,
+                "SNAP": 262144,
                 "MONO": 16,
             }
             for label, expected_limit in expected_limits.items():

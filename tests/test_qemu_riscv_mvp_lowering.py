@@ -1043,6 +1043,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_MOVE_LIST_SELECTION_TO_VISIBLE_TOP", 313),
                 ("RECORZ_MVP_SELECTOR_MOVE_LIST_SELECTION_TO_VISIBLE_BOTTOM", 314),
                 ("RECORZ_MVP_SELECTOR_CURRENT_HEADER_TEXT", 315),
+                ("RECORZ_MVP_SELECTOR_NAMED_OBJECT_OR_NIL", 316),
             ],
         )
 
@@ -1365,7 +1366,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            mvp.METHOD_ENTRY_ORDER[-12:],
+            mvp.METHOD_ENTRY_ORDER[-13:],
             [
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_PRINT_CURRENT",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_ACCEPT_CURRENT",
@@ -1379,6 +1380,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_BROWSE_REGENERATED_FILE_IN_SOURCE",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_STATUS_TEXT",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_FEEDBACK_TEXT",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_NAMED_OBJECT_OR_NIL",
             ],
         )
 

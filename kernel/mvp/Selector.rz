@@ -630,3 +630,5 @@ RecorzKernelSelector: #moveListSelectionToVisibleBottom order: 313
 !
 RecorzKernelSelector: #currentHeaderText order: 314
 !
+RecorzKernelSelector: #namedObjectOrNil: order: 315
+!
