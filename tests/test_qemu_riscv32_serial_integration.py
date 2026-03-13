@@ -1691,6 +1691,92 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("CONTENTS=plain workspace buffer", normalized)
             self.assertNotIn("panic:", normalized)
 
+    def test_workspace_direct_method_browser_edit_return_restores_plain_workspace_state(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-direct-edit-return-") as temp_dir:
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "build"
+            example_path = temp_path / "workspace_direct_edit_return_demo.rz"
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "Display clear.",
+                        "Workspace setContents: 'scratch direct workspace'.",
+                        "Workspace cursor moveToIndex: 6 line: 0 column: 6 topLine: 0.",
+                        "Workspace selection setStartLine: 0 startColumn: 2 endLine: 0 endColumn: 6.",
+                        "Workspace setVisibleOriginTop: 0 left: 4.",
+                        "Workspace browseMethod: 'newline' ofClassNamed: 'Display'.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') openOn: Workspace mode: 1.",
+                        "Transcript show: 'RESULT='.",
+                        "Transcript show: ((KernelInstaller objectNamed: 'BootWorkspaceTool') dispatchCommandOnForm: 15) printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'VIEW='.",
+                        "Transcript show: Workspace currentViewKind printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'TARGET='.",
+                        "Transcript show: ((Workspace currentTargetName = nil) ifTrue: ['nil'] ifFalse: [Workspace currentTargetName]).",
+                        "Transcript cr.",
+                        "Transcript show: 'CONTENTS='.",
+                        "Transcript show: Workspace contents.",
+                        "Transcript cr.",
+                        "Transcript show: 'CURSOR='.",
+                        "Transcript show: Workspace cursor column printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'SELECTION='.",
+                        "Transcript show: Workspace selection startColumn printString.",
+                        "Transcript show: '-'.",
+                        "Transcript show: Workspace selection endColumn printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'LEFT='.",
+                        "Transcript show: Workspace visibleLeftColumn printString.",
+                        "Transcript cr.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            elf_path = _build_elf(build_dir, example_path)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=8.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            normalized = output.replace("\r", "").replace("\n", "")
+            self.assertIn("RESULT=1", normalized)
+            self.assertIn("VIEW=18", normalized)
+            self.assertIn("TARGET=nil", normalized)
+            self.assertIn("CONTENTS=scratch direct workspace", normalized)
+            self.assertIn("CURSOR=6", normalized)
+            self.assertIn("SELECTION=2-6", normalized)
+            self.assertIn("LEFT=4", normalized)
+            self.assertNotIn("panic:", normalized)
+
     def test_workspace_tool_command_bindings_can_be_updated_from_image_source(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-command-bindings-") as temp_dir:
             temp_path = Path(temp_dir)

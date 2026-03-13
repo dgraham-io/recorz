@@ -5433,6 +5433,57 @@ static void workspace_remember_view(
     );
 }
 
+static void workspace_capture_plain_return_state_if_needed(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    uint16_t tool_handle;
+    struct recorz_mvp_value view_kind_value;
+    struct recorz_mvp_value target_name_value;
+    struct recorz_mvp_value current_source_value;
+    struct recorz_mvp_value arguments[1];
+
+    if (workspace_object == 0) {
+        return;
+    }
+    view_kind_value = heap_get_field(
+        workspace_object,
+        workspace_current_view_kind_field_index(workspace_object)
+    );
+    if (view_kind_value.kind == RECORZ_MVP_VALUE_SMALL_INTEGER &&
+        (uint32_t)view_kind_value.integer != WORKSPACE_VIEW_INPUT_MONITOR) {
+        return;
+    }
+    if (view_kind_value.kind != RECORZ_MVP_VALUE_NIL &&
+        view_kind_value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+        return;
+    }
+    target_name_value = heap_get_field(
+        workspace_object,
+        workspace_current_target_name_field_index(workspace_object)
+    );
+    if (target_name_value.kind != RECORZ_MVP_VALUE_NIL) {
+        return;
+    }
+    tool_handle = named_object_handle_for_name("BootWorkspaceTool");
+    if (tool_handle == 0U) {
+        return;
+    }
+    current_source_value = workspace_current_source_value(workspace_object);
+    if (current_source_value.kind == RECORZ_MVP_VALUE_STRING &&
+        current_source_value.string != 0) {
+        arguments[0] = current_source_value;
+    } else {
+        arguments[0] = string_value("");
+    }
+    (void)perform_send_and_pop_result(
+        object_value(tool_handle),
+        RECORZ_MVP_SELECTOR_REMEMBER_PLAIN_WORKSPACE_STATE_CONTENTS,
+        1U,
+        arguments,
+        0
+    );
+}
+
 static void workspace_remember_input_monitor_view(
     const struct recorz_mvp_heap_object *workspace_object
 ) {
@@ -10906,6 +10957,7 @@ static void workspace_edit_package_in_place(
     if (package_definition_for_name(package_name) == 0) {
         machine_panic("Workspace package editor could not resolve the package");
     }
+    workspace_capture_plain_return_state_if_needed(workspace_object);
     source = file_out_package_source_by_name(package_name);
     workspace_remember_editor_current_source(workspace_object, source);
     workspace_remember_source(workspace_object, source);
@@ -19674,6 +19726,7 @@ static void execute_entry_workspace_browse_methods_for_class_named(
     if (class_object == 0) {
         machine_panic("Workspace browseMethodsForClassNamed: could not resolve class");
     }
+    workspace_capture_plain_return_state_if_needed(object);
     workspace_remember_view(object, WORKSPACE_VIEW_METHODS, arguments[0].string);
     workspace_render_method_list_browser(object, class_object, arguments[0].string, "INST");
     push(receiver);
@@ -19692,6 +19745,7 @@ static void execute_entry_workspace_browse_package_named(
     if (package_definition_for_name(arguments[0].string) == 0) {
         machine_panic("Workspace browsePackageNamed: could not resolve package");
     }
+    workspace_capture_plain_return_state_if_needed(object);
     workspace_remember_view(object, WORKSPACE_VIEW_PACKAGE, arguments[0].string);
     workspace_render_package_browser(object, arguments[0].string);
     push(receiver);
@@ -19713,6 +19767,7 @@ static void execute_entry_workspace_browse_protocols_for_class_named(
     if (class_object == 0) {
         machine_panic("Workspace browseProtocolsForClassNamed: could not resolve class");
     }
+    workspace_capture_plain_return_state_if_needed(object);
     workspace_remember_view(object, WORKSPACE_VIEW_PROTOCOLS, arguments[0].string);
     workspace_render_protocol_list_browser(object, class_object, arguments[0].string, "INST");
     push(receiver);
@@ -19737,6 +19792,7 @@ static void execute_entry_workspace_browse_protocol_of_class_named(
     if (class_object == 0) {
         machine_panic("Workspace browseProtocol:ofClassNamed: could not resolve class");
     }
+    workspace_capture_plain_return_state_if_needed(object);
     workspace_remember_view(
         object,
         WORKSPACE_VIEW_PROTOCOL,
@@ -19768,6 +19824,7 @@ static void execute_entry_workspace_browse_class_named(
     if (class_object == 0) {
         machine_panic("Workspace browseClassNamed: could not resolve class");
     }
+    workspace_capture_plain_return_state_if_needed(object);
     workspace_remember_view(object, WORKSPACE_VIEW_CLASS, arguments[0].string);
     workspace_render_class_browser(object, class_object, arguments[0].string);
     push(receiver);
@@ -19823,6 +19880,7 @@ static void execute_entry_workspace_browse_method_of_class_named(
         lookup_builtin_method_descriptor(class_object, selector_id, 1U) == 0) {
         machine_panic("Workspace browseMethod:ofClassNamed: could not resolve method");
     }
+    workspace_capture_plain_return_state_if_needed(object);
     method_source = workspace_method_source_text_for_browser_target(
         class_object,
         arguments[1].string,
@@ -19869,6 +19927,7 @@ static void execute_entry_workspace_edit_method_of_class_named(
         lookup_builtin_method_descriptor(class_object, selector_id, 1U) == 0) {
         machine_panic("Workspace editMethod:ofClassNamed: could not resolve method");
     }
+    workspace_capture_plain_return_state_if_needed(object);
     method_source = workspace_method_source_text_for_browser_target(
         class_object,
         arguments[1].string,
@@ -19903,6 +19962,7 @@ static void execute_entry_workspace_browse_class_methods_for_class_named(
     if (class_object == 0) {
         machine_panic("Workspace browseClassMethodsForClassNamed: could not resolve class");
     }
+    workspace_capture_plain_return_state_if_needed(object);
     workspace_remember_view(object, WORKSPACE_VIEW_CLASS_METHODS, arguments[0].string);
     workspace_render_method_list_browser(
         object,
@@ -19929,6 +19989,7 @@ static void execute_entry_workspace_browse_class_protocols_for_class_named(
     if (class_object == 0) {
         machine_panic("Workspace browseClassProtocolsForClassNamed: could not resolve class");
     }
+    workspace_capture_plain_return_state_if_needed(object);
     workspace_remember_view(object, WORKSPACE_VIEW_CLASS_PROTOCOLS, arguments[0].string);
     workspace_render_protocol_list_browser(
         object,
@@ -19958,6 +20019,7 @@ static void execute_entry_workspace_browse_class_protocol_of_class_named(
     if (class_object == 0) {
         machine_panic("Workspace browseClassProtocol:ofClassNamed: could not resolve class");
     }
+    workspace_capture_plain_return_state_if_needed(object);
     workspace_remember_view(
         object,
         WORKSPACE_VIEW_CLASS_PROTOCOL,
@@ -20004,6 +20066,7 @@ static void execute_entry_workspace_browse_class_method_of_class_named(
         lookup_builtin_method_descriptor(metaclass_object, selector_id, 1U) == 0) {
         machine_panic("Workspace browseClassMethod:ofClassNamed: could not resolve class-side method");
     }
+    workspace_capture_plain_return_state_if_needed(object);
     method_source = workspace_method_source_text_for_browser_target(
         metaclass_object,
         arguments[1].string,
@@ -20127,6 +20190,7 @@ static void execute_entry_workspace_browse_regenerated_boot_source(
 ) {
     (void)arguments;
     (void)text;
+    workspace_capture_plain_return_state_if_needed(object);
     workspace_remember_current_source(object, 0);
     workspace_remember_view(object, WORKSPACE_VIEW_REGENERATED_BOOT_SOURCE, 0);
     workspace_render_regenerated_source_browser(object, "BOOT");
@@ -20141,6 +20205,7 @@ static void execute_entry_workspace_browse_regenerated_kernel_source(
 ) {
     (void)arguments;
     (void)text;
+    workspace_capture_plain_return_state_if_needed(object);
     workspace_remember_current_source(object, 0);
     workspace_remember_view(object, WORKSPACE_VIEW_REGENERATED_KERNEL_SOURCE, 0);
     workspace_render_regenerated_source_browser(object, "KERNEL");
@@ -20155,6 +20220,7 @@ static void execute_entry_workspace_browse_regenerated_file_in_source(
 ) {
     (void)arguments;
     (void)text;
+    workspace_capture_plain_return_state_if_needed(object);
     workspace_remember_current_source(object, 0);
     workspace_remember_view(object, WORKSPACE_VIEW_REGENERATED_FILE_IN_SOURCE, 0);
     workspace_render_regenerated_source_browser(object, "FILEIN");

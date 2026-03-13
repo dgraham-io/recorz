@@ -63,7 +63,7 @@ Notes:
 
 ## Phase 6 - Workflow Integration
 - [x] Make the workspace the default place to stage and run exploratory code from inside the image
-- [ ] Support jumping cleanly between workspace and browser/source-editor contexts
+- [x] Support jumping cleanly between workspace and browser/source-editor contexts
 - [x] Allow browser-opened source to return to the workspace without losing the workspace buffer
 - [ ] Add save/resume behavior that feels like continuing one live workspace session
 - [ ] Ensure regeneration, recovery, and package/class editing flows do not corrupt workspace state

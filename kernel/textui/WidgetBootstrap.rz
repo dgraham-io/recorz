@@ -1035,17 +1035,15 @@ openSelectedPackageSource
     plainState := tool namedObjectOrNil: 'BootWorkspacePlainState'.
     plainState = nil ifTrue: [
         workspace currentTargetName = nil ifTrue: [
-            workspace isModified ifTrue: [
-                plainContents := workspace contents.
-                plainContents = nil ifTrue: [plainContents := ''].
-                tool rememberPlainWorkspaceStateContents: plainContents]]].
+            plainContents := workspace contents.
+            plainContents = nil ifTrue: [plainContents := ''].
+            tool rememberPlainWorkspaceStateContents: plainContents]].
     plainState = nil ifFalse: [
         plainState contents = nil ifTrue: [
             workspace currentTargetName = nil ifTrue: [
-                workspace isModified ifTrue: [
-                    plainContents := workspace contents.
-                    plainContents = nil ifTrue: [plainContents := ''].
-                    tool rememberPlainWorkspaceStateContents: plainContents]]]].
+                plainContents := workspace contents.
+                plainContents = nil ifTrue: [plainContents := ''].
+                tool rememberPlainWorkspaceStateContents: plainContents]]]].
     packageName := self selectedPackageName.
     priorTarget := workspace currentTargetName.
     workspace setCurrentViewKind: 13.
