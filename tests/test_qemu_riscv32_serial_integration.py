@@ -2956,12 +2956,16 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 text=True,
             )
             try:
-                output = _read_until(process, "VIEW: PACKAGES", timeout=8.0)
+                output = _read_until(process, "INTERACTIVE PACKAGE LIST", timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
                 process.stdin.write("\x18\x0f\x0f")
                 process.stdin.flush()
-                time.sleep(1.0)
+                output += _read_until_any(
+                    process,
+                    ("Workspace browsePackagesInteractive.", "panic:"),
+                    timeout=8.0,
+                )
                 if process.poll() is None:
                     process.kill()
                 process.wait(timeout=5.0)
@@ -2976,11 +2980,11 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     process.stdin.close()
 
             output = output.replace("\r", "")
-            self.assertGreaterEqual(output.count("VIEW: PACKAGES"), 2)
-            self.assertIn("EDIT: ENTER/CTRL-X", output)
-            self.assertIn("VIEW: SOURCE", output)
-            self.assertIn("PACKAGE:", output)
-            self.assertIn("DONE", output)
+            self.assertIn("INTERACTIVE PACKAGE LIST", output)
+            self.assertIn("X OPEN  O CLOSE", output)
+            self.assertIn("WORKSPACETextUI", output)
+            self.assertIn("RecorzKernelPackage: 'TextUI'", output)
+            self.assertIn("Workspace browsePackagesInteractive.", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_interactive_input_monitor_can_emit_regenerated_sources_and_continue(self) -> None:

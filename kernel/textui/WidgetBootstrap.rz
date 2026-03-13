@@ -113,7 +113,7 @@ visibleEditorColumns
     ^0
 !
 redrawOnForm: form
-    | margins oldLeft oldTop oldRight oldBottom leftMargin topMargin rightMargin bottomMargin visibleLines visibleColumns renderer renderText topLine |
+    | margins oldLeft oldTop oldRight oldBottom leftMargin topMargin rightMargin bottomMargin visibleLines visibleColumns renderText topLine |
     view redrawOnForm: form.
     margins := Display layout margins.
     oldLeft := margins left.
@@ -133,8 +133,7 @@ redrawOnForm: form
     topLine := Workspace visibleTopLine.
     text = Workspace contents ifTrue: [
         renderText := Workspace visibleContentsTop: topLine left: Workspace visibleLeftColumn lines: visibleLines columns: visibleColumns.
-        renderer := KernelInstaller objectNamed: 'BootInputMonitorRenderer'.
-        renderer drawSource: renderText onForm: form visible: visibleLines.
+        form writeString: renderText.
         self drawCursorOnForm: form
     ] ifFalse: [
         form writeString: renderText
@@ -1092,33 +1091,42 @@ handleBrowserByte: aByte
     ^0
 !
 openSelectedPackageSource
-    | packageName source priorTarget tool plainState plainContents |
+    | packageName source priorTarget |
     workspace packageCount = 0 ifTrue: [^4].
-    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
-    plainState := tool namedObjectOrNil: 'BootWorkspacePlainState'.
-    plainState = nil ifTrue: [
-        workspace currentTargetName = nil ifTrue: [
-            plainContents := workspace contents.
-            plainContents = nil ifTrue: [plainContents := ''].
-            tool rememberPlainWorkspaceStateContents: plainContents]].
-    plainState = nil ifFalse: [
-        plainState contents = nil ifTrue: [
-            workspace currentTargetName = nil ifTrue: [
-                plainContents := workspace contents.
-                plainContents = nil ifTrue: [plainContents := ''].
-                tool rememberPlainWorkspaceStateContents: plainContents]]]].
+    self rememberPlainWorkspaceStateIfNeeded.
     packageName := self selectedPackageName.
     priorTarget := workspace currentTargetName.
     workspace setCurrentViewKind: 13.
     workspace setCurrentTargetName: packageName.
-    source := KernelInstaller fileOutPackageNamed: packageName.
-    (priorTarget = packageName) ifTrue: [
-        workspace contents = nil ifFalse: [source := workspace contents]].
+    source := self packageSourceToOpenFor: packageName priorTarget: priorTarget.
     workspace setContents: source.
     Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: Workspace visibleTopLine.
     Workspace collapseSelectionToCursor.
     Workspace setVisibleOriginTop: 0 left: 0.
     ^1
+!
+rememberCurrentPlainWorkspaceStateOnTool: tool
+    | plainContents |
+    workspace currentTargetName = nil ifFalse: [^self].
+    plainContents := workspace contents.
+    plainContents = nil ifTrue: [plainContents := ''].
+    tool rememberPlainWorkspaceStateContents: plainContents.
+    ^self
+!
+rememberPlainWorkspaceStateIfNeeded
+    | tool plainState |
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    plainState := tool namedObjectOrNil: 'BootWorkspacePlainState'.
+    plainState = nil ifTrue: [^self rememberCurrentPlainWorkspaceStateOnTool: tool].
+    plainState contents = nil ifTrue: [^self rememberCurrentPlainWorkspaceStateOnTool: tool].
+    ^self
+!
+packageSourceToOpenFor: packageName priorTarget: priorTarget
+    | source |
+    source := KernelInstaller fileOutPackageNamed: packageName.
+    priorTarget = packageName ifFalse: [^source].
+    workspace contents = nil ifTrue: [^source].
+    ^workspace contents
 !
 handleEditorByte: aByte tool: tool
     | commandResult |

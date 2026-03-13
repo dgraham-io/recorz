@@ -674,3 +674,9 @@ RecorzKernelSelector: #handleEditorInputByte:visibleLines:visibleColumns: order:
 !
 RecorzKernelSelector: #finishEditorInteractionForLines:visibleColumns:redrawCode: order: 336
 !
+RecorzKernelSelector: #rememberCurrentPlainWorkspaceStateOnTool: order: 337
+!
+RecorzKernelSelector: #rememberPlainWorkspaceStateIfNeeded order: 338
+!
+RecorzKernelSelector: #packageSourceToOpenFor:priorTarget: order: 339
+!
