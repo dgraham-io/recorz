@@ -775,7 +775,7 @@ redrawBrowserOnForm: form
     ^statusWidget redrawOnForm: form
 !
 redrawEditorOnForm: form
-    | headerWidget sourceView statusWidget statusView headerView |
+    | headerWidget sourceWidget sourceView statusWidget statusView headerView |
     Display clear.
     headerView := KernelInstaller objectNamed: 'BootWorkspaceHeaderView'.
     sourceView := KernelInstaller objectNamed: 'BootWorkspaceSourceView'.
@@ -786,12 +786,13 @@ redrawEditorOnForm: form
     headerWidget := KernelInstaller objectNamed: 'BootWorkspaceHeaderWidget'.
     headerWidget setView: headerView text: self currentHeaderText.
     headerWidget redrawOnForm: form.
-    sourceView takeFocus.
-    sourceView redrawOnForm: form.
+    sourceWidget := KernelInstaller objectNamed: 'BootWorkspaceSourceWidget'.
+    sourceWidget setView: sourceView text: workspace contents cursor: Workspace cursor selection: Workspace selection.
+    sourceWidget takeFocus.
+    sourceWidget redrawOnForm: form.
     statusWidget := KernelInstaller objectNamed: 'BootWorkspaceStatusWidget'.
     statusWidget setView: statusView status: self currentStatusText feedback: self currentFeedbackText.
-    statusWidget redrawOnForm: form.
-    ^self drawEditorCursorOnForm: form
+    ^statusWidget redrawOnForm: form
 !
 visibleEditorLines
     | view lineHeight cellHeight usable |

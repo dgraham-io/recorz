@@ -46,9 +46,9 @@ Notes:
 - [x] Support command binding updates without hard-wiring more policy into the VM
 
 ## Phase 4 - Rendering And Layout
-- [ ] Keep workspace rendering image-owned:
+- [x] Keep workspace rendering image-owned:
   header, source pane, status pane, feedback pane, cursor, selection, and scroll position
-- [ ] Unify workspace rendering with the existing view/widget/layout objects rather than special-casing the workspace
+- [x] Unify workspace rendering with the existing view/widget/layout objects rather than special-casing the workspace
 - [x] Add explicit dirty-region redraw for:
   cursor-only movement, line edits, viewport scroll, and status updates
 - [x] Preserve readable default workspace typography and pane spacing on the RV32 framebuffer target
