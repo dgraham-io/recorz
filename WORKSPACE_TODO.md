@@ -51,8 +51,8 @@ Notes:
 - [ ] Unify workspace rendering with the existing view/widget/layout objects rather than special-casing the workspace
 - [ ] Add explicit dirty-region redraw for:
   cursor-only movement, line edits, viewport scroll, and status updates
-- [ ] Preserve readable default workspace typography and pane spacing on the RV32 framebuffer target
-- [ ] Ensure the workspace remains usable at both the primary and comfort text densities
+- [x] Preserve readable default workspace typography and pane spacing on the RV32 framebuffer target
+- [x] Ensure the workspace remains usable at both the primary and comfort text densities
 
 ## Phase 5 - Persistence And Reopen
 - [x] Make workspace reopen restore the image-owned workspace session instead of reconstructing a VM-owned tool mode

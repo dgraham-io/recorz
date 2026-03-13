@@ -33,6 +33,7 @@ VIEW_PANE_EXAMPLE = ROOT / "examples" / "qemu_riscv_view_pane_demo.rz"
 SPLIT_LAYOUT_EXAMPLE = ROOT / "examples" / "qemu_riscv_split_layout_demo.rz"
 WIDGET_SURFACE_EXAMPLE = ROOT / "examples" / "qemu_riscv_widget_surface_demo.rz"
 WORKSPACE_EDITOR_SURFACE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_editor_surface_demo.rz"
+WORKSPACE_EDITOR_SURFACE_COMFORT_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_editor_surface_comfort_mode_demo.rz"
 WORKSPACE_HORIZONTAL_ORIGIN_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_horizontal_origin_demo.rz"
 WORKSPACE_HORIZONTAL_ORIGIN_SCROLLED_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_horizontal_origin_scrolled_demo.rz"
 BROWSER_SURFACE_EXAMPLE = ROOT / "examples" / "qemu_riscv_browser_surface_demo.rz"
@@ -473,6 +474,16 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertGreater(_region_histogram(data, width, 52, 84, 320, 112)[(31, 41, 51)], 120)
         self.assertGreater(_region_histogram(data, width, 52, 160, 520, 260)[(31, 41, 51)], 180)
         self.assertGreater(_region_histogram(data, width, 52, 612, 860, 652)[(31, 41, 51)], 180)
+
+    def test_workspace_editor_surface_remains_usable_in_comfort_text_mode(self) -> None:
+        qemu_log, width, height, data = self.render_example(WORKSPACE_EDITOR_SURFACE_COMFORT_EXAMPLE)
+
+        normalized_log = " ".join(qemu_log.replace("\r", " ").split())
+        self.assertIn("EDITOR SURFACE COMFORT", normalized_log)
+        self.assertEqual((width, height), (1024, 768))
+        self.assertGreater(_region_histogram(data, width, 52, 84, 420, 124)[(31, 41, 51)], 140)
+        self.assertGreater(_region_histogram(data, width, 52, 172, 620, 300)[(31, 41, 51)], 220)
+        self.assertGreater(_region_histogram(data, width, 52, 612, 900, 668)[(31, 41, 51)], 180)
 
     def test_workspace_editor_surface_respects_horizontal_visible_origin(self) -> None:
         base_log, base_width, base_height, base_data = self.render_example(WORKSPACE_HORIZONTAL_ORIGIN_EXAMPLE)

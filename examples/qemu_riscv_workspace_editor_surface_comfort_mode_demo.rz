@@ -1,0 +1,11 @@
+Display useComfortTextMode.
+Workspace setContents: 'Display clear. Transcript show: ''HELLO''.'.
+Workspace cursor moveToIndex: 1 line: 0 column: 8 topLine: 0.
+Workspace selection collapseToLine: 0 column: 8.
+(KernelInstaller objectNamed: 'BootWorkspaceEditorSurface')
+    drawSource: Workspace contents
+    status: 'READY'
+    feedback: 'OUT> COMFORT MODE'
+    onForm: Display defaultForm.
+Transcript show: 'EDITOR SURFACE COMFORT'.
+Transcript cr.
