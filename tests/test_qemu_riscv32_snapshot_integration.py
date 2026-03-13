@@ -1328,6 +1328,74 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             self.assertEqual(workspace_selection["start_column"], 3)
             self.assertEqual(workspace_selection["end_column"], 8)
 
+    def test_recovery_snapshot_after_regenerated_source_return_preserves_plain_workspace_state(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-regen-recovery-") as temp_dir:
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "save-build"
+            reload_build_dir = ROOT / "misc" / "q32-regen-recovery-reload"
+            snapshot_path = temp_path / "workspace-regen-recovery.bin"
+            example_path = temp_path / "workspace_regen_recovery_demo.rz"
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "Display clear.",
+                        "Workspace setContents: 'regen recovery workspace'.",
+                        "Workspace cursor moveToIndex: 9 line: 0 column: 9 topLine: 0.",
+                        "Workspace selection setStartLine: 0 startColumn: 2 endLine: 0 endColumn: 9.",
+                        "Workspace setVisibleOriginTop: 0 left: 6.",
+                        "Workspace interactiveInputMonitor.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            save_log = self.save_snapshot_from_interactive_editor(
+                build_dir=build_dir,
+                example_path=example_path,
+                snapshot_output=snapshot_path,
+                serial_input="\x07\x0f\x0b",
+            )
+            self.assertIn("recorz-snapshot-begin", save_log)
+            self.assertTrue(snapshot_path.exists())
+
+            snapshot_summary = self.inspect_snapshot_summary(snapshot_path=snapshot_path)
+            workspace_summary = snapshot_summary.get("workspace")
+            workspace_tool = snapshot_summary.get("workspace_tool")
+            workspace_cursor = snapshot_summary.get("workspace_cursor")
+            workspace_selection = snapshot_summary.get("workspace_selection")
+            self.assertIsInstance(workspace_summary, dict)
+            self.assertIsInstance(workspace_tool, dict)
+            self.assertIsInstance(workspace_cursor, dict)
+            self.assertIsInstance(workspace_selection, dict)
+            assert isinstance(workspace_summary, dict)
+            assert isinstance(workspace_tool, dict)
+            assert isinstance(workspace_cursor, dict)
+            assert isinstance(workspace_selection, dict)
+
+            self.assertEqual(workspace_summary["current_view_kind"], 18)
+            self.assertIsNone(workspace_summary["current_target_name"])
+            self.assertEqual(workspace_summary["current_source"], "regen recovery workspace")
+            self.assertIsNone(workspace_summary["input_monitor_state"])
+            self.assertEqual(workspace_tool["visible_left_column"], 6)
+            self.assertEqual(workspace_cursor["column"], 9)
+            self.assertEqual(workspace_selection["start_column"], 9)
+            self.assertEqual(workspace_selection["end_column"], 9)
+
+            reload_log, width, height, data = self.render_demo(
+                build_dir=reload_build_dir,
+                example_path=SNAPSHOT_WORKSPACE_IDLE_DEMO_PATH,
+                snapshot_payload=snapshot_path,
+            )
+
+            self.assertEqual((width, height), (1024, 768))
+            self.assertIn("recorz qemu-riscv32 mvp: loaded snapshot", reload_log)
+            self.assertIn("recovery workspace", reload_log)
+            self.assertNotIn("panic:", reload_log)
+            self.assertGreater(
+                _region_histogram(data, width, 24, 126, 980, 700)[TEXT_FOREGROUND],
+                1800,
+            )
+
     def test_snapshot_can_reopen_workspace_class_source_browser_state_without_demo_specific_program(self) -> None:
         save_log = self.save_snapshot(
             build_dir=SNAPSHOT_CLASS_FILE_OUT_BUILD_DIR,

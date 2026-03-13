@@ -66,7 +66,7 @@ Notes:
 - [x] Support jumping cleanly between workspace and browser/source-editor contexts
 - [x] Allow browser-opened source to return to the workspace without losing the workspace buffer
 - [x] Add save/resume behavior that feels like continuing one live workspace session
-- [ ] Ensure regeneration, recovery, and package/class editing flows do not corrupt workspace state
+- [x] Ensure regeneration, recovery, and package/class editing flows do not corrupt workspace state
 
 ## Phase 7 - Ergonomics
 - [x] Add a clear visual indicator for focus, cursor, modified state, and current target

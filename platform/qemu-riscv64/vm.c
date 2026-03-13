@@ -6884,6 +6884,15 @@ static struct recorz_mvp_heap_object *workspace_cursor_object(void) {
     return (struct recorz_mvp_heap_object *)heap_object(handle);
 }
 
+static struct recorz_mvp_heap_object *workspace_selection_object(void) {
+    uint16_t handle = global_handles[RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION];
+
+    if (handle == 0U || handle > heap_size) {
+        machine_panic("workspace selection object is unavailable");
+    }
+    return (struct recorz_mvp_heap_object *)heap_object(handle);
+}
+
 static void workspace_sync_input_monitor_text_state(
     const struct recorz_mvp_heap_object *workspace_object,
     uint32_t cursor_index,
@@ -7892,6 +7901,8 @@ static void workspace_view_regenerated_source_from_input_monitor(
     const char *source_name
 ) {
     uint16_t workspace_handle = heap_handle_for_object(workspace_object);
+    struct recorz_mvp_heap_object *selection_object = workspace_selection_object();
+    uint16_t selection_handle = heap_handle_for_object(selection_object);
     struct recorz_mvp_value saved_view_kind = heap_get_field(
         workspace_object,
         workspace_current_view_kind_field_index(workspace_object)
@@ -7903,6 +7914,22 @@ static void workspace_view_regenerated_source_from_input_monitor(
     struct recorz_mvp_value saved_source = heap_get_field(
         workspace_object,
         workspace_current_source_field_index(workspace_object)
+    );
+    struct recorz_mvp_value saved_selection_start_line = heap_get_field(
+        selection_object,
+        TEXT_SELECTION_FIELD_START_LINE
+    );
+    struct recorz_mvp_value saved_selection_start_column = heap_get_field(
+        selection_object,
+        TEXT_SELECTION_FIELD_START_COLUMN
+    );
+    struct recorz_mvp_value saved_selection_end_line = heap_get_field(
+        selection_object,
+        TEXT_SELECTION_FIELD_END_LINE
+    );
+    struct recorz_mvp_value saved_selection_end_column = heap_get_field(
+        selection_object,
+        TEXT_SELECTION_FIELD_END_COLUMN
     );
 
     heap_set_field(
@@ -7940,6 +7967,26 @@ static void workspace_view_regenerated_source_from_input_monitor(
     );
     workspace_bind_input_monitor_buffer(workspace_object);
     workspace_bind_input_monitor_cursor_state(workspace_object);
+    heap_set_field(
+        selection_handle,
+        TEXT_SELECTION_FIELD_START_LINE,
+        saved_selection_start_line
+    );
+    heap_set_field(
+        selection_handle,
+        TEXT_SELECTION_FIELD_START_COLUMN,
+        saved_selection_start_column
+    );
+    heap_set_field(
+        selection_handle,
+        TEXT_SELECTION_FIELD_END_LINE,
+        saved_selection_end_line
+    );
+    heap_set_field(
+        selection_handle,
+        TEXT_SELECTION_FIELD_END_COLUMN,
+        saved_selection_end_column
+    );
     workspace_render_input_monitor_browser(workspace_object);
 }
 
