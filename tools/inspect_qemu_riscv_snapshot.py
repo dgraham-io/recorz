@@ -54,7 +54,9 @@ WORKSPACE_FIELD_LAST_SOURCE = 3
 WORKSPACE_TOOL_FIELD_STATUS_TEXT = 0
 WORKSPACE_TOOL_FIELD_FEEDBACK_TEXT = 1
 WORKSPACE_TOOL_FIELD_NAME = 2
-WORKSPACE_TOOL_FIELD_LEFT_COLUMN = 3
+WORKSPACE_TOOL_FIELD_VISIBLE_ORIGIN = 3
+WORKSPACE_VISIBLE_ORIGIN_FIELD_TOP_LINE = 0
+WORKSPACE_VISIBLE_ORIGIN_FIELD_LEFT_COLUMN = 1
 WORKSPACE_SESSION_FIELD_WORKSPACE = 0
 WORKSPACE_SESSION_FIELD_SELECTED = 1
 WORKSPACE_SESSION_FIELD_LIST_TOP = 2
@@ -429,6 +431,17 @@ def _workspace_tool_summary(snapshot: ParsedSnapshot) -> dict[str, object] | Non
         return None
     handle, tool_object = tool
     fields = tool_object.fields
+    visible_origin_handle = fields[WORKSPACE_TOOL_FIELD_VISIBLE_ORIGIN].value
+    visible_origin: SnapshotObject | None = None
+    visible_top_line: int | None = None
+    visible_left_column: int | None = None
+
+    if isinstance(visible_origin_handle, int) and 1 <= visible_origin_handle <= len(snapshot.objects):
+        candidate = snapshot.objects[visible_origin_handle - 1]
+        if candidate.field_count >= 2:
+            visible_origin = candidate
+            visible_top_line = candidate.fields[WORKSPACE_VISIBLE_ORIGIN_FIELD_TOP_LINE].value
+            visible_left_column = candidate.fields[WORKSPACE_VISIBLE_ORIGIN_FIELD_LEFT_COLUMN].value
     return {
         "handle": handle,
         "kind": tool_object.kind,
@@ -437,7 +450,10 @@ def _workspace_tool_summary(snapshot: ParsedSnapshot) -> dict[str, object] | Non
         "status_text": fields[WORKSPACE_TOOL_FIELD_STATUS_TEXT].value,
         "feedback_text": fields[WORKSPACE_TOOL_FIELD_FEEDBACK_TEXT].value,
         "workspace_name": fields[WORKSPACE_TOOL_FIELD_NAME].value,
-        "visible_left_column": fields[WORKSPACE_TOOL_FIELD_LEFT_COLUMN].value,
+        "visible_origin_handle": visible_origin_handle,
+        "visible_origin_class_handle": visible_origin.class_handle if visible_origin is not None else None,
+        "visible_top_line": visible_top_line,
+        "visible_left_column": visible_left_column,
     }
 
 

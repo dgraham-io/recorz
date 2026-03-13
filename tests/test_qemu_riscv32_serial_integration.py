@@ -1307,6 +1307,12 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                         "Transcript show: 'LEFT='.",
                         "Transcript show: Workspace visibleLeftColumn printString.",
                         "Transcript cr.",
+                        "Transcript show: 'ORIGINTOP='.",
+                        "Transcript show: Workspace visibleOrigin topLine printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'ORIGINLEFT='.",
+                        "Transcript show: Workspace visibleOrigin visibleLeftColumn printString.",
+                        "Transcript cr.",
                         "Transcript show: 'TARGET='.",
                         "Transcript show: Workspace currentTargetLabel.",
                         "Transcript cr.",
@@ -1357,6 +1363,8 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("FEEDBACK=SHORT HELP", normalized)
             self.assertIn("TOP=3", normalized)
             self.assertIn("LEFT=5", normalized)
+            self.assertIn("ORIGINTOP=3", normalized)
+            self.assertIn("ORIGINLEFT=5", normalized)
             self.assertIn("TARGET=ScratchBuffer", normalized)
             self.assertIn("MOD=Y", normalized)
             self.assertNotIn("panic:", normalized)
@@ -1380,7 +1388,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                         "(KernelInstaller objectNamed: 'BootWorkspaceSession') openOn: Workspace mode: 1.",
                         f"Workspace cursor moveToIndex: {cursor_index} line: {cursor_line} column: {cursor_column} topLine: 10.",
                         f"Workspace selection collapseToLine: {cursor_line} column: {cursor_column}.",
-                        "(KernelInstaller objectNamed: 'BootWorkspaceTool') setVisibleLeftColumn: 10.",
+                        "Workspace setVisibleOriginTop: 10 left: 10.",
                         "(KernelInstaller objectNamed: 'BootWorkspaceSession') ensureEditorCursorVisible.",
                         "Transcript show: 'STEP1TOP='.",
                         "Transcript show: Workspace visibleTopLine printString.",

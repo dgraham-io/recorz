@@ -191,10 +191,11 @@ class QemuRiscvSnapshotInspectorTests(unittest.TestCase):
                         "first\nsecond\nthird",
                     ),
                 ),
-                (35, 1, ("WORKSPACE READY", "OUT> READY", "Workspace", 17)),
+                (35, 1, ("WORKSPACE READY", "OUT> READY", "Workspace", ("object", 6))),
                 (36, 1, (("object", 1), 0, 0, 0)),
                 (30, 1, (123, 23, 88, 7)),
                 (31, 1, (23, 88, 23, 88)),
+                (37, 1, (7, 17)),
             ],
             global_handles={
                 WORKSPACE_GLOBAL_ID: 1,
@@ -214,6 +215,7 @@ class QemuRiscvSnapshotInspectorTests(unittest.TestCase):
         self.assertEqual(workspace_tool["workspace_name"], "Workspace")
         self.assertEqual(workspace_tool["status_text"], "WORKSPACE READY")
         self.assertEqual(workspace_tool["feedback_text"], "OUT> READY")
+        self.assertEqual(workspace_tool["visible_top_line"], 7)
         self.assertEqual(workspace_tool["visible_left_column"], 17)
 
         workspace_session = inspection["workspace_session"]

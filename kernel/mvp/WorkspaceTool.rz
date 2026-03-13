@@ -1,4 +1,4 @@
-RecorzKernelClass: #WorkspaceTool descriptorOrder: 35 objectKindOrder: 35 sourceBootOrder: 29 instanceVariableNames: 'statusText feedbackText name leftColumn'
+RecorzKernelClass: #WorkspaceTool descriptorOrder: 35 objectKindOrder: 35 sourceBootOrder: 29 instanceVariableNames: 'statusText feedbackText name visibleOrigin'
 !
 evaluateCurrent
     <primitive: #workspaceToolEvaluateCurrent>

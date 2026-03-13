@@ -113,7 +113,7 @@ visibleEditorColumns
     ^0
 !
 redrawOnForm: form
-    | margins oldLeft oldTop oldRight oldBottom leftMargin topMargin rightMargin bottomMargin visibleLines visibleColumns renderer renderText |
+    | margins oldLeft oldTop oldRight oldBottom leftMargin topMargin rightMargin bottomMargin visibleLines visibleColumns renderer renderText topLine |
     view redrawOnForm: form.
     margins := Display layout margins.
     oldLeft := margins left.
@@ -129,8 +129,9 @@ redrawOnForm: form
     visibleLines := self visibleEditorLines.
     visibleColumns := self visibleEditorColumns.
     renderText := text.
+    topLine := Workspace visibleTopLine.
     text = Workspace contents ifTrue: [
-        renderText := Workspace visibleContentsTop: cursor topLine left: Workspace visibleLeftColumn lines: visibleLines columns: visibleColumns].
+        renderText := Workspace visibleContentsTop: topLine left: Workspace visibleLeftColumn lines: visibleLines columns: visibleColumns].
     renderer := KernelInstaller objectNamed: 'BootInputMonitorRenderer'.
     renderer drawSource: renderText onForm: form visible: visibleLines.
     text = Workspace contents ifTrue: [self drawCursorOnForm: form].
@@ -138,16 +139,17 @@ redrawOnForm: form
     ^form
 !
 drawCursorOnForm: form
-    | x y height selectionStartX selectionEndX selectionY leftColumn relativeColumn relativeStart relativeEnd visibleLines visibleColumns |
+    | x y height selectionStartX selectionEndX selectionY leftColumn relativeColumn relativeStart relativeEnd visibleLines visibleColumns topLine |
     text = Workspace contents ifFalse: [^form].
     visibleLines := self visibleEditorLines.
     visibleColumns := self visibleEditorColumns.
     visibleLines < 1 ifTrue: [^form].
     visibleColumns < 1 ifTrue: [^form].
     leftColumn := Workspace visibleLeftColumn.
+    topLine := Workspace visibleTopLine.
     selection endLine = selection startLine ifTrue: [
-        selection startLine < cursor topLine ifFalse: [
-            selection startLine > (cursor topLine + visibleLines - 1) ifFalse: [
+        selection startLine < topLine ifFalse: [
+            selection startLine > (topLine + visibleLines - 1) ifFalse: [
                 relativeStart := selection startColumn - leftColumn.
                 relativeEnd := selection endColumn - leftColumn.
                 relativeStart < 0 ifTrue: [relativeStart := 0].
@@ -155,19 +157,19 @@ drawCursorOnForm: form
                 relativeEnd > relativeStart ifTrue: [
                     selectionStartX := view bounds left + 12 + (relativeStart * Display font metrics cellWidth * Display layout scale).
                     selectionEndX := view bounds left + 12 + (relativeEnd * Display font metrics cellWidth * Display layout scale) - 1.
-                    selectionY := view bounds top + 12 + (((selection startLine - cursor topLine) + 2) * Display font metrics lineHeight * Display layout scale) - 2.
+                    selectionY := view bounds top + 12 + (((selection startLine - topLine) + 2) * Display font metrics lineHeight * Display layout scale) - 2.
                     BitBlt drawLineOnForm: form fromX: selectionStartX fromY: selectionY toX: selectionEndX toY: selectionY color: 11393254
                 ]
             ]
         ]
     ].
-    cursor line < cursor topLine ifTrue: [^form].
-    cursor line > (cursor topLine + visibleLines - 1) ifTrue: [^form].
+    cursor line < topLine ifTrue: [^form].
+    cursor line > (topLine + visibleLines - 1) ifTrue: [^form].
     relativeColumn := cursor column - leftColumn.
     relativeColumn < 0 ifTrue: [^form].
     relativeColumn > (visibleColumns - 1) ifTrue: [^form].
     x := view bounds left + 12 + (relativeColumn * Display font metrics cellWidth * Display layout scale).
-    y := view bounds top + 12 + (Display font metrics lineHeight * Display layout scale) + ((cursor line - cursor topLine) * Display font metrics lineHeight * Display layout scale).
+    y := view bounds top + 12 + (Display font metrics lineHeight * Display layout scale) + ((cursor line - topLine) * Display font metrics lineHeight * Display layout scale).
     height := (Display font metrics lineHeight * Display layout scale) - 1.
     BitBlt drawLineOnForm: form fromX: x fromY: y toX: x toY: y + height color: 11393254.
     ^form
@@ -325,7 +327,22 @@ KernelInstaller rememberObject: widget named: 'BootWorkspaceStatusWidget'.
 RecorzKernelDoIt:
 KernelInstaller rememberObject: ((KernelInstaller classNamed: 'WorkspaceEditorSurface') new) named: 'BootWorkspaceEditorSurface'.
 !
-RecorzKernelClass: #WorkspaceTool descriptorOrder: 35 objectKindOrder: 35 sourceBootOrder: 29 instanceVariableNames: 'statusText feedbackText name leftColumn'
+RecorzKernelClass: #WorkspaceVisibleOrigin descriptorOrder: 36 objectKindOrder: 36 sourceBootOrder: 30 instanceVariableNames: 'topLine leftColumn'
+!
+topLine
+    topLine = nil ifTrue: [topLine := 0].
+    ^topLine
+!
+visibleLeftColumn
+    leftColumn = nil ifTrue: [leftColumn := 0].
+    ^leftColumn
+!
+setVisibleOriginTop: aTopLine left: aLeftColumn
+    topLine := aTopLine.
+    leftColumn := aLeftColumn.
+    ^self
+!
+RecorzKernelClass: #WorkspaceTool descriptorOrder: 35 objectKindOrder: 35 sourceBootOrder: 29 instanceVariableNames: 'statusText feedbackText name visibleOrigin'
 !
 setStatusText: aStatusText
     statusText := aStatusText.
@@ -342,13 +359,20 @@ setWorkspaceName: aWorkspaceName
     name := aWorkspaceName.
     ^name
 !
+visibleOrigin
+    visibleOrigin = nil ifTrue: [
+        visibleOrigin := (KernelInstaller classNamed: 'WorkspaceVisibleOrigin') new.
+        visibleOrigin setVisibleOriginTop: 0 left: 0].
+    ^visibleOrigin
+!
 visibleLeftColumn
-    leftColumn = nil ifTrue: [leftColumn := 0].
-    ^leftColumn
+    | origin |
+    origin := self visibleOrigin.
+    ^origin visibleLeftColumn
 !
 setVisibleLeftColumn: aColumn
-    leftColumn := aColumn.
-    ^leftColumn
+    self visibleOrigin setVisibleOriginTop: self visibleOrigin topLine left: aColumn.
+    ^self visibleOrigin visibleLeftColumn
 !
 acceptCommandByte
     ^24
@@ -440,6 +464,7 @@ RecorzKernelDoIt:
 | tool |
 tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
 tool workspaceName = nil ifTrue: [tool setWorkspaceName: 'Workspace'].
+tool visibleOrigin.
 !
 RecorzKernelClass: #Workspace descriptorOrder: 19 objectKindOrder: 19 sourceBootOrder: 11 instanceVariableNames: 'currentViewKind currentTargetName currentSource lastSource'
 !
@@ -473,24 +498,30 @@ setWorkspaceName: aWorkspaceName
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
     ^tool setWorkspaceName: aWorkspaceName
 !
+visibleOrigin
+    | tool |
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    ^tool visibleOrigin
+!
 visibleTopLine
-    ^self cursor topLine
+    | origin |
+    origin := self visibleOrigin.
+    ^origin topLine
 !
 visibleLeftColumn
-    | tool |
-    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
-    ^tool visibleLeftColumn
+    | origin |
+    origin := self visibleOrigin.
+    ^origin visibleLeftColumn
 !
 setVisibleLeftColumn: aLeftColumn
-    | tool |
-    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
-    ^tool setVisibleLeftColumn: aLeftColumn
+    self setVisibleOriginTop: self visibleTopLine left: aLeftColumn.
+    ^self
 !
 setVisibleOriginTop: aTopLine left: aLeftColumn
     | cursor |
     cursor := self cursor.
+    self visibleOrigin setVisibleOriginTop: aTopLine left: aLeftColumn.
     cursor moveToIndex: cursor index line: cursor line column: cursor column topLine: aTopLine.
-    self setVisibleLeftColumn: aLeftColumn.
     ^self
 !
 isModified
@@ -606,10 +637,9 @@ KernelInstaller rememberObject: ((KernelInstaller classNamed: 'BrowserSurface') 
 RecorzKernelClass: #WorkspaceSession superclass: #Object package: 'TextUI' instanceVariableNames: 'workspace selected listTop escape'
 !
 openOn: aWorkspace mode: aMode
-    | count tool |
+    | count |
     workspace := aWorkspace.
     escape := 0.
-    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
     aMode = 0 ifTrue: [
         selected = nil ifTrue: [selected := 0].
         listTop = nil ifTrue: [listTop := 0].
@@ -622,8 +652,8 @@ openOn: aWorkspace mode: aMode
         workspace setCurrentViewKind: 14.
         workspace setCurrentTargetName: nil.
         Workspace selection collapseToLine: 0 column: 0.
-        Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: 0.
-        tool setVisibleLeftColumn: 0.
+        Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: Workspace visibleTopLine.
+        Workspace setVisibleOriginTop: 0 left: 0.
         ^4].
     workspace currentViewKind = nil ifTrue: [workspace setCurrentViewKind: 18].
     workspace currentViewKind = 14 ifTrue: [
@@ -640,7 +670,7 @@ openOn: aWorkspace mode: aMode
         workspace currentViewKind = 18 ifFalse: [
             workspace setCurrentViewKind: 18.
             workspace setCurrentTargetName: nil]].
-    tool visibleLeftColumn < 0 ifTrue: [tool setVisibleLeftColumn: 0].
+    Workspace visibleLeftColumn < 0 ifTrue: [Workspace setVisibleLeftColumn: 0].
     self ensureEditorCursorVisible.
     ^1
 !
@@ -827,7 +857,7 @@ scrollEditorPageBy: delta
     step = 0 ifTrue: [step := 1].
     step = 1 ifFalse: [step := step - 1].
     cursor := Workspace cursor.
-    oldTop := cursor topLine.
+    oldTop := Workspace visibleTopLine.
     oldRow := cursor line - oldTop.
     delta < 0 ifTrue: [self scrollEditorUpRemaining: step].
     delta < 0 ifFalse: [self scrollEditorDownRemaining: step].
@@ -836,7 +866,7 @@ scrollEditorPageBy: delta
     newTop < 0 ifTrue: [newTop := 0].
     cursor line < (newTop + oldRow) ifTrue: [newTop := cursor line - oldRow].
     newTop < 0 ifTrue: [newTop := 0].
-    Workspace cursor moveToIndex: cursor index line: cursor line column: cursor column topLine: newTop.
+    Workspace setVisibleOriginTop: newTop left: Workspace visibleLeftColumn.
     Workspace selection collapseToLine: cursor line column: cursor column.
     ^2
 !
@@ -860,7 +890,7 @@ moveListSelectionToVisibleBottom
 moveCursorToVisibleTop
     | cursor steps |
     cursor := Workspace cursor.
-    steps := cursor line - cursor topLine.
+    steps := cursor line - Workspace visibleTopLine.
     steps < 1 ifTrue: [^6].
     self scrollEditorUpRemaining: steps.
     Workspace selection collapseToLine: Workspace cursor line column: Workspace cursor column.
@@ -871,7 +901,7 @@ moveCursorToVisibleBottom
     cursor := Workspace cursor.
     visibleLines := self visibleEditorLines.
     visibleLines < 1 ifTrue: [^6].
-    steps := (cursor topLine + visibleLines - 1) - cursor line.
+    steps := (Workspace visibleTopLine + visibleLines - 1) - cursor line.
     steps < 1 ifTrue: [^6].
     self scrollEditorDownRemaining: steps.
     self ensureEditorCursorVisible.
@@ -932,17 +962,16 @@ handleBrowserByte: aByte
     ^0
 !
 openSelectedPackageSource
-    | packageName source tool |
+    | packageName source |
     workspace packageCount = 0 ifTrue: [^4].
     packageName := self selectedPackageName.
     source := KernelInstaller fileOutPackageNamed: packageName.
-    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
     workspace setContents: source.
     workspace setCurrentViewKind: 13.
     workspace setCurrentTargetName: packageName.
     Workspace selection collapseToLine: 0 column: 0.
-    Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: 0.
-    tool setVisibleLeftColumn: 0.
+    Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: Workspace visibleTopLine.
+    Workspace setVisibleOriginTop: 0 left: 0.
     ^1
 !
 handleEditorByte: aByte tool: tool
@@ -964,52 +993,50 @@ handleEditorByte: aByte tool: tool
     ^2
 !
 ensureEditorCursorVisible
-    | cursor visibleLines visibleColumns tool topLine leftColumn |
+    | cursor visibleLines visibleColumns topLine leftColumn |
     cursor := Workspace cursor.
     visibleLines := self visibleEditorLines.
     visibleColumns := self visibleEditorColumns.
-    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
-    topLine := cursor topLine.
+    topLine := Workspace visibleTopLine.
     cursor line < topLine ifTrue: [topLine := cursor line].
     visibleLines > 0 ifTrue: [
         cursor line > (topLine + visibleLines - 1) ifTrue: [
             topLine := cursor line - visibleLines + 1]].
-    leftColumn := tool visibleLeftColumn.
+    leftColumn := Workspace visibleLeftColumn.
     cursor column < leftColumn ifTrue: [leftColumn := cursor column].
     visibleColumns > 0 ifTrue: [
         cursor column > (leftColumn + visibleColumns - 1) ifTrue: [
             leftColumn := cursor column - visibleColumns + 1]].
     topLine < 0 ifTrue: [topLine := 0].
     leftColumn < 0 ifTrue: [leftColumn := 0].
-    Workspace cursor moveToIndex: cursor index line: cursor line column: cursor column topLine: topLine.
+    Workspace setVisibleOriginTop: topLine left: leftColumn.
     Workspace selection collapseToLine: cursor line column: cursor column.
-    tool setVisibleLeftColumn: leftColumn.
     ^self
 !
 syncEditorCursor
     | renderer visibleLines |
     renderer := KernelInstaller objectNamed: 'BootInputMonitorRenderer'.
     visibleLines := self visibleEditorLines.
-    renderer syncCursorText: workspace contents index: Workspace cursor index top: Workspace cursor topLine visible: visibleLines.
+    renderer syncCursorText: workspace contents index: Workspace cursor index top: Workspace visibleTopLine visible: visibleLines.
     Workspace selection collapseToLine: Workspace cursor line column: Workspace cursor column.
     ^self
 !
 drawEditorCursorOnForm: form
-    | view cursor visibleLines visibleColumns tool relativeColumn x y height |
+    | view cursor visibleLines visibleColumns relativeColumn x y height topLine |
     view := KernelInstaller objectNamed: 'BootWorkspaceSourceView'.
     cursor := Workspace cursor.
     visibleLines := self visibleEditorLines.
     visibleColumns := self visibleEditorColumns.
-    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    topLine := Workspace visibleTopLine.
     visibleLines < 1 ifTrue: [^form].
     visibleColumns < 1 ifTrue: [^form].
-    cursor line < cursor topLine ifTrue: [^form].
-    cursor line > (cursor topLine + visibleLines - 1) ifTrue: [^form].
-    relativeColumn := cursor column - tool visibleLeftColumn.
+    cursor line < topLine ifTrue: [^form].
+    cursor line > (topLine + visibleLines - 1) ifTrue: [^form].
+    relativeColumn := cursor column - Workspace visibleLeftColumn.
     relativeColumn < 0 ifTrue: [^form].
     relativeColumn > (visibleColumns - 1) ifTrue: [^form].
     x := view bounds left + 12 + (relativeColumn * Display font metrics cellWidth * Display layout scale).
-    y := view bounds top + 12 + (Display font metrics lineHeight * Display layout scale) + ((cursor line - cursor topLine) * Display font metrics lineHeight * Display layout scale).
+    y := view bounds top + 12 + (Display font metrics lineHeight * Display layout scale) + ((cursor line - topLine) * Display font metrics lineHeight * Display layout scale).
     height := (Display font metrics lineHeight * Display layout scale) - 1.
     BitBlt drawLineOnForm: form fromX: x fromY: y toX: x toY: y + height color: 11393254.
     ^form

@@ -1056,6 +1056,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_SOURCE_EDITOR_VIEW_KIND", 326),
                 ("RECORZ_MVP_SELECTOR_DISPATCH_WORKSPACE_COMMAND_ON_FORM", 327),
                 ("RECORZ_MVP_SELECTOR_DISPATCH_SOURCE_EDITOR_COMMAND_ON_FORM", 328),
+                ("RECORZ_MVP_SELECTOR_VISIBLE_ORIGIN", 329),
             ],
         )
 
@@ -1072,7 +1073,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.OBJECT_KIND_SPECS[0], ("Transcript", "RECORZ_MVP_OBJECT_TRANSCRIPT"))
         self.assertEqual(
             mvp.OBJECT_KIND_SPECS[-1],
-            ("WorkspaceTool", "RECORZ_MVP_OBJECT_WORKSPACE_TOOL"),
+            ("WorkspaceVisibleOrigin", "RECORZ_MVP_OBJECT_WORKSPACE_VISIBLE_ORIGIN"),
         )
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_IN_DESCRIPTOR_ORDER[0],
@@ -1117,11 +1118,12 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "CursorFactory",
                 "CharacterScanner",
                 "WorkspaceTool",
+                "WorkspaceVisibleOrigin",
             ],
         )
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_IN_DESCRIPTOR_ORDER[-1],
-            mvp.KernelClassHeader("WorkspaceTool", 35, 35, 29, ("statusText", "feedbackText", "name", "leftColumn")),
+            mvp.KernelClassHeader("WorkspaceVisibleOrigin", 36, 36, 30, ("topLine", "leftColumn")),
         )
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_BY_NAME["Class"],
@@ -1186,12 +1188,16 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_BY_NAME["WorkspaceTool"],
-            mvp.KernelClassHeader("WorkspaceTool", 35, 35, 29, ("statusText", "feedbackText", "name", "leftColumn")),
+            mvp.KernelClassHeader("WorkspaceTool", 35, 35, 29, ("statusText", "feedbackText", "name", "visibleOrigin")),
+        )
+        self.assertEqual(
+            mvp.KERNEL_CLASS_HEADERS_BY_NAME["WorkspaceVisibleOrigin"],
+            mvp.KernelClassHeader("WorkspaceVisibleOrigin", 36, 36, 30, ("topLine", "leftColumn")),
         )
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["BitBlt"], mvp.SEED_OBJECT_BITBLT)
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["CompiledMethod"], mvp.SEED_OBJECT_COMPILED_METHOD)
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["KernelInstaller"], mvp.SEED_OBJECT_KERNEL_INSTALLER)
-        self.assertEqual(mvp.OBJECT_KIND_DEFINITIONS[-1], ("RECORZ_MVP_OBJECT_WORKSPACE_TOOL", 36))
+        self.assertEqual(mvp.OBJECT_KIND_DEFINITIONS[-1], ("RECORZ_MVP_OBJECT_WORKSPACE_VISIBLE_ORIGIN", 37))
         self.assertEqual(mvp.CLASS_FIELD_METHOD_START, mvp.kernel_instance_variable_index("Class", "methodStart"))
         self.assertEqual(mvp.METHOD_FIELD_ENTRY, mvp.kernel_instance_variable_index("MethodDescriptor", "entry"))
         self.assertEqual(
@@ -1319,6 +1325,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "CursorFactory",
                 "CharacterScanner",
                 "WorkspaceTool",
+                "WorkspaceVisibleOrigin",
             ],
         )
         self.assertEqual(
@@ -1795,6 +1802,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "CursorFactory",
                 "CharacterScanner",
                 "WorkspaceTool",
+                "WorkspaceVisibleOrigin",
             ],
         )
         self.assertEqual(
@@ -2069,7 +2077,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertIsNone(mvp.validate_dynamic_seed_build_step_specs())
         layout = mvp.build_seed_layout(140, mvp.CLASS_DESCRIPTOR_KIND_ORDER)
-        self.assertEqual(layout["class_descriptors"], mvp.SeedLayoutSection(140, 36))
+        self.assertEqual(layout["class_descriptors"], mvp.SeedLayoutSection(140, 37))
         self.assertEqual(
             layout["selectors"],
             mvp.SeedLayoutSection(140 + len(mvp.CLASS_DESCRIPTOR_KIND_ORDER), len(mvp.SELECTOR_VALUE_ORDER)),
@@ -2107,7 +2115,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         seed_objects, _seed_object_indices_by_name, _glyph_object_indices = mvp.build_fixed_boot_seed_objects()
         dynamic_sections = mvp.build_dynamic_seed_sections(seed_objects)
 
-        self.assertEqual(dynamic_sections.seed_layout["class_descriptors"], mvp.SeedLayoutSection(152, 36))
+        self.assertEqual(dynamic_sections.seed_layout["class_descriptors"], mvp.SeedLayoutSection(152, 37))
         self.assertEqual(dynamic_sections.class_indices[mvp.SEED_OBJECT_TRANSCRIPT], 153)
         self.assertEqual(dynamic_sections.class_indices[mvp.SEED_OBJECT_COMPILED_METHOD], 168)
         self.assertEqual(dynamic_sections.class_indices[mvp.SEED_OBJECT_KERNEL_INSTALLER], 169)
@@ -2123,7 +2131,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "selectors",
             ],
         )
-        self.assertEqual(len(dynamic_sections.class_seed_objects), 36)
+        self.assertEqual(len(dynamic_sections.class_seed_objects), 37)
         self.assertEqual(len(dynamic_sections.selector_seed_objects), len(mvp.SELECTOR_VALUE_ORDER))
         self.assertEqual(len(dynamic_sections.compiled_method_seed_objects), 72)
         self.assertEqual(len(dynamic_sections.method_entry_seed_objects), len(mvp.METHOD_ENTRY_ORDER))

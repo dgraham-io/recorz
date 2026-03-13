@@ -100,7 +100,9 @@
 #define WORKSPACE_TOOL_FIELD_STATUS_TEXT RECORZ_MVP_WORKSPACE_TOOL_FIELD_STATUS_TEXT
 #define WORKSPACE_TOOL_FIELD_FEEDBACK_TEXT RECORZ_MVP_WORKSPACE_TOOL_FIELD_FEEDBACK_TEXT
 #define WORKSPACE_TOOL_FIELD_NAME RECORZ_MVP_WORKSPACE_TOOL_FIELD_NAME
-#define WORKSPACE_TOOL_FIELD_LEFT_COLUMN RECORZ_MVP_WORKSPACE_TOOL_FIELD_LEFT_COLUMN
+#define WORKSPACE_TOOL_FIELD_VISIBLE_ORIGIN RECORZ_MVP_WORKSPACE_TOOL_FIELD_VISIBLE_ORIGIN
+#define WORKSPACE_VISIBLE_ORIGIN_FIELD_TOP_LINE RECORZ_MVP_WORKSPACE_VISIBLE_ORIGIN_FIELD_TOP_LINE
+#define WORKSPACE_VISIBLE_ORIGIN_FIELD_LEFT_COLUMN RECORZ_MVP_WORKSPACE_VISIBLE_ORIGIN_FIELD_LEFT_COLUMN
 #define TEXT_SELECTION_FIELD_START_LINE RECORZ_MVP_TEXT_SELECTION_FIELD_START_LINE
 #define TEXT_SELECTION_FIELD_START_COLUMN RECORZ_MVP_TEXT_SELECTION_FIELD_START_COLUMN
 #define TEXT_SELECTION_FIELD_END_LINE RECORZ_MVP_TEXT_SELECTION_FIELD_END_LINE
@@ -187,7 +189,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_TOOL
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_DISPATCH_SOURCE_EDITOR_COMMAND_ON_FORM
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_VISIBLE_ORIGIN
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -1546,6 +1548,8 @@ static const char *selector_name(uint16_t selector) {
             return "dispatchWorkspaceCommandOnForm:";
         case RECORZ_MVP_SELECTOR_DISPATCH_SOURCE_EDITOR_COMMAND_ON_FORM:
             return "dispatchSourceEditorCommandOnForm:";
+        case RECORZ_MVP_SELECTOR_VISIBLE_ORIGIN:
+            return "visibleOrigin";
     }
     return "unknown";
 }
@@ -3698,6 +3702,34 @@ static uint8_t workspace_send_tool_selector(uint16_t selector) {
     }
     perform_send_and_pop_result(object_value(tool_handle), selector, 0U, 0, 0U);
     return 1U;
+}
+
+static struct recorz_mvp_heap_object *workspace_tool_object_or_null(void) {
+    uint16_t tool_handle = named_object_handle_for_name("BootWorkspaceTool");
+
+    if (tool_handle == 0U || !heap_handle_is_live(tool_handle)) {
+        return 0;
+    }
+    return (struct recorz_mvp_heap_object *)heap_object(tool_handle);
+}
+
+static struct recorz_mvp_heap_object *workspace_visible_origin_object_or_null(void) {
+    struct recorz_mvp_heap_object *tool_object = workspace_tool_object_or_null();
+    struct recorz_mvp_value origin_value;
+    uint16_t origin_handle;
+
+    if (tool_object == 0) {
+        return 0;
+    }
+    origin_value = heap_get_field(tool_object, WORKSPACE_TOOL_FIELD_VISIBLE_ORIGIN);
+    if (origin_value.kind != RECORZ_MVP_VALUE_OBJECT) {
+        return 0;
+    }
+    origin_handle = (uint16_t)origin_value.integer;
+    if (!heap_handle_is_live(origin_handle)) {
+        return 0;
+    }
+    return (struct recorz_mvp_heap_object *)heap_object(origin_handle);
 }
 
 static void vm_panic_hook(const char *message) {
@@ -6709,6 +6741,7 @@ static void workspace_surface_copy_source_viewport(
     uint32_t buffer_size,
     const char *source,
     uint32_t top_line,
+    uint32_t left_column,
     uint32_t visible_line_capacity,
     uint32_t visible_column_capacity
 ) {
@@ -6735,6 +6768,9 @@ static void workspace_surface_copy_source_viewport(
         }
         if (current_line >= top_line + visible_line_capacity) {
             break;
+        }
+        while (line[source_index] != '\0' && source_index < left_column) {
+            ++source_index;
         }
         while (line[source_index] != '\0' &&
                visible_index + 1U < sizeof(visible_line) &&
@@ -8029,6 +8065,7 @@ static void workspace_render_method_browser(
             ? source_value.string
             : "NO SOURCE BUFFER",
         0U,
+        0U,
         workspace_surface_visible_line_capacity_for_view_height(BROWSER_SOURCE_VIEW_HEIGHT),
         workspace_surface_visible_column_capacity_for_view_width(BROWSER_SOURCE_VIEW_WIDTH)
     );
@@ -8070,6 +8107,7 @@ static void workspace_render_class_source_browser(
         (source_value.kind == RECORZ_MVP_VALUE_STRING && source_value.string != 0)
             ? source_value.string
             : "NO SOURCE BUFFER",
+        0U,
         0U,
         workspace_surface_visible_line_capacity_for_view_height(BROWSER_SOURCE_VIEW_HEIGHT),
         workspace_surface_visible_column_capacity_for_view_width(BROWSER_SOURCE_VIEW_WIDTH)
@@ -8113,6 +8151,7 @@ static void workspace_render_package_source_browser(
             ? source_value.string
             : "NO SOURCE BUFFER",
         0U,
+        0U,
         workspace_surface_visible_line_capacity_for_view_height(BROWSER_SOURCE_VIEW_HEIGHT),
         workspace_surface_visible_column_capacity_for_view_width(BROWSER_SOURCE_VIEW_WIDTH)
     );
@@ -8154,6 +8193,7 @@ static void workspace_render_regenerated_source_browser(
         (source_value.kind == RECORZ_MVP_VALUE_STRING && source_value.string != 0)
             ? source_value.string
             : "NO SOURCE BUFFER",
+        0U,
         0U,
         workspace_surface_visible_line_capacity_for_view_height(BROWSER_SOURCE_VIEW_HEIGHT),
         workspace_surface_visible_column_capacity_for_view_width(BROWSER_SOURCE_VIEW_WIDTH)
@@ -8380,6 +8420,7 @@ static void workspace_render_input_monitor_browser_mode(
         sizeof(workspace_surface_editor_buffer),
         source_value.kind == RECORZ_MVP_VALUE_STRING ? source_value.string : "",
         top_line,
+        0U,
         visible_line_capacity,
         workspace_surface_visible_column_capacity_for_view_width(WORKSPACE_SOURCE_VIEW_WIDTH)
     );
@@ -8910,7 +8951,7 @@ static uint32_t workspace_cursor_column_value(void) {
     return (uint32_t)value.integer;
 }
 
-static uint32_t workspace_cursor_top_line_value(void) {
+static uint32_t workspace_cursor_cached_top_line_value(void) {
     struct recorz_mvp_heap_object *cursor_object = workspace_cursor_object();
     struct recorz_mvp_value value = heap_get_field(cursor_object, TEXT_CURSOR_FIELD_TOP_LINE);
 
@@ -8920,6 +8961,38 @@ static uint32_t workspace_cursor_top_line_value(void) {
     return (uint32_t)value.integer;
 }
 
+static uint32_t workspace_visible_origin_top_line_value(void) {
+    struct recorz_mvp_heap_object *origin_object = workspace_visible_origin_object_or_null();
+    struct recorz_mvp_value value;
+
+    if (origin_object == 0) {
+        return workspace_cursor_cached_top_line_value();
+    }
+    value = heap_get_field(origin_object, WORKSPACE_VISIBLE_ORIGIN_FIELD_TOP_LINE);
+    if (value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER || value.integer < 0) {
+        return workspace_cursor_cached_top_line_value();
+    }
+    return (uint32_t)value.integer;
+}
+
+static uint32_t workspace_visible_origin_left_column_value(void) {
+    struct recorz_mvp_heap_object *origin_object = workspace_visible_origin_object_or_null();
+    struct recorz_mvp_value value;
+
+    if (origin_object == 0) {
+        return 0U;
+    }
+    value = heap_get_field(origin_object, WORKSPACE_VISIBLE_ORIGIN_FIELD_LEFT_COLUMN);
+    if (value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER || value.integer < 0) {
+        return 0U;
+    }
+    return (uint32_t)value.integer;
+}
+
+static uint32_t workspace_cursor_top_line_value(void) {
+    return workspace_visible_origin_top_line_value();
+}
+
 static void workspace_sync_workspace_cursor_index(
     const struct recorz_mvp_heap_object *workspace_object,
     uint32_t cursor_index
@@ -8927,7 +9000,7 @@ static void workspace_sync_workspace_cursor_index(
     workspace_sync_input_monitor_text_state(
         workspace_object,
         cursor_index,
-        workspace_cursor_top_line_value()
+        workspace_visible_origin_top_line_value()
     );
 }
 
@@ -10479,7 +10552,8 @@ static void workspace_overlay_image_session_editor_source(
         (source_value.kind == RECORZ_MVP_VALUE_STRING && source_value.string != 0)
             ? source_value.string
             : "";
-    uint32_t top_line = workspace_cursor_top_line_value();
+    uint32_t top_line = workspace_visible_origin_top_line_value();
+    uint32_t left_column = workspace_visible_origin_left_column_value();
     uint32_t cursor_index = workspace_cursor_index_value();
     uint32_t cursor_line = 0U;
     uint32_t cursor_column = 0U;
@@ -10495,6 +10569,7 @@ static void workspace_overlay_image_session_editor_source(
         sizeof(workspace_surface_editor_buffer),
         source,
         top_line,
+        left_column,
         workspace_surface_visible_line_capacity_for_view_height(WORKSPACE_SOURCE_VIEW_HEIGHT),
         workspace_surface_visible_column_capacity_for_view_width(WORKSPACE_SOURCE_VIEW_WIDTH)
     );
@@ -10502,7 +10577,7 @@ static void workspace_overlay_image_session_editor_source(
         form,
         workspace_surface_editor_buffer,
         cursor_line >= top_line ? cursor_line - top_line : 0U,
-        cursor_column
+        cursor_column >= left_column ? cursor_column - left_column : 0U
     );
 }
 
@@ -10518,23 +10593,31 @@ static uint8_t workspace_overlay_image_session_editor_cursor_move(
         (source_value.kind == RECORZ_MVP_VALUE_STRING && source_value.string != 0)
             ? source_value.string
             : "";
-    uint32_t top_line = workspace_cursor_top_line_value();
+    uint32_t top_line = workspace_visible_origin_top_line_value();
+    uint32_t left_column = workspace_visible_origin_left_column_value();
     uint32_t cursor_line = workspace_cursor_line_value();
     uint32_t cursor_column = workspace_cursor_column_value();
     uint32_t visible_lines = workspace_surface_visible_line_capacity_for_view_height(WORKSPACE_SOURCE_VIEW_HEIGHT);
     uint32_t visible_columns = workspace_surface_visible_column_capacity_for_view_width(WORKSPACE_SOURCE_VIEW_WIDTH);
+    uint32_t old_relative_column;
+    uint32_t relative_column;
 
     if (top_line != old_top_line ||
         visible_lines == 0U ||
         visible_columns == 0U) {
         return 0U;
     }
+    if (old_cursor_column < left_column || cursor_column < left_column) {
+        return 0U;
+    }
+    old_relative_column = old_cursor_column - left_column;
+    relative_column = cursor_column - left_column;
     if (old_cursor_line < top_line ||
         old_cursor_line >= top_line + visible_lines ||
         cursor_line < top_line ||
         cursor_line >= top_line + visible_lines ||
-        old_cursor_column >= visible_columns ||
-        cursor_column >= visible_columns) {
+        old_relative_column >= visible_columns ||
+        relative_column >= visible_columns) {
         return 0U;
     }
     workspace_surface_copy_source_viewport(
@@ -10542,6 +10625,7 @@ static uint8_t workspace_overlay_image_session_editor_cursor_move(
         sizeof(workspace_surface_editor_buffer),
         source,
         top_line,
+        left_column,
         visible_lines,
         visible_columns
     );
@@ -10549,12 +10633,12 @@ static uint8_t workspace_overlay_image_session_editor_cursor_move(
         form,
         workspace_surface_editor_buffer,
         old_cursor_line - top_line,
-        old_cursor_column
+        old_relative_column
     );
     workspace_draw_editor_cursor_overlay(
         form,
         cursor_line - top_line,
-        cursor_column
+        relative_column
     );
     ++render_counter_editor_cursor_redraws;
     return 1U;

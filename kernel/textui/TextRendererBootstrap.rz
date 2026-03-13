@@ -58,7 +58,7 @@ adjustTopForLine: line requested: topLine visible: visibleLines
 !
 drawSource: text onForm: form visible: visibleLines
     visibleLines = 0 ifTrue: [Cursor hideCursor. ^form].
-    ^self drawText: text index: 1 line: 0 column: 0 top: Workspace cursor topLine remaining: visibleLines onForm: form open: false
+    ^self drawText: text index: 1 line: 0 column: 0 top: 0 remaining: visibleLines onForm: form open: false
 !
 drawText: text index: i line: line column: column top: top remaining: remaining onForm: form open: open
     remaining = 0 ifTrue: [^form].
@@ -118,7 +118,7 @@ underlineCellLine: line column: column onForm: form
     originX := Display layout margins left.
     originY := Display layout margins top.
     x := originX + (column * width).
-    y := originY + (((line - Workspace cursor topLine) + 1) * height) - 2.
+    y := originY + ((line + 1) * height) - 2.
     BitBlt drawLineOnForm: form fromX: x fromY: y toX: x + width - 1 toY: y color: 11393254.
     ^form
 !
@@ -132,7 +132,7 @@ selectionCoversLine: line column: column
     ^selection containsLine: line column: column
 !
 drawCursorOnForm: form
-    | cursor cursorX cursorY active lineHeight originX originY usableWidth cellWidth visibleColumns |
+    | cursor cursorX cursorY active lineHeight originX originY usableWidth cellWidth visibleColumns relativeColumn |
     cursor := Workspace cursor.
     cellWidth := Display font metrics cellWidth * Display layout scale.
     visibleColumns := 0.
@@ -140,11 +140,13 @@ drawCursorOnForm: form
         usableWidth := form width - Display layout margins left - Display layout margins right.
         usableWidth > 0 ifTrue: [visibleColumns := usableWidth / cellWidth]].
     visibleColumns = 0 ifTrue: [Cursor hideCursor. ^form].
-    cursor column > (visibleColumns - 1) ifTrue: [Cursor hideCursor. ^form].
+    relativeColumn := cursor column - Workspace visibleLeftColumn.
+    relativeColumn < 0 ifTrue: [Cursor hideCursor. ^form].
+    relativeColumn > (visibleColumns - 1) ifTrue: [Cursor hideCursor. ^form].
     originX := Display layout margins left.
     originY := Display layout margins top.
-    cursorX := originX + (cursor column * Display font metrics cellWidth * Display layout scale).
-    cursorY := originY + ((cursor line - cursor topLine) * Display font metrics lineHeight * Display layout scale).
+    cursorX := originX + (relativeColumn * Display font metrics cellWidth * Display layout scale).
+    cursorY := originY + ((cursor line - Workspace visibleTopLine) * Display font metrics lineHeight * Display layout scale).
     lineHeight := (Display font metrics lineHeight * Display layout scale) - 1.
     active := Cursor current.
     active = nil ifTrue: [

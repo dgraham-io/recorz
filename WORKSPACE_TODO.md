@@ -25,13 +25,13 @@ The workspace should be:
 
 Notes:
 - persistent image-owned state now lives across `Workspace`, `WorkspaceCursor`, `WorkspaceSelection`, `BootWorkspaceTool`, and `BootWorkspaceSession`
-- `BootWorkspaceTool` now owns status text, feedback text, workspace name, and horizontal viewport column; `escape` remains transient session input state
+- `BootWorkspaceTool` now owns status text, feedback text, workspace name, and a dedicated `WorkspaceVisibleOrigin` object; `escape` remains transient session input state
 - first real viewport-relative page-up/page-down is now in the image session path
-- explicit workspace/session protocol now exposes status, feedback, target label, modified-state, and visible top/left origin from image code; the current visible-origin API is an explicit top/left pair rather than a dedicated origin object
+- explicit workspace/session protocol now exposes status, feedback, target label, modified-state, and visible origin from image code through a dedicated image-owned origin object
 
 ## Phase 2 - Editor Behavior
 - [ ] Make the workspace editor the single source of truth for cursor movement, selection, insert/delete, and line navigation
-- [ ] Support stable horizontal and vertical scrolling with a real visible-origin model
+- [x] Support stable horizontal and vertical scrolling with a real visible-origin model
 - [x] Add page-up/page-down that operate on the visible viewport, not just the cursor
 - [x] Add top/bottom navigation that operate on the visible viewport, not just the cursor
 - [x] Ensure large buffers keep a stable visible origin during edits, movement, and reopen
@@ -86,7 +86,7 @@ Notes:
 
 ## Definition Of Done
 - [ ] The workspace is an image-owned tool object with a stable editor/session model
-- [ ] The visible origin is owned by workspace/image objects and remains stable under scrolling and editing
+- [x] The visible origin is owned by workspace/image objects and remains stable under scrolling and editing
 - [x] Workspace command behavior is owned by image-side tool objects, not VM-side mode policy
 - [x] Reopen/snapshot restore lands back in the same workspace session with correct buffer, cursor, and viewport state
 - [x] The workspace is covered by live RV32 framebuffer proofs for open, edit, scroll, save, and restore

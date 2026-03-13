@@ -656,3 +656,5 @@ RecorzKernelSelector: #dispatchWorkspaceCommandOnForm: order: 326
 !
 RecorzKernelSelector: #dispatchSourceEditorCommandOnForm: order: 327
 !
+RecorzKernelSelector: #visibleOrigin order: 328
+!
