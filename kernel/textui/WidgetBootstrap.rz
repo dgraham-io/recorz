@@ -129,12 +129,16 @@ redrawOnForm: form
     visibleLines := self visibleEditorLines.
     visibleColumns := self visibleEditorColumns.
     renderText := text.
+    renderText = nil ifTrue: [renderText := ''].
     topLine := Workspace visibleTopLine.
     text = Workspace contents ifTrue: [
-        renderText := Workspace visibleContentsTop: topLine left: Workspace visibleLeftColumn lines: visibleLines columns: visibleColumns].
-    renderer := KernelInstaller objectNamed: 'BootInputMonitorRenderer'.
-    renderer drawSource: renderText onForm: form visible: visibleLines.
-    text = Workspace contents ifTrue: [self drawCursorOnForm: form].
+        renderText := Workspace visibleContentsTop: topLine left: Workspace visibleLeftColumn lines: visibleLines columns: visibleColumns.
+        renderer := KernelInstaller objectNamed: 'BootInputMonitorRenderer'.
+        renderer drawSource: renderText onForm: form visible: visibleLines.
+        self drawCursorOnForm: form
+    ] ifFalse: [
+        form writeString: renderText
+    ].
     margins left: oldLeft top: oldTop right: oldRight bottom: oldBottom.
     ^form
 !

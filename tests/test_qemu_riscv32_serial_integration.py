@@ -3381,6 +3381,66 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("VIEW: INPUT", output)
             self.assertNotIn("panic:", output)
 
+    def test_workspace_file_out_class_named_renders_the_static_browser_without_panicking(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-class-file-out-browser-") as temp_dir:
+            temp_path = Path(temp_dir)
+            example_path = temp_path / "workspace_class_file_out_browser.rz"
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "Display clear.",
+                        "Transcript show: 'MARK A'.",
+                        "Transcript cr.",
+                        "Workspace fileOutClassNamed: 'Display'.",
+                        "Transcript show: 'MARK B'.",
+                        "Transcript cr.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            elf_path = _build_elf(temp_path / "build", example_path)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output, _ = process.communicate(timeout=12.0)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            normalized_output = output.replace("\r", "")
+            self.assertIn("MARK A", normalized_output)
+            self.assertIn("MARK B", normalized_output)
+            self.assertIn("CLASS: Display", normalized_output)
+            self.assertIn("VIEW: SOURCE", normalized_output)
+            self.assertNotIn("panic:", normalized_output)
+            self.assertNotIn("selector is not understood", normalized_output)
+
     def test_memory_report_demo_prints_usage_within_budget(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-memory-report-") as temp_dir:
             build_dir = Path(temp_dir)
