@@ -1637,6 +1637,77 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("VIEW=14", normalized)
             self.assertNotIn("panic:", normalized)
 
+    def test_workspace_session_open_repairs_invalid_view_kind_target_and_left_column(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-stale-session-") as temp_dir:
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "build"
+            example_path = temp_path / "workspace_stale_session_demo.rz"
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "Display clear.",
+                        "Workspace fileIn: 'RecorzKernelClass: #TinyWorkspaceState superclass: #Object instanceVariableNames: ''''",
+                        "!",
+                        "value",
+                        "    ^1'.",
+                        "Workspace browseClassNamed: 'TinyWorkspaceState'.",
+                        "Workspace setCurrentViewKind: 99.",
+                        "Workspace setCurrentTargetName: 'StaleTarget'.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceTool') setVisibleLeftColumn: (0 - 5).",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') openOn: Workspace mode: 1.",
+                        "Transcript show: 'VIEW='.",
+                        "Transcript show: Workspace currentViewKind printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'TARGET='.",
+                        "Transcript show: ((Workspace currentTargetName = nil) ifTrue: ['nil'] ifFalse: [Workspace currentTargetName]).",
+                        "Transcript cr.",
+                        "Transcript show: 'LEFT='.",
+                        "Transcript show: ((KernelInstaller objectNamed: 'BootWorkspaceTool') visibleLeftColumn) printString.",
+                        "Transcript cr.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            elf_path = _build_elf(build_dir, example_path)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            normalized = output.replace("\r", "").replace("\n", "")
+            self.assertIn("VIEW=18", normalized)
+            self.assertIn("TARGET=nil", normalized)
+            self.assertIn("LEFT=0", normalized)
+            self.assertNotIn("panic:", normalized)
+
     def test_workspace_home_moves_to_the_visible_top_of_the_viewport(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-home-") as temp_dir:
             temp_path = Path(temp_dir)

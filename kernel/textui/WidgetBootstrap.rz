@@ -289,13 +289,6 @@ KernelInstaller rememberObject: widget named: 'BootWorkspaceStatusWidget'.
 RecorzKernelDoIt:
 KernelInstaller rememberObject: ((KernelInstaller classNamed: 'WorkspaceEditorSurface') new) named: 'BootWorkspaceEditorSurface'.
 !
-RecorzKernelDoIt:
-| tool |
-tool := ((KernelInstaller classNamed: 'WorkspaceTool') new) namedObjectOrNil: 'BootWorkspaceTool'.
-tool = nil ifTrue: [
-    tool := (KernelInstaller classNamed: 'WorkspaceTool') new.
-    KernelInstaller rememberObject: tool named: 'BootWorkspaceTool'].
-!
 RecorzKernelClass: #WorkspaceTool descriptorOrder: 35 objectKindOrder: 35 sourceBootOrder: 29 instanceVariableNames: 'statusText feedbackText name leftColumn'
 !
 setStatusText: aStatusText
@@ -399,10 +392,18 @@ dispatchCommandOnForm: aByte
     ^self dispatchWorkspaceCommandOnForm: aByte
 !
 RecorzKernelDoIt:
+| tool toolClass |
+toolClass := KernelInstaller classNamed: 'WorkspaceTool'.
+tool := toolClass new namedObjectOrNil: 'BootWorkspaceTool'.
+tool = nil ifTrue: [KernelInstaller rememberObject: (toolClass new) named: 'BootWorkspaceTool'].
+tool = nil ifFalse: [
+    (tool class = toolClass) ifFalse: [
+        KernelInstaller rememberObject: (toolClass new) named: 'BootWorkspaceTool']].
+!
+RecorzKernelDoIt:
 | tool |
 tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
 tool workspaceName = nil ifTrue: [tool setWorkspaceName: 'Workspace'].
-tool visibleLeftColumn = nil ifTrue: [tool setVisibleLeftColumn: 0].
 !
 RecorzKernelClass: #Workspace descriptorOrder: 19 objectKindOrder: 19 sourceBootOrder: 11 instanceVariableNames: 'currentViewKind currentTargetName currentSource lastSource'
 !
@@ -589,6 +590,21 @@ openOn: aWorkspace mode: aMode
         tool setVisibleLeftColumn: 0.
         ^4].
     workspace currentViewKind = nil ifTrue: [workspace setCurrentViewKind: 18].
+    workspace currentViewKind = 14 ifTrue: [
+        selected = nil ifTrue: [selected := 0].
+        listTop = nil ifTrue: [listTop := 0].
+        count := workspace packageCount.
+        count = 0 ifTrue: [selected := 0].
+        count > 0 ifTrue: [
+            selected < 0 ifTrue: [selected := 0].
+            selected > (count - 1) ifTrue: [selected := count - 1]].
+        listTop < 0 ifTrue: [listTop := 0].
+        ^4].
+    self sourceEditorViewActive ifFalse: [
+        workspace currentViewKind = 18 ifFalse: [
+            workspace setCurrentViewKind: 18.
+            workspace setCurrentTargetName: nil]].
+    tool visibleLeftColumn < 0 ifTrue: [tool setVisibleLeftColumn: 0].
     self ensureEditorCursorVisible.
     ^1
 !
@@ -963,6 +979,12 @@ drawEditorCursorOnForm: form
     ^form
 !
 RecorzKernelDoIt:
-(((KernelInstaller classNamed: 'WorkspaceTool') new) namedObjectOrNil: 'BootWorkspaceSession') = nil ifTrue: [
-    KernelInstaller rememberObject: ((KernelInstaller classNamed: 'WorkspaceSession') new) named: 'BootWorkspaceSession'].
+| session sessionClass tool |
+tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+sessionClass := KernelInstaller classNamed: 'WorkspaceSession'.
+session := tool namedObjectOrNil: 'BootWorkspaceSession'.
+session = nil ifTrue: [KernelInstaller rememberObject: (sessionClass new) named: 'BootWorkspaceSession'].
+session = nil ifFalse: [
+    (session class = sessionClass) ifFalse: [
+        KernelInstaller rememberObject: (sessionClass new) named: 'BootWorkspaceSession']].
 !
