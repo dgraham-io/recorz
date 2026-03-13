@@ -1253,6 +1253,81 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             1800,
         )
 
+    def test_snapshot_resume_can_return_from_a_source_editor_to_the_same_plain_workspace(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-return-resume-") as temp_dir:
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "save-build"
+            reload_build_dir = temp_path / "reload-build"
+            first_snapshot_path = temp_path / "workspace-return-resume-first.bin"
+            second_snapshot_path = temp_path / "workspace-return-resume-second.bin"
+            example_path = temp_path / "workspace_return_resume_demo.rz"
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "Display clear.",
+                        "Workspace setContents: 'snapshot plain workspace'.",
+                        "Workspace cursor moveToIndex: 8 line: 0 column: 8 topLine: 0.",
+                        "Workspace selection setStartLine: 0 startColumn: 3 endLine: 0 endColumn: 8.",
+                        "Workspace setVisibleOriginTop: 0 left: 5.",
+                        "Workspace browseMethod: 'newline' ofClassNamed: 'Display'.",
+                        "Workspace interactiveInputMonitor.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            first_output = self.save_snapshot_from_interactive_editor(
+                build_dir=build_dir,
+                example_path=example_path,
+                snapshot_output=first_snapshot_path,
+                serial_input="\x17",
+            )
+            self.assertIn("recorz-snapshot-begin", first_output)
+            self.assertTrue(first_snapshot_path.exists())
+
+            second_output = self.run_interactive_session(
+                build_dir=reload_build_dir,
+                example_path=SNAPSHOT_DEVELOPMENT_HOME_BOOT_DEMO_PATH,
+                ready_marker="STATUS: METHOD SOURCE :: SOURCE EDITOR READY",
+                snapshot_payload=first_snapshot_path,
+                serial_input="\x0f\x17",
+            )
+
+            second_snapshot = self.extract_snapshot_bytes(second_output)
+            if second_snapshot is None:
+                self.fail(
+                    "workspace return/resume flow did not emit a continuation snapshot\n"
+                    f"stdout:\n{second_output}"
+                )
+            second_snapshot_path.write_bytes(second_snapshot)
+
+            self.assertIn("recorz qemu-riscv32 mvp: loaded snapshot", second_output)
+            self.assertIn("recorz qemu-riscv32 mvp: snapshot saved, shutting down", second_output)
+
+            second_summary = self.inspect_snapshot_summary(snapshot_path=second_snapshot_path)
+            workspace_summary = second_summary.get("workspace")
+            workspace_tool = second_summary.get("workspace_tool")
+            workspace_cursor = second_summary.get("workspace_cursor")
+            workspace_selection = second_summary.get("workspace_selection")
+            self.assertIsInstance(workspace_summary, dict)
+            self.assertIsInstance(workspace_tool, dict)
+            self.assertIsInstance(workspace_cursor, dict)
+            self.assertIsInstance(workspace_selection, dict)
+            assert isinstance(workspace_summary, dict)
+            assert isinstance(workspace_tool, dict)
+            assert isinstance(workspace_cursor, dict)
+            assert isinstance(workspace_selection, dict)
+
+            self.assertEqual(workspace_summary["current_view_kind"], 18)
+            self.assertIsNone(workspace_summary["current_target_name"])
+            self.assertEqual(workspace_summary["current_source"], "snapshot plain workspace")
+            self.assertIsNone(workspace_summary["input_monitor_state"])
+
+            self.assertEqual(workspace_tool["visible_left_column"], 5)
+            self.assertEqual(workspace_cursor["column"], 8)
+            self.assertEqual(workspace_selection["start_column"], 3)
+            self.assertEqual(workspace_selection["end_column"], 8)
+
     def test_snapshot_can_reopen_workspace_class_source_browser_state_without_demo_specific_program(self) -> None:
         save_log = self.save_snapshot(
             build_dir=SNAPSHOT_CLASS_FILE_OUT_BUILD_DIR,
