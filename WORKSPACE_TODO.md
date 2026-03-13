@@ -43,7 +43,7 @@ Notes:
 - [ ] Separate workspace editing commands from browser/package/class source-editor commands
 - [x] Make command dispatch live in workspace/tool objects instead of VM-side mode branches
 - [x] Add clear refusal/status behavior for commands that require a browser-backed target
-- [ ] Support command binding updates without hard-wiring more policy into the VM
+- [x] Support command binding updates without hard-wiring more policy into the VM
 
 ## Phase 4 - Rendering And Layout
 - [ ] Keep workspace rendering image-owned:

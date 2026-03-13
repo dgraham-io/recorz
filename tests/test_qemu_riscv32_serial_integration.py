@@ -1498,6 +1498,77 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("TARGET=nil", normalized)
             self.assertNotIn("panic:", normalized)
 
+    def test_workspace_tool_command_bindings_can_be_updated_from_image_source(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-command-bindings-") as temp_dir:
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "build"
+            example_path = temp_path / "workspace_command_binding_update_demo.rz"
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "Display clear.",
+                        "Workspace setContents: '1 + 2'.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') openOn: Workspace mode: 1.",
+                        "KernelInstaller fileInMethodChunks: 'printCommandByte",
+                        "    ^21",
+                        "!' onClass: (KernelInstaller classNamed: 'WorkspaceTool').",
+                        "Transcript show: 'OLD='.",
+                        "Transcript show: ((KernelInstaller objectNamed: 'BootWorkspaceTool') dispatchCommandOnForm: 16) printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'NEW='.",
+                        "Transcript show: ((KernelInstaller objectNamed: 'BootWorkspaceTool') dispatchCommandOnForm: 21) printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'STATUS='.",
+                        "Transcript show: Workspace statusText.",
+                        "Transcript cr.",
+                        "Transcript show: 'FEEDBACK='.",
+                        "Transcript show: Workspace feedbackText.",
+                        "Transcript cr.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            elf_path = _build_elf(build_dir, example_path)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            normalized = output.replace("\r", "").replace("\n", "")
+            self.assertIn("OLD=0", normalized)
+            self.assertIn("NEW=1", normalized)
+            self.assertIn("STATUS=PRINT COMPLETE", normalized)
+            self.assertIn("FEEDBACK=3", normalized)
+            self.assertNotIn("panic:", normalized)
+
     def test_workspace_home_moves_to_the_visible_top_of_the_viewport(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-home-") as temp_dir:
             temp_path = Path(temp_dir)

@@ -632,3 +632,21 @@ RecorzKernelSelector: #currentHeaderText order: 314
 !
 RecorzKernelSelector: #namedObjectOrNil: order: 315
 !
+RecorzKernelSelector: #acceptCommandByte order: 316
+!
+RecorzKernelSelector: #revertCommandByte order: 317
+!
+RecorzKernelSelector: #runTestsCommandByte order: 318
+!
+RecorzKernelSelector: #printCommandByte order: 319
+!
+RecorzKernelSelector: #doItCommandByte order: 320
+!
+RecorzKernelSelector: #alternateDoItCommandByte order: 321
+!
+RecorzKernelSelector: #saveAndReopenCommandByte order: 322
+!
+RecorzKernelSelector: #saveRecoverySnapshotCommandByte order: 323
+!
+RecorzKernelSelector: #returnToBrowserCommandByte order: 324
+!

@@ -187,7 +187,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_TOOL
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_NAMED_OBJECT_OR_NIL
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_RETURN_TO_BROWSER_COMMAND_BYTE
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -1522,6 +1522,24 @@ static const char *selector_name(uint16_t selector) {
             return "currentHeaderText";
         case RECORZ_MVP_SELECTOR_NAMED_OBJECT_OR_NIL:
             return "namedObjectOrNil:";
+        case RECORZ_MVP_SELECTOR_ACCEPT_COMMAND_BYTE:
+            return "acceptCommandByte";
+        case RECORZ_MVP_SELECTOR_REVERT_COMMAND_BYTE:
+            return "revertCommandByte";
+        case RECORZ_MVP_SELECTOR_RUN_TESTS_COMMAND_BYTE:
+            return "runTestsCommandByte";
+        case RECORZ_MVP_SELECTOR_PRINT_COMMAND_BYTE:
+            return "printCommandByte";
+        case RECORZ_MVP_SELECTOR_DO_IT_COMMAND_BYTE:
+            return "doItCommandByte";
+        case RECORZ_MVP_SELECTOR_ALTERNATE_DO_IT_COMMAND_BYTE:
+            return "alternateDoItCommandByte";
+        case RECORZ_MVP_SELECTOR_SAVE_AND_REOPEN_COMMAND_BYTE:
+            return "saveAndReopenCommandByte";
+        case RECORZ_MVP_SELECTOR_SAVE_RECOVERY_SNAPSHOT_COMMAND_BYTE:
+            return "saveRecoverySnapshotCommandByte";
+        case RECORZ_MVP_SELECTOR_RETURN_TO_BROWSER_COMMAND_BYTE:
+            return "returnToBrowserCommandByte";
     }
     return "unknown";
 }

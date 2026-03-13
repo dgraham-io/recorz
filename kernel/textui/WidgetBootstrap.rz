@@ -321,17 +321,44 @@ setVisibleLeftColumn: aColumn
     leftColumn := aColumn.
     ^leftColumn
 !
+acceptCommandByte
+    ^24
+!
+revertCommandByte
+    ^25
+!
+runTestsCommandByte
+    ^20
+!
+printCommandByte
+    ^16
+!
+doItCommandByte
+    ^4
+!
+alternateDoItCommandByte
+    ^18
+!
+saveAndReopenCommandByte
+    ^23
+!
+saveRecoverySnapshotCommandByte
+    ^11
+!
+returnToBrowserCommandByte
+    ^15
+!
 dispatchCommandOnForm: aByte
     | viewKind |
-    aByte = 24 ifTrue: [self acceptCurrent. ^1].
-    aByte = 25 ifTrue: [self revertCurrent. ^1].
-    aByte = 20 ifTrue: [self runCurrentTests. ^1].
-    aByte = 16 ifTrue: [self printCurrent. ^1].
-    aByte = 4 ifTrue: [self evaluateCurrent. ^1].
-    aByte = 18 ifTrue: [self evaluateCurrent. ^1].
-    aByte = 23 ifTrue: [self saveAndReopen. ^9].
-    aByte = 11 ifTrue: [self saveRecoverySnapshot. ^9].
-    aByte = 15 ifTrue: [
+    aByte = self acceptCommandByte ifTrue: [self acceptCurrent. ^1].
+    aByte = self revertCommandByte ifTrue: [self revertCurrent. ^1].
+    aByte = self runTestsCommandByte ifTrue: [self runCurrentTests. ^1].
+    aByte = self printCommandByte ifTrue: [self printCurrent. ^1].
+    aByte = self doItCommandByte ifTrue: [self evaluateCurrent. ^1].
+    aByte = self alternateDoItCommandByte ifTrue: [self evaluateCurrent. ^1].
+    aByte = self saveAndReopenCommandByte ifTrue: [self saveAndReopen. ^9].
+    aByte = self saveRecoverySnapshotCommandByte ifTrue: [self saveRecoverySnapshot. ^9].
+    aByte = self returnToBrowserCommandByte ifTrue: [
         viewKind := Workspace currentViewKind.
         viewKind = 5 ifTrue: [Workspace setCurrentViewKind: 14. Workspace setCurrentTargetName: nil. ^4].
         viewKind = 7 ifTrue: [Workspace setCurrentViewKind: 14. Workspace setCurrentTargetName: nil. ^4].
