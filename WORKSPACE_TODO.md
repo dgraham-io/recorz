@@ -71,8 +71,8 @@ Notes:
 ## Phase 7 - Ergonomics
 - [ ] Add a clear visual indicator for focus, cursor, modified state, and current target
 - [ ] Add a visible command summary that fits the workspace layout without causing wrap corruption
-- [ ] Add explicit empty-workspace and first-run behavior
-- [ ] Decide whether the first serious workspace should support multiple buffers, scratch panes, or one canonical buffer only
+- [x] Add explicit empty-workspace and first-run behavior
+- [x] Decide whether the first serious workspace should support multiple buffers, scratch panes, or one canonical buffer only
 - [x] Document the intended user flow for the native workspace in `implementation.md` or `/docs`
 
 ## Proof And Regression Coverage
