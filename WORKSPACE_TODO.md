@@ -58,7 +58,7 @@ Notes:
 - [x] Make workspace reopen restore the image-owned workspace session instead of reconstructing a VM-owned tool mode
 - [x] Preserve buffer contents, cursor, selection, visible origin, status, and feedback across snapshot/reboot
 - [x] Distinguish reopening a plain workspace buffer from reopening a browser-backed source editor
-- [ ] Add recovery behavior for malformed or stale workspace session state
+- [x] Add recovery behavior for malformed or stale workspace session state
 - [x] Keep snapshot format expectations explicit and covered by tests
 
 ## Phase 6 - Workflow Integration
