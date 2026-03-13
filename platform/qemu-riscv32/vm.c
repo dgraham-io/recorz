@@ -698,6 +698,10 @@ static void workspace_move_input_monitor_cursor_to_line_end(
     const struct recorz_mvp_heap_object *workspace_object
 );
 static struct recorz_mvp_heap_object *workspace_cursor_object(void);
+static uint32_t workspace_cursor_line_value(void);
+static uint32_t workspace_cursor_column_value(void);
+static uint32_t workspace_visible_origin_top_line_value(void);
+static uint32_t workspace_visible_origin_left_column_value(void);
 static uint8_t workspace_input_monitor_accept_context(
     const struct recorz_mvp_heap_object *workspace_object,
     uint32_t *view_kind_out,
@@ -7271,6 +7275,88 @@ static uint8_t workspace_redraw_image_session_status_only(void) {
     return 1U;
 }
 
+static uint8_t workspace_redraw_named_label_widget(
+    const struct recorz_mvp_heap_object *form,
+    const char *widget_name,
+    const char *view_name,
+    const char *text
+) {
+    uint16_t widget_handle = named_object_handle_for_name(widget_name);
+    uint16_t view_handle = named_object_handle_for_name(view_name);
+    struct recorz_mvp_value arguments[2];
+
+    if (widget_handle == 0U || view_handle == 0U) {
+        return 0U;
+    }
+    arguments[0] = object_value(view_handle);
+    arguments[1] = string_value(text == 0 ? "" : text);
+    (void)perform_send_and_pop_result(
+        object_value(widget_handle),
+        RECORZ_MVP_SELECTOR_SET_VIEW_TEXT,
+        2U,
+        arguments,
+        0
+    );
+    arguments[0] = object_value(heap_handle_for_object(form));
+    (void)perform_send_and_pop_result(
+        object_value(widget_handle),
+        RECORZ_MVP_SELECTOR_REDRAW_ON_FORM,
+        1U,
+        arguments,
+        0
+    );
+    return 1U;
+}
+
+static uint8_t workspace_redraw_image_session_package_source_editor(
+    const struct recorz_mvp_heap_object *workspace_object
+) {
+    const struct recorz_mvp_heap_object *form = default_form_object();
+    struct recorz_mvp_value source_value = workspace_current_source_value(workspace_object);
+    const char *source =
+        (source_value.kind == RECORZ_MVP_VALUE_STRING && source_value.string != 0)
+            ? source_value.string
+            : "";
+    const char *header = workspace_session_current_text_for_selector(
+        RECORZ_MVP_SELECTOR_CURRENT_HEADER_TEXT
+    );
+    const char *status = workspace_session_current_text_for_selector(
+        RECORZ_MVP_SELECTOR_CURRENT_STATUS_TEXT
+    );
+    const char *feedback = workspace_session_current_text_for_selector(
+        RECORZ_MVP_SELECTOR_CURRENT_FEEDBACK_TEXT
+    );
+    uint32_t top_line = workspace_visible_origin_top_line_value();
+    uint32_t left_column = workspace_visible_origin_left_column_value();
+    uint32_t cursor_line = workspace_cursor_line_value();
+    uint32_t cursor_column = workspace_cursor_column_value();
+
+    workspace_surface_copy_source_viewport(
+        workspace_surface_editor_buffer,
+        sizeof(workspace_surface_editor_buffer),
+        source,
+        top_line,
+        left_column,
+        workspace_surface_visible_line_capacity_for_view_height(WORKSPACE_SOURCE_VIEW_HEIGHT),
+        workspace_surface_visible_column_capacity_for_view_width(WORKSPACE_SOURCE_VIEW_WIDTH)
+    );
+    workspace_require_editor_surface(form, "", status, feedback);
+    if (!workspace_redraw_named_label_widget(
+            form,
+            "BootWorkspaceHeaderWidget",
+            "BootWorkspaceHeaderView",
+            header)) {
+        return 0U;
+    }
+    workspace_draw_editor_source_viewport_overlay(
+        form,
+        workspace_surface_editor_buffer,
+        cursor_line >= top_line ? cursor_line - top_line : 0U,
+        cursor_column >= left_column ? cursor_column - left_column : 0U
+    );
+    return 1U;
+}
+
 static uint8_t workspace_input_byte_is_status_only_command(uint8_t ch) {
     return (uint8_t)(
         ch == 0x04 ||
@@ -10796,9 +10882,14 @@ static uint8_t workspace_session_open_from_image(
 static uint8_t workspace_session_redraw_from_image(void) {
     uint16_t object_handle = named_object_handle_for_name("BootWorkspaceSession");
     struct recorz_mvp_value arguments[1];
+    const struct recorz_mvp_heap_object *workspace_object = workspace_global_object();
 
     if (object_handle == 0U) {
         return 0U;
+    }
+    if (workspace_object != 0 &&
+        workspace_current_view_kind_value(workspace_object) == WORKSPACE_VIEW_PACKAGE_SOURCE) {
+        return workspace_redraw_image_session_package_source_editor(workspace_object);
     }
     arguments[0] = object_value(heap_handle_for_object(default_form_object()));
     (void)perform_send_and_pop_result(

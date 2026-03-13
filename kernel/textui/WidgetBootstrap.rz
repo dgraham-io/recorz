@@ -113,7 +113,7 @@ visibleEditorColumns
     ^0
 !
 redrawOnForm: form
-    | margins oldLeft oldTop oldRight oldBottom leftMargin topMargin rightMargin bottomMargin visibleLines visibleColumns renderText topLine |
+    | margins oldLeft oldTop oldRight oldBottom leftMargin topMargin rightMargin bottomMargin visibleLines visibleColumns renderText topLine flow oldWrapWidth oldTabWidth oldLineBreakMode |
     view redrawOnForm: form.
     margins := Display layout margins.
     oldLeft := margins left.
@@ -130,6 +130,11 @@ redrawOnForm: form
     visibleColumns := self visibleEditorColumns.
     renderText := text.
     renderText = nil ifTrue: [renderText := ''].
+    flow := Display layout flow.
+    oldWrapWidth := flow wrapWidth.
+    oldTabWidth := flow tabWidth.
+    oldLineBreakMode := flow lineBreakMode.
+    flow setWrapWidth: 0 tabWidth: oldTabWidth lineBreakMode: oldLineBreakMode.
     topLine := Workspace visibleTopLine.
     text = Workspace contents ifTrue: [
         renderText := Workspace visibleContentsTop: topLine left: Workspace visibleLeftColumn lines: visibleLines columns: visibleColumns.
@@ -138,6 +143,7 @@ redrawOnForm: form
     ] ifFalse: [
         form writeString: renderText
     ].
+    flow setWrapWidth: oldWrapWidth tabWidth: oldTabWidth lineBreakMode: oldLineBreakMode.
     margins left: oldLeft top: oldTop right: oldRight bottom: oldBottom.
     ^form
 !
