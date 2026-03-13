@@ -34,7 +34,7 @@ Notes:
 - [ ] Support stable horizontal and vertical scrolling with a real visible-origin model
 - [x] Add page-up/page-down that operate on the visible viewport, not just the cursor
 - [x] Add top/bottom navigation that operate on the visible viewport, not just the cursor
-- [ ] Ensure large buffers keep a stable visible origin during edits, movement, and reopen
+- [x] Ensure large buffers keep a stable visible origin during edits, movement, and reopen
 - [x] Add explicit cursor painting and selection painting rules owned by image-side objects
 
 ## Phase 3 - Workspace Commands

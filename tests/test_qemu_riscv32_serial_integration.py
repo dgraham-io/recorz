@@ -1361,6 +1361,108 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("MOD=Y", normalized)
             self.assertNotIn("panic:", normalized)
 
+    def test_workspace_session_keeps_visible_origin_stable_during_in_view_edits_and_movement(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-visible-origin-stable-") as temp_dir:
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "build"
+            line_text = "0123456789" * 9
+            buffer_lines = [line_text for _ in range(30)]
+            buffer_text = "\n".join(buffer_lines)
+            cursor_line = 20
+            cursor_column = 70
+            cursor_index = sum(len(line) + 1 for line in buffer_lines[:cursor_line]) + cursor_column
+            example_path = temp_path / "workspace_visible_origin_stable_demo.rz"
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "Display clear.",
+                        f"Workspace setContents: '{buffer_text}'.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') openOn: Workspace mode: 1.",
+                        f"Workspace cursor moveToIndex: {cursor_index} line: {cursor_line} column: {cursor_column} topLine: 10.",
+                        f"Workspace selection collapseToLine: {cursor_line} column: {cursor_column}.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceTool') setVisibleLeftColumn: 10.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') ensureEditorCursorVisible.",
+                        "Transcript show: 'STEP1TOP='.",
+                        "Transcript show: Workspace visibleTopLine printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'STEP1LEFT='.",
+                        "Transcript show: Workspace visibleLeftColumn printString.",
+                        "Transcript cr.",
+                        "Workspace insertCodePoint: 88.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') ensureEditorCursorVisible.",
+                        "Transcript show: 'STEP2TOP='.",
+                        "Transcript show: Workspace visibleTopLine printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'STEP2LEFT='.",
+                        "Transcript show: Workspace visibleLeftColumn printString.",
+                        "Transcript cr.",
+                        "Workspace deleteBackward.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') ensureEditorCursorVisible.",
+                        "Transcript show: 'STEP3TOP='.",
+                        "Transcript show: Workspace visibleTopLine printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'STEP3LEFT='.",
+                        "Transcript show: Workspace visibleLeftColumn printString.",
+                        "Transcript cr.",
+                        "Workspace moveCursorDown.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') ensureEditorCursorVisible.",
+                        "Workspace moveCursorUp.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') ensureEditorCursorVisible.",
+                        "Transcript show: 'STEP4TOP='.",
+                        "Transcript show: Workspace visibleTopLine printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'STEP4LEFT='.",
+                        "Transcript show: Workspace visibleLeftColumn printString.",
+                        "Transcript cr.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            elf_path = _build_elf(build_dir, example_path)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            normalized = output.replace("\r", "").replace("\n", "")
+            self.assertIn("STEP1TOP=10", normalized)
+            self.assertIn("STEP1LEFT=10", normalized)
+            self.assertIn("STEP2TOP=10", normalized)
+            self.assertIn("STEP2LEFT=10", normalized)
+            self.assertIn("STEP3TOP=10", normalized)
+            self.assertIn("STEP3LEFT=10", normalized)
+            self.assertIn("STEP4TOP=10", normalized)
+            self.assertIn("STEP4LEFT=10", normalized)
+            self.assertNotIn("panic:", normalized)
+
     def test_workspace_tool_dispatch_command_updates_status_feedback_and_refusals(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-commands-") as temp_dir:
             temp_path = Path(temp_dir)
