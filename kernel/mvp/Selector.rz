@@ -658,3 +658,9 @@ RecorzKernelSelector: #dispatchSourceEditorCommandOnForm: order: 327
 !
 RecorzKernelSelector: #visibleOrigin order: 328
 !
+RecorzKernelSelector: #rememberPlainWorkspaceStateContents: order: 329
+!
+RecorzKernelSelector: #restorePlainWorkspaceState order: 330
+!
+RecorzKernelSelector: #setContents:cursor:selection:visibleOrigin: order: 331
+!

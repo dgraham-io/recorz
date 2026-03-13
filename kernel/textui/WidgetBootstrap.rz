@@ -346,6 +346,34 @@ setVisibleOriginTop: aTopLine left: aLeftColumn
     leftColumn := aLeftColumn.
     ^self
 !
+RecorzKernelClass: #WorkspaceReturnState superclass: #Object package: 'TextUI' instanceVariableNames: 'contents cursor selection visibleOrigin'
+!
+setContents: aContents cursor: aCursor selection: aSelection visibleOrigin: anOrigin
+    contents := aContents.
+    cursor := aCursor.
+    selection := aSelection.
+    visibleOrigin := anOrigin.
+    ^self
+!
+clear
+    contents := nil.
+    cursor := nil.
+    selection := nil.
+    visibleOrigin := nil.
+    ^self
+!
+contents
+    ^contents
+!
+cursor
+    ^cursor
+!
+selection
+    ^selection
+!
+visibleOrigin
+    ^visibleOrigin
+!
 RecorzKernelClass: #WorkspaceTool descriptorOrder: 35 objectKindOrder: 35 sourceBootOrder: 29 instanceVariableNames: 'statusText feedbackText name visibleOrigin'
 !
 setStatusText: aStatusText
@@ -377,6 +405,37 @@ visibleLeftColumn
 setVisibleLeftColumn: aColumn
     self visibleOrigin setVisibleOriginTop: self visibleOrigin topLine left: aColumn.
     ^self visibleOrigin visibleLeftColumn
+!
+rememberPlainWorkspaceStateContents: plainContents
+    | cursorCopy selectionCopy originCopy state |
+    cursorCopy := (KernelInstaller classNamed: 'TextCursor') new.
+    cursorCopy moveToIndex: Workspace cursor index line: Workspace cursor line column: Workspace cursor column topLine: Workspace cursor topLine.
+    selectionCopy := (KernelInstaller classNamed: 'TextSelection') new.
+    selectionCopy setStartLine: Workspace selection startLine startColumn: Workspace selection startColumn endLine: Workspace selection endLine endColumn: Workspace selection endColumn.
+    originCopy := (KernelInstaller classNamed: 'WorkspaceVisibleOrigin') new.
+    originCopy setVisibleOriginTop: Workspace visibleTopLine left: Workspace visibleLeftColumn.
+    state := (KernelInstaller classNamed: 'WorkspaceReturnState') new.
+    state setContents: plainContents cursor: cursorCopy selection: selectionCopy visibleOrigin: originCopy.
+    KernelInstaller rememberObject: state named: 'BootWorkspacePlainState'.
+    ^state
+!
+restorePlainWorkspaceState
+    | state plainContents savedCursor savedSelection savedOrigin |
+    state := self namedObjectOrNil: 'BootWorkspacePlainState'.
+    plainContents := state contents.
+    Workspace setCurrentViewKind: 18.
+    Workspace setCurrentTargetName: nil.
+    Workspace setContents: plainContents.
+    savedCursor := state cursor.
+    Workspace cursor moveToIndex: savedCursor index line: savedCursor line column: savedCursor column topLine: savedCursor topLine.
+    savedSelection := state selection.
+    Workspace selection setStartLine: savedSelection startLine startColumn: savedSelection startColumn endLine: savedSelection endLine endColumn: savedSelection endColumn.
+    savedOrigin := state visibleOrigin.
+    Workspace setVisibleOriginTop: savedOrigin topLine left: savedOrigin visibleLeftColumn.
+    self setStatusText: ''.
+    self setFeedbackText: ''.
+    state clear.
+    ^1
 !
 acceptCommandByte
     ^24
@@ -427,7 +486,7 @@ dispatchWorkspaceCommandOnForm: aByte
     ^0
 !
 dispatchSourceEditorCommandOnForm: aByte
-    | viewKind |
+    | viewKind plainState |
     aByte = self acceptCommandByte ifTrue: [self acceptCurrent. ^1].
     aByte = self revertCommandByte ifTrue: [self revertCurrent. ^1].
     aByte = self runTestsCommandByte ifTrue: [self runCurrentTests. ^1].
@@ -437,14 +496,18 @@ dispatchSourceEditorCommandOnForm: aByte
     aByte = self saveAndReopenCommandByte ifTrue: [self saveAndReopen. ^9].
     aByte = self saveRecoverySnapshotCommandByte ifTrue: [self saveRecoverySnapshot. ^9].
     aByte = self returnToBrowserCommandByte ifTrue: [
+        plainState := self namedObjectOrNil: 'BootWorkspacePlainState'.
+        plainState = nil ifFalse: [
+            plainState contents = nil ifFalse: [
+                ^self restorePlainWorkspaceState]].
         viewKind := Workspace currentViewKind.
-        viewKind = 5 ifTrue: [Workspace setCurrentViewKind: 14. ^4].
-        viewKind = 7 ifTrue: [Workspace setCurrentViewKind: 14. ^4].
-        viewKind = 8 ifTrue: [Workspace setCurrentViewKind: 14. ^4].
-        viewKind = 13 ifTrue: [Workspace setCurrentViewKind: 14. ^4].
-        viewKind = 16 ifTrue: [Workspace setCurrentViewKind: 14. ^4].
-        viewKind = 17 ifTrue: [Workspace setCurrentViewKind: 14. ^4].
-        viewKind = 19 ifTrue: [Workspace setCurrentViewKind: 14. ^4].
+        viewKind = 5 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
+        viewKind = 7 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
+        viewKind = 8 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
+        viewKind = 13 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
+        viewKind = 16 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
+        viewKind = 17 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
+        viewKind = 19 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
         ^9].
     ^0
 !
@@ -966,8 +1029,23 @@ handleBrowserByte: aByte
     ^0
 !
 openSelectedPackageSource
-    | packageName source priorTarget |
+    | packageName source priorTarget tool plainState plainContents |
     workspace packageCount = 0 ifTrue: [^4].
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    plainState := tool namedObjectOrNil: 'BootWorkspacePlainState'.
+    plainState = nil ifTrue: [
+        workspace currentTargetName = nil ifTrue: [
+            workspace isModified ifTrue: [
+                plainContents := workspace contents.
+                plainContents = nil ifTrue: [plainContents := ''].
+                tool rememberPlainWorkspaceStateContents: plainContents]]].
+    plainState = nil ifFalse: [
+        plainState contents = nil ifTrue: [
+            workspace currentTargetName = nil ifTrue: [
+                workspace isModified ifTrue: [
+                    plainContents := workspace contents.
+                    plainContents = nil ifTrue: [plainContents := ''].
+                    tool rememberPlainWorkspaceStateContents: plainContents]]]].
     packageName := self selectedPackageName.
     priorTarget := workspace currentTargetName.
     workspace setCurrentViewKind: 13.

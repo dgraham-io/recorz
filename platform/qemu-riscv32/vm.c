@@ -22,6 +22,7 @@
 #define PACKAGE_COMMENT_LIMIT CLASS_COMMENT_LIMIT
 #define METHOD_SOURCE_CHUNK_LIMIT 2048U
 #define PACKAGE_SOURCE_BUFFER_LIMIT 65536U
+#define FILE_IN_SOURCE_BUFFER_LIMIT 131072U
 #define REGENERATED_SOURCE_BUFFER_LIMIT 65536U
 #define VIEW_CONTENT_HORIZONTAL_PADDING 24U
 #define VIEW_CONTENT_VERTICAL_PADDING 24U
@@ -189,7 +190,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_TOOL
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_VISIBLE_ORIGIN
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SET_CONTENTS_CURSOR_SELECTION_VISIBLE_ORIGIN
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -431,6 +432,7 @@ static uint32_t render_counter_browser_full_redraws = 0U;
 static uint32_t render_counter_browser_list_redraws = 0U;
 static char kernel_source_io_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char package_source_io_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
+static char file_in_source_io_buffer[FILE_IN_SOURCE_BUFFER_LIMIT + 1U];
 static char regenerated_source_io_buffer[REGENERATED_SOURCE_BUFFER_LIMIT];
 static char runtime_string_pool[RUNTIME_STRING_POOL_LIMIT];
 static uint32_t runtime_string_pool_offset = 0U;
@@ -1551,6 +1553,12 @@ static const char *selector_name(uint16_t selector) {
             return "dispatchSourceEditorCommandOnForm:";
         case RECORZ_MVP_SELECTOR_VISIBLE_ORIGIN:
             return "visibleOrigin";
+        case RECORZ_MVP_SELECTOR_REMEMBER_PLAIN_WORKSPACE_STATE_CONTENTS:
+            return "rememberPlainWorkspaceStateContents:";
+        case RECORZ_MVP_SELECTOR_RESTORE_PLAIN_WORKSPACE_STATE:
+            return "restorePlainWorkspaceState";
+        case RECORZ_MVP_SELECTOR_SET_CONTENTS_CURSOR_SELECTION_VISIBLE_ORIGIN:
+            return "setContents:cursor:selection:visibleOrigin:";
     }
     return "unknown";
 }
@@ -18916,17 +18924,17 @@ static void apply_external_file_in_blob(const uint8_t *blob, uint32_t size) {
     if (blob == 0 || size == 0U) {
         return;
     }
-    if (size >= sizeof(kernel_source_io_buffer)) {
+    if (size >= sizeof(file_in_source_io_buffer)) {
         machine_panic("external file-in payload exceeds buffer capacity");
     }
     for (index = 0U; index < size; ++index) {
         if (blob[index] == '\0') {
             machine_panic("external file-in payload contains an unexpected NUL byte");
         }
-        kernel_source_io_buffer[index] = (char)blob[index];
+        file_in_source_io_buffer[index] = (char)blob[index];
     }
-    kernel_source_io_buffer[size] = '\0';
-    file_in_chunk_stream_source(kernel_source_io_buffer);
+    file_in_source_io_buffer[size] = '\0';
+    file_in_chunk_stream_source(file_in_source_io_buffer);
 }
 
 static void execute_entry_kernel_installer_remember_object_named(
