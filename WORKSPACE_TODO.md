@@ -73,7 +73,7 @@ Notes:
 - [ ] Add a visible command summary that fits the workspace layout without causing wrap corruption
 - [ ] Add explicit empty-workspace and first-run behavior
 - [ ] Decide whether the first serious workspace should support multiple buffers, scratch panes, or one canonical buffer only
-- [ ] Document the intended user flow for the native workspace in `implementation.md` or `/docs`
+- [x] Document the intended user flow for the native workspace in `implementation.md` or `/docs`
 
 ## Proof And Regression Coverage
 - [x] Add framebuffer integration tests for:
