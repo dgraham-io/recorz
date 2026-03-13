@@ -7,7 +7,7 @@
 #define RECORZ_MVP_PROGRAM_INSTRUCTION_LIMIT 512U
 #define RECORZ_MVP_PROGRAM_LITERAL_LIMIT 128U
 #define RECORZ_MVP_PROGRAM_OBJECT_FIELD_LIMIT 4U
-#define RECORZ_MVP_PROGRAM_MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_ENSURE_EDITOR_CURSOR_VISIBLE
+#define RECORZ_MVP_PROGRAM_MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_CURRENT_HEADER_TEXT
 #define RECORZ_MVP_PROGRAM_MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 static struct recorz_mvp_instruction loaded_instructions[RECORZ_MVP_PROGRAM_INSTRUCTION_LIMIT];
@@ -114,7 +114,8 @@ const struct recorz_mvp_program *recorz_mvp_program_load(const uint8_t *blob, ui
     for (instruction_index = 0U; instruction_index < instruction_count; ++instruction_index) {
         struct recorz_mvp_instruction *instruction = &loaded_instructions[instruction_index];
         instruction->opcode = blob[offset++];
-        instruction->operand_a = blob[offset++];
+        instruction->operand_a = read_u16_le(blob + offset);
+        offset += 2U;
         instruction->operand_b = read_u16_le(blob + offset);
         offset += 2U;
         validate_instruction(instruction, literal_count, lexical_count);

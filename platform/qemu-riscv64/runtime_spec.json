@@ -1,11 +1,11 @@
 {
   "program": {
     "magic": "RCZP",
-    "version": 2,
+    "version": 3,
     "header_format": "<4sHHHH",
     "lexical_limit": 32,
     "lexical_name_limit": 96,
-    "instruction_format": "<BBH",
+    "instruction_format": "<BHH",
     "literal_header_format": "<BBHi"
   },
   "image": {

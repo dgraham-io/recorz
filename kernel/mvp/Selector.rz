@@ -608,3 +608,25 @@ RecorzKernelSelector: #visibleContentsTop:left:lines:columns: order: 302
 !
 RecorzKernelSelector: #ensureEditorCursorVisible order: 303
 !
+RecorzKernelSelector: #setStatusText: order: 304
+!
+RecorzKernelSelector: #setFeedbackText: order: 305
+!
+RecorzKernelSelector: #visibleTopLine order: 306
+!
+RecorzKernelSelector: #setVisibleOriginTop:left: order: 307
+!
+RecorzKernelSelector: #isModified order: 308
+!
+RecorzKernelSelector: #currentTargetLabel order: 309
+!
+RecorzKernelSelector: #moveCursorToVisibleTop order: 310
+!
+RecorzKernelSelector: #moveCursorToVisibleBottom order: 311
+!
+RecorzKernelSelector: #moveListSelectionToVisibleTop order: 312
+!
+RecorzKernelSelector: #moveListSelectionToVisibleBottom order: 313
+!
+RecorzKernelSelector: #currentHeaderText order: 314
+!

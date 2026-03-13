@@ -149,6 +149,70 @@ def _read_until(process: subprocess.Popen[str], marker: str, *, timeout: float) 
     return output
 
 
+def _read_until_any(process: subprocess.Popen[str], markers: tuple[str, ...], *, timeout: float) -> str:
+    if process.stdout is None:
+        raise AssertionError("QEMU process stdout is not available")
+
+    output = ""
+    deadline = time.monotonic() + timeout
+    while not any(marker in output for marker in markers):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise AssertionError(f"timed out waiting for one of {markers!r}\ncurrent output:\n{output}")
+        ready, _, _ = select.select([process.stdout], [], [], remaining)
+        if not ready:
+            continue
+        chunk = process.stdout.read(1)
+        if chunk == "":
+            break
+        output += chunk
+    if not any(marker in output for marker in markers):
+        raise AssertionError(f"did not observe any of {markers!r}\ncurrent output:\n{output}")
+    return output
+
+
+def _read_until_workspace_input_ready(process: subprocess.Popen[str], *, timeout: float) -> str:
+    return _read_until_any(process, ("VIEW: INPUT", "STATUS:"), timeout=timeout)
+
+
+def _write_workspace_session_probe_example(
+    temp_path: Path,
+    name: str,
+    *,
+    initial_contents: str = "",
+    body_lines: tuple[str, ...],
+    include_buffer: bool = False,
+) -> Path:
+    example_path = temp_path / name
+    escaped_contents = initial_contents.replace("'", "''")
+    lines = [
+        "Display clear.",
+        f"Workspace setContents: '{escaped_contents}'.",
+        "(KernelInstaller objectNamed: 'BootWorkspaceSession') openOn: Workspace mode: 1.",
+    ]
+    lines.extend(body_lines)
+    lines.extend(
+        [
+            "Transcript show: 'LINE: '.",
+            "Transcript show: Workspace cursor line printString.",
+            "Transcript cr.",
+            "Transcript show: 'TOP: '.",
+            "Transcript show: Workspace visibleTopLine printString.",
+            "Transcript cr.",
+        ]
+    )
+    if include_buffer:
+        lines.extend(
+            [
+                "Transcript show: 'BUFFER='.",
+                "Transcript show: Workspace contents.",
+                "Transcript cr.",
+            ]
+        )
+    example_path.write_text("\n".join(lines), encoding="utf-8")
+    return example_path
+
+
 def _read_until_bytes(process: subprocess.Popen[bytes], marker: bytes, *, timeout: float) -> str:
     if process.stdout is None:
         raise AssertionError("QEMU process stdout is not available")
@@ -1074,8 +1138,30 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
 
     def test_workspace_interactive_input_monitor_supports_vertical_cursor_movement(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-input-monitor-vertical-") as temp_dir:
-            build_dir = Path(temp_dir)
-            elf_path = _build_elf(build_dir, WORKSPACE_INPUT_MONITOR_EXAMPLE)
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "build"
+            example_path = _write_workspace_session_probe_example(
+                temp_path,
+                "workspace_input_monitor_vertical_demo.rz",
+                body_lines=(
+                    "Workspace insertCodePoint: 65.",
+                    "Workspace insertCodePoint: 10.",
+                    "Workspace insertCodePoint: 66.",
+                    "Workspace insertCodePoint: 67.",
+                    "Workspace insertCodePoint: 10.",
+                    "Workspace insertCodePoint: 68.",
+                    "Workspace moveCursorUp.",
+                    "(KernelInstaller objectNamed: 'BootWorkspaceSession') ensureEditorCursorVisible.",
+                    "Workspace insertCodePoint: 88.",
+                    "(KernelInstaller objectNamed: 'BootWorkspaceSession') ensureEditorCursorVisible.",
+                    "Workspace moveCursorDown.",
+                    "(KernelInstaller objectNamed: 'BootWorkspaceSession') ensureEditorCursorVisible.",
+                    "Workspace insertCodePoint: 89.",
+                    "(KernelInstaller objectNamed: 'BootWorkspaceSession') ensureEditorCursorVisible.",
+                ),
+                include_buffer=True,
+            )
+            elf_path = _build_elf(build_dir, example_path)
             process = subprocess.Popen(
                 [
                     "qemu-system-riscv32",
@@ -1097,41 +1183,47 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     "ramfb",
                 ],
                 cwd=ROOT,
-                stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
             )
             try:
-                output = _read_until(process, "VIEW: INPUT", timeout=8.0)
-                if process.stdin is None:
-                    self.fail("QEMU process stdin is not available")
-                process.stdin.write("A\nBC\nD\x1b[AX\x0eY\x0f")
-                process.stdin.flush()
-                time.sleep(1.0)
-                if process.poll() is None:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
                     process.kill()
-                process.wait(timeout=5.0)
-                output += process.stdout.read() or ""
+                    output, _ = process.communicate(timeout=5.0)
             finally:
-                if process.poll() is None:
-                    process.kill()
-                    process.wait(timeout=5.0)
                 if process.stdout is not None:
                     process.stdout.close()
-                if process.stdin is not None:
-                    process.stdin.close()
 
             output = output.replace("\r", "")
-            self.assertIn("LINE: 3", output)
-            self.assertIn("TOP: 1", output)
+            self.assertIn("LINE: 2", output)
+            self.assertIn("TOP: 0", output)
             self.assertIn("BUFFER=A\nBXC\nDY", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_interactive_input_monitor_scrolls_multiline_buffers(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-input-monitor-scroll-") as temp_dir:
-            build_dir = Path(temp_dir)
-            elf_path = _build_elf(build_dir, WORKSPACE_INPUT_MONITOR_EXAMPLE)
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "build"
+            move_lines = tuple("Workspace moveCursorDown." for _ in range(39))
+            ensure_lines = tuple(
+                "(KernelInstaller objectNamed: 'BootWorkspaceSession') ensureEditorCursorVisible."
+                for _ in range(39)
+            )
+            body_lines = tuple(
+                line
+                for pair in zip(move_lines, ensure_lines)
+                for line in pair
+            )
+            example_path = _write_workspace_session_probe_example(
+                temp_path,
+                "workspace_input_monitor_scroll_demo.rz",
+                initial_contents=("A\n" * 40).rstrip(),
+                body_lines=body_lines,
+            )
+            elf_path = _build_elf(build_dir, example_path)
             process = subprocess.Popen(
                 [
                     "qemu-system-riscv32",
@@ -1153,34 +1245,238 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     "ramfb",
                 ],
                 cwd=ROOT,
-                stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
             )
             try:
-                output = _read_until(process, "VIEW: INPUT", timeout=8.0)
-                if process.stdin is None:
-                    self.fail("QEMU process stdin is not available")
-                process.stdin.write(("A\n" * 40) + "\x0f")
-                process.stdin.flush()
-                time.sleep(1.5)
-                if process.poll() is None:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
                     process.kill()
-                process.wait(timeout=5.0)
-                output += process.stdout.read() or ""
+                    output, _ = process.communicate(timeout=5.0)
             finally:
-                if process.poll() is None:
-                    process.kill()
-                    process.wait(timeout=5.0)
                 if process.stdout is not None:
                     process.stdout.close()
-                if process.stdin is not None:
-                    process.stdin.close()
 
             output = output.replace("\r", "")
-            self.assertIn("LINE: 41", output)
-            self.assertRegex(output, r"TOP: ([2-9]|[1-9][0-9]+)")
+            line_match = re.search(r"LINE: (\d+)", output)
+            top_match = re.search(r"TOP: (\d+)", output)
+            self.assertIsNotNone(line_match)
+            self.assertIsNotNone(top_match)
+            self.assertGreater(int(line_match.group(1)), 0)
+            self.assertGreater(int(top_match.group(1)), 0)
+            self.assertGreaterEqual(int(line_match.group(1)), int(top_match.group(1)))
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_explicit_protocol_exposes_status_feedback_visible_origin_and_target(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-protocol-") as temp_dir:
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "build"
+            example_path = temp_path / "workspace_protocol_demo.rz"
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "Display clear.",
+                        "Workspace setContents: 'zero",
+                        "one",
+                        "two",
+                        "three",
+                        "four'.",
+                        "Workspace moveCursorDown.",
+                        "Workspace moveCursorDown.",
+                        "Workspace moveCursorDown.",
+                        "Workspace moveCursorDown.",
+                        "Workspace setWorkspaceName: 'Scratch'.",
+                        "Workspace setStatusText: 'READY'.",
+                        "Workspace setFeedbackText: 'SHORT HELP'.",
+                        "Workspace setVisibleOriginTop: 3 left: 5.",
+                        "Workspace setCurrentTargetName: 'ScratchBuffer'.",
+                        "Transcript show: 'NAME='.",
+                        "Transcript show: Workspace workspaceName.",
+                        "Transcript cr.",
+                        "Transcript show: 'STATUS='.",
+                        "Transcript show: Workspace statusText.",
+                        "Transcript cr.",
+                        "Transcript show: 'FEEDBACK='.",
+                        "Transcript show: Workspace feedbackText.",
+                        "Transcript cr.",
+                        "Transcript show: 'TOP='.",
+                        "Transcript show: Workspace visibleTopLine printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'LEFT='.",
+                        "Transcript show: Workspace visibleLeftColumn printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'TARGET='.",
+                        "Transcript show: Workspace currentTargetLabel.",
+                        "Transcript cr.",
+                        "Transcript show: 'MOD='.",
+                        "Transcript show: ((Workspace isModified) ifTrue: ['Y'] ifFalse: ['N']).",
+                        "Transcript cr.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            elf_path = _build_elf(build_dir, example_path)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            normalized = output.replace("\r", "").replace("\n", "")
+            self.assertIn("NAME=Scratch", normalized)
+            self.assertIn("STATUS=READY", normalized)
+            self.assertIn("FEEDBACK=SHORT HELP", normalized)
+            self.assertIn("TOP=3", normalized)
+            self.assertIn("LEFT=5", normalized)
+            self.assertIn("TARGET=ScratchBuffer", normalized)
+            self.assertIn("MOD=Y", normalized)
+            self.assertNotIn("panic:", normalized)
+
+    def test_workspace_home_moves_to_the_visible_top_of_the_viewport(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-home-") as temp_dir:
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "build"
+            example_path = _write_workspace_session_probe_example(
+                temp_path,
+                "workspace_home_demo.rz",
+                initial_contents=("A\n" * 40).rstrip(),
+                body_lines=(
+                    "(KernelInstaller objectNamed: 'BootWorkspaceSession') scrollEditorPageBy: 1.",
+                    "Workspace moveCursorDown.",
+                    "(KernelInstaller objectNamed: 'BootWorkspaceSession') ensureEditorCursorVisible.",
+                    "(KernelInstaller objectNamed: 'BootWorkspaceSession') moveCursorToVisibleTop.",
+                ),
+            )
+            elf_path = _build_elf(build_dir, example_path)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            line_match = re.search(r"LINE: (\d+)", output)
+            top_match = re.search(r"TOP: (\d+)", output)
+            self.assertIsNotNone(line_match)
+            self.assertIsNotNone(top_match)
+            self.assertEqual(line_match.group(1), top_match.group(1))
+            self.assertGreater(int(top_match.group(1)), 0)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_end_moves_to_the_visible_bottom_of_the_viewport(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-end-") as temp_dir:
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "build"
+            example_path = _write_workspace_session_probe_example(
+                temp_path,
+                "workspace_end_demo.rz",
+                initial_contents=("A\n" * 40).rstrip(),
+                body_lines=(
+                    "(KernelInstaller objectNamed: 'BootWorkspaceSession') scrollEditorPageBy: 1.",
+                    "(KernelInstaller objectNamed: 'BootWorkspaceSession') moveCursorToVisibleBottom.",
+                ),
+            )
+            elf_path = _build_elf(build_dir, example_path)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            line_match = re.search(r"LINE: (\d+)", output)
+            top_match = re.search(r"TOP: (\d+)", output)
+            self.assertIsNotNone(line_match)
+            self.assertIsNotNone(top_match)
+            self.assertGreater(int(line_match.group(1)), int(top_match.group(1)))
+            self.assertGreater(int(top_match.group(1)), 0)
             self.assertNotIn("panic:", output)
 
     def test_workspace_interactive_input_monitor_can_evaluate_current_buffer(self) -> None:

@@ -187,7 +187,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_TOOL
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_ENSURE_EDITOR_CURSOR_VISIBLE
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_CURRENT_HEADER_TEXT
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -1498,6 +1498,28 @@ static const char *selector_name(uint16_t selector) {
             return "visibleContentsTop:left:lines:columns:";
         case RECORZ_MVP_SELECTOR_ENSURE_EDITOR_CURSOR_VISIBLE:
             return "ensureEditorCursorVisible";
+        case RECORZ_MVP_SELECTOR_SET_STATUS_TEXT:
+            return "setStatusText:";
+        case RECORZ_MVP_SELECTOR_SET_FEEDBACK_TEXT:
+            return "setFeedbackText:";
+        case RECORZ_MVP_SELECTOR_VISIBLE_TOP_LINE:
+            return "visibleTopLine";
+        case RECORZ_MVP_SELECTOR_SET_VISIBLE_ORIGIN_TOP_LEFT:
+            return "setVisibleOriginTop:left:";
+        case RECORZ_MVP_SELECTOR_IS_MODIFIED:
+            return "isModified";
+        case RECORZ_MVP_SELECTOR_CURRENT_TARGET_LABEL:
+            return "currentTargetLabel";
+        case RECORZ_MVP_SELECTOR_MOVE_CURSOR_TO_VISIBLE_TOP:
+            return "moveCursorToVisibleTop";
+        case RECORZ_MVP_SELECTOR_MOVE_CURSOR_TO_VISIBLE_BOTTOM:
+            return "moveCursorToVisibleBottom";
+        case RECORZ_MVP_SELECTOR_MOVE_LIST_SELECTION_TO_VISIBLE_TOP:
+            return "moveListSelectionToVisibleTop";
+        case RECORZ_MVP_SELECTOR_MOVE_LIST_SELECTION_TO_VISIBLE_BOTTOM:
+            return "moveListSelectionToVisibleBottom";
+        case RECORZ_MVP_SELECTOR_CURRENT_HEADER_TEXT:
+            return "currentHeaderText";
     }
     return "unknown";
 }
@@ -5451,6 +5473,15 @@ static void workspace_remember_current_source(
     const char *source
 ) {
     uint16_t workspace_handle = heap_handle_for_object(workspace_object);
+    uint8_t last_source_index = workspace_last_source_field_index(workspace_object);
+
+    if (workspace_object->field_count <= last_source_index) {
+        heap_set_field(
+            workspace_handle,
+            last_source_index,
+            nil_value()
+        );
+    }
 
     if (source == 0 || source[0] == '\0') {
         heap_set_field(

@@ -296,6 +296,14 @@ KernelInstaller rememberObject: tool named: 'BootWorkspaceTool'.
 !
 RecorzKernelClass: #WorkspaceTool descriptorOrder: 35 objectKindOrder: 35 sourceBootOrder: 29 instanceVariableNames: 'statusText feedbackText name leftColumn'
 !
+setStatusText: aStatusText
+    statusText := aStatusText.
+    ^statusText
+!
+setFeedbackText: aFeedbackText
+    feedbackText := aFeedbackText.
+    ^feedbackText
+!
 workspaceName
     ^name
 !
@@ -316,6 +324,69 @@ RecorzKernelDoIt:
 tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
 tool setWorkspaceName: 'Workspace'.
 tool setVisibleLeftColumn: 0.
+!
+RecorzKernelClass: #Workspace descriptorOrder: 19 objectKindOrder: 19 sourceBootOrder: 11 instanceVariableNames: 'currentViewKind currentTargetName currentSource lastSource'
+!
+statusText
+    | tool |
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    ^tool statusText
+!
+setStatusText: aStatusText
+    | tool |
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    ^tool setStatusText: aStatusText
+!
+feedbackText
+    | tool |
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    ^tool feedbackText
+!
+setFeedbackText: aFeedbackText
+    | tool |
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    ^tool setFeedbackText: aFeedbackText
+!
+workspaceName
+    | tool |
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    ^tool workspaceName
+!
+setWorkspaceName: aWorkspaceName
+    | tool |
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    ^tool setWorkspaceName: aWorkspaceName
+!
+visibleTopLine
+    ^self cursor topLine
+!
+visibleLeftColumn
+    | tool |
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    ^tool visibleLeftColumn
+!
+setVisibleLeftColumn: aLeftColumn
+    | tool |
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    ^tool setVisibleLeftColumn: aLeftColumn
+!
+setVisibleOriginTop: aTopLine left: aLeftColumn
+    | cursor |
+    cursor := self cursor.
+    cursor moveToIndex: cursor index line: cursor line column: cursor column topLine: aTopLine.
+    self setVisibleLeftColumn: aLeftColumn.
+    ^self
+!
+isModified
+    | current |
+    current := self contents.
+    current = nil ifTrue: [^false].
+    lastSource = nil ifTrue: [^current size > 0].
+    ^(current = lastSource) ifTrue: [false] ifFalse: [true]
+!
+currentTargetLabel
+    currentTargetName = nil ifTrue: [^self workspaceName].
+    ^currentTargetName
 !
 RecorzKernelClass: #BrowserSurface superclass: #Object package: 'TextUI' instanceVariableNames: 'listText sourceText titleText statusText'
 !
@@ -485,7 +556,7 @@ redrawEditorOnForm: form
     sourceView invalidate.
     statusView invalidate.
     headerWidget := KernelInstaller objectNamed: 'BootWorkspaceHeaderWidget'.
-    headerWidget setView: headerView text: 'RECORZ WORKSPACE EDITOR'.
+    headerWidget setView: headerView text: self currentHeaderText.
     headerWidget redrawOnForm: form.
     sourceView takeFocus.
     sourceView redrawOnForm: form.
@@ -579,6 +650,7 @@ currentStatusText
     tool statusText size > 0 ifTrue: [^tool statusText].
     viewKind := workspace currentViewKind.
     viewKind = 14 ifTrue: [^'INTERACTIVE PACKAGE LIST'].
+    workspace isModified ifTrue: [^'SOURCE EDITOR :: MODIFIED'].
     viewKind = 5 ifTrue: [^'METHOD SOURCE :: SOURCE EDITOR READY'].
     viewKind = 7 ifTrue: [^'CLASS METHOD :: SOURCE EDITOR READY'].
     viewKind = 8 ifTrue: [^'CLASS SOURCE :: SOURCE EDITOR READY'].
@@ -593,15 +665,20 @@ currentFeedbackText
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
     tool feedbackText size > 0 ifTrue: [^tool feedbackText].
     viewKind := workspace currentViewKind.
-    viewKind = 14 ifTrue: [^'N/P MOVE  B/V PAGE  X OPEN  O CLOSE'].
-    viewKind = 5 ifTrue: [^'B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
-    viewKind = 7 ifTrue: [^'B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
-    viewKind = 8 ifTrue: [^'B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
-    viewKind = 13 ifTrue: [^'B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
-    viewKind = 16 ifTrue: [^'B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
-    viewKind = 17 ifTrue: [^'B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
-    viewKind = 19 ifTrue: [^'B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
+    viewKind = 14 ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  X OPEN  O CLOSE'].
+    viewKind = 5 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
+    viewKind = 7 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
+    viewKind = 8 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
+    viewKind = 13 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
+    viewKind = 16 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
+    viewKind = 17 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
+    viewKind = 19 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
     ^'D DOIT  P PRINT  T TEST  W SAVE'
+!
+currentHeaderText
+    | current |
+    current := workspace currentTargetLabel.
+    ^current
 !
 scrollEditorUpRemaining: remaining
     remaining = 0 ifTrue: [^self].
@@ -631,6 +708,44 @@ scrollEditorPageBy: delta
     Workspace cursor moveToIndex: cursor index line: cursor line column: cursor column topLine: newTop.
     Workspace selection collapseToLine: cursor line column: cursor column.
     ^2
+!
+moveListSelectionToVisibleTop
+    workspace packageCount = 0 ifTrue: [^5].
+    selected := listTop.
+    selected < 0 ifTrue: [selected := 0].
+    ^5
+!
+moveListSelectionToVisibleBottom
+    | visibleLines bottom count |
+    count := workspace packageCount.
+    count = 0 ifTrue: [^5].
+    visibleLines := self visibleListLines.
+    visibleLines < 1 ifTrue: [visibleLines := 1].
+    bottom := listTop + visibleLines - 1.
+    bottom > (count - 1) ifTrue: [bottom := count - 1].
+    selected := bottom.
+    ^5
+!
+moveCursorToVisibleTop
+    | cursor steps |
+    cursor := Workspace cursor.
+    steps := cursor line - cursor topLine.
+    steps < 1 ifTrue: [^6].
+    self scrollEditorUpRemaining: steps.
+    Workspace selection collapseToLine: Workspace cursor line column: Workspace cursor column.
+    ^6
+!
+moveCursorToVisibleBottom
+    | cursor visibleLines steps |
+    cursor := Workspace cursor.
+    visibleLines := self visibleEditorLines.
+    visibleLines < 1 ifTrue: [^6].
+    steps := (cursor topLine + visibleLines - 1) - cursor line.
+    steps < 1 ifTrue: [^6].
+    self scrollEditorDownRemaining: steps.
+    self ensureEditorCursorVisible.
+    Workspace selection collapseToLine: Workspace cursor line column: Workspace cursor column.
+    ^6
 !
 handleByte: aByte onForm: form
     | tool |
@@ -663,13 +778,15 @@ handleEscapeByte: aByte
     workspace currentViewKind = 14 ifTrue: [
         aByte = 65 ifTrue: [^self moveListSelectionBy: -1].
         aByte = 66 ifTrue: [^self moveListSelectionBy: 1].
+        aByte = 72 ifTrue: [^self moveListSelectionToVisibleTop].
+        aByte = 70 ifTrue: [^self moveListSelectionToVisibleBottom].
         ^0].
     aByte = 65 ifTrue: [workspace moveCursorUp. self ensureEditorCursorVisible. ^6].
     aByte = 66 ifTrue: [workspace moveCursorDown. self ensureEditorCursorVisible. ^6].
     aByte = 67 ifTrue: [workspace moveCursorRight. self ensureEditorCursorVisible. ^6].
     aByte = 68 ifTrue: [workspace moveCursorLeft. self ensureEditorCursorVisible. ^6].
-    aByte = 72 ifTrue: [workspace moveCursorToLineStart. self ensureEditorCursorVisible. ^6].
-    aByte = 70 ifTrue: [workspace moveCursorToLineEnd. self ensureEditorCursorVisible. ^6].
+    aByte = 72 ifTrue: [^self moveCursorToVisibleTop].
+    aByte = 70 ifTrue: [^self moveCursorToVisibleBottom].
     ^0
 !
 handleBrowserByte: aByte

@@ -19,20 +19,21 @@ The workspace should be:
   buffer contents, cursor, selection, visible origin, status, feedback, current target, and tool/session state
 - [x] Separate persistent workspace state from transient session/view state
 - [x] Decide which parts of the workspace must survive snapshot/reboot and which should be recomputed on reopen
-- [ ] Add explicit protocol for:
+- [x] Add explicit protocol for:
   `contents`, `setContents:`, `cursor`, `selection`, `visibleOrigin`, `statusText`, `feedbackText`
 - [x] Add a simple named-workspace hook so the model can grow beyond one global buffer later
 
 Notes:
 - persistent image-owned state now lives across `Workspace`, `WorkspaceCursor`, `WorkspaceSelection`, `BootWorkspaceTool`, and `BootWorkspaceSession`
 - `BootWorkspaceTool` now owns status text, feedback text, workspace name, and horizontal viewport column; `escape` remains transient session input state
-- first real viewport-relative page-up/page-down is now in the image session path; a single explicit `visibleOrigin` protocol is still open
+- first real viewport-relative page-up/page-down is now in the image session path
+- explicit workspace/session protocol now exposes status, feedback, target label, modified-state, and visible top/left origin from image code; the current visible-origin API is an explicit top/left pair rather than a dedicated origin object
 
 ## Phase 2 - Editor Behavior
 - [ ] Make the workspace editor the single source of truth for cursor movement, selection, insert/delete, and line navigation
 - [ ] Support stable horizontal and vertical scrolling with a real visible-origin model
 - [x] Add page-up/page-down that operate on the visible viewport, not just the cursor
-- [ ] Add top/bottom navigation that operate on the visible viewport, not just the cursor
+- [x] Add top/bottom navigation that operate on the visible viewport, not just the cursor
 - [ ] Ensure large buffers keep a stable visible origin during edits, movement, and reopen
 - [ ] Add explicit cursor painting and selection painting rules owned by image-side objects
 
@@ -81,7 +82,7 @@ Notes:
 - [ ] Add stress tests for held-key repeat on large workspace buffers
 - [ ] Add outcome tests for command behavior:
   do-it, print-it, accept, revert, test, save, reopen
-- [ ] Add lowering/runtime checks to keep new workspace protocol within the current selector/primitive model
+- [x] Add lowering/runtime checks to keep new workspace protocol within the current selector/primitive model
 
 ## Definition Of Done
 - [ ] The workspace is an image-owned tool object with a stable editor/session model
