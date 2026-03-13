@@ -33,6 +33,8 @@ VIEW_PANE_EXAMPLE = ROOT / "examples" / "qemu_riscv_view_pane_demo.rz"
 SPLIT_LAYOUT_EXAMPLE = ROOT / "examples" / "qemu_riscv_split_layout_demo.rz"
 WIDGET_SURFACE_EXAMPLE = ROOT / "examples" / "qemu_riscv_widget_surface_demo.rz"
 WORKSPACE_EDITOR_SURFACE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_editor_surface_demo.rz"
+WORKSPACE_HORIZONTAL_ORIGIN_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_horizontal_origin_demo.rz"
+WORKSPACE_HORIZONTAL_ORIGIN_SCROLLED_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_horizontal_origin_scrolled_demo.rz"
 BROWSER_SURFACE_EXAMPLE = ROOT / "examples" / "qemu_riscv_browser_surface_demo.rz"
 WORKSPACE_PACKAGE_HOME_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_package_home_demo.rz"
 
@@ -429,7 +431,7 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
 
         self.assertIn("recorz qemu-riscv32 mvp: rendered", qemu_log)
         self.assertEqual((width, height), (1024, 768))
-        highlight_histogram = _region_histogram(data, width, 60, 176, 100, 180)
+        highlight_histogram = _region_histogram(data, width, 60, 184, 100, 188)
         self.assertGreater(highlight_histogram[(173, 216, 230)], 30)
 
     def test_image_side_view_bootstrap_can_render_focused_and_unfocused_panes(self) -> None:
@@ -471,6 +473,21 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertGreater(_region_histogram(data, width, 52, 84, 320, 112)[(31, 41, 51)], 120)
         self.assertGreater(_region_histogram(data, width, 52, 160, 520, 260)[(31, 41, 51)], 180)
         self.assertGreater(_region_histogram(data, width, 52, 612, 860, 652)[(31, 41, 51)], 180)
+
+    def test_workspace_editor_surface_respects_horizontal_visible_origin(self) -> None:
+        base_log, base_width, base_height, base_data = self.render_example(WORKSPACE_HORIZONTAL_ORIGIN_EXAMPLE)
+        shifted_log, shifted_width, shifted_height, shifted_data = self.render_example(
+            WORKSPACE_HORIZONTAL_ORIGIN_SCROLLED_EXAMPLE
+        )
+
+        self.assertEqual((base_width, base_height), (1024, 768))
+        self.assertEqual((shifted_width, shifted_height), (1024, 768))
+        self.assertNotIn("panic:", base_log.replace("\r", ""))
+        self.assertNotIn("panic:", shifted_log.replace("\r", ""))
+        self.assertGreater(
+            _region_diff_pixels(base_data, shifted_data, base_width, 56, 160, 952, 260),
+            1200,
+        )
 
     def test_browser_surface_can_render_list_and_source_panes_in_image_code(self) -> None:
         qemu_log, width, height, data = self.render_example(BROWSER_SURFACE_EXAMPLE)

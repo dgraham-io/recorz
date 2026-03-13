@@ -1,0 +1,11 @@
+Workspace setContents: '0123456789ABCDEFGHIJ
+0123456789KLMNOPQRST
+0123456789UVWXYZabcd
+0123456789efghijklmn'.
+Workspace cursor moveToIndex: 15 line: 0 column: 15 topLine: 0.
+(KernelInstaller objectNamed: 'BootWorkspaceTool') setVisibleLeftColumn: 0.
+(KernelInstaller objectNamed: 'BootWorkspaceEditorSurface')
+    drawSource: Workspace contents
+    status: 'READY'
+    feedback: 'LEFT=0'
+    onForm: Display defaultForm.

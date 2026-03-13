@@ -95,8 +95,25 @@ loseFocus
     view loseFocus.
     ^self
 !
+visibleEditorLines
+    | lineHeight cellHeight usable |
+    lineHeight := Display font metrics lineHeight * Display layout scale.
+    cellHeight := Display font metrics cellHeight * Display layout scale.
+    usable := view bounds height - 24 - cellHeight - 1.
+    usable > 0 ifTrue: [
+        lineHeight > 0 ifTrue: [^usable / lineHeight]].
+    ^0
+!
+visibleEditorColumns
+    | cellWidth usable |
+    cellWidth := Display font metrics cellWidth * Display layout scale.
+    usable := view bounds width - 24.
+    usable > 0 ifTrue: [
+        cellWidth > 0 ifTrue: [^usable / cellWidth]].
+    ^0
+!
 redrawOnForm: form
-    | margins oldLeft oldTop oldRight oldBottom leftMargin topMargin rightMargin bottomMargin visibleLines renderer lineHeight cellHeight usable |
+    | margins oldLeft oldTop oldRight oldBottom leftMargin topMargin rightMargin bottomMargin visibleLines visibleColumns renderer renderText |
     view redrawOnForm: form.
     margins := Display layout margins.
     oldLeft := margins left.
@@ -109,28 +126,47 @@ redrawOnForm: form
     bottomMargin := form height - (view bounds bottom - 12).
     margins left: leftMargin top: topMargin right: rightMargin bottom: bottomMargin.
     Display moveTextCursorToX: leftMargin y: topMargin.
-    lineHeight := Display font metrics lineHeight * Display layout scale.
-    cellHeight := Display font metrics cellHeight * Display layout scale.
-    visibleLines := 0.
-    usable := view bounds height - 24 - cellHeight - 1.
-    usable > 0 ifTrue: [
-        lineHeight > 0 ifTrue: [visibleLines := usable / lineHeight]].
+    visibleLines := self visibleEditorLines.
+    visibleColumns := self visibleEditorColumns.
+    renderText := text.
+    text = Workspace contents ifTrue: [
+        renderText := Workspace visibleContentsTop: cursor topLine left: Workspace visibleLeftColumn lines: visibleLines columns: visibleColumns].
     renderer := KernelInstaller objectNamed: 'BootInputMonitorRenderer'.
-    renderer drawSource: text onForm: form visible: visibleLines.
+    renderer drawSource: renderText onForm: form visible: visibleLines.
+    text = Workspace contents ifTrue: [self drawCursorOnForm: form].
     margins left: oldLeft top: oldTop right: oldRight bottom: oldBottom.
     ^form
 !
 drawCursorOnForm: form
-    | x y height selectionStartX selectionEndX selectionY |
+    | x y height selectionStartX selectionEndX selectionY leftColumn relativeColumn relativeStart relativeEnd visibleLines visibleColumns |
+    text = Workspace contents ifFalse: [^form].
+    visibleLines := self visibleEditorLines.
+    visibleColumns := self visibleEditorColumns.
+    visibleLines < 1 ifTrue: [^form].
+    visibleColumns < 1 ifTrue: [^form].
+    leftColumn := Workspace visibleLeftColumn.
     selection endLine = selection startLine ifTrue: [
-        selection endColumn > selection startColumn ifTrue: [
-            selectionStartX := view bounds left + 12 + (selection startColumn * Display font metrics cellWidth * Display layout scale).
-            selectionEndX := view bounds left + 12 + (selection endColumn * Display font metrics cellWidth * Display layout scale) - 1.
-            selectionY := view bounds top + 12 + (((selection startLine - cursor topLine) + 2) * Display font metrics lineHeight * Display layout scale) - 2.
-            BitBlt drawLineOnForm: form fromX: selectionStartX fromY: selectionY toX: selectionEndX toY: selectionY color: 11393254
+        selection startLine < cursor topLine ifFalse: [
+            selection startLine > (cursor topLine + visibleLines - 1) ifFalse: [
+                relativeStart := selection startColumn - leftColumn.
+                relativeEnd := selection endColumn - leftColumn.
+                relativeStart < 0 ifTrue: [relativeStart := 0].
+                relativeEnd > visibleColumns ifTrue: [relativeEnd := visibleColumns].
+                relativeEnd > relativeStart ifTrue: [
+                    selectionStartX := view bounds left + 12 + (relativeStart * Display font metrics cellWidth * Display layout scale).
+                    selectionEndX := view bounds left + 12 + (relativeEnd * Display font metrics cellWidth * Display layout scale) - 1.
+                    selectionY := view bounds top + 12 + (((selection startLine - cursor topLine) + 2) * Display font metrics lineHeight * Display layout scale) - 2.
+                    BitBlt drawLineOnForm: form fromX: selectionStartX fromY: selectionY toX: selectionEndX toY: selectionY color: 11393254
+                ]
+            ]
         ]
     ].
-    x := view bounds left + 12 + (cursor column * Display font metrics cellWidth * Display layout scale).
+    cursor line < cursor topLine ifTrue: [^form].
+    cursor line > (cursor topLine + visibleLines - 1) ifTrue: [^form].
+    relativeColumn := cursor column - leftColumn.
+    relativeColumn < 0 ifTrue: [^form].
+    relativeColumn > (visibleColumns - 1) ifTrue: [^form].
+    x := view bounds left + 12 + (relativeColumn * Display font metrics cellWidth * Display layout scale).
     y := view bounds top + 12 + (Display font metrics lineHeight * Display layout scale) + ((cursor line - cursor topLine) * Display font metrics lineHeight * Display layout scale).
     height := (Display font metrics lineHeight * Display layout scale) - 1.
     BitBlt drawLineOnForm: form fromX: x fromY: y toX: x toY: y + height color: 11393254.
