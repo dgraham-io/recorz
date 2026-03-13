@@ -321,6 +321,28 @@ setVisibleLeftColumn: aColumn
     leftColumn := aColumn.
     ^leftColumn
 !
+dispatchCommandOnForm: aByte
+    | viewKind |
+    aByte = 24 ifTrue: [self acceptCurrent. ^1].
+    aByte = 25 ifTrue: [self revertCurrent. ^1].
+    aByte = 20 ifTrue: [self runCurrentTests. ^1].
+    aByte = 16 ifTrue: [self printCurrent. ^1].
+    aByte = 4 ifTrue: [self evaluateCurrent. ^1].
+    aByte = 18 ifTrue: [self evaluateCurrent. ^1].
+    aByte = 23 ifTrue: [self saveAndReopen. ^9].
+    aByte = 11 ifTrue: [self saveRecoverySnapshot. ^9].
+    aByte = 15 ifTrue: [
+        viewKind := Workspace currentViewKind.
+        viewKind = 5 ifTrue: [Workspace setCurrentViewKind: 14. Workspace setCurrentTargetName: nil. ^4].
+        viewKind = 7 ifTrue: [Workspace setCurrentViewKind: 14. Workspace setCurrentTargetName: nil. ^4].
+        viewKind = 8 ifTrue: [Workspace setCurrentViewKind: 14. Workspace setCurrentTargetName: nil. ^4].
+        viewKind = 13 ifTrue: [Workspace setCurrentViewKind: 14. Workspace setCurrentTargetName: nil. ^4].
+        viewKind = 16 ifTrue: [Workspace setCurrentViewKind: 14. Workspace setCurrentTargetName: nil. ^4].
+        viewKind = 17 ifTrue: [Workspace setCurrentViewKind: 14. Workspace setCurrentTargetName: nil. ^4].
+        viewKind = 19 ifTrue: [Workspace setCurrentViewKind: 14. Workspace setCurrentTargetName: nil. ^4].
+        ^9].
+    ^0
+!
 RecorzKernelDoIt:
 | tool |
 tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
@@ -817,31 +839,15 @@ openSelectedPackageSource
     ^1
 !
 handleEditorByte: aByte tool: tool
-    | viewKind |
+    | commandResult |
     aByte = 2 ifTrue: [^self scrollEditorPageBy: -1].
     aByte = 1 ifTrue: [workspace moveCursorToLineStart. self ensureEditorCursorVisible. ^6].
     aByte = 5 ifTrue: [workspace moveCursorToLineEnd. self ensureEditorCursorVisible. ^6].
     aByte = 8 ifTrue: [workspace deleteBackward. self ensureEditorCursorVisible. ^2].
     aByte = 22 ifTrue: [^self scrollEditorPageBy: 1].
     aByte = 127 ifTrue: [workspace deleteBackward. self ensureEditorCursorVisible. ^2].
-    aByte = 24 ifTrue: [tool acceptCurrent. ^1].
-    aByte = 25 ifTrue: [tool revertCurrent. ^1].
-    aByte = 20 ifTrue: [tool runCurrentTests. ^1].
-    aByte = 16 ifTrue: [tool printCurrent. ^1].
-    aByte = 4 ifTrue: [tool evaluateCurrent. ^1].
-    aByte = 18 ifTrue: [tool evaluateCurrent. ^1].
-    aByte = 23 ifTrue: [tool saveAndReopen. ^9].
-    aByte = 11 ifTrue: [tool saveRecoverySnapshot. ^9].
-    aByte = 15 ifTrue: [
-        viewKind := workspace currentViewKind.
-        viewKind = 5 ifTrue: [workspace setCurrentViewKind: 14. workspace setCurrentTargetName: nil. ^4].
-        viewKind = 7 ifTrue: [workspace setCurrentViewKind: 14. workspace setCurrentTargetName: nil. ^4].
-        viewKind = 8 ifTrue: [workspace setCurrentViewKind: 14. workspace setCurrentTargetName: nil. ^4].
-        viewKind = 13 ifTrue: [workspace setCurrentViewKind: 14. workspace setCurrentTargetName: nil. ^4].
-        viewKind = 16 ifTrue: [workspace setCurrentViewKind: 14. workspace setCurrentTargetName: nil. ^4].
-        viewKind = 17 ifTrue: [workspace setCurrentViewKind: 14. workspace setCurrentTargetName: nil. ^4].
-        viewKind = 19 ifTrue: [workspace setCurrentViewKind: 14. workspace setCurrentTargetName: nil. ^4].
-        ^9].
+    commandResult := tool dispatchCommandOnForm: aByte.
+    commandResult = 0 ifFalse: [^commandResult].
     aByte = 10 ifTrue: [workspace insertCodePoint: 10. self ensureEditorCursorVisible. ^2].
     aByte = 13 ifTrue: [workspace insertCodePoint: 10. self ensureEditorCursorVisible. ^2].
     aByte < 32 ifTrue: [^0].

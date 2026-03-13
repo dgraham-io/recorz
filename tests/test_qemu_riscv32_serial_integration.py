@@ -1361,6 +1361,143 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("MOD=Y", normalized)
             self.assertNotIn("panic:", normalized)
 
+    def test_workspace_tool_dispatch_command_updates_status_feedback_and_refusals(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-commands-") as temp_dir:
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "build"
+            example_path = temp_path / "workspace_command_protocol_demo.rz"
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "Display clear.",
+                        "Workspace setContents: '1 + 2'.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') openOn: Workspace mode: 1.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceTool') dispatchCommandOnForm: 16.",
+                        "Transcript show: 'PRINTSTATUS='.",
+                        "Transcript show: Workspace statusText.",
+                        "Transcript cr.",
+                        "Transcript show: 'PRINTFDBK='.",
+                        "Transcript show: Workspace feedbackText.",
+                        "Transcript cr.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceTool') dispatchCommandOnForm: 20.",
+                        "Transcript show: 'TESTSTATUS='.",
+                        "Transcript show: Workspace statusText.",
+                        "Transcript cr.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceTool') dispatchCommandOnForm: 24.",
+                        "Transcript show: 'ACCEPTSTATUS='.",
+                        "Transcript show: Workspace statusText.",
+                        "Transcript cr.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            elf_path = _build_elf(build_dir, example_path)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            normalized = output.replace("\r", "").replace("\n", "")
+            self.assertIn("PRINTSTATUS=PRINT COMPLETE", normalized)
+            self.assertIn("PRINTFDBK=3", normalized)
+            self.assertIn("TESTSTATUS=TESTS NEED TARGET", normalized)
+            self.assertIn("ACCEPTSTATUS=ACCEPT NEEDS SOURCE TARGET", normalized)
+            self.assertNotIn("panic:", normalized)
+
+    def test_workspace_tool_dispatch_command_returns_source_editor_to_browser_context(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-command-return-") as temp_dir:
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "build"
+            example_path = temp_path / "workspace_command_return_demo.rz"
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "Display clear.",
+                        "Workspace setContents: (KernelInstaller fileOutPackageNamed: 'TextUI').",
+                        "Workspace setCurrentViewKind: 13.",
+                        "Workspace setCurrentTargetName: 'TextUI'.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') openOn: Workspace mode: 1.",
+                        "Transcript show: 'RESULT='.",
+                        "Transcript show: ((KernelInstaller objectNamed: 'BootWorkspaceTool') dispatchCommandOnForm: 15) printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'VIEW='.",
+                        "Transcript show: Workspace currentViewKind printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'TARGET='.",
+                        "Transcript show: ((Workspace currentTargetName = nil) ifTrue: ['nil'] ifFalse: [Workspace currentTargetName]).",
+                        "Transcript cr.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            elf_path = _build_elf(build_dir, example_path)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            normalized = output.replace("\r", "").replace("\n", "")
+            self.assertIn("RESULT=4", normalized)
+            self.assertIn("VIEW=14", normalized)
+            self.assertIn("TARGET=nil", normalized)
+            self.assertNotIn("panic:", normalized)
+
     def test_workspace_home_moves_to_the_visible_top_of_the_viewport(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-home-") as temp_dir:
             temp_path = Path(temp_dir)

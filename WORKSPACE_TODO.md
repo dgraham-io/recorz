@@ -38,11 +38,11 @@ Notes:
 - [ ] Add explicit cursor painting and selection painting rules owned by image-side objects
 
 ## Phase 3 - Workspace Commands
-- [ ] Define a clean image-side command protocol for:
+- [x] Define a clean image-side command protocol for:
   do-it, print-it, accept, revert, run tests, save, reopen, and browse target
 - [ ] Separate workspace editing commands from browser/package/class source-editor commands
-- [ ] Make command dispatch live in workspace/tool objects instead of VM-side mode branches
-- [ ] Add clear refusal/status behavior for commands that require a browser-backed target
+- [x] Make command dispatch live in workspace/tool objects instead of VM-side mode branches
+- [x] Add clear refusal/status behavior for commands that require a browser-backed target
 - [ ] Support command binding updates without hard-wiring more policy into the VM
 
 ## Phase 4 - Rendering And Layout
@@ -87,6 +87,6 @@ Notes:
 ## Definition Of Done
 - [ ] The workspace is an image-owned tool object with a stable editor/session model
 - [ ] The visible origin is owned by workspace/image objects and remains stable under scrolling and editing
-- [ ] Workspace command behavior is owned by image-side tool objects, not VM-side mode policy
+- [x] Workspace command behavior is owned by image-side tool objects, not VM-side mode policy
 - [x] Reopen/snapshot restore lands back in the same workspace session with correct buffer, cursor, and viewport state
 - [ ] The workspace is covered by live RV32 framebuffer proofs for open, edit, scroll, save, and restore
