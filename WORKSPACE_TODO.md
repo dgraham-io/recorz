@@ -76,7 +76,7 @@ Notes:
 - [ ] Document the intended user flow for the native workspace in `implementation.md` or `/docs`
 
 ## Proof And Regression Coverage
-- [ ] Add framebuffer integration tests for:
+- [x] Add framebuffer integration tests for:
   workspace open, edit, scroll, page movement, save/reopen, and snapshot restore
 - [x] Add snapshot tests proving workspace buffer, cursor, and visible origin survive reboot
 - [ ] Add stress tests for held-key repeat on large workspace buffers
