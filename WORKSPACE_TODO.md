@@ -49,7 +49,7 @@ Notes:
 - [ ] Keep workspace rendering image-owned:
   header, source pane, status pane, feedback pane, cursor, selection, and scroll position
 - [ ] Unify workspace rendering with the existing view/widget/layout objects rather than special-casing the workspace
-- [ ] Add explicit dirty-region redraw for:
+- [x] Add explicit dirty-region redraw for:
   cursor-only movement, line edits, viewport scroll, and status updates
 - [x] Preserve readable default workspace typography and pane spacing on the RV32 framebuffer target
 - [x] Ensure the workspace remains usable at both the primary and comfort text densities

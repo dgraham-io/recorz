@@ -1,0 +1,3 @@
+Display clear.
+Workspace setContents: '1 + 2'.
+Workspace interactiveInputMonitor.

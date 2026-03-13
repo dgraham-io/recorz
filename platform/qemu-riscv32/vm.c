@@ -428,6 +428,7 @@ static uint8_t workspace_tool_feedback_dirty = 0U;
 static uint32_t render_counter_editor_full_redraws = 0U;
 static uint32_t render_counter_editor_pane_redraws = 0U;
 static uint32_t render_counter_editor_cursor_redraws = 0U;
+static uint32_t render_counter_editor_status_redraws = 0U;
 static uint32_t render_counter_browser_full_redraws = 0U;
 static uint32_t render_counter_browser_list_redraws = 0U;
 static char kernel_source_io_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
@@ -826,6 +827,7 @@ static void render_counters_reset(void) {
     render_counter_editor_full_redraws = 0U;
     render_counter_editor_pane_redraws = 0U;
     render_counter_editor_cursor_redraws = 0U;
+    render_counter_editor_status_redraws = 0U;
     render_counter_browser_full_redraws = 0U;
     render_counter_browser_list_redraws = 0U;
 }
@@ -838,6 +840,8 @@ static void render_counters_dump(void) {
     panic_put_u32(render_counter_editor_pane_redraws);
     machine_puts(" editor_cursor=");
     panic_put_u32(render_counter_editor_cursor_redraws);
+    machine_puts(" editor_status=");
+    panic_put_u32(render_counter_editor_status_redraws);
     machine_puts(" browser_full=");
     panic_put_u32(render_counter_browser_full_redraws);
     machine_puts(" browser_list=");
@@ -7203,6 +7207,63 @@ static uint8_t workspace_redraw_named_status_widget(
     return 1U;
 }
 
+static const char *workspace_session_current_text_for_selector(uint16_t selector) {
+    uint16_t session_handle = named_object_handle_for_name("BootWorkspaceSession");
+    struct recorz_mvp_value result;
+
+    if (session_handle == 0U) {
+        return 0;
+    }
+    result = perform_send_and_pop_result(
+        object_value(session_handle),
+        selector,
+        0U,
+        0,
+        0
+    );
+    if (result.kind != RECORZ_MVP_VALUE_STRING || result.string == 0) {
+        return 0;
+    }
+    return result.string;
+}
+
+static uint8_t workspace_redraw_image_session_status_only(void) {
+    const struct recorz_mvp_heap_object *form = default_form_object();
+    const char *status = workspace_session_current_text_for_selector(
+        RECORZ_MVP_SELECTOR_CURRENT_STATUS_TEXT
+    );
+    const char *feedback = workspace_session_current_text_for_selector(
+        RECORZ_MVP_SELECTOR_CURRENT_FEEDBACK_TEXT
+    );
+
+    workspace_clear_view_content_area(
+        form,
+        STATUS_VIEW_LEFT,
+        STATUS_VIEW_TOP,
+        STATUS_VIEW_WIDTH,
+        STATUS_VIEW_HEIGHT
+    );
+    if (!workspace_redraw_named_status_widget(
+            form,
+            "BootWorkspaceStatusWidget",
+            "BootWorkspaceStatusView",
+            status,
+            feedback)) {
+        return 0U;
+    }
+    ++render_counter_editor_status_redraws;
+    return 1U;
+}
+
+static uint8_t workspace_input_byte_is_status_only_command(uint8_t ch) {
+    return (uint8_t)(
+        ch == 0x04 ||
+        ch == 0x10 ||
+        ch == 0x12 ||
+        ch == 0x14
+    );
+}
+
 static uint8_t workspace_redraw_named_list_widget(
     const struct recorz_mvp_heap_object *form,
     const char *widget_name,
@@ -10952,6 +11013,17 @@ static void workspace_run_interactive_image_session(
         }
         if (render_code == 6U) {
             render_code = 2U;
+        }
+        if (render_code == 1U &&
+            workspace_current_view_kind_value(workspace_object) != WORKSPACE_VIEW_PACKAGES &&
+            workspace_input_byte_is_status_only_command((uint8_t)ch)) {
+            render_code = 7U;
+        }
+        if (render_code == 7U) {
+            if (workspace_redraw_image_session_status_only()) {
+                continue;
+            }
+            render_code = 1U;
         }
         if (render_code == 1U || render_code == 4U) {
             machine_discard_pending_input();
