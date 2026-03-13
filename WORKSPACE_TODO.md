@@ -40,7 +40,7 @@ Notes:
 ## Phase 3 - Workspace Commands
 - [x] Define a clean image-side command protocol for:
   do-it, print-it, accept, revert, run tests, save, reopen, and browse target
-- [ ] Separate workspace editing commands from browser/package/class source-editor commands
+- [x] Separate workspace editing commands from browser/package/class source-editor commands
 - [x] Make command dispatch live in workspace/tool objects instead of VM-side mode branches
 - [x] Add clear refusal/status behavior for commands that require a browser-backed target
 - [x] Support command binding updates without hard-wiring more policy into the VM

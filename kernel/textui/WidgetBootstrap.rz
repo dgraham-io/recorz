@@ -348,7 +348,28 @@ saveRecoverySnapshotCommandByte
 returnToBrowserCommandByte
     ^15
 !
-dispatchCommandOnForm: aByte
+sourceEditorViewKind: aViewKind
+    aViewKind = 5 ifTrue: [^true].
+    aViewKind = 7 ifTrue: [^true].
+    aViewKind = 8 ifTrue: [^true].
+    aViewKind = 13 ifTrue: [^true].
+    aViewKind = 16 ifTrue: [^true].
+    aViewKind = 17 ifTrue: [^true].
+    aViewKind = 19 ifTrue: [^true].
+    ^false
+!
+dispatchWorkspaceCommandOnForm: aByte
+    aByte = self acceptCommandByte ifTrue: [self acceptCurrent. ^1].
+    aByte = self revertCommandByte ifTrue: [self revertCurrent. ^1].
+    aByte = self runTestsCommandByte ifTrue: [self runCurrentTests. ^1].
+    aByte = self printCommandByte ifTrue: [self printCurrent. ^1].
+    aByte = self doItCommandByte ifTrue: [self evaluateCurrent. ^1].
+    aByte = self alternateDoItCommandByte ifTrue: [self evaluateCurrent. ^1].
+    aByte = self saveAndReopenCommandByte ifTrue: [self saveAndReopen. ^9].
+    aByte = self saveRecoverySnapshotCommandByte ifTrue: [self saveRecoverySnapshot. ^9].
+    ^0
+!
+dispatchSourceEditorCommandOnForm: aByte
     | viewKind |
     aByte = self acceptCommandByte ifTrue: [self acceptCurrent. ^1].
     aByte = self revertCommandByte ifTrue: [self revertCurrent. ^1].
@@ -369,6 +390,13 @@ dispatchCommandOnForm: aByte
         viewKind = 19 ifTrue: [Workspace setCurrentViewKind: 14. Workspace setCurrentTargetName: nil. ^4].
         ^9].
     ^0
+!
+dispatchCommandOnForm: aByte
+    | viewKind |
+    viewKind := Workspace currentViewKind.
+    (self sourceEditorViewKind: viewKind) ifTrue: [^self dispatchSourceEditorCommandOnForm: aByte].
+    viewKind = 14 ifTrue: [^0].
+    ^self dispatchWorkspaceCommandOnForm: aByte
 !
 RecorzKernelDoIt:
 | tool |

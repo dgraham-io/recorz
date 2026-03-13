@@ -650,3 +650,9 @@ RecorzKernelSelector: #saveRecoverySnapshotCommandByte order: 323
 !
 RecorzKernelSelector: #returnToBrowserCommandByte order: 324
 !
+RecorzKernelSelector: #sourceEditorViewKind: order: 325
+!
+RecorzKernelSelector: #dispatchWorkspaceCommandOnForm: order: 326
+!
+RecorzKernelSelector: #dispatchSourceEditorCommandOnForm: order: 327
+!

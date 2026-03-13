@@ -155,7 +155,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_TOOL
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_RETURN_TO_BROWSER_COMMAND_BYTE
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_DISPATCH_SOURCE_EDITOR_COMMAND_ON_FORM
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -1335,6 +1335,12 @@ static const char *selector_name(uint16_t selector) {
             return "saveRecoverySnapshotCommandByte";
         case RECORZ_MVP_SELECTOR_RETURN_TO_BROWSER_COMMAND_BYTE:
             return "returnToBrowserCommandByte";
+        case RECORZ_MVP_SELECTOR_SOURCE_EDITOR_VIEW_KIND:
+            return "sourceEditorViewKind:";
+        case RECORZ_MVP_SELECTOR_DISPATCH_WORKSPACE_COMMAND_ON_FORM:
+            return "dispatchWorkspaceCommandOnForm:";
+        case RECORZ_MVP_SELECTOR_DISPATCH_SOURCE_EDITOR_COMMAND_ON_FORM:
+            return "dispatchSourceEditorCommandOnForm:";
     }
     return "unknown";
 }
