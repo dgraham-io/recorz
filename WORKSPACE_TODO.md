@@ -62,7 +62,7 @@ Notes:
 - [x] Keep snapshot format expectations explicit and covered by tests
 
 ## Phase 6 - Workflow Integration
-- [ ] Make the workspace the default place to stage and run exploratory code from inside the image
+- [x] Make the workspace the default place to stage and run exploratory code from inside the image
 - [ ] Support jumping cleanly between workspace and browser/source-editor contexts
 - [ ] Allow browser-opened source to return to the workspace without losing the workspace buffer
 - [ ] Add save/resume behavior that feels like continuing one live workspace session
@@ -89,4 +89,4 @@ Notes:
 - [ ] The visible origin is owned by workspace/image objects and remains stable under scrolling and editing
 - [x] Workspace command behavior is owned by image-side tool objects, not VM-side mode policy
 - [x] Reopen/snapshot restore lands back in the same workspace session with correct buffer, cursor, and viewport state
-- [ ] The workspace is covered by live RV32 framebuffer proofs for open, edit, scroll, save, and restore
+- [x] The workspace is covered by live RV32 framebuffer proofs for open, edit, scroll, save, and restore
