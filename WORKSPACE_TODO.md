@@ -35,7 +35,7 @@ Notes:
 - [x] Add page-up/page-down that operate on the visible viewport, not just the cursor
 - [x] Add top/bottom navigation that operate on the visible viewport, not just the cursor
 - [ ] Ensure large buffers keep a stable visible origin during edits, movement, and reopen
-- [ ] Add explicit cursor painting and selection painting rules owned by image-side objects
+- [x] Add explicit cursor painting and selection painting rules owned by image-side objects
 
 ## Phase 3 - Workspace Commands
 - [x] Define a clean image-side command protocol for:
