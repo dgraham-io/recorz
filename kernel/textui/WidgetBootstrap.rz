@@ -434,13 +434,13 @@ dispatchSourceEditorCommandOnForm: aByte
     aByte = self saveRecoverySnapshotCommandByte ifTrue: [self saveRecoverySnapshot. ^9].
     aByte = self returnToBrowserCommandByte ifTrue: [
         viewKind := Workspace currentViewKind.
-        viewKind = 5 ifTrue: [Workspace setCurrentViewKind: 14. Workspace setCurrentTargetName: nil. ^4].
-        viewKind = 7 ifTrue: [Workspace setCurrentViewKind: 14. Workspace setCurrentTargetName: nil. ^4].
-        viewKind = 8 ifTrue: [Workspace setCurrentViewKind: 14. Workspace setCurrentTargetName: nil. ^4].
-        viewKind = 13 ifTrue: [Workspace setCurrentViewKind: 14. Workspace setCurrentTargetName: nil. ^4].
-        viewKind = 16 ifTrue: [Workspace setCurrentViewKind: 14. Workspace setCurrentTargetName: nil. ^4].
-        viewKind = 17 ifTrue: [Workspace setCurrentViewKind: 14. Workspace setCurrentTargetName: nil. ^4].
-        viewKind = 19 ifTrue: [Workspace setCurrentViewKind: 14. Workspace setCurrentTargetName: nil. ^4].
+        viewKind = 5 ifTrue: [Workspace setCurrentViewKind: 14. ^4].
+        viewKind = 7 ifTrue: [Workspace setCurrentViewKind: 14. ^4].
+        viewKind = 8 ifTrue: [Workspace setCurrentViewKind: 14. ^4].
+        viewKind = 13 ifTrue: [Workspace setCurrentViewKind: 14. ^4].
+        viewKind = 16 ifTrue: [Workspace setCurrentViewKind: 14. ^4].
+        viewKind = 17 ifTrue: [Workspace setCurrentViewKind: 14. ^4].
+        viewKind = 19 ifTrue: [Workspace setCurrentViewKind: 14. ^4].
         ^9].
     ^0
 !
@@ -962,13 +962,16 @@ handleBrowserByte: aByte
     ^0
 !
 openSelectedPackageSource
-    | packageName source |
+    | packageName source priorTarget |
     workspace packageCount = 0 ifTrue: [^4].
     packageName := self selectedPackageName.
-    source := KernelInstaller fileOutPackageNamed: packageName.
-    workspace setContents: source.
+    priorTarget := workspace currentTargetName.
     workspace setCurrentViewKind: 13.
     workspace setCurrentTargetName: packageName.
+    source := KernelInstaller fileOutPackageNamed: packageName.
+    (priorTarget = packageName) ifTrue: [
+        workspace contents = nil ifFalse: [source := workspace contents]].
+    workspace setContents: source.
     Workspace selection collapseToLine: 0 column: 0.
     Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: Workspace visibleTopLine.
     Workspace setVisibleOriginTop: 0 left: 0.

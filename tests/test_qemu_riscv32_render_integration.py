@@ -656,6 +656,38 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertEqual(counters["browser_list"], 0)
         self.assertGreater(_region_histogram(data, width, 40, 136, 960, 592)[(31, 41, 51)], 5000)
 
+    def test_interactive_editor_line_edit_uses_pane_redraw_path_without_pool_overflow(self) -> None:
+        qemu_log, width, height, data = self.render_interactive_example(
+            WORKSPACE_PACKAGE_HOME_EXAMPLE,
+            (b"\x18", b"A", b"\x1f"),
+        )
+
+        counters = _render_counters(qemu_log)
+        self.assertEqual((width, height), (1024, 768))
+        self.assertNotIn("panic:", qemu_log.replace("\r", ""))
+        self.assertEqual(counters["browser_full"], 1)
+        self.assertEqual(counters["editor_full"], 1)
+        self.assertEqual(counters["editor_pane"], 1)
+        self.assertEqual(counters["editor_cursor"], 0)
+        self.assertEqual(counters["browser_list"], 0)
+        self.assertGreater(_region_histogram(data, width, 40, 136, 960, 592)[(31, 41, 51)], 5000)
+
+    def test_interactive_editor_page_down_uses_pane_redraw_path(self) -> None:
+        qemu_log, width, height, data = self.render_interactive_example(
+            WORKSPACE_PACKAGE_HOME_EXAMPLE,
+            (b"\x18", b"\x16", b"\x1f"),
+        )
+
+        counters = _render_counters(qemu_log)
+        self.assertEqual((width, height), (1024, 768))
+        self.assertNotIn("panic:", qemu_log.replace("\r", ""))
+        self.assertEqual(counters["browser_full"], 1)
+        self.assertEqual(counters["editor_full"], 1)
+        self.assertEqual(counters["editor_pane"], 1)
+        self.assertEqual(counters["editor_cursor"], 0)
+        self.assertEqual(counters["browser_list"], 0)
+        self.assertGreater(_region_histogram(data, width, 40, 136, 960, 592)[(31, 41, 51)], 5000)
+
     def test_interactive_textui_package_editor_survives_keyboard_repeat_burst(self) -> None:
         qemu_log, width, height, data = self.render_interactive_example(
             WORKSPACE_PACKAGE_HOME_EXAMPLE,
