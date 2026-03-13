@@ -602,6 +602,72 @@ currentTargetLabel
     currentTargetName = nil ifTrue: [^self workspaceName].
     ^currentTargetName
 !
+collapseSelectionToCursor
+    self selection collapseToLine: self cursor line column: self cursor column.
+    ^self
+!
+ensureEditorCursorVisibleForLines: visibleLines visibleColumns: visibleColumns
+    | cursor topLine leftColumn |
+    cursor := self cursor.
+    topLine := self visibleTopLine.
+    cursor line < topLine ifTrue: [topLine := cursor line].
+    visibleLines > 0 ifTrue: [
+        cursor line > (topLine + visibleLines - 1) ifTrue: [
+            topLine := cursor line - visibleLines + 1]].
+    leftColumn := self visibleLeftColumn.
+    cursor column < leftColumn ifTrue: [leftColumn := cursor column].
+    visibleColumns > 0 ifTrue: [
+        cursor column > (leftColumn + visibleColumns - 1) ifTrue: [
+            leftColumn := cursor column - visibleColumns + 1]].
+    topLine < 0 ifTrue: [topLine := 0].
+    leftColumn < 0 ifTrue: [leftColumn := 0].
+    self setVisibleOriginTop: topLine left: leftColumn.
+    ^self
+!
+finishEditorInteractionForLines: visibleLines visibleColumns: visibleColumns redrawCode: redrawCode
+    self collapseSelectionToCursor.
+    self ensureEditorCursorVisibleForLines: visibleLines visibleColumns: visibleColumns.
+    ^redrawCode
+!
+handleEditorArrowByte: aByte visibleLines: visibleLines visibleColumns: visibleColumns
+    aByte = 65 ifTrue: [
+        self moveCursorUp.
+        ^self finishEditorInteractionForLines: visibleLines visibleColumns: visibleColumns redrawCode: 6].
+    aByte = 66 ifTrue: [
+        self moveCursorDown.
+        ^self finishEditorInteractionForLines: visibleLines visibleColumns: visibleColumns redrawCode: 6].
+    aByte = 67 ifTrue: [
+        self moveCursorRight.
+        ^self finishEditorInteractionForLines: visibleLines visibleColumns: visibleColumns redrawCode: 6].
+    aByte = 68 ifTrue: [
+        self moveCursorLeft.
+        ^self finishEditorInteractionForLines: visibleLines visibleColumns: visibleColumns redrawCode: 6].
+    ^0
+!
+handleEditorInputByte: aByte visibleLines: visibleLines visibleColumns: visibleColumns
+    aByte = 1 ifTrue: [
+        self moveCursorToLineStart.
+        ^self finishEditorInteractionForLines: visibleLines visibleColumns: visibleColumns redrawCode: 6].
+    aByte = 5 ifTrue: [
+        self moveCursorToLineEnd.
+        ^self finishEditorInteractionForLines: visibleLines visibleColumns: visibleColumns redrawCode: 6].
+    aByte = 8 ifTrue: [
+        self deleteBackward.
+        ^self finishEditorInteractionForLines: visibleLines visibleColumns: visibleColumns redrawCode: 2].
+    aByte = 127 ifTrue: [
+        self deleteBackward.
+        ^self finishEditorInteractionForLines: visibleLines visibleColumns: visibleColumns redrawCode: 2].
+    aByte = 10 ifTrue: [
+        self insertCodePoint: 10.
+        ^self finishEditorInteractionForLines: visibleLines visibleColumns: visibleColumns redrawCode: 2].
+    aByte = 13 ifTrue: [
+        self insertCodePoint: 10.
+        ^self finishEditorInteractionForLines: visibleLines visibleColumns: visibleColumns redrawCode: 2].
+    aByte < 32 ifTrue: [^0].
+    aByte > 126 ifTrue: [^0].
+    self insertCodePoint: aByte.
+    ^self finishEditorInteractionForLines: visibleLines visibleColumns: visibleColumns redrawCode: 2
+!
 RecorzKernelClass: #BrowserSurface superclass: #Object package: 'TextUI' instanceVariableNames: 'listText sourceText titleText statusText'
 !
 drawList: items source: source title: title status: status onForm: form
@@ -718,8 +784,8 @@ openOn: aWorkspace mode: aMode
         listTop < 0 ifTrue: [listTop := 0].
         workspace setCurrentViewKind: 14.
         workspace setCurrentTargetName: nil.
-        Workspace selection collapseToLine: 0 column: 0.
         Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: Workspace visibleTopLine.
+        Workspace collapseSelectionToCursor.
         Workspace setVisibleOriginTop: 0 left: 0.
         ^4].
     workspace currentViewKind = nil ifTrue: [workspace setCurrentViewKind: 18].
@@ -935,7 +1001,7 @@ scrollEditorPageBy: delta
     cursor line < (newTop + oldRow) ifTrue: [newTop := cursor line - oldRow].
     newTop < 0 ifTrue: [newTop := 0].
     Workspace setVisibleOriginTop: newTop left: Workspace visibleLeftColumn.
-    Workspace selection collapseToLine: cursor line column: cursor column.
+    Workspace collapseSelectionToCursor.
     ^2
 !
 moveListSelectionToVisibleTop
@@ -961,7 +1027,7 @@ moveCursorToVisibleTop
     steps := cursor line - Workspace visibleTopLine.
     steps < 1 ifTrue: [^6].
     self scrollEditorUpRemaining: steps.
-    Workspace selection collapseToLine: Workspace cursor line column: Workspace cursor column.
+    Workspace collapseSelectionToCursor.
     ^6
 !
 moveCursorToVisibleBottom
@@ -973,7 +1039,7 @@ moveCursorToVisibleBottom
     steps < 1 ifTrue: [^6].
     self scrollEditorDownRemaining: steps.
     self ensureEditorCursorVisible.
-    Workspace selection collapseToLine: Workspace cursor line column: Workspace cursor column.
+    Workspace collapseSelectionToCursor.
     ^6
 !
 handleByte: aByte onForm: form
@@ -1010,13 +1076,9 @@ handleEscapeByte: aByte
         aByte = 72 ifTrue: [^self moveListSelectionToVisibleTop].
         aByte = 70 ifTrue: [^self moveListSelectionToVisibleBottom].
         ^0].
-    aByte = 65 ifTrue: [workspace moveCursorUp. self ensureEditorCursorVisible. ^6].
-    aByte = 66 ifTrue: [workspace moveCursorDown. self ensureEditorCursorVisible. ^6].
-    aByte = 67 ifTrue: [workspace moveCursorRight. self ensureEditorCursorVisible. ^6].
-    aByte = 68 ifTrue: [workspace moveCursorLeft. self ensureEditorCursorVisible. ^6].
     aByte = 72 ifTrue: [^self moveCursorToVisibleTop].
     aByte = 70 ifTrue: [^self moveCursorToVisibleBottom].
-    ^0
+    ^workspace handleEditorArrowByte: aByte visibleLines: self visibleEditorLines visibleColumns: self visibleEditorColumns
 !
 handleBrowserByte: aByte
     aByte = 14 ifTrue: [^self moveListSelectionBy: 1].
@@ -1053,48 +1115,21 @@ openSelectedPackageSource
     (priorTarget = packageName) ifTrue: [
         workspace contents = nil ifFalse: [source := workspace contents]].
     workspace setContents: source.
-    Workspace selection collapseToLine: 0 column: 0.
     Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: Workspace visibleTopLine.
+    Workspace collapseSelectionToCursor.
     Workspace setVisibleOriginTop: 0 left: 0.
     ^1
 !
 handleEditorByte: aByte tool: tool
     | commandResult |
     aByte = 2 ifTrue: [^self scrollEditorPageBy: -1].
-    aByte = 1 ifTrue: [workspace moveCursorToLineStart. self ensureEditorCursorVisible. ^6].
-    aByte = 5 ifTrue: [workspace moveCursorToLineEnd. self ensureEditorCursorVisible. ^6].
-    aByte = 8 ifTrue: [workspace deleteBackward. self ensureEditorCursorVisible. ^2].
     aByte = 22 ifTrue: [^self scrollEditorPageBy: 1].
-    aByte = 127 ifTrue: [workspace deleteBackward. self ensureEditorCursorVisible. ^2].
     commandResult := tool dispatchCommandOnForm: aByte.
     commandResult = 0 ifFalse: [^commandResult].
-    aByte = 10 ifTrue: [workspace insertCodePoint: 10. self ensureEditorCursorVisible. ^2].
-    aByte = 13 ifTrue: [workspace insertCodePoint: 10. self ensureEditorCursorVisible. ^2].
-    aByte < 32 ifTrue: [^0].
-    aByte > 126 ifTrue: [^0].
-    workspace insertCodePoint: aByte.
-    self ensureEditorCursorVisible.
-    ^2
+    ^workspace handleEditorInputByte: aByte visibleLines: self visibleEditorLines visibleColumns: self visibleEditorColumns
 !
 ensureEditorCursorVisible
-    | cursor visibleLines visibleColumns topLine leftColumn |
-    cursor := Workspace cursor.
-    visibleLines := self visibleEditorLines.
-    visibleColumns := self visibleEditorColumns.
-    topLine := Workspace visibleTopLine.
-    cursor line < topLine ifTrue: [topLine := cursor line].
-    visibleLines > 0 ifTrue: [
-        cursor line > (topLine + visibleLines - 1) ifTrue: [
-            topLine := cursor line - visibleLines + 1]].
-    leftColumn := Workspace visibleLeftColumn.
-    cursor column < leftColumn ifTrue: [leftColumn := cursor column].
-    visibleColumns > 0 ifTrue: [
-        cursor column > (leftColumn + visibleColumns - 1) ifTrue: [
-            leftColumn := cursor column - visibleColumns + 1]].
-    topLine < 0 ifTrue: [topLine := 0].
-    leftColumn < 0 ifTrue: [leftColumn := 0].
-    Workspace setVisibleOriginTop: topLine left: leftColumn.
-    Workspace selection collapseToLine: cursor line column: cursor column.
+    workspace ensureEditorCursorVisibleForLines: self visibleEditorLines visibleColumns: self visibleEditorColumns.
     ^self
 !
 syncEditorCursor
@@ -1102,7 +1137,7 @@ syncEditorCursor
     renderer := KernelInstaller objectNamed: 'BootInputMonitorRenderer'.
     visibleLines := self visibleEditorLines.
     renderer syncCursorText: workspace contents index: Workspace cursor index top: Workspace visibleTopLine visible: visibleLines.
-    Workspace selection collapseToLine: Workspace cursor line column: Workspace cursor column.
+    workspace ensureEditorCursorVisibleForLines: visibleLines visibleColumns: self visibleEditorColumns.
     ^self
 !
 drawEditorCursorOnForm: form

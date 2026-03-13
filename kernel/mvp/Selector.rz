@@ -664,3 +664,13 @@ RecorzKernelSelector: #restorePlainWorkspaceState order: 330
 !
 RecorzKernelSelector: #setContents:cursor:selection:visibleOrigin: order: 331
 !
+RecorzKernelSelector: #collapseSelectionToCursor order: 332
+!
+RecorzKernelSelector: #ensureEditorCursorVisibleForLines:visibleColumns: order: 333
+!
+RecorzKernelSelector: #handleEditorArrowByte:visibleLines:visibleColumns: order: 334
+!
+RecorzKernelSelector: #handleEditorInputByte:visibleLines:visibleColumns: order: 335
+!
+RecorzKernelSelector: #finishEditorInteractionForLines:visibleColumns:redrawCode: order: 336
+!

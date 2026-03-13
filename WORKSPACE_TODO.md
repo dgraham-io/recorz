@@ -30,7 +30,7 @@ Notes:
 - explicit workspace/session protocol now exposes status, feedback, target label, modified-state, and visible origin from image code through a dedicated image-owned origin object
 
 ## Phase 2 - Editor Behavior
-- [ ] Make the workspace editor the single source of truth for cursor movement, selection, insert/delete, and line navigation
+- [x] Make the workspace editor the single source of truth for cursor movement, selection, insert/delete, and line navigation
 - [x] Support stable horizontal and vertical scrolling with a real visible-origin model
 - [x] Add page-up/page-down that operate on the visible viewport, not just the cursor
 - [x] Add top/bottom navigation that operate on the visible viewport, not just the cursor
@@ -85,7 +85,7 @@ Notes:
 - [x] Add lowering/runtime checks to keep new workspace protocol within the current selector/primitive model
 
 ## Definition Of Done
-- [ ] The workspace is an image-owned tool object with a stable editor/session model
+- [x] The workspace is an image-owned tool object with a stable editor/session model
 - [x] The visible origin is owned by workspace/image objects and remains stable under scrolling and editing
 - [x] Workspace command behavior is owned by image-side tool objects, not VM-side mode policy
 - [x] Reopen/snapshot restore lands back in the same workspace session with correct buffer, cursor, and viewport state

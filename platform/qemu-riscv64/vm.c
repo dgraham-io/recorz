@@ -156,7 +156,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_TOOL
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SET_CONTENTS_CURSOR_SELECTION_VISIBLE_ORIGIN
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_FINISH_EDITOR_INTERACTION_FOR_LINES_VISIBLE_COLUMNS_REDRAW_CODE
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -1351,6 +1351,16 @@ static const char *selector_name(uint16_t selector) {
             return "restorePlainWorkspaceState";
         case RECORZ_MVP_SELECTOR_SET_CONTENTS_CURSOR_SELECTION_VISIBLE_ORIGIN:
             return "setContents:cursor:selection:visibleOrigin:";
+        case RECORZ_MVP_SELECTOR_COLLAPSE_SELECTION_TO_CURSOR:
+            return "collapseSelectionToCursor";
+        case RECORZ_MVP_SELECTOR_ENSURE_EDITOR_CURSOR_VISIBLE_FOR_LINES_VISIBLE_COLUMNS:
+            return "ensureEditorCursorVisibleForLines:visibleColumns:";
+        case RECORZ_MVP_SELECTOR_HANDLE_EDITOR_ARROW_BYTE_VISIBLE_LINES_VISIBLE_COLUMNS:
+            return "handleEditorArrowByte:visibleLines:visibleColumns:";
+        case RECORZ_MVP_SELECTOR_HANDLE_EDITOR_INPUT_BYTE_VISIBLE_LINES_VISIBLE_COLUMNS:
+            return "handleEditorInputByte:visibleLines:visibleColumns:";
+        case RECORZ_MVP_SELECTOR_FINISH_EDITOR_INTERACTION_FOR_LINES_VISIBLE_COLUMNS_REDRAW_CODE:
+            return "finishEditorInteractionForLines:visibleColumns:redrawCode:";
     }
     return "unknown";
 }

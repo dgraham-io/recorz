@@ -1600,6 +1600,132 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("ACCEPTSTATUS=ACCEPT NEEDS SOURCE TARGET", normalized)
             self.assertNotIn("panic:", normalized)
 
+    def test_workspace_source_editor_state_survives_replacing_boot_workspace_session(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-session-model-") as temp_dir:
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "build"
+            example_path = temp_path / "workspace_source_editor_session_model_demo.rz"
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "Display clear.",
+                        "Workspace browseMethod: 'newline' ofClassNamed: 'Display'.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') openOn: Workspace mode: 1.",
+                        "Workspace setContents: 'one",
+                        "two'.",
+                        "Workspace cursor moveToIndex: 3 line: 0 column: 3 topLine: 0.",
+                        "Workspace collapseSelectionToCursor.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') handleByte: 88 onForm: Display defaultForm.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') handleByte: 8 onForm: Display defaultForm.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') handleByte: 27 onForm: Display defaultForm.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') handleByte: 91 onForm: Display defaultForm.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') handleByte: 66 onForm: Display defaultForm.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') handleByte: 27 onForm: Display defaultForm.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') handleByte: 91 onForm: Display defaultForm.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') handleByte: 68 onForm: Display defaultForm.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') handleByte: 27 onForm: Display defaultForm.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') handleByte: 91 onForm: Display defaultForm.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') handleByte: 67 onForm: Display defaultForm.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') handleByte: 27 onForm: Display defaultForm.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') handleByte: 91 onForm: Display defaultForm.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') handleByte: 65 onForm: Display defaultForm.",
+                        "Workspace selection setStartLine: 0 startColumn: 1 endLine: 1 endColumn: 2.",
+                        "Workspace setVisibleOriginTop: 0 left: 1.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceTool') setStatusText: 'EDIT STATUS'.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceTool') setFeedbackText: 'EDIT FEEDBACK'.",
+                        "KernelInstaller rememberObject: ((KernelInstaller classNamed: 'WorkspaceSession') new) named: 'BootWorkspaceSession'.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') openOn: Workspace mode: 1.",
+                        "Transcript show: 'VIEW='.",
+                        "Transcript show: Workspace currentViewKind printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'TARGET='.",
+                        "Transcript show: Workspace currentTargetName.",
+                        "Transcript cr.",
+                        "Transcript show: 'STATUS='.",
+                        "Transcript show: Workspace statusText.",
+                        "Transcript cr.",
+                        "Transcript show: 'FEEDBACK='.",
+                        "Transcript show: Workspace feedbackText.",
+                        "Transcript cr.",
+                        "Transcript show: 'BUFFER='.",
+                        "Transcript show: Workspace contents.",
+                        "Transcript cr.",
+                        "Transcript show: 'LINE='.",
+                        "Transcript show: Workspace cursor line printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'COLUMN='.",
+                        "Transcript show: Workspace cursor column printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'LEFT='.",
+                        "Transcript show: Workspace visibleLeftColumn printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'STARTLINE='.",
+                        "Transcript show: Workspace selection startLine printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'STARTCOLUMN='.",
+                        "Transcript show: Workspace selection startColumn printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'ENDLINE='.",
+                        "Transcript show: Workspace selection endLine printString.",
+                        "Transcript cr.",
+                        "Transcript show: 'ENDCOLUMN='.",
+                        "Transcript show: Workspace selection endColumn printString.",
+                        "Transcript cr.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            elf_path = _build_elf(build_dir, example_path)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=8.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            normalized = output.replace("\r", "")
+            self.assertIn("VIEW=5", normalized)
+            self.assertIn("TARGET=Display>>newline", normalized)
+            self.assertIn("STATUS=EDIT STATUS", normalized)
+            self.assertIn("FEEDBACK=EDIT FEEDBACK", normalized)
+            self.assertIn("BUFFER=one\ntwo", normalized)
+            self.assertIn("LINE=0", normalized)
+            self.assertIn("COLUMN=3", normalized)
+            self.assertIn("LEFT=1", normalized)
+            self.assertIn("STARTLINE=0", normalized)
+            self.assertIn("STARTCOLUMN=1", normalized)
+            self.assertIn("ENDLINE=1", normalized)
+            self.assertIn("ENDCOLUMN=2", normalized)
+            self.assertNotIn("panic:", normalized)
+
     def test_workspace_tool_dispatch_command_returns_source_editor_to_browser_context(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-command-return-") as temp_dir:
             temp_path = Path(temp_dir)
