@@ -69,8 +69,8 @@ Notes:
 - [ ] Ensure regeneration, recovery, and package/class editing flows do not corrupt workspace state
 
 ## Phase 7 - Ergonomics
-- [ ] Add a clear visual indicator for focus, cursor, modified state, and current target
-- [ ] Add a visible command summary that fits the workspace layout without causing wrap corruption
+- [x] Add a clear visual indicator for focus, cursor, modified state, and current target
+- [x] Add a visible command summary that fits the workspace layout without causing wrap corruption
 - [x] Add explicit empty-workspace and first-run behavior
 - [x] Decide whether the first serious workspace should support multiple buffers, scratch panes, or one canonical buffer only
 - [x] Document the intended user flow for the native workspace in `implementation.md` or `/docs`
