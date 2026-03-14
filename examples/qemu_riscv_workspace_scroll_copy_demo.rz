@@ -1,0 +1,35 @@
+Display clear.
+Workspace setContents: 'line01 alpha beta gamma
+line02 alpha beta gamma
+line03 alpha beta gamma
+line04 alpha beta gamma
+line05 alpha beta gamma
+line06 alpha beta gamma
+line07 alpha beta gamma
+line08 alpha beta gamma
+line09 alpha beta gamma
+line10 alpha beta gamma
+line11 alpha beta gamma
+line12 alpha beta gamma
+line13 alpha beta gamma
+line14 alpha beta gamma
+line15 alpha beta gamma
+line16 alpha beta gamma
+line17 alpha beta gamma
+line18 alpha beta gamma
+line19 alpha beta gamma
+line20 alpha beta gamma
+line21 alpha beta gamma
+line22 alpha beta gamma
+line23 alpha beta gamma
+line24 alpha beta gamma
+line25 alpha beta gamma
+line26 alpha beta gamma
+line27 alpha beta gamma
+line28 alpha beta gamma
+line29 alpha beta gamma
+line30 alpha beta gamma'.
+Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: 0.
+Workspace collapseSelectionToCursor.
+(KernelInstaller objectNamed: 'BootWorkspaceTool') setVisibleLeftColumn: 0.
+Workspace interactiveInputMonitor.

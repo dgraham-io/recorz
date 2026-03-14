@@ -149,11 +149,11 @@ the RV32 native-tool path now has a managed VM-side collector plus updated snaps
 - [ ] Lock the current `BitBlt` contract for Recorz:
   document transfer rules, clipping, same-form behavior, and the current framebuffer-vs-heap-form expectations before changing the implementation
 - [ ] Unify the current bitmap/fill/line/glyph code paths under one VM-owned blit core instead of keeping separate ad hoc raster helpers
-- [ ] Add a same-form rectangle copy / scroll primitive in the VM and framebuffer backend so editor and browser scrolling can shift pixels instead of repainting the full pane
-- [ ] Keep `display.c` as a dumb framebuffer backend:
+- [x] Add a same-form rectangle copy / scroll primitive in the VM and framebuffer backend so editor and browser scrolling can shift pixels instead of repainting the full pane
+- [x] Keep `display.c` as a dumb framebuffer backend:
   row copy, rect fill, mono blit, line draw, rect copy
 - [ ] Move clipping normalization, storage selection, and transfer-rule dispatch above the framebuffer backend into the VM blit layer
-- [ ] Add fast paths for opaque rect fill, opaque row copy, and overlap-safe in-place scroll copy while retaining the generic clipped fallback for correctness
+- [x] Add fast paths for opaque rect fill, opaque row copy, and overlap-safe in-place scroll copy while retaining the generic clipped fallback for correctness
 - [ ] Route text and glyph drawing through the same blit core so cursor, selection, source text, and future smooth scrolling all use one primitive family
 - [ ] Add render counters and focused benchmarks for:
   full pane redraw, cursor-only redraw, package-source open, and pane scroll copy

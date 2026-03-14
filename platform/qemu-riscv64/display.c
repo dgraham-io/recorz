@@ -9,6 +9,77 @@ static uint32_t framebuffer[RECORZ_DISPLAY_WIDTH * RECORZ_DISPLAY_HEIGHT] __attr
 /* Match the seeded transcript background so boot and cleared forms stay legible. */
 static uint32_t background = 0x00F7F3E8U;
 
+static uint32_t *framebuffer_row(uint32_t y) {
+    return framebuffer + ((size_t)y * (size_t)RECORZ_DISPLAY_WIDTH);
+}
+
+static uint8_t normalize_framebuffer_rect(uint32_t *x, uint32_t *y, uint32_t *width, uint32_t *height) {
+    if (*width == 0U || *height == 0U || *x >= RECORZ_DISPLAY_WIDTH || *y >= RECORZ_DISPLAY_HEIGHT) {
+        return 0U;
+    }
+    if (*width > RECORZ_DISPLAY_WIDTH - *x) {
+        *width = RECORZ_DISPLAY_WIDTH - *x;
+    }
+    if (*height > RECORZ_DISPLAY_HEIGHT - *y) {
+        *height = RECORZ_DISPLAY_HEIGHT - *y;
+    }
+    return (uint8_t)(*width != 0U && *height != 0U);
+}
+
+static uint8_t normalize_framebuffer_copy_rect(
+    uint32_t *source_x,
+    uint32_t *source_y,
+    uint32_t *width,
+    uint32_t *height,
+    uint32_t *dest_x,
+    uint32_t *dest_y
+) {
+    if (*width == 0U ||
+        *height == 0U ||
+        *source_x >= RECORZ_DISPLAY_WIDTH ||
+        *source_y >= RECORZ_DISPLAY_HEIGHT ||
+        *dest_x >= RECORZ_DISPLAY_WIDTH ||
+        *dest_y >= RECORZ_DISPLAY_HEIGHT) {
+        return 0U;
+    }
+    if (*width > RECORZ_DISPLAY_WIDTH - *source_x) {
+        *width = RECORZ_DISPLAY_WIDTH - *source_x;
+    }
+    if (*height > RECORZ_DISPLAY_HEIGHT - *source_y) {
+        *height = RECORZ_DISPLAY_HEIGHT - *source_y;
+    }
+    if (*width > RECORZ_DISPLAY_WIDTH - *dest_x) {
+        *width = RECORZ_DISPLAY_WIDTH - *dest_x;
+    }
+    if (*height > RECORZ_DISPLAY_HEIGHT - *dest_y) {
+        *height = RECORZ_DISPLAY_HEIGHT - *dest_y;
+    }
+    return (uint8_t)(*width != 0U && *height != 0U);
+}
+
+static void copy_pixel_row(uint32_t *dest, const uint32_t *source, uint32_t count) {
+    uint32_t index;
+
+    for (index = 0U; index < count; ++index) {
+        dest[index] = source[index];
+    }
+}
+
+static void move_pixel_row(uint32_t *dest, const uint32_t *source, uint32_t count) {
+    uint32_t index;
+
+    if (dest < source) {
+        copy_pixel_row(dest, source, count);
+        return;
+    }
+    if (dest == source) {
+        return;
+    }
+    for (index = count; index != 0U; --index) {
+        dest[index - 1U] = source[index - 1U];
+    }
+}
+
 static void put_pixel(uint32_t x, uint32_t y, uint32_t color) {
     if (x >= RECORZ_DISPLAY_WIDTH || y >= RECORZ_DISPLAY_HEIGHT) {
         return;
@@ -44,7 +115,12 @@ void display_form_blit_mono_bitmap(
     if (scale == 0U) {
         return;
     }
-    if (source_x >= bitmap_width || source_y >= bitmap_height || copy_width == 0U || copy_height == 0U) {
+    if (source_x >= bitmap_width ||
+        source_y >= bitmap_height ||
+        copy_width == 0U ||
+        copy_height == 0U ||
+        x >= RECORZ_DISPLAY_WIDTH ||
+        y >= RECORZ_DISPLAY_HEIGHT) {
         return;
     }
     if (copy_width > bitmap_width - source_x) {
@@ -71,8 +147,20 @@ void display_form_blit_mono_bitmap(
             }
             color = bit_is_set ? one_color : zero_color;
             for (dy = 0; dy < scale; ++dy) {
+                uint32_t dest_y = y + (row * scale) + dy;
+                uint32_t *dest_row;
+
+                if (dest_y >= RECORZ_DISPLAY_HEIGHT) {
+                    break;
+                }
+                dest_row = framebuffer_row(dest_y);
                 for (dx = 0; dx < scale; ++dx) {
-                    put_pixel(x + (col * scale) + dx, y + (row * scale) + dy, color);
+                    uint32_t dest_x = x + (col * scale) + dx;
+
+                    if (dest_x >= RECORZ_DISPLAY_WIDTH) {
+                        break;
+                    }
+                    dest_row[dest_x] = color;
                 }
             }
         }
@@ -98,13 +186,50 @@ void display_form_fill_color(uint32_t color) {
 
 void display_form_fill_rect(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color) {
     uint32_t row;
+    uint32_t *first_row;
+    uint32_t col;
 
-    for (row = 0U; row < height; ++row) {
-        uint32_t col;
+    if (!normalize_framebuffer_rect(&x, &y, &width, &height)) {
+        return;
+    }
+    first_row = framebuffer_row(y) + x;
+    for (col = 0U; col < width; ++col) {
+        first_row[col] = color;
+    }
+    for (row = 1U; row < height; ++row) {
+        copy_pixel_row(framebuffer_row(y + row) + x, first_row, width);
+    }
+}
 
-        for (col = 0U; col < width; ++col) {
-            put_pixel(x + col, y + row, color);
+void display_form_copy_rect(
+    uint32_t source_x,
+    uint32_t source_y,
+    uint32_t width,
+    uint32_t height,
+    uint32_t dest_x,
+    uint32_t dest_y
+) {
+    uint32_t row;
+
+    if (!normalize_framebuffer_copy_rect(&source_x, &source_y, &width, &height, &dest_x, &dest_y)) {
+        return;
+    }
+    if (source_y < dest_y && source_y + height > dest_y) {
+        for (row = height; row != 0U; --row) {
+            move_pixel_row(
+                framebuffer_row(dest_y + row - 1U) + dest_x,
+                framebuffer_row(source_y + row - 1U) + source_x,
+                width
+            );
         }
+        return;
+    }
+    for (row = 0U; row < height; ++row) {
+        move_pixel_row(
+            framebuffer_row(dest_y + row) + dest_x,
+            framebuffer_row(source_y + row) + source_x,
+            width
+        );
     }
 }
 

@@ -34,6 +34,7 @@ SPLIT_LAYOUT_EXAMPLE = ROOT / "examples" / "qemu_riscv_split_layout_demo.rz"
 WIDGET_SURFACE_EXAMPLE = ROOT / "examples" / "qemu_riscv_widget_surface_demo.rz"
 WORKSPACE_EDITOR_SURFACE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_editor_surface_demo.rz"
 WORKSPACE_EDITOR_SURFACE_COMFORT_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_editor_surface_comfort_mode_demo.rz"
+WORKSPACE_SCROLL_COPY_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_scroll_copy_demo.rz"
 WORKSPACE_HORIZONTAL_ORIGIN_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_horizontal_origin_demo.rz"
 WORKSPACE_HORIZONTAL_ORIGIN_SCROLLED_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_horizontal_origin_scrolled_demo.rz"
 BROWSER_SURFACE_EXAMPLE = ROOT / "examples" / "qemu_riscv_browser_surface_demo.rz"
@@ -103,17 +104,19 @@ def _render_counters(log: str) -> dict[str, int]:
     matches = re.findall(
         r"recorz-render-counters "
         r"editor_full=(\d+) editor_pane=(\d+) editor_cursor=(\d+)"
+        r"(?: editor_scroll=(\d+))?"
         r"(?: editor_status=(\d+))? "
         r"browser_full=(\d+) browser_list=(\d+)",
         log,
     )
     if not matches:
         raise AssertionError("expected recorz-render-counters in QEMU log")
-    editor_full, editor_pane, editor_cursor, editor_status, browser_full, browser_list = matches[-1]
+    editor_full, editor_pane, editor_cursor, editor_scroll, editor_status, browser_full, browser_list = matches[-1]
     return {
         "editor_full": int(editor_full),
         "editor_pane": int(editor_pane),
         "editor_cursor": int(editor_cursor),
+        "editor_scroll": int(editor_scroll or 0),
         "editor_status": int(editor_status or 0),
         "browser_full": int(browser_full),
         "browser_list": int(browser_list),
@@ -656,6 +659,7 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertEqual(counters["editor_full"], 1)
         self.assertEqual(counters["editor_pane"], 0)
         self.assertEqual(counters["editor_cursor"], 1)
+        self.assertEqual(counters["editor_scroll"], 0)
         self.assertEqual(counters["editor_status"], 0)
         self.assertEqual(counters["browser_list"], 0)
         self.assertGreater(_region_histogram(data, width, 40, 136, 960, 592)[(31, 41, 51)], 5000)
@@ -673,23 +677,47 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertEqual(counters["editor_full"], 1)
         self.assertEqual(counters["editor_pane"], 1)
         self.assertEqual(counters["editor_cursor"], 0)
+        self.assertEqual(counters["editor_scroll"], 0)
         self.assertEqual(counters["editor_status"], 0)
         self.assertEqual(counters["browser_list"], 0)
         self.assertGreater(_region_histogram(data, width, 40, 136, 960, 592)[(31, 41, 51)], 5000)
 
-    def test_interactive_editor_page_down_uses_pane_redraw_path(self) -> None:
+    def test_interactive_editor_page_down_keeps_text_visible(self) -> None:
+        opened_log, opened_width, opened_height, opened_data = self.render_interactive_example(
+            WORKSPACE_SCROLL_COPY_EXAMPLE,
+            (),
+        )
+        paged_log, paged_width, paged_height, paged_data = self.render_interactive_example(
+            WORKSPACE_SCROLL_COPY_EXAMPLE,
+            (),
+            monitor_commands=("sendkey pgdn",),
+            final_monitor_delay=2.0,
+        )
+
+        self.assertEqual((opened_width, opened_height), (1024, 768))
+        self.assertEqual((paged_width, paged_height), (1024, 768))
+        self.assertNotIn("panic:", opened_log.replace("\r", ""))
+        self.assertNotIn("panic:", paged_log.replace("\r", ""))
+        self.assertGreater(_region_histogram(paged_data, paged_width, 40, 136, 960, 592)[(31, 41, 51)], 5000)
+        self.assertGreater(
+            _region_diff_pixels(opened_data, paged_data, opened_width, 40, 136, 960, 592),
+            1000,
+        )
+
+    def test_interactive_editor_arrow_scrolling_uses_scroll_copy_path(self) -> None:
         qemu_log, width, height, data = self.render_interactive_example(
-            WORKSPACE_PACKAGE_HOME_EXAMPLE,
-            (b"\x18", b"\x16", b"\x1f"),
+            WORKSPACE_SCROLL_COPY_EXAMPLE,
+            (b"\x1b[B",) * 22 + (b"\x1f",),
         )
 
         counters = _render_counters(qemu_log)
         self.assertEqual((width, height), (1024, 768))
         self.assertNotIn("panic:", qemu_log.replace("\r", ""))
-        self.assertEqual(counters["browser_full"], 1)
+        self.assertEqual(counters["browser_full"], 0)
         self.assertEqual(counters["editor_full"], 1)
-        self.assertEqual(counters["editor_pane"], 1)
-        self.assertEqual(counters["editor_cursor"], 0)
+        self.assertEqual(counters["editor_pane"], 0)
+        self.assertGreater(counters["editor_cursor"], 0)
+        self.assertGreater(counters["editor_scroll"], 0)
         self.assertEqual(counters["editor_status"], 0)
         self.assertEqual(counters["browser_list"], 0)
         self.assertGreater(_region_histogram(data, width, 40, 136, 960, 592)[(31, 41, 51)], 5000)
@@ -706,6 +734,7 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertEqual(counters["editor_full"], 1)
         self.assertEqual(counters["editor_pane"], 0)
         self.assertEqual(counters["editor_cursor"], 0)
+        self.assertEqual(counters["editor_scroll"], 0)
         self.assertEqual(counters["editor_status"], 1)
         self.assertEqual(counters["browser_full"], 0)
         self.assertEqual(counters["browser_list"], 0)

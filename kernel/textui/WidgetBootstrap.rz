@@ -1007,7 +1007,7 @@ scrollEditorPageBy: delta
     newTop < 0 ifTrue: [newTop := 0].
     Workspace setVisibleOriginTop: newTop left: Workspace visibleLeftColumn.
     Workspace collapseSelectionToCursor.
-    ^2
+    ^6
 !
 moveListSelectionToVisibleTop
     workspace packageCount = 0 ifTrue: [^5].
