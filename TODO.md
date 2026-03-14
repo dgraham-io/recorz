@@ -155,7 +155,7 @@ the RV32 native-tool path now has a managed VM-side collector plus updated snaps
 - [ ] Move clipping normalization, storage selection, and transfer-rule dispatch above the framebuffer backend into the VM blit layer
 - [x] Add fast paths for opaque rect fill, opaque row copy, and overlap-safe in-place scroll copy while retaining the generic clipped fallback for correctness
 - [x] Route text and glyph drawing through the same blit core so cursor, selection, source text, and future smooth scrolling all use one primitive family
-- [ ] Add render counters and focused benchmarks for:
+- [x] Add render counters and focused benchmarks for:
   full pane redraw, cursor-only redraw, package-source open, and pane scroll copy
 - [ ] Convert workspace and browser viewport scrolling to the new rect-copy path before attempting any animated or sub-line scrolling behavior
 - [ ] Expand integration coverage for:
