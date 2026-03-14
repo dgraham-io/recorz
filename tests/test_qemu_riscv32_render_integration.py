@@ -3,6 +3,7 @@ import re
 import socket
 import shutil
 import subprocess
+import tempfile
 import time
 import unittest
 from collections import Counter
@@ -97,6 +98,26 @@ def _region_diff_pixels(
         for x in range(x0, x1):
             index = (y * width + x) * 3
             if data_a[index : index + 3] != data_b[index : index + 3]:
+                diff += 1
+    return diff
+
+
+def _region_diff_pixels_with_offsets(
+    data: bytes,
+    width: int,
+    ax0: int,
+    ay0: int,
+    bx0: int,
+    by0: int,
+    region_width: int,
+    region_height: int,
+) -> int:
+    diff = 0
+    for row in range(region_height):
+        for col in range(region_width):
+            a_index = ((ay0 + row) * width + (ax0 + col)) * 3
+            b_index = ((by0 + row) * width + (bx0 + col)) * 3
+            if data[a_index : a_index + 3] != data[b_index : b_index + 3]:
                 diff += 1
     return diff
 
@@ -329,6 +350,78 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         glyph_histogram = _region_histogram(data, width, 560, 24, 584, 52)
         self.assertGreater(glyph_histogram[(255, 0, 0)], 200)
         self.assertGreater(glyph_histogram[(247, 243, 232)], 200)
+
+    def test_bitblt_heap_form_copy_matches_direct_framebuffer_copy(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-bitblt-heap-parity-") as temp_dir:
+            temp_path = Path(temp_dir)
+            example_path = temp_path / "bitblt_heap_parity_demo.rz"
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "| form scratch glyph |",
+                        "form := Display defaultForm.",
+                        "glyph := Glyphs at: 82.",
+                        "scratch := Form fromBits: (Bitmap monoWidth: 24 height: 28).",
+                        "form clear.",
+                        "BitBlt fillForm: scratch color: 0.",
+                        "BitBlt copyBitmap: glyph toForm: form x: 120 y: 80 scale: 4 color: 16711680.",
+                        "BitBlt copyBitmap: glyph toForm: scratch x: 0 y: 0 scale: 4.",
+                        "BitBlt copyBitmap: scratch bits sourceX: 0 sourceY: 0 width: 24 height: 28 toForm: form x: 220 y: 80 scale: 1 color: 16711680.",
+                        "Transcript show: 'HEAP PARITY'.",
+                        "Transcript cr.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            qemu_log, width, height, data = self.render_example(example_path)
+
+        normalized_log = qemu_log.replace("\r", "")
+        self.assertIn("HEAP PARITY", normalized_log)
+        self.assertNotIn("panic:", normalized_log)
+        self.assertEqual((width, height), (1024, 768))
+        self.assertGreater(_region_histogram(data, width, 120, 80, 144, 108)[(255, 0, 0)], 120)
+        self.assertEqual(
+            _region_diff_pixels_with_offsets(
+                data,
+                width,
+                120,
+                80,
+                220,
+                80,
+                24,
+                28,
+            ),
+            0,
+        )
+
+    def test_bitblt_vm_clips_heap_bitmap_blits_at_framebuffer_edges(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-bitblt-edge-clip-") as temp_dir:
+            temp_path = Path(temp_dir)
+            example_path = temp_path / "bitblt_edge_clip_demo.rz"
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "| form scratch |",
+                        "form := Display defaultForm.",
+                        "scratch := Form fromBits: (Bitmap monoWidth: 24 height: 28).",
+                        "form clear.",
+                        "BitBlt fillForm: scratch color: 1.",
+                        "BitBlt copyBitmap: scratch bits sourceX: 0 sourceY: 0 width: 24 height: 28 toForm: form x: 1008 y: 744 scale: 1 color: 16711680.",
+                        "Transcript show: 'EDGE CLIP'.",
+                        "Transcript cr.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            qemu_log, width, height, data = self.render_example(example_path)
+
+        normalized_log = qemu_log.replace("\r", "")
+        self.assertIn("EDGE CLIP", normalized_log)
+        self.assertNotIn("panic:", normalized_log)
+        self.assertEqual((width, height), (1024, 768))
+        self.assertEqual(_region_histogram(data, width, 1008, 744, 1024, 768)[(255, 0, 0)], 16 * 24)
+        self.assertEqual(_region_histogram(data, width, 1000, 744, 1008, 768)[(255, 0, 0)], 0)
+        self.assertEqual(_region_histogram(data, width, 1008, 736, 1024, 744)[(255, 0, 0)], 0)
 
     def test_glyph_demo_renders_lowercase_digits_and_source_punctuation(self) -> None:
         qemu_log, width, height, data = self.render_example(GLYPH_EXAMPLE)

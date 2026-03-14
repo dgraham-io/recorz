@@ -13123,6 +13123,41 @@ static uint8_t form_surface_normalize_copy_rect(
     return (uint8_t)(*width != 0U && *height != 0U);
 }
 
+static uint8_t form_surface_normalize_scaled_mono_blit(
+    const struct recorz_mvp_form_surface *surface,
+    uint32_t *dest_x,
+    uint32_t *dest_y,
+    uint32_t copy_width,
+    uint32_t copy_height,
+    uint32_t scale,
+    uint32_t *draw_width_pixels,
+    uint32_t *draw_height_pixels
+) {
+    uint32_t width_pixels;
+    uint32_t height_pixels;
+
+    if (*dest_x >= surface->width || *dest_y >= surface->height) {
+        return 0U;
+    }
+    width_pixels = copy_width * scale;
+    height_pixels = copy_height * scale;
+    if (width_pixels == 0U || height_pixels == 0U) {
+        return 0U;
+    }
+    if (width_pixels > surface->width - *dest_x) {
+        width_pixels = surface->width - *dest_x;
+    }
+    if (height_pixels > surface->height - *dest_y) {
+        height_pixels = surface->height - *dest_y;
+    }
+    if (width_pixels == 0U || height_pixels == 0U) {
+        return 0U;
+    }
+    *draw_width_pixels = width_pixels;
+    *draw_height_pixels = height_pixels;
+    return 1U;
+}
+
 static void reset_text_cursor(void) {
     cursor_x = text_left_margin();
     cursor_y = text_top_margin();
@@ -13348,6 +13383,8 @@ static void bitblt_copy_mono_bitmap_to_surface(
     uint32_t zero_color,
     uint8_t transfer_rule
 ) {
+    uint32_t draw_width_pixels = 0U;
+    uint32_t draw_height_pixels = 0U;
     uint8_t transparent_zero = bitblt_transfer_rule_uses_transparent_zero(transfer_rule);
 
     if (scale == 0U) {
@@ -13357,6 +13394,17 @@ static void bitblt_copy_mono_bitmap_to_surface(
         return;
     }
     if (dest_surface->storage_kind == BITMAP_STORAGE_FRAMEBUFFER) {
+        if (!form_surface_normalize_scaled_mono_blit(
+                dest_surface,
+                &x,
+                &y,
+                copy_width,
+                copy_height,
+                scale,
+                &draw_width_pixels,
+                &draw_height_pixels)) {
+            return;
+        }
         display_form_blit_mono_bitmap(
             x,
             y,
@@ -13368,6 +13416,8 @@ static void bitblt_copy_mono_bitmap_to_surface(
             copy_width,
             copy_height,
             scale,
+            draw_width_pixels,
+            draw_height_pixels,
             one_color,
             zero_color,
             transparent_zero

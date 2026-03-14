@@ -13,50 +13,6 @@ static uint32_t *framebuffer_row(uint32_t y) {
     return framebuffer + ((size_t)y * (size_t)RECORZ_DISPLAY_WIDTH);
 }
 
-static uint8_t normalize_framebuffer_rect(uint32_t *x, uint32_t *y, uint32_t *width, uint32_t *height) {
-    if (*width == 0U || *height == 0U || *x >= RECORZ_DISPLAY_WIDTH || *y >= RECORZ_DISPLAY_HEIGHT) {
-        return 0U;
-    }
-    if (*width > RECORZ_DISPLAY_WIDTH - *x) {
-        *width = RECORZ_DISPLAY_WIDTH - *x;
-    }
-    if (*height > RECORZ_DISPLAY_HEIGHT - *y) {
-        *height = RECORZ_DISPLAY_HEIGHT - *y;
-    }
-    return (uint8_t)(*width != 0U && *height != 0U);
-}
-
-static uint8_t normalize_framebuffer_copy_rect(
-    uint32_t *source_x,
-    uint32_t *source_y,
-    uint32_t *width,
-    uint32_t *height,
-    uint32_t *dest_x,
-    uint32_t *dest_y
-) {
-    if (*width == 0U ||
-        *height == 0U ||
-        *source_x >= RECORZ_DISPLAY_WIDTH ||
-        *source_y >= RECORZ_DISPLAY_HEIGHT ||
-        *dest_x >= RECORZ_DISPLAY_WIDTH ||
-        *dest_y >= RECORZ_DISPLAY_HEIGHT) {
-        return 0U;
-    }
-    if (*width > RECORZ_DISPLAY_WIDTH - *source_x) {
-        *width = RECORZ_DISPLAY_WIDTH - *source_x;
-    }
-    if (*height > RECORZ_DISPLAY_HEIGHT - *source_y) {
-        *height = RECORZ_DISPLAY_HEIGHT - *source_y;
-    }
-    if (*width > RECORZ_DISPLAY_WIDTH - *dest_x) {
-        *width = RECORZ_DISPLAY_WIDTH - *dest_x;
-    }
-    if (*height > RECORZ_DISPLAY_HEIGHT - *dest_y) {
-        *height = RECORZ_DISPLAY_HEIGHT - *dest_y;
-    }
-    return (uint8_t)(*width != 0U && *height != 0U);
-}
-
 static void copy_pixel_row(uint32_t *dest, const uint32_t *source, uint32_t count) {
     uint32_t index;
 
@@ -106,61 +62,59 @@ void display_form_blit_mono_bitmap(
     uint32_t copy_width,
     uint32_t copy_height,
     uint32_t scale,
+    uint32_t draw_width_pixels,
+    uint32_t draw_height_pixels,
     uint32_t one_color,
     uint32_t zero_color,
     uint8_t transparent_zero
 ) {
     uint32_t row;
 
-    if (scale == 0U) {
+    (void)bitmap_height;
+    if (scale == 0U || draw_width_pixels == 0U || draw_height_pixels == 0U) {
         return;
-    }
-    if (source_x >= bitmap_width ||
-        source_y >= bitmap_height ||
-        copy_width == 0U ||
-        copy_height == 0U ||
-        x >= RECORZ_DISPLAY_WIDTH ||
-        y >= RECORZ_DISPLAY_HEIGHT) {
-        return;
-    }
-    if (copy_width > bitmap_width - source_x) {
-        copy_width = bitmap_width - source_x;
-    }
-    if (copy_height > bitmap_height - source_y) {
-        copy_height = bitmap_height - source_y;
     }
 
     for (row = 0; row < copy_height; ++row) {
         uint32_t source_row = source_y + row;
+        uint32_t dest_row_offset = row * scale;
+        uint32_t row_pixels = scale;
         uint32_t bits = rows[source_row];
         uint32_t col;
+
+        if (dest_row_offset >= draw_height_pixels) {
+            break;
+        }
+        if (row_pixels > draw_height_pixels - dest_row_offset) {
+            row_pixels = draw_height_pixels - dest_row_offset;
+        }
         for (col = 0; col < copy_width; ++col) {
             uint32_t source_col = source_x + col;
+            uint32_t dest_col_offset = col * scale;
+            uint32_t col_pixels = scale;
             uint32_t bit = 1U << (bitmap_width - source_col - 1U);
             uint8_t bit_is_set = (uint8_t)((bits & bit) != 0U);
             uint32_t color;
             uint32_t dy;
             uint32_t dx;
 
+            if (dest_col_offset >= draw_width_pixels) {
+                break;
+            }
             if (!bit_is_set && transparent_zero) {
                 continue;
             }
+            if (col_pixels > draw_width_pixels - dest_col_offset) {
+                col_pixels = draw_width_pixels - dest_col_offset;
+            }
             color = bit_is_set ? one_color : zero_color;
-            for (dy = 0; dy < scale; ++dy) {
-                uint32_t dest_y = y + (row * scale) + dy;
+            for (dy = 0; dy < row_pixels; ++dy) {
+                uint32_t dest_y = y + dest_row_offset + dy;
                 uint32_t *dest_row;
 
-                if (dest_y >= RECORZ_DISPLAY_HEIGHT) {
-                    break;
-                }
                 dest_row = framebuffer_row(dest_y);
-                for (dx = 0; dx < scale; ++dx) {
-                    uint32_t dest_x = x + (col * scale) + dx;
-
-                    if (dest_x >= RECORZ_DISPLAY_WIDTH) {
-                        break;
-                    }
-                    dest_row[dest_x] = color;
+                for (dx = 0; dx < col_pixels; ++dx) {
+                    dest_row[x + dest_col_offset + dx] = color;
                 }
             }
         }
@@ -189,7 +143,7 @@ void display_form_fill_rect(uint32_t x, uint32_t y, uint32_t width, uint32_t hei
     uint32_t *first_row;
     uint32_t col;
 
-    if (!normalize_framebuffer_rect(&x, &y, &width, &height)) {
+    if (width == 0U || height == 0U) {
         return;
     }
     first_row = framebuffer_row(y) + x;
@@ -211,7 +165,7 @@ void display_form_copy_rect(
 ) {
     uint32_t row;
 
-    if (!normalize_framebuffer_copy_rect(&source_x, &source_y, &width, &height, &dest_x, &dest_y)) {
+    if (width == 0U || height == 0U) {
         return;
     }
     if (source_y < dest_y && source_y + height > dest_y) {

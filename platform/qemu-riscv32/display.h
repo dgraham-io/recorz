@@ -29,6 +29,8 @@ void display_form_blit_mono_bitmap(
     uint32_t copy_width,
     uint32_t copy_height,
     uint32_t scale,
+    uint32_t draw_width_pixels,
+    uint32_t draw_height_pixels,
     uint32_t one_color,
     uint32_t zero_color,
     uint8_t transparent_zero

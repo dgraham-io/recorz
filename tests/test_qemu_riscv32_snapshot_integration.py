@@ -1672,6 +1672,71 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         self.assertGreater(line_3[TEXT_FOREGROUND], 300)
         self.assertGreater(line_4[TEXT_FOREGROUND], 300)
 
+    def test_snapshot_preserves_scrolled_package_list_state_with_incremental_browser_path(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-scrolled-package-list-") as temp_dir:
+            temp_path = Path(temp_dir)
+            build_dir = ROOT / "misc" / "q32-scrolled-package-list-save"
+            reload_build_dir = ROOT / "misc" / "q32-scrolled-package-list-reload"
+            snapshot_output = ROOT / "misc" / "qemu-riscv32-snapshots" / "scrolled-package-list-live-image.bin"
+            example_path = temp_path / "scrolled_package_list_snapshot_demo.rz"
+            package_source = "\n!\n".join(
+                f"RecorzKernelPackage: ''Pkg{index:02d}'' comment: ''Scroll fixture''"
+                for index in range(1, 21)
+            )
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "Display clear.",
+                        f"Workspace fileIn: '{package_source}'.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') openOn: Workspace mode: 0.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') moveListSelectionPageBy: 1.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') moveListSelectionPageBy: 1.",
+                        "(KernelInstaller objectNamed: 'BootWorkspaceSession') moveListSelectionBy: 1.",
+                        "KernelInstaller configureStartup: Workspace selectorNamed: 'reopen'.",
+                        "KernelInstaller saveSnapshot.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            save_log = self.save_snapshot(
+                build_dir=build_dir,
+                example_path=example_path,
+                snapshot_output=snapshot_output,
+            )
+            self.assertIn("recorz-snapshot-begin", save_log)
+            self.assertTrue(snapshot_output.exists())
+
+            snapshot_summary = self.inspect_snapshot_summary(snapshot_path=snapshot_output)
+            workspace_summary = snapshot_summary.get("workspace")
+            workspace_session = snapshot_summary.get("workspace_session")
+            self.assertIsInstance(workspace_summary, dict)
+            self.assertIsInstance(workspace_session, dict)
+            assert isinstance(workspace_summary, dict)
+            assert isinstance(workspace_session, dict)
+
+            self.assertEqual(workspace_summary["current_view_kind"], 14)
+            self.assertIsNone(workspace_summary["current_target_name"])
+            self.assertGreater(int(workspace_session["selected"]), 0)
+            self.assertGreater(int(workspace_session["list_top"]), 0)
+            self.assertGreaterEqual(
+                int(workspace_session["selected"]),
+                int(workspace_session["list_top"]),
+            )
+
+            reload_log, width, height, data = self.render_demo(
+                build_dir=reload_build_dir,
+                example_path=SNAPSHOT_WORKSPACE_IDLE_DEMO_PATH,
+                snapshot_payload=snapshot_output,
+            )
+
+            self.assertEqual((width, height), (1024, 768))
+            self.assertIn("recorz qemu-riscv32 mvp: loaded snapshot", reload_log)
+            self.assertIn("recorz qemu-riscv32 mvp: rendered", reload_log)
+            self.assertNotIn("panic:", reload_log)
+            self.assertGreater(_region_histogram(data, width, 40, 136, 320, 592)[TEXT_FOREGROUND], 5000)
+            self.assertGreater(_region_histogram(data, width, 336, 136, 960, 592)[TEXT_FOREGROUND], 4000)
+
     def test_snapshot_can_reopen_workspace_package_browser_state_without_demo_specific_program(self) -> None:
         save_log = self.save_snapshot(
             build_dir=SNAPSHOT_WORKSPACE_PACKAGE_BUILD_DIR,
