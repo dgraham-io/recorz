@@ -629,6 +629,34 @@ static void bitblt_copy_mono_bitmap_to_form(
     uint32_t zero_color,
     uint8_t transfer_rule
 );
+static void bitblt_copy_mono_bitmap_to_mono_bitmap(
+    const struct recorz_mvp_heap_object *source_bitmap,
+    struct recorz_mvp_heap_object *dest_bitmap,
+    uint32_t source_x,
+    uint32_t source_y,
+    uint32_t copy_width,
+    uint32_t copy_height,
+    uint32_t x,
+    uint32_t y,
+    uint32_t scale,
+    uint8_t transfer_rule
+);
+static uint8_t bitblt_transfer_rule_uses_transparent_zero(uint8_t transfer_rule);
+static uint8_t normalize_bitblt_source_region(
+    const struct recorz_mvp_heap_object *source_bitmap,
+    uint32_t *source_x,
+    uint32_t *source_y,
+    uint32_t *copy_width,
+    uint32_t *copy_height
+);
+static void draw_mono_bitmap_line(
+    struct recorz_mvp_heap_object *bitmap,
+    int32_t x0,
+    int32_t y0,
+    int32_t x1,
+    int32_t y1,
+    uint8_t value
+);
 static uint32_t text_background_color(void);
 static void active_cursor_move_to(uint32_t x, uint32_t y);
 static void active_cursor_set_visible(uint8_t visible);
@@ -12735,6 +12763,76 @@ static struct recorz_mvp_heap_object *mutable_bitmap_for_form(const struct recor
     return bitmap;
 }
 
+struct recorz_mvp_form_surface {
+    uint32_t storage_kind;
+    uint32_t width;
+    uint32_t height;
+    struct recorz_mvp_heap_object *mutable_bitmap;
+};
+
+static struct recorz_mvp_form_surface form_surface_for_form(const struct recorz_mvp_heap_object *form) {
+    const struct recorz_mvp_heap_object *bitmap = bitmap_for_form(form);
+    struct recorz_mvp_form_surface surface;
+
+    surface.storage_kind = bitmap_storage_kind(bitmap);
+    surface.width = bitmap_width(bitmap);
+    surface.height = bitmap_height(bitmap);
+    surface.mutable_bitmap =
+        surface.storage_kind == BITMAP_STORAGE_HEAP_MONO ? mutable_bitmap_for_form(form) : 0;
+    return surface;
+}
+
+static uint8_t form_surface_normalize_rect(
+    const struct recorz_mvp_form_surface *surface,
+    uint32_t *x,
+    uint32_t *y,
+    uint32_t *width,
+    uint32_t *height
+) {
+    if (*width == 0U || *height == 0U || *x >= surface->width || *y >= surface->height) {
+        return 0U;
+    }
+    if (*width > surface->width - *x) {
+        *width = surface->width - *x;
+    }
+    if (*height > surface->height - *y) {
+        *height = surface->height - *y;
+    }
+    return (uint8_t)(*width != 0U && *height != 0U);
+}
+
+static uint8_t form_surface_normalize_copy_rect(
+    const struct recorz_mvp_form_surface *surface,
+    uint32_t *source_x,
+    uint32_t *source_y,
+    uint32_t *width,
+    uint32_t *height,
+    uint32_t *dest_x,
+    uint32_t *dest_y
+) {
+    if (*width == 0U ||
+        *height == 0U ||
+        *source_x >= surface->width ||
+        *source_y >= surface->height ||
+        *dest_x >= surface->width ||
+        *dest_y >= surface->height) {
+        return 0U;
+    }
+    if (*width > surface->width - *source_x) {
+        *width = surface->width - *source_x;
+    }
+    if (*height > surface->height - *source_y) {
+        *height = surface->height - *source_y;
+    }
+    if (*width > surface->width - *dest_x) {
+        *width = surface->width - *dest_x;
+    }
+    if (*height > surface->height - *dest_y) {
+        *height = surface->height - *dest_y;
+    }
+    return (uint8_t)(*width != 0U && *height != 0U);
+}
+
 static void reset_text_cursor(void) {
     cursor_x = text_left_margin();
     cursor_y = text_top_margin();
@@ -12865,6 +12963,143 @@ static void copy_mono_bitmap_rect_in_place(
             }
         }
     }
+}
+
+static void form_surface_fill_rect_color(
+    const struct recorz_mvp_form_surface *surface,
+    uint32_t x,
+    uint32_t y,
+    uint32_t width,
+    uint32_t height,
+    uint32_t color
+) {
+    if (!form_surface_normalize_rect(surface, &x, &y, &width, &height)) {
+        return;
+    }
+    if (surface->storage_kind == BITMAP_STORAGE_FRAMEBUFFER) {
+        display_form_fill_rect(x, y, width, height, color);
+        return;
+    }
+    if (surface->storage_kind == BITMAP_STORAGE_HEAP_MONO) {
+        fill_mono_bitmap_rect(surface->mutable_bitmap, x, y, width, height, (uint8_t)(color != 0U));
+        return;
+    }
+    machine_panic("fill expects a framebuffer or heap monochrome form");
+}
+
+static void form_surface_copy_rect(
+    const struct recorz_mvp_form_surface *surface,
+    uint32_t source_x,
+    uint32_t source_y,
+    uint32_t width,
+    uint32_t height,
+    uint32_t dest_x,
+    uint32_t dest_y
+) {
+    if (!form_surface_normalize_copy_rect(
+            surface,
+            &source_x,
+            &source_y,
+            &width,
+            &height,
+            &dest_x,
+            &dest_y)) {
+        return;
+    }
+    if (surface->storage_kind == BITMAP_STORAGE_FRAMEBUFFER) {
+        display_form_copy_rect(source_x, source_y, width, height, dest_x, dest_y);
+        return;
+    }
+    if (surface->storage_kind == BITMAP_STORAGE_HEAP_MONO) {
+        copy_mono_bitmap_rect_in_place(
+            surface->mutable_bitmap,
+            source_x,
+            source_y,
+            width,
+            height,
+            dest_x,
+            dest_y
+        );
+        return;
+    }
+    machine_panic("copy expects a framebuffer or heap monochrome form");
+}
+
+static void form_surface_draw_line_color(
+    const struct recorz_mvp_form_surface *surface,
+    int32_t x0,
+    int32_t y0,
+    int32_t x1,
+    int32_t y1,
+    uint32_t color
+) {
+    if (surface->storage_kind == BITMAP_STORAGE_FRAMEBUFFER) {
+        display_form_draw_line(x0, y0, x1, y1, color);
+        return;
+    }
+    if (surface->storage_kind == BITMAP_STORAGE_HEAP_MONO) {
+        draw_mono_bitmap_line(surface->mutable_bitmap, x0, y0, x1, y1, (uint8_t)(color != 0U));
+        return;
+    }
+    machine_panic("line draw expects a framebuffer or heap monochrome form");
+}
+
+static void bitblt_copy_mono_bitmap_to_surface(
+    const struct recorz_mvp_heap_object *source_bitmap,
+    const struct recorz_mvp_form_surface *dest_surface,
+    uint32_t source_x,
+    uint32_t source_y,
+    uint32_t copy_width,
+    uint32_t copy_height,
+    uint32_t x,
+    uint32_t y,
+    uint32_t scale,
+    uint32_t one_color,
+    uint32_t zero_color,
+    uint8_t transfer_rule
+) {
+    uint8_t transparent_zero = bitblt_transfer_rule_uses_transparent_zero(transfer_rule);
+
+    if (scale == 0U) {
+        machine_panic("BitBlt copy scale must be non-zero");
+    }
+    if (!normalize_bitblt_source_region(source_bitmap, &source_x, &source_y, &copy_width, &copy_height)) {
+        return;
+    }
+    if (dest_surface->storage_kind == BITMAP_STORAGE_FRAMEBUFFER) {
+        display_form_blit_mono_bitmap(
+            x,
+            y,
+            mono_bitmap_rows(source_bitmap),
+            bitmap_width(source_bitmap),
+            bitmap_height(source_bitmap),
+            source_x,
+            source_y,
+            copy_width,
+            copy_height,
+            scale,
+            one_color,
+            zero_color,
+            transparent_zero
+        );
+        return;
+    }
+    if (dest_surface->storage_kind == BITMAP_STORAGE_HEAP_MONO) {
+        bitblt_copy_mono_bitmap_to_mono_bitmap(
+            source_bitmap,
+            dest_surface->mutable_bitmap,
+            source_x,
+            source_y,
+            copy_width,
+            copy_height,
+            x,
+            y,
+            scale,
+            transfer_rule
+        );
+        return;
+    }
+    machine_panic("BitBlt destination bitmap storage is unsupported");
 }
 
 static void set_mono_bitmap_pixel(
@@ -13030,51 +13265,22 @@ static void bitblt_copy_mono_bitmap_to_form(
     uint32_t zero_color,
     uint8_t transfer_rule
 ) {
-    const struct recorz_mvp_heap_object *dest_bitmap = bitmap_for_form(dest_form);
-    uint32_t storage_kind = bitmap_storage_kind(dest_bitmap);
-    uint8_t transparent_zero = bitblt_transfer_rule_uses_transparent_zero(transfer_rule);
+    struct recorz_mvp_form_surface dest_surface = form_surface_for_form(dest_form);
 
-    if (scale == 0U) {
-        machine_panic("BitBlt copy scale must be non-zero");
-    }
-    if (!normalize_bitblt_source_region(source_bitmap, &source_x, &source_y, &copy_width, &copy_height)) {
-        return;
-    }
-
-    if (storage_kind == BITMAP_STORAGE_FRAMEBUFFER) {
-        display_form_blit_mono_bitmap(
-            x,
-            y,
-            mono_bitmap_rows(source_bitmap),
-            bitmap_width(source_bitmap),
-            bitmap_height(source_bitmap),
-            source_x,
-            source_y,
-            copy_width,
-            copy_height,
-            scale,
-            one_color,
-            zero_color,
-            transparent_zero
-        );
-        return;
-    }
-    if (storage_kind == BITMAP_STORAGE_HEAP_MONO) {
-        bitblt_copy_mono_bitmap_to_mono_bitmap(
-            source_bitmap,
-            mutable_bitmap_for_form(dest_form),
-            source_x,
-            source_y,
-            copy_width,
-            copy_height,
-            x,
-            y,
-            scale,
-            transfer_rule
-        );
-        return;
-    }
-    machine_panic("BitBlt destination bitmap storage is unsupported");
+    bitblt_copy_mono_bitmap_to_surface(
+        source_bitmap,
+        &dest_surface,
+        source_x,
+        source_y,
+        copy_width,
+        copy_height,
+        x,
+        y,
+        scale,
+        one_color,
+        zero_color,
+        transfer_rule
+    );
 }
 
 static void require_bitblt_copy_operands_at(
@@ -13101,15 +13307,17 @@ static void require_bitblt_copy_operands_at(
 }
 
 static void fill_form_color(const struct recorz_mvp_heap_object *form, uint32_t color) {
+    struct recorz_mvp_form_surface surface = form_surface_for_form(form);
+
     form_fill_rect_color(
         form,
         0U,
         0U,
-        bitmap_width(bitmap_for_form(form)),
-        bitmap_height(bitmap_for_form(form)),
+        surface.width,
+        surface.height,
         color
     );
-    if (bitmap_storage_kind(bitmap_for_form(form)) == BITMAP_STORAGE_FRAMEBUFFER) {
+    if (surface.storage_kind == BITMAP_STORAGE_FRAMEBUFFER) {
         reset_text_cursor();
     }
 }
@@ -13122,18 +13330,9 @@ static void form_fill_rect_color(
     uint32_t height,
     uint32_t color
 ) {
-    const struct recorz_mvp_heap_object *bitmap = bitmap_for_form(form);
-    uint32_t storage_kind = bitmap_storage_kind(bitmap);
+    struct recorz_mvp_form_surface surface = form_surface_for_form(form);
 
-    if (storage_kind == BITMAP_STORAGE_FRAMEBUFFER) {
-        display_form_fill_rect(x, y, width, height, color);
-        return;
-    }
-    if (storage_kind == BITMAP_STORAGE_HEAP_MONO) {
-        fill_mono_bitmap_rect(mutable_bitmap_for_form(form), x, y, width, height, (uint8_t)(color != 0U));
-        return;
-    }
-    machine_panic("fill expects a framebuffer or heap monochrome form");
+    form_surface_fill_rect_color(&surface, x, y, width, height, color);
 }
 
 static void form_copy_rect(
@@ -13145,26 +13344,9 @@ static void form_copy_rect(
     uint32_t dest_x,
     uint32_t dest_y
 ) {
-    const struct recorz_mvp_heap_object *bitmap = bitmap_for_form(form);
-    uint32_t storage_kind = bitmap_storage_kind(bitmap);
+    struct recorz_mvp_form_surface surface = form_surface_for_form(form);
 
-    if (storage_kind == BITMAP_STORAGE_FRAMEBUFFER) {
-        display_form_copy_rect(source_x, source_y, width, height, dest_x, dest_y);
-        return;
-    }
-    if (storage_kind == BITMAP_STORAGE_HEAP_MONO) {
-        copy_mono_bitmap_rect_in_place(
-            mutable_bitmap_for_form(form),
-            source_x,
-            source_y,
-            width,
-            height,
-            dest_x,
-            dest_y
-        );
-        return;
-    }
-    machine_panic("copy expects a framebuffer or heap monochrome form");
+    form_surface_copy_rect(&surface, source_x, source_y, width, height, dest_x, dest_y);
 }
 
 static void form_draw_line_color(
@@ -13175,18 +13357,9 @@ static void form_draw_line_color(
     int32_t y1,
     uint32_t color
 ) {
-    const struct recorz_mvp_heap_object *bitmap = bitmap_for_form(form);
-    uint32_t storage_kind = bitmap_storage_kind(bitmap);
+    struct recorz_mvp_form_surface surface = form_surface_for_form(form);
 
-    if (storage_kind == BITMAP_STORAGE_FRAMEBUFFER) {
-        display_form_draw_line(x0, y0, x1, y1, color);
-        return;
-    }
-    if (storage_kind == BITMAP_STORAGE_HEAP_MONO) {
-        draw_mono_bitmap_line(mutable_bitmap_for_form(form), x0, y0, x1, y1, (uint8_t)(color != 0U));
-        return;
-    }
-    machine_panic("line draw expects a framebuffer or heap monochrome form");
+    form_surface_draw_line_color(&surface, x0, y0, x1, y1, color);
 }
 
 static void form_clear(const struct recorz_mvp_heap_object *form) {

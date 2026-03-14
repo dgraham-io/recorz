@@ -36,6 +36,7 @@ The first Recorz native UI should keep only the following behavior in C.
 ### 1. Bitmap Transfer And Fill
 - `BitBlt>>copyBits`-class primitive path
 - rectangular fill path
+- same-form rectangle copy / scroll path
 - clipping support
 - monochrome-to-form and form-to-form transfer support as needed
 - transfer/composition rule selection
@@ -87,8 +88,10 @@ This classifies the major C-side helper families in [vm.c](/Users/david/repos/re
 - `display_form_blit_mono_bitmap(...)`
 - `display_form_fill_color(...)`
 - `display_form_fill_rect(...)`
+- `display_form_copy_rect(...)`
 - `bitblt_copy_mono_bitmap_to_form(...)`
 - `bitblt_copy_mono_bitmap_to_mono_bitmap(...)`
+- `form_copy_rect(...)`
 - raw keyboard/serial delivery in the machine layer
 - snapshot/boot/panic/debug transport
 
@@ -125,12 +128,14 @@ These decisions are now explicit.
 - Clipping stays below the image as part of the bitmap transfer primitive.
 - Image code should be able to request drawing without manually clipping each glyph or rectangle.
 - The first UI only needs rectangular clipping.
+- Same-form rect copy now clips both source and destination regions in the VM blit layer before the framebuffer backend runs.
 
 ### Transfer Rules
 - The primitive surface should support a small rule set first:
   copy, paint/over, erase/under, and monochrome transparent-zero handling.
 - We do not need every historical BitBlt combination rule before the first native workspace/browser.
 - The rule set should be documented and stable before image-owned UI classes depend on it.
+- The current RV32 implementation uses `copy` for opaque form/glyph transfer and same-form rect copy, plus `over` for transparent-zero mono blits.
 
 ## Glyph Blitting Decision
 Glyph drawing should not remain a special VM text service.
@@ -143,6 +148,7 @@ The intended long-term shape is:
 Implication:
 - `Form>>writeString:` and `Form>>writeStyledText:` are transitional convenience surfaces
 - the real native UI should eventually render text through image-owned scanner/composer objects using the same underlying copy primitive
+- the current cursor, source text, and viewport scroll paths should all share the same VM-owned blit dispatch rather than bypassing it with special framebuffer loops
 
 ## RV32 Performance Assumptions
 These assumptions constrain the primitive boundary.
