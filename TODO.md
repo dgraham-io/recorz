@@ -157,6 +157,6 @@ the RV32 native-tool path now has a managed VM-side collector plus updated snaps
 - [x] Route text and glyph drawing through the same blit core so cursor, selection, source text, and future smooth scrolling all use one primitive family
 - [x] Add render counters and focused benchmarks for:
   full pane redraw, cursor-only redraw, package-source open, and pane scroll copy
-- [ ] Convert workspace and browser viewport scrolling to the new rect-copy path before attempting any animated or sub-line scrolling behavior
+- [x] Convert workspace and browser viewport scrolling to the new rect-copy path before attempting any animated or sub-line scrolling behavior
 - [ ] Expand integration coverage for:
   clipped rect copy, heap-form parity, workspace scroll stability, and snapshot safety with the new primitive path

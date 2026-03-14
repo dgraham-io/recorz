@@ -680,3 +680,7 @@ RecorzKernelSelector: #rememberPlainWorkspaceStateIfNeeded order: 338
 !
 RecorzKernelSelector: #packageSourceToOpenFor:priorTarget: order: 339
 !
+RecorzKernelSelector: #selectedIndex order: 340
+!
+RecorzKernelSelector: #listTopLine order: 341
+!

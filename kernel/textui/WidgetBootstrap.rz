@@ -894,6 +894,14 @@ visibleListLines
     lineHeight < 1 ifTrue: [^0].
     ^usable / lineHeight
 !
+selectedIndex
+    selected = nil ifTrue: [selected := 0].
+    ^selected
+!
+listTopLine
+    listTop = nil ifTrue: [listTop := 0].
+    ^listTop
+!
 moveListSelectionBy: delta
     | visibleLines nextIndex count |
     count := workspace packageCount.

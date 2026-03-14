@@ -190,7 +190,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_TOOL
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_PACKAGE_SOURCE_TO_OPEN_FOR_PRIOR_TARGET
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_LIST_TOP_LINE
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -1500,6 +1500,10 @@ static const char *selector_name(uint16_t selector) {
             return "visibleEditorLines";
         case RECORZ_MVP_SELECTOR_VISIBLE_LIST_LINES:
             return "visibleListLines";
+        case RECORZ_MVP_SELECTOR_SELECTED_INDEX:
+            return "selectedIndex";
+        case RECORZ_MVP_SELECTOR_LIST_TOP_LINE:
+            return "listTopLine";
         case RECORZ_MVP_SELECTOR_MOVE_LIST_SELECTION_BY:
             return "moveListSelectionBy:";
         case RECORZ_MVP_SELECTOR_SELECTED_PACKAGE_NAME:
@@ -7221,6 +7225,154 @@ static void workspace_draw_editor_source_viewport_overlay(
     workspace_draw_editor_cursor_overlay(form, cursor_line, cursor_column);
 }
 
+static void workspace_draw_text_line_at(
+    const struct recorz_mvp_heap_object *form,
+    const char *text,
+    uint32_t x,
+    uint32_t y,
+    uint32_t max_columns
+) {
+    char line_buffer[METHOD_SOURCE_LINE_LIMIT];
+    uint32_t column_width = char_width();
+    uint32_t index = 0U;
+
+    if (column_width == 0U || max_columns == 0U) {
+        return;
+    }
+    workspace_copy_raw_text(line_buffer, sizeof(line_buffer), text == 0 ? "" : text, max_columns);
+    while (line_buffer[index] != '\0') {
+        form_draw_code_point_at_with_colors(
+            form,
+            (uint8_t)line_buffer[index],
+            x + (index * column_width),
+            y,
+            text_foreground_color(),
+            text_background_color()
+        );
+        ++index;
+    }
+}
+
+static uint8_t workspace_text_line_at(
+    const char *text,
+    uint32_t target_line,
+    char buffer[],
+    uint32_t buffer_size
+) {
+    const char *cursor = text == 0 ? "" : text;
+    uint32_t line = 0U;
+
+    if (buffer_size == 0U) {
+        return 0U;
+    }
+    buffer[0] = '\0';
+    while (source_copy_raw_line(&cursor, buffer, buffer_size)) {
+        if (line == target_line) {
+            return 1U;
+        }
+        ++line;
+    }
+    buffer[0] = '\0';
+    return 0U;
+}
+
+static uint32_t workspace_browser_list_content_top(void) {
+    return BROWSER_LIST_VIEW_TOP + VIEW_CONTENT_INSET + text_line_height();
+}
+
+static uint32_t workspace_browser_list_row_y(uint32_t row) {
+    return workspace_browser_list_content_top() + (row * text_line_height());
+}
+
+static uint32_t workspace_browser_list_selection_line_y(uint32_t row) {
+    uint32_t line_height = text_line_height();
+
+    if (line_height < 2U) {
+        return workspace_browser_list_row_y(row);
+    }
+    return BROWSER_LIST_VIEW_TOP + VIEW_CONTENT_INSET + (((row + 2U) * line_height) - 2U);
+}
+
+static void workspace_clear_browser_list_selection_overlay(
+    const struct recorz_mvp_heap_object *form,
+    uint32_t row
+) {
+    uint32_t width = BROWSER_LIST_VIEW_WIDTH - VIEW_CONTENT_HORIZONTAL_PADDING;
+    uint32_t x = BROWSER_LIST_VIEW_LEFT + VIEW_CONTENT_INSET;
+    uint32_t y = workspace_browser_list_selection_line_y(row);
+
+    if (width == 0U) {
+        return;
+    }
+    form_fill_rect_color(form, x, y, width + 1U, 1U, text_background_color());
+}
+
+static void workspace_draw_browser_list_selection_overlay(
+    const struct recorz_mvp_heap_object *form,
+    uint32_t row
+) {
+    uint32_t width = BROWSER_LIST_VIEW_WIDTH - VIEW_CONTENT_HORIZONTAL_PADDING;
+    uint32_t x = BROWSER_LIST_VIEW_LEFT + VIEW_CONTENT_INSET;
+    uint32_t y = workspace_browser_list_selection_line_y(row);
+
+    form_draw_line_color(form, (int32_t)x, (int32_t)y, (int32_t)(x + width), (int32_t)y, 11393254U);
+}
+
+static void workspace_redraw_browser_list_row(
+    const struct recorz_mvp_heap_object *form,
+    const char *text,
+    uint32_t row
+) {
+    char line_buffer[METHOD_SOURCE_LINE_LIMIT];
+    uint32_t visible_lines = workspace_surface_visible_line_capacity_for_view_height(BROWSER_LIST_VIEW_HEIGHT);
+    uint32_t visible_columns = workspace_surface_visible_column_capacity_for_view_width(BROWSER_LIST_VIEW_WIDTH);
+    uint32_t line_height = text_line_height();
+    uint32_t y;
+
+    if (row >= visible_lines || line_height == 0U) {
+        return;
+    }
+    y = workspace_browser_list_row_y(row);
+    form_fill_rect_color(
+        form,
+        BROWSER_LIST_VIEW_LEFT + 1U,
+        y,
+        BROWSER_LIST_VIEW_WIDTH - 2U,
+        line_height,
+        text_background_color()
+    );
+    if (workspace_text_line_at(text, row, line_buffer, sizeof(line_buffer))) {
+        workspace_draw_text_line_at(
+            form,
+            line_buffer,
+            BROWSER_LIST_VIEW_LEFT + VIEW_CONTENT_INSET,
+            y,
+            visible_columns
+        );
+    }
+}
+
+static void workspace_redraw_browser_list_rows(
+    const struct recorz_mvp_heap_object *form,
+    const char *text,
+    uint32_t first_row,
+    uint32_t row_count
+) {
+    uint32_t visible_lines = workspace_surface_visible_line_capacity_for_view_height(BROWSER_LIST_VIEW_HEIGHT);
+    uint32_t row_end = first_row + row_count;
+    uint32_t row;
+
+    if (first_row >= visible_lines) {
+        return;
+    }
+    if (row_end > visible_lines) {
+        row_end = visible_lines;
+    }
+    for (row = first_row; row < row_end; ++row) {
+        workspace_redraw_browser_list_row(form, text, row);
+    }
+}
+
 static uint8_t workspace_draw_editor_surface_from_image(
     const struct recorz_mvp_heap_object *form,
     const char *source,
@@ -7382,6 +7534,44 @@ static const char *workspace_session_current_text_for_selector(uint16_t selector
         return 0;
     }
     return result.string;
+}
+
+static uint32_t workspace_session_small_integer_for_selector(uint16_t selector, const char *message) {
+    uint16_t session_handle = named_object_handle_for_name("BootWorkspaceSession");
+    struct recorz_mvp_value result;
+
+    if (session_handle == 0U) {
+        return 0U;
+    }
+    result = perform_send_and_pop_result(
+        object_value(session_handle),
+        selector,
+        0U,
+        0,
+        0
+    );
+    return small_integer_u32(result, message);
+}
+
+static uint32_t workspace_session_selected_index(void) {
+    return workspace_session_small_integer_for_selector(
+        RECORZ_MVP_SELECTOR_SELECTED_INDEX,
+        "BootWorkspaceSession selectedIndex did not return a non-negative small integer"
+    );
+}
+
+static uint32_t workspace_session_list_top_line(void) {
+    return workspace_session_small_integer_for_selector(
+        RECORZ_MVP_SELECTOR_LIST_TOP_LINE,
+        "BootWorkspaceSession listTopLine did not return a non-negative small integer"
+    );
+}
+
+static uint32_t workspace_session_visible_list_lines(void) {
+    return workspace_session_small_integer_for_selector(
+        RECORZ_MVP_SELECTOR_VISIBLE_LIST_LINES,
+        "BootWorkspaceSession visibleListLines did not return a non-negative small integer"
+    );
 }
 
 static uint8_t workspace_redraw_image_session_status_only(void) {
@@ -7681,6 +7871,94 @@ static uint8_t workspace_redraw_named_list_widget(
         arguments,
         0
     );
+    return 1U;
+}
+
+static const char *workspace_package_names_visible_text(
+    uint32_t first_index,
+    uint32_t count,
+    char buffer[],
+    uint32_t buffer_size
+);
+
+static uint8_t workspace_scroll_copy_image_session_browser_list(
+    uint32_t old_selected_index,
+    uint32_t old_list_top_line
+) {
+    const struct recorz_mvp_heap_object *form = default_form_object();
+    uint32_t selected_index = workspace_session_selected_index();
+    uint32_t list_top_line = workspace_session_list_top_line();
+    uint32_t visible_lines = workspace_session_visible_list_lines();
+    uint32_t line_height = text_line_height();
+    int32_t top_delta = (int32_t)list_top_line - (int32_t)old_list_top_line;
+    uint32_t content_top = workspace_browser_list_content_top();
+    uint32_t content_height;
+    uint32_t content_width;
+    uint32_t vertical_pixels;
+    const char *visible_text;
+
+    if (visible_lines == 0U || line_height == 0U) {
+        return 0U;
+    }
+    if (selected_index == old_selected_index && list_top_line == old_list_top_line) {
+        return 0U;
+    }
+    if (old_selected_index >= old_list_top_line &&
+        old_selected_index < old_list_top_line + visible_lines) {
+        workspace_clear_browser_list_selection_overlay(form, old_selected_index - old_list_top_line);
+    }
+    visible_text = workspace_package_names_visible_text(
+        list_top_line + 1U,
+        visible_lines,
+        workspace_surface_list_buffer,
+        sizeof(workspace_surface_list_buffer)
+    );
+    if (top_delta == 0) {
+        if (selected_index >= list_top_line && selected_index < list_top_line + visible_lines) {
+            workspace_draw_browser_list_selection_overlay(form, selected_index - list_top_line);
+        }
+        ++render_counter_browser_list_redraws;
+        return 1U;
+    }
+    if ((top_delta > 0 && (uint32_t)top_delta >= visible_lines) ||
+        (top_delta < 0 && (uint32_t)(-top_delta) >= visible_lines) ||
+        BROWSER_LIST_VIEW_HEIGHT <= VIEW_CONTENT_INSET + line_height + 1U) {
+        return 0U;
+    }
+    content_width = BROWSER_LIST_VIEW_WIDTH - 2U;
+    content_height = BROWSER_LIST_VIEW_HEIGHT - (VIEW_CONTENT_INSET + line_height) - 1U;
+    vertical_pixels = (uint32_t)(top_delta < 0 ? -top_delta : top_delta) * line_height;
+    if (content_width == 0U || content_height == 0U || vertical_pixels >= content_height) {
+        return 0U;
+    }
+    form_copy_rect(
+        form,
+        BROWSER_LIST_VIEW_LEFT + 1U,
+        content_top + (top_delta > 0 ? vertical_pixels : 0U),
+        content_width,
+        content_height - vertical_pixels,
+        BROWSER_LIST_VIEW_LEFT + 1U,
+        content_top + (top_delta < 0 ? vertical_pixels : 0U)
+    );
+    if (top_delta > 0) {
+        workspace_redraw_browser_list_rows(
+            form,
+            visible_text,
+            visible_lines - (uint32_t)top_delta,
+            (uint32_t)top_delta
+        );
+    } else {
+        workspace_redraw_browser_list_rows(
+            form,
+            visible_text,
+            0U,
+            (uint32_t)(-top_delta)
+        );
+    }
+    if (selected_index >= list_top_line && selected_index < list_top_line + visible_lines) {
+        workspace_draw_browser_list_selection_overlay(form, selected_index - list_top_line);
+    }
+    ++render_counter_browser_list_redraws;
     return 1U;
 }
 
@@ -11333,6 +11611,8 @@ static void workspace_run_interactive_image_session(
         uint32_t old_cursor_column = 0U;
         uint32_t old_top_line = 0U;
         uint32_t old_left_column = 0U;
+        uint32_t old_browser_selected_index = 0U;
+        uint32_t old_browser_list_top_line = 0U;
 
         if (ch == '\r') {
             saw_carriage_return = 1U;
@@ -11351,6 +11631,9 @@ static void workspace_run_interactive_image_session(
             old_cursor_column = workspace_cursor_column_value();
             old_top_line = workspace_cursor_top_line_value();
             old_left_column = workspace_visible_origin_left_column_value();
+        } else {
+            old_browser_selected_index = workspace_session_selected_index();
+            old_browser_list_top_line = workspace_session_list_top_line();
         }
         render_code = workspace_session_handle_byte_from_image(ch);
         if (render_code == 9U) {
@@ -11367,6 +11650,13 @@ static void workspace_run_interactive_image_session(
                 old_cursor_column,
                 old_top_line,
                 old_left_column)) {
+            continue;
+        }
+        if (render_code == 5U &&
+            workspace_current_view_kind_value(workspace_object) == WORKSPACE_VIEW_PACKAGES &&
+            workspace_scroll_copy_image_session_browser_list(
+                old_browser_selected_index,
+                old_browser_list_top_line)) {
             continue;
         }
         if (render_code == 6U) {

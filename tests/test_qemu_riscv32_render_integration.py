@@ -39,6 +39,7 @@ WORKSPACE_HORIZONTAL_ORIGIN_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_
 WORKSPACE_HORIZONTAL_ORIGIN_SCROLLED_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_horizontal_origin_scrolled_demo.rz"
 BROWSER_SURFACE_EXAMPLE = ROOT / "examples" / "qemu_riscv_browser_surface_demo.rz"
 WORKSPACE_PACKAGE_HOME_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_package_home_demo.rz"
+WORKSPACE_PACKAGE_SCROLL_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_package_scroll_demo.rz"
 WORKSPACE_STATUS_DIRTY_REDRAW_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_status_dirty_redraw_demo.rz"
 
 
@@ -803,6 +804,24 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertGreater(_region_histogram(data, width, 40, 136, 320, 592)[(31, 41, 51)], 600)
         self.assertGreater(_region_histogram(data, width, 40, 136, 320, 592)[(173, 216, 230)], 100)
         self.assertGreater(_region_histogram(data, width, 336, 136, 960, 592)[(31, 41, 51)], 600)
+
+    def test_interactive_package_browser_scrolling_uses_incremental_list_redraw_path(self) -> None:
+        qemu_log, width, height, data = self.render_interactive_example(
+            WORKSPACE_PACKAGE_SCROLL_EXAMPLE,
+            (b"\x1b[B", b"\x1f"),
+        )
+
+        counters = _render_counters(qemu_log)
+        self.assertEqual((width, height), (1024, 768))
+        self.assertNotIn("panic:", qemu_log.replace("\r", ""))
+        self.assertEqual(counters["browser_full"], 1)
+        self.assertGreater(counters["browser_list"], 0)
+        self.assertEqual(counters["editor_full"], 0)
+        self.assertEqual(counters["editor_pane"], 0)
+        self.assertEqual(counters["editor_cursor"], 0)
+        self.assertEqual(counters["editor_scroll"], 0)
+        self.assertGreater(_region_histogram(data, width, 40, 136, 320, 592)[(31, 41, 51)], 600)
+        self.assertGreater(_region_histogram(data, width, 40, 136, 320, 592)[(173, 216, 230)], 100)
 
     def test_interactive_package_browser_can_open_large_tools_package_source_without_blank_tail_screen(self) -> None:
         qemu_log, width, height, data = self.render_interactive_example(
