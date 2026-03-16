@@ -4,6 +4,10 @@ Recorz is an experimental Smalltalk/Strongtalk-inspired system built around a li
 
 Today, Recorz already boots on QEMU RISC-V with framebuffer output, live source loading, snapshots, and an in-image workspace/editor. The long-term goal is a compact but expressive system that remains faithful to classic image-based development while opening room for gradual typing, systems work, hardware description, and capability-oriented isolation.
 
+![In-image Browser/Workspace](assets/images/browser_sreenshot.png)
+
+*The screenshot shows the live package browser and workspace editor running on the RV32 target.*
+
 ## Quick Start
 
 Recorz currently targets QEMU RISC-V first. The main host-side prerequisites are:
@@ -25,10 +29,6 @@ make -C /Users/david/repos/recorz/platform/qemu-riscv32 dev-loop
 ```
 
 `dev-loop` reopens the saved image automatically after `Ctrl-W`, so save/resume feels like one continuous development session. The older one-shot entry remains available as `dev-interactive`.
-
-![In-image Browser/Workspace](assets/images/browser_sreenshot.png)
-
-The screenshot above shows the live package browser and workspace editor.
 
 In the interactive workspace, the primary commands are:
 - `Ctrl-D` do it
