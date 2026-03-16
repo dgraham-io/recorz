@@ -26,6 +26,10 @@ make -C /Users/david/repos/recorz/platform/qemu-riscv32 dev-loop
 
 `dev-loop` reopens the saved image automatically after `Ctrl-W`, so save/resume feels like one continuous development session. The older one-shot entry remains available as `dev-interactive`.
 
+![In-image Browser/Workspace](assets/images/browser_sreenshot.png)
+
+The screenshot above shows the live package browser and workspace editor.
+
 In the interactive workspace, the primary commands are:
 - `Ctrl-D` do it
 - `Ctrl-P` print it
