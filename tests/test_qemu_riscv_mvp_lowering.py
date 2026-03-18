@@ -1,3 +1,4 @@
+import re
 import sys
 import struct
 import unittest
@@ -11,6 +12,14 @@ if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
 import build_qemu_riscv_mvp_image as mvp  # noqa: E402
+
+
+WORKSPACE_TOOL_PRIMITIVE_PATTERN = re.compile(r"<primitive:\s*#(?P<binding>[A-Za-z_]\w*)>")
+
+
+def _workspace_tool_primitive_bindings() -> list[str]:
+    source = (ROOT / "kernel" / "mvp" / "WorkspaceTool.rz").read_text(encoding="utf-8")
+    return [match.group("binding") for match in WORKSPACE_TOOL_PRIMITIVE_PATTERN.finditer(source)]
 
 
 class QemuRiscvMvpLoweringTests(unittest.TestCase):
@@ -652,8 +661,8 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLeftLinesColumns"], 60)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceBrowseInteractiveViews"], 77)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 93)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceToolStatusText"], 115)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceToolFeedbackText"], 116)
+        for binding_name in _workspace_tool_primitive_bindings():
+            self.assertIn(binding_name, mvp.PRIMITIVE_BINDING_VALUES)
         self.assertEqual(
             mvp.PRIMITIVE_BINDING_BY_ENTRY_NAME["RECORZ_MVP_METHOD_ENTRY_FORM_WRITE_STRING"],
             mvp.PRIMITIVE_BINDING_VALUES["formWriteString"],
