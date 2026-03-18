@@ -1,43 +1,45 @@
 RecorzKernelClass: #WorkspaceTool descriptorOrder: 35 objectKindOrder: 35 sourceBootOrder: 29 instanceVariableNames: 'statusText feedbackText name visibleOrigin'
 !
 evaluateCurrent
-    <primitive: #workspaceToolEvaluateCurrent>
+    ^Workspace evaluateCurrent
 !
 printCurrent
     <primitive: #workspaceToolPrintCurrent>
 !
 acceptCurrent
-    <primitive: #workspaceToolAcceptCurrent>
+    ^Workspace acceptCurrent
 !
 revertCurrent
-    <primitive: #workspaceToolRevertCurrent>
+    ^Workspace revertCurrent
 !
 runCurrentTests
-    <primitive: #workspaceToolRunCurrentTests>
+    ^Workspace runCurrentTests
 !
 saveAndReopen
-    <primitive: #workspaceToolSaveAndReopen>
+    ^Workspace saveAndReopen
 !
 saveRecoverySnapshot
-    <primitive: #workspaceToolSaveRecoverySnapshot>
+    ^Workspace saveRecoverySnapshot
 !
 emitRegeneratedBootSource
-    <primitive: #workspaceToolEmitRegeneratedBootSource>
+    ^Workspace emitRegeneratedBootSource
 !
 browseRegeneratedKernelSource
-    <primitive: #workspaceToolBrowseRegeneratedKernelSource>
+    ^Workspace browseRegeneratedKernelSource
 !
 browseRegeneratedBootSource
-    <primitive: #workspaceToolBrowseRegeneratedBootSource>
+    ^Workspace browseRegeneratedBootSource
 !
 browseRegeneratedFileInSource
-    <primitive: #workspaceToolBrowseRegeneratedFileInSource>
+    ^Workspace browseRegeneratedFileInSource
 !
 statusText
-    <primitive: #workspaceToolStatusText>
+    statusText = nil ifTrue: [^''].
+    ^statusText
 !
 feedbackText
-    <primitive: #workspaceToolFeedbackText>
+    feedbackText = nil ifTrue: [^''].
+    ^feedbackText
 !
 namedObjectOrNil: name
     <primitive: #workspaceToolNamedObjectOrNil>

@@ -389,6 +389,44 @@ setFeedbackText: aFeedbackText
     feedbackText := aFeedbackText.
     ^feedbackText
 !
+evaluateCurrent
+    ^Workspace evaluateCurrent
+!
+acceptCurrent
+    ^Workspace acceptCurrent
+!
+revertCurrent
+    ^Workspace revertCurrent
+!
+runCurrentTests
+    ^Workspace runCurrentTests
+!
+saveAndReopen
+    ^Workspace saveAndReopen
+!
+saveRecoverySnapshot
+    ^Workspace saveRecoverySnapshot
+!
+emitRegeneratedBootSource
+    ^Workspace emitRegeneratedBootSource
+!
+browseRegeneratedKernelSource
+    ^Workspace browseRegeneratedKernelSource
+!
+browseRegeneratedBootSource
+    ^Workspace browseRegeneratedBootSource
+!
+browseRegeneratedFileInSource
+    ^Workspace browseRegeneratedFileInSource
+!
+statusText
+    statusText = nil ifTrue: [^''].
+    ^statusText
+!
+feedbackText
+    feedbackText = nil ifTrue: [^''].
+    ^feedbackText
+!
 workspaceName
     ^name
 !
