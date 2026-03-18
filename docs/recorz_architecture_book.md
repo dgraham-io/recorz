@@ -5,6 +5,8 @@
 
 This book is the consolidated architectural reference for **Recorz**, a Smalltalk- and Strongtalk-inspired language and living system intended to scale from a tiny educational implementation to a self-hosting, graphical, bare-metal computing platform with support for low-level programming, hardware description, accelerators, multiprocessing, and future capability-based isolation.
 
+The repository currently sits in the Phase 1 seed implementation: an RV32-first live image with a native workspace/browser and a small host-side compiler/runtime. This book describes the destination architecture, not the present implementation boundary.
+
 This document unifies the major Recorz specifications into a single architectural narrative. It is intended to serve as the top-level design reference for the project.
 
 The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **SHOULD**, **SHOULD NOT**, **RECOMMENDED**, **MAY**, and **OPTIONAL** are to be interpreted as normative requirements.

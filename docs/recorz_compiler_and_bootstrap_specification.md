@@ -5,6 +5,8 @@
 
 This document specifies the intended **compiler architecture, semantic analysis pipeline, subset lowering strategy, image construction flow, and bootstrap process** for Recorz. It complements the Recorz Formal Specification, Recorz Language Specification, and Recorz VM and Object Memory Specification.
 
+The current implementation is a Phase 1 seed compiler and bootstrap path. It supports the present RV32-first live image workflow, but it does not yet realize the full staged architecture described here for gradual typing, restricted subsets, or self-hosting.
+
 This is a design specification, not a fixed implementation manual. It defines normative architectural intent while leaving room for staged implementation and experimentation.
 
 The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **SHOULD**, **SHOULD NOT**, **RECOMMENDED**, **MAY**, and **OPTIONAL** are to be interpreted as normative requirements.
@@ -805,4 +807,3 @@ The Recorz compiler and bootstrap architecture are specified as a live, inspecta
 - SHALL keep non-Recorz bootstrap code minimal and intentionally temporary.
 
 Its purpose is to let Recorz explain and rebuild itself, so that language, runtime, and tools become part of the same living system rather than externally maintained machinery.
-

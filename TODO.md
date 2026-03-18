@@ -1,11 +1,13 @@
 # Recorz TODO
 
 ## Goal
-Build the first native Recorz development UI in the image using a Smalltalk-80-style primitive boundary:
+Phase 1 is to build the first native Recorz development UI in the image using a Smalltalk-80-style primitive boundary:
 
 - a tiny VM/platform surface for bitmap display, cursor/display binding, text scanning, line/shape support, input delivery, and persistence
 - image-owned text composition, editor/browser rendering, tool behavior, and UI structure
 - RV32 as the primary development target, with RV64 kept as a validation target
+
+This TODO tracks the current Phase 1 contract. The broader language, typing, capability, HDL, and self-hosting aspirations in the formal specs are long-term direction, not the current implementation boundary.
 
 The immediate target is not a full window system. It is a credible initial in-image workspace and browser built on the same kind of primitive boundary Smalltalk-80 used.
 
@@ -34,6 +36,17 @@ Reference:
 - [x] Display/input primitive boundary cleaned up around the Smalltalk-80 model
 - [x] Image-owned workspace/browser rendering
 - [x] Real native tool surfaces in the image
+
+## Beyond Phase 1
+These goals remain on the roadmap, but they are not the current shipped contract:
+
+- gradual typing and richer type analysis
+- systems-subset and HDL-subset lowering
+- capability-oriented isolation and sandboxing
+- broader debugger and inspector tooling
+- a mostly self-hosted compiler/toolchain
+- multiprocessing and accelerator direction
+- bare-metal targets beyond the current RV32/QEMU bring-up path
 
 ## Phase 1 - Lock The Primitive Contract
 - [x] Complete Pass 1 from [smalltalk80_ui_extraction_plan.md](/Users/david/repos/recorz/docs/smalltalk80_ui_extraction_plan.md):

@@ -5,6 +5,8 @@
 
 This document defines the intended language, runtime, environment, and platform model for **Recorz**, a Smalltalk- and Strongtalk-derived computing system. It is a design specification, not yet a conformance test suite.
 
+The current codebase implements only a Phase 1 seed subset of this vision: an RV32-first live image with a native workspace/browser, snapshots, and a small host-side compiler/runtime. Everything beyond that seed should be read as intended direction unless a file explicitly says it is current behavior.
+
 The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **SHOULD**, **SHOULD NOT**, **RECOMMENDED**, **MAY**, and **OPTIONAL** in this document are to be interpreted as normative requirements.
 
 ---
@@ -743,4 +745,3 @@ Recorz is specified as a live, image-based, Smalltalk-descended system that:
 - SHALL scale from a small VM to a richer personal computing platform.
 
 Its unifying principle is that one coherent, inspectable system SHOULD span the full stack from ordinary objects to runtime internals to hardware-oriented artifacts.
-

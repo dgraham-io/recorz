@@ -1,6 +1,7 @@
 import unittest
 
 from recorz import ast
+from recorz.model import ParseError
 from recorz.parser import parse_do_it, parse_method
 
 
@@ -20,6 +21,18 @@ class ParserTests(unittest.TestCase):
         self.assertIsInstance(expression.receiver, ast.Identifier)
         self.assertEqual(expression.receiver.name, "stream")
         self.assertEqual([message.selector for message in expression.messages], ["nextPutAll:", "cr"])
+
+    def test_unterminated_string_literal_raises_parse_error(self) -> None:
+        with self.assertRaisesRegex(ParseError, "Unterminated string literal"):
+            parse_do_it("'unterminated")
+
+    def test_unterminated_comment_raises_parse_error(self) -> None:
+        with self.assertRaisesRegex(ParseError, "Unterminated comment"):
+            parse_do_it('"unterminated')
+
+    def test_unexpected_character_raises_parse_error(self) -> None:
+        with self.assertRaisesRegex(ParseError, r"Unexpected character '!'"):
+            parse_do_it("!")
 
 
 if __name__ == "__main__":
