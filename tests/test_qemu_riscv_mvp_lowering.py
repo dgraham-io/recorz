@@ -660,7 +660,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLinesColumns"], 59)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLeftLinesColumns"], 60)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceBrowseInteractiveViews"], 77)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 93)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 96)
         for binding_name in _workspace_tool_primitive_bindings():
             self.assertIn(binding_name, mvp.PRIMITIVE_BINDING_VALUES)
         self.assertEqual(
@@ -1079,6 +1079,24 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_PACKAGE_SOURCE_TO_OPEN_FOR_PRIOR_TARGET", 340),
                 ("RECORZ_MVP_SELECTOR_SELECTED_INDEX", 341),
                 ("RECORZ_MVP_SELECTOR_LIST_TOP_LINE", 342),
+                ("RECORZ_MVP_SELECTOR_BROWSER_RETURN_VIEW_KIND", 343),
+                ("RECORZ_MVP_SELECTOR_SET_BROWSER_RETURN_VIEW_KIND", 344),
+                ("RECORZ_MVP_SELECTOR_BROWSER_LIST_VIEW_ACTIVE", 345),
+                ("RECORZ_MVP_SELECTOR_OPENING_MENU_OPTION_COUNT", 346),
+                ("RECORZ_MVP_SELECTOR_CURRENT_LIST_COUNT", 347),
+                ("RECORZ_MVP_SELECTOR_PREPARE_LIST_SELECTION_FOR_COUNT", 348),
+                ("RECORZ_MVP_SELECTOR_PREPARE_BROWSER_STATE_FOR_MODE", 349),
+                ("RECORZ_MVP_SELECTOR_CURRENT_BROWSER_ITEMS_VISIBLE_FROM_COUNT", 350),
+                ("RECORZ_MVP_SELECTOR_OPENING_MENU_ITEMS_VISIBLE_FROM_COUNT", 351),
+                ("RECORZ_MVP_SELECTOR_CURRENT_BROWSER_HEADER_TEXT", 352),
+                ("RECORZ_MVP_SELECTOR_CURRENT_BROWSER_SOURCE_TEXT", 353),
+                ("RECORZ_MVP_SELECTOR_SELECTED_CLASS_NAME", 354),
+                ("RECORZ_MVP_SELECTOR_OPEN_SELECTED_OPENING_MENU_ITEM", 355),
+                ("RECORZ_MVP_SELECTOR_OPEN_SELECTED_CLASS_SOURCE", 356),
+                ("RECORZ_MVP_SELECTOR_CLASS_SOURCE_TO_OPEN_FOR_PRIOR_TARGET", 357),
+                ("RECORZ_MVP_SELECTOR_CLASS_COUNT", 358),
+                ("RECORZ_MVP_SELECTOR_CLASS_NAME_AT", 359),
+                ("RECORZ_MVP_SELECTOR_CLASS_NAMES_VISIBLE_FROM_COUNT", 360),
             ],
         )
 
@@ -2454,6 +2472,18 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             header,
         )
         self.assertIn(
+            f"RECORZ_MVP_PRIMITIVE_WORKSPACE_CLASS_COUNT = {mvp.PRIMITIVE_BINDING_VALUES['workspaceClassCount']},",
+            header,
+        )
+        self.assertIn(
+            f"RECORZ_MVP_PRIMITIVE_WORKSPACE_CLASS_NAME_AT = {mvp.PRIMITIVE_BINDING_VALUES['workspaceClassNameAt']},",
+            header,
+        )
+        self.assertIn(
+            f"RECORZ_MVP_PRIMITIVE_WORKSPACE_CLASS_NAMES_VISIBLE_FROM_COUNT = {mvp.PRIMITIVE_BINDING_VALUES['workspaceClassNamesVisibleFromCount']},",
+            header,
+        )
+        self.assertIn(
             f"RECORZ_MVP_PRIMITIVE_WORKSPACE_RERUN = {mvp.PRIMITIVE_BINDING_VALUES['workspaceRerun']},",
             header,
         )
@@ -2606,6 +2636,19 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertIn(
             "[RECORZ_MVP_PRIMITIVE_KERNEL_INSTALLER_SAVE_SNAPSHOT] = execute_entry_kernel_installer_save_snapshot,",
+            header,
+        )
+        self.assertIn(
+            "[RECORZ_MVP_PRIMITIVE_WORKSPACE_CLASS_COUNT] = execute_entry_workspace_class_count,",
+            header,
+        )
+        self.assertIn(
+            "[RECORZ_MVP_PRIMITIVE_WORKSPACE_CLASS_NAME_AT] = execute_entry_workspace_class_name_at,",
+            header,
+        )
+        self.assertIn(
+            "[RECORZ_MVP_PRIMITIVE_WORKSPACE_CLASS_NAMES_VISIBLE_FROM_COUNT] = "
+            "execute_entry_workspace_class_names_visible_from_count,",
             header,
         )
         self.assertIn(

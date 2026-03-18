@@ -183,6 +183,15 @@ insertCodePoint: codePoint
 deleteBackward
     <primitive: #workspaceDeleteBackward>
 !
+classCount
+    <primitive: #workspaceClassCount>
+!
+classNameAt: index
+    <primitive: #workspaceClassNameAt>
+!
+classNamesVisibleFrom: firstIndex count: lineCount
+    <primitive: #workspaceClassNamesVisibleFromCount>
+!
 cursor
     ^WorkspaceCursor
 !

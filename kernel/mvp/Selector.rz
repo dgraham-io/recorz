@@ -684,3 +684,39 @@ RecorzKernelSelector: #selectedIndex order: 340
 !
 RecorzKernelSelector: #listTopLine order: 341
 !
+RecorzKernelSelector: #browserReturnViewKind order: 342
+!
+RecorzKernelSelector: #setBrowserReturnViewKind: order: 343
+!
+RecorzKernelSelector: #browserListViewActive order: 344
+!
+RecorzKernelSelector: #openingMenuOptionCount order: 345
+!
+RecorzKernelSelector: #currentListCount order: 346
+!
+RecorzKernelSelector: #prepareListSelectionForCount: order: 347
+!
+RecorzKernelSelector: #prepareBrowserStateForMode: order: 348
+!
+RecorzKernelSelector: #currentBrowserItemsVisibleFrom:count: order: 349
+!
+RecorzKernelSelector: #openingMenuItemsVisibleFrom:count: order: 350
+!
+RecorzKernelSelector: #currentBrowserHeaderText order: 351
+!
+RecorzKernelSelector: #currentBrowserSourceText order: 352
+!
+RecorzKernelSelector: #selectedClassName order: 353
+!
+RecorzKernelSelector: #openSelectedOpeningMenuItem order: 354
+!
+RecorzKernelSelector: #openSelectedClassSource order: 355
+!
+RecorzKernelSelector: #classSourceToOpenFor:priorTarget: order: 356
+!
+RecorzKernelSelector: #classCount order: 357
+!
+RecorzKernelSelector: #classNameAt: order: 358
+!
+RecorzKernelSelector: #classNamesVisibleFrom:count: order: 359
+!

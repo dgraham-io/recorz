@@ -190,7 +190,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_TOOL
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_LIST_TOP_LINE
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_CLASS_NAMES_VISIBLE_FROM_COUNT
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -223,6 +223,8 @@
 #define WORKSPACE_VIEW_REGENERATED_KERNEL_SOURCE 17U
 #define WORKSPACE_VIEW_INPUT_MONITOR 18U
 #define WORKSPACE_VIEW_REGENERATED_FILE_IN_SOURCE 19U
+#define WORKSPACE_VIEW_OPENING_MENU 20U
+#define WORKSPACE_VIEW_INTERACTIVE_CLASSES 21U
 
 enum recorz_mvp_value_kind {
     RECORZ_MVP_VALUE_NIL = 0,
@@ -814,7 +816,9 @@ static uint8_t workspace_view_kind_uses_image_session(uint32_t view_kind) {
         case WORKSPACE_VIEW_CLASS_METHOD:
         case WORKSPACE_VIEW_CLASS_SOURCE:
         case WORKSPACE_VIEW_PACKAGE_SOURCE:
+        case WORKSPACE_VIEW_OPENING_MENU:
         case WORKSPACE_VIEW_PACKAGES:
+        case WORKSPACE_VIEW_INTERACTIVE_CLASSES:
         case WORKSPACE_VIEW_REGENERATED_BOOT_SOURCE:
         case WORKSPACE_VIEW_REGENERATED_KERNEL_SOURCE:
         case WORKSPACE_VIEW_INPUT_MONITOR:
@@ -826,7 +830,16 @@ static uint8_t workspace_view_kind_uses_image_session(uint32_t view_kind) {
 }
 
 static uint32_t workspace_image_session_mode_for_view_kind(uint32_t view_kind) {
-    return view_kind == WORKSPACE_VIEW_PACKAGES ? 0U : 1U;
+    if (view_kind == WORKSPACE_VIEW_OPENING_MENU) {
+        return 0U;
+    }
+    if (view_kind == WORKSPACE_VIEW_PACKAGES) {
+        return 2U;
+    }
+    if (view_kind == WORKSPACE_VIEW_INTERACTIVE_CLASSES) {
+        return 3U;
+    }
+    return 1U;
 }
 
 static void panic_put_string_sample(const char *text) {
@@ -1468,6 +1481,12 @@ static const char *selector_name(uint16_t selector) {
             return "packageNameAt:";
         case RECORZ_MVP_SELECTOR_PACKAGE_NAMES_VISIBLE_FROM_COUNT:
             return "packageNamesVisibleFrom:count:";
+        case RECORZ_MVP_SELECTOR_CLASS_COUNT:
+            return "classCount";
+        case RECORZ_MVP_SELECTOR_CLASS_NAME_AT:
+            return "classNameAt:";
+        case RECORZ_MVP_SELECTOR_CLASS_NAMES_VISIBLE_FROM_COUNT:
+            return "classNamesVisibleFrom:count:";
         case RECORZ_MVP_SELECTOR_MOVE_CURSOR_LEFT:
             return "moveCursorLeft";
         case RECORZ_MVP_SELECTOR_MOVE_CURSOR_RIGHT:
@@ -1628,6 +1647,36 @@ static const char *selector_name(uint16_t selector) {
             return "rememberPlainWorkspaceStateIfNeeded";
         case RECORZ_MVP_SELECTOR_PACKAGE_SOURCE_TO_OPEN_FOR_PRIOR_TARGET:
             return "packageSourceToOpenFor:priorTarget:";
+        case RECORZ_MVP_SELECTOR_BROWSER_RETURN_VIEW_KIND:
+            return "browserReturnViewKind";
+        case RECORZ_MVP_SELECTOR_SET_BROWSER_RETURN_VIEW_KIND:
+            return "setBrowserReturnViewKind:";
+        case RECORZ_MVP_SELECTOR_BROWSER_LIST_VIEW_ACTIVE:
+            return "browserListViewActive";
+        case RECORZ_MVP_SELECTOR_OPENING_MENU_OPTION_COUNT:
+            return "openingMenuOptionCount";
+        case RECORZ_MVP_SELECTOR_CURRENT_LIST_COUNT:
+            return "currentListCount";
+        case RECORZ_MVP_SELECTOR_PREPARE_LIST_SELECTION_FOR_COUNT:
+            return "prepareListSelectionForCount:";
+        case RECORZ_MVP_SELECTOR_PREPARE_BROWSER_STATE_FOR_MODE:
+            return "prepareBrowserStateForMode:";
+        case RECORZ_MVP_SELECTOR_CURRENT_BROWSER_ITEMS_VISIBLE_FROM_COUNT:
+            return "currentBrowserItemsVisibleFrom:count:";
+        case RECORZ_MVP_SELECTOR_OPENING_MENU_ITEMS_VISIBLE_FROM_COUNT:
+            return "openingMenuItemsVisibleFrom:count:";
+        case RECORZ_MVP_SELECTOR_CURRENT_BROWSER_HEADER_TEXT:
+            return "currentBrowserHeaderText";
+        case RECORZ_MVP_SELECTOR_CURRENT_BROWSER_SOURCE_TEXT:
+            return "currentBrowserSourceText";
+        case RECORZ_MVP_SELECTOR_SELECTED_CLASS_NAME:
+            return "selectedClassName";
+        case RECORZ_MVP_SELECTOR_OPEN_SELECTED_OPENING_MENU_ITEM:
+            return "openSelectedOpeningMenuItem";
+        case RECORZ_MVP_SELECTOR_OPEN_SELECTED_CLASS_SOURCE:
+            return "openSelectedClassSource";
+        case RECORZ_MVP_SELECTOR_CLASS_SOURCE_TO_OPEN_FOR_PRIOR_TARGET:
+            return "classSourceToOpenFor:priorTarget:";
     }
     return "unknown";
 }
@@ -8029,6 +8078,77 @@ static void workspace_render_class_browser(
 
 static uint32_t workspace_package_count(void) {
     return package_count;
+}
+
+static uint32_t workspace_class_count(void) {
+    uint8_t kind;
+    uint32_t count = 0U;
+
+    for (kind = 1U; kind <= MAX_OBJECT_KIND; ++kind) {
+        if (class_descriptor_handles_by_kind[kind] != 0U) {
+            ++count;
+        }
+    }
+    return count + (uint32_t)dynamic_class_count;
+}
+
+static const char *workspace_class_name_at_index(uint32_t one_based_index) {
+    uint8_t kind;
+    uint32_t remaining;
+
+    if (one_based_index == 0U) {
+        return 0;
+    }
+    remaining = one_based_index;
+    for (kind = 1U; kind <= MAX_OBJECT_KIND; ++kind) {
+        if (class_descriptor_handles_by_kind[kind] == 0U) {
+            continue;
+        }
+        if (remaining == 1U) {
+            return object_kind_name(kind);
+        }
+        --remaining;
+    }
+    if (remaining == 0U || remaining > (uint32_t)dynamic_class_count) {
+        return 0;
+    }
+    return dynamic_classes[remaining - 1U].class_name;
+}
+
+static const char *workspace_class_names_visible_text(
+    uint32_t first_index,
+    uint32_t count,
+    char buffer[],
+    uint32_t buffer_size
+) {
+    uint32_t offset = 0U;
+    uint32_t index;
+
+    if (buffer_size == 0U) {
+        return "";
+    }
+    buffer[0] = '\0';
+    if (count == 0U) {
+        return buffer;
+    }
+    if (first_index == 0U) {
+        first_index = 1U;
+    }
+    if (first_index > workspace_class_count()) {
+        return buffer;
+    }
+    for (index = first_index; index < first_index + count; ++index) {
+        const char *class_name = workspace_class_name_at_index(index);
+
+        if (class_name == 0) {
+            break;
+        }
+        if (offset != 0U) {
+            append_text_checked(buffer, buffer_size, &offset, "\n");
+        }
+        append_text_checked(buffer, buffer_size, &offset, class_name);
+    }
+    return buffer;
 }
 
 static const char *workspace_package_name_at_index(uint32_t one_based_index) {
@@ -19176,7 +19296,15 @@ static void regenerated_boot_source_emit_view_restore(
         regenerated_boot_source_emit_text(emitter, "Workspace reopen.\n");
         return;
     }
+    if (view_kind_value.integer == WORKSPACE_VIEW_OPENING_MENU) {
+        regenerated_boot_source_emit_text(emitter, "Workspace developmentHome.\n");
+        return;
+    }
     if (view_kind_value.integer == WORKSPACE_VIEW_CLASSES) {
+        regenerated_boot_source_emit_text(emitter, "Workspace browseClasses.\n");
+        return;
+    }
+    if (view_kind_value.integer == WORKSPACE_VIEW_INTERACTIVE_CLASSES) {
         regenerated_boot_source_emit_text(emitter, "Workspace browseClasses.\n");
         return;
     }
@@ -19592,7 +19720,7 @@ static const char *regenerated_file_in_source_text(void) {
 }
 
 static const char *development_home_initial_source_text(void) {
-    return "Workspace browsePackagesInteractive.";
+    return "Workspace developmentHome.";
 }
 
 static void execute_entry_kernel_installer_compiled_method_word0_word1_word2_word3_instruction_count(
@@ -20209,6 +20337,72 @@ static void execute_entry_workspace_package_count(
     push(small_integer_value((int32_t)workspace_package_count()));
 }
 
+static void execute_entry_workspace_class_count(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    push(small_integer_value((int32_t)workspace_class_count()));
+}
+
+static void execute_entry_workspace_class_name_at(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const char *class_name;
+    uint32_t index;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    index = small_integer_u32(
+        arguments[0],
+        "Workspace classNameAt: expects a positive small integer"
+    );
+    class_name = workspace_class_name_at_index(index);
+    if (class_name == 0) {
+        push(string_value(""));
+        return;
+    }
+    push(string_value(class_name));
+}
+
+static void execute_entry_workspace_class_names_visible_from_count(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint32_t first_index;
+    uint32_t count;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    first_index = small_integer_u32(
+        arguments[0],
+        "Workspace classNamesVisibleFrom:count: expects a positive first index"
+    );
+    count = small_integer_u32(
+        arguments[1],
+        "Workspace classNamesVisibleFrom:count: expects a non-negative line count"
+    );
+    push(string_value(runtime_string_intern_copy(
+        workspace_class_names_visible_text(
+            first_index,
+            count,
+            workspace_surface_list_buffer,
+            sizeof(workspace_surface_list_buffer)
+        ))));
+}
+
 static void execute_entry_workspace_package_name_at(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -20605,7 +20799,7 @@ static void execute_entry_workspace_browse_packages_interactive(
 ) {
     (void)arguments;
     (void)text;
-    workspace_run_interactive_image_session(object, 0U);
+    workspace_run_interactive_image_session(object, 2U);
     push(receiver);
 }
 
@@ -21152,8 +21346,39 @@ static void execute_entry_workspace_development_home(
     }
     if (seed_initial_source) {
         workspace_remember_current_source(object, development_home_initial_source_text());
+        heap_set_field(
+            heap_handle_for_object(object),
+            workspace_current_view_kind_field_index(object),
+            small_integer_value((int32_t)WORKSPACE_VIEW_OPENING_MENU)
+        );
+        heap_set_field(
+            heap_handle_for_object(object),
+            workspace_current_target_name_field_index(object),
+            nil_value()
+        );
+    } else if (view_kind_value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER ||
+               (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_NONE) {
+        heap_set_field(
+            heap_handle_for_object(object),
+            workspace_current_view_kind_field_index(object),
+            small_integer_value((int32_t)WORKSPACE_VIEW_OPENING_MENU)
+        );
+        heap_set_field(
+            heap_handle_for_object(object),
+            workspace_current_target_name_field_index(object),
+            nil_value()
+        );
     }
-    workspace_present_image_session(object, 0U);
+    view_kind_value = heap_get_field(object, workspace_current_view_kind_field_index(object));
+    if (view_kind_value.kind == RECORZ_MVP_VALUE_SMALL_INTEGER &&
+        workspace_view_kind_uses_image_session((uint32_t)view_kind_value.integer)) {
+        workspace_present_image_session(
+            object,
+            workspace_image_session_mode_for_view_kind((uint32_t)view_kind_value.integer)
+        );
+    } else {
+        workspace_present_image_session(object, 0U);
+    }
     push(receiver);
 }
 
@@ -21187,9 +21412,20 @@ static void execute_entry_workspace_interactive_input_monitor(
     const struct recorz_mvp_value arguments[],
     const char *text
 ) {
+    struct recorz_mvp_value view_kind_value;
+
     (void)arguments;
     (void)text;
-    workspace_run_interactive_image_session(object, 1U);
+    view_kind_value = heap_get_field(object, workspace_current_view_kind_field_index(object));
+    if (view_kind_value.kind == RECORZ_MVP_VALUE_SMALL_INTEGER &&
+        workspace_view_kind_uses_image_session((uint32_t)view_kind_value.integer)) {
+        workspace_run_interactive_image_session(
+            object,
+            workspace_image_session_mode_for_view_kind((uint32_t)view_kind_value.integer)
+        );
+    } else {
+        workspace_run_interactive_image_session(object, 1U);
+    }
     push(receiver);
 }
 

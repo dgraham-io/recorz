@@ -2869,7 +2869,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("FILEIN: CTRL-Q", output)
             self.assertNotIn("panic:", output)
 
-    def test_workspace_development_home_boot_opens_the_interactive_editor_with_a_starter_command(self) -> None:
+    def test_workspace_development_home_boot_opens_the_opening_menu_and_workspace_editor(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-boot-") as temp_dir:
             build_dir = Path(temp_dir)
             elf_path = _build_elf(build_dir, WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE)
@@ -2900,12 +2900,12 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 text=True,
             )
             try:
-                output = _read_until(process, "Workspace browsePackagesInteractive.", timeout=8.0)
+                output = _read_until(process, "OPENING MENU", timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
-                process.stdin.write("\x0f")
+                process.stdin.write("\x18")
                 process.stdin.flush()
-                time.sleep(1.0)
+                output += _read_until_workspace_input_ready(process, timeout=8.0)
                 if process.poll() is None:
                     process.kill()
                 process.wait(timeout=5.0)
@@ -2920,9 +2920,124 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     process.stdin.close()
 
             output = output.replace("\r", "")
-            self.assertIn("VIEW: INPUT", output)
-            self.assertIn("Workspace browsePackagesInteractive.", output)
-            self.assertIn("CLOSE: CTRL-O", output)
+            self.assertIn("OPENING MENU", output)
+            self.assertIn("Workspace", output)
+            self.assertIn("Class Browser", output)
+            self.assertIn("Project Browser", output)
+            self.assertTrue("VIEW: INPUT" in output or "STATUS:" in output)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_development_home_menu_can_open_the_project_browser(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-project-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "OPENING MENU", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("\x0e\x0e\x18")
+                process.stdin.flush()
+                output += _read_until(process, "INTERACTIVE PACKAGE LIST", timeout=8.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("OPENING MENU", output)
+            self.assertIn("INTERACTIVE PACKAGE LIST", output)
+            self.assertIn("opens source.", output)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_development_home_menu_can_open_the_class_browser(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-class-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "OPENING MENU", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("\x0e\x18")
+                process.stdin.flush()
+                output += _read_until(process, "INTERACTIVE CLASS LIST", timeout=8.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("OPENING MENU", output)
+            self.assertIn("INTERACTIVE CLASS LIST", output)
+            self.assertIn("Class", output)
+            self.assertIn("Workspace", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_browse_packages_interactive_can_edit_a_package_and_return(self) -> None:

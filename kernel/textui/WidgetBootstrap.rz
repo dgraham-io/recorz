@@ -440,6 +440,21 @@ visibleOrigin
         visibleOrigin setVisibleOriginTop: 0 left: 0].
     ^visibleOrigin
 !
+browserReturnViewKind
+    | state |
+    state := self namedObjectOrNil: 'BootWorkspaceBrowserReturnState'.
+    state = nil ifTrue: [^nil].
+    ^state contents
+!
+setBrowserReturnViewKind: aViewKind
+    | state |
+    state := self namedObjectOrNil: 'BootWorkspaceBrowserReturnState'.
+    state = nil ifTrue: [
+        state := (KernelInstaller classNamed: 'WorkspaceReturnState') new.
+        KernelInstaller rememberObject: state named: 'BootWorkspaceBrowserReturnState'].
+    state setContents: aViewKind cursor: nil selection: nil visibleOrigin: nil.
+    ^aViewKind
+!
 visibleLeftColumn
     | origin |
     origin := self visibleOrigin.
@@ -529,7 +544,7 @@ dispatchWorkspaceCommandOnForm: aByte
     ^0
 !
 dispatchSourceEditorCommandOnForm: aByte
-    | viewKind plainState |
+    | viewKind plainState returnViewKind |
     aByte = self acceptCommandByte ifTrue: [self acceptCurrent. ^1].
     aByte = self revertCommandByte ifTrue: [self revertCurrent. ^1].
     aByte = self runTestsCommandByte ifTrue: [self runCurrentTests. ^1].
@@ -546,7 +561,12 @@ dispatchSourceEditorCommandOnForm: aByte
         viewKind := Workspace currentViewKind.
         viewKind = 5 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
         viewKind = 7 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
-        viewKind = 8 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
+        viewKind = 8 ifTrue: [
+            returnViewKind := self browserReturnViewKind.
+            returnViewKind = 21 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 21. ^4].
+            Workspace setCurrentTargetName: nil.
+            Workspace setCurrentViewKind: 14.
+            ^4].
         viewKind = 13 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
         viewKind = 16 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
         viewKind = 17 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
@@ -813,34 +833,38 @@ KernelInstaller rememberObject: ((KernelInstaller classNamed: 'BrowserSurface') 
 RecorzKernelClass: #WorkspaceSession superclass: #Object package: 'TextUI' instanceVariableNames: 'workspace selected listTop escape'
 !
 openOn: aWorkspace mode: aMode
-    | count |
+    | tool |
     workspace := aWorkspace.
     escape := 0.
     aMode = 0 ifTrue: [
-        selected = nil ifTrue: [selected := 0].
-        listTop = nil ifTrue: [listTop := 0].
-        count := workspace packageCount.
-        count = 0 ifTrue: [selected := 0].
-        count > 0 ifTrue: [
-            selected < 0 ifTrue: [selected := 0].
-            selected > (count - 1) ifTrue: [selected := count - 1]].
-        listTop < 0 ifTrue: [listTop := 0].
+        workspace setCurrentViewKind: 20.
+        workspace setCurrentTargetName: nil.
+        tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+        tool setBrowserReturnViewKind: nil.
+        self prepareBrowserStateForMode: 0.
+        Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: Workspace visibleTopLine.
+        Workspace collapseSelectionToCursor.
+        Workspace setVisibleOriginTop: 0 left: 0.
+        ^4].
+    aMode = 2 ifTrue: [
         workspace setCurrentViewKind: 14.
         workspace setCurrentTargetName: nil.
+        self prepareBrowserStateForMode: 2.
+        Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: Workspace visibleTopLine.
+        Workspace collapseSelectionToCursor.
+        Workspace setVisibleOriginTop: 0 left: 0.
+        ^4].
+    aMode = 3 ifTrue: [
+        workspace setCurrentViewKind: 21.
+        workspace setCurrentTargetName: nil.
+        self prepareBrowserStateForMode: 3.
         Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: Workspace visibleTopLine.
         Workspace collapseSelectionToCursor.
         Workspace setVisibleOriginTop: 0 left: 0.
         ^4].
     workspace currentViewKind = nil ifTrue: [workspace setCurrentViewKind: 18].
-    workspace currentViewKind = 14 ifTrue: [
-        selected = nil ifTrue: [selected := 0].
-        listTop = nil ifTrue: [listTop := 0].
-        count := workspace packageCount.
-        count = 0 ifTrue: [selected := 0].
-        count > 0 ifTrue: [
-            selected < 0 ifTrue: [selected := 0].
-            selected > (count - 1) ifTrue: [selected := count - 1]].
-        listTop < 0 ifTrue: [listTop := 0].
+    self browserListViewActive ifTrue: [
+        self prepareBrowserStateForMode: 1.
         ^4].
     self sourceEditorViewActive ifFalse: [
         workspace currentViewKind = 18 ifFalse: [
@@ -851,13 +875,13 @@ openOn: aWorkspace mode: aMode
     ^1
 !
 redrawOnForm: form
-    workspace currentViewKind = 14 ifTrue: [^self redrawBrowserOnForm: form].
+    self browserListViewActive ifTrue: [^self redrawBrowserOnForm: form].
     ^self redrawEditorOnForm: form
 !
 redrawBrowserOnForm: form
     | headerWidget listWidget sourceWidget statusWidget visibleLines items headerView listView sourceView statusView statusText feedbackText |
     visibleLines := self visibleListLines.
-    items := workspace packageNamesVisibleFrom: listTop + 1 count: visibleLines.
+    items := self currentBrowserItemsVisibleFrom: listTop + 1 count: visibleLines.
     Display clear.
     headerView := KernelInstaller objectNamed: 'BootBrowserHeaderView'.
     listView := KernelInstaller objectNamed: 'BootBrowserListView'.
@@ -868,14 +892,14 @@ redrawBrowserOnForm: form
     sourceView invalidate.
     statusView invalidate.
     headerWidget := KernelInstaller objectNamed: 'BootBrowserHeaderWidget'.
-    headerWidget setView: headerView text: 'PACKAGES'.
+    headerWidget setView: headerView text: self currentBrowserHeaderText.
     headerWidget redrawOnForm: form.
     listWidget := KernelInstaller objectNamed: 'BootBrowserListWidget'.
     listWidget setView: listView items: items selectedIndex: selected - listTop topLine: 0.
     listWidget takeFocus.
     listWidget redrawOnForm: form.
     sourceWidget := KernelInstaller objectNamed: 'BootBrowserSourceWidget'.
-    sourceWidget setView: sourceView text: 'Arrows move. Ctrl-B/Ctrl-V and PgUp/PgDn page. Enter or Ctrl-X opens source.' cursor: Workspace cursor selection: Workspace selection.
+    sourceWidget setView: sourceView text: self currentBrowserSourceText cursor: Workspace cursor selection: Workspace selection.
     sourceWidget redrawOnForm: form.
     statusWidget := KernelInstaller objectNamed: 'BootBrowserStatusWidget'.
     statusText := self currentStatusText.
@@ -932,6 +956,74 @@ visibleListLines
     lineHeight < 1 ifTrue: [^0].
     ^usable / lineHeight
 !
+browserListViewActive
+    | viewKind |
+    viewKind := workspace currentViewKind.
+    viewKind = 14 ifTrue: [^true].
+    viewKind = 20 ifTrue: [^true].
+    viewKind = 21 ifTrue: [^true].
+    ^false
+!
+openingMenuOptionCount
+    ^3
+!
+currentListCount
+    | viewKind |
+    viewKind := workspace currentViewKind.
+    viewKind = 20 ifTrue: [^self openingMenuOptionCount].
+    viewKind = 21 ifTrue: [^workspace classCount].
+    ^workspace packageCount
+!
+prepareListSelectionForCount: count
+    selected = nil ifTrue: [selected := 0].
+    listTop = nil ifTrue: [listTop := 0].
+    count = 0 ifTrue: [selected := 0].
+    count > 0 ifTrue: [
+        selected < 0 ifTrue: [selected := 0].
+        selected > (count - 1) ifTrue: [selected := count - 1]].
+    listTop < 0 ifTrue: [listTop := 0].
+    ^self
+!
+prepareBrowserStateForMode: aMode
+    aMode = 0 ifTrue: [selected := 0. listTop := 0. ^self].
+    aMode = 2 ifTrue: [selected := 0. listTop := 0].
+    aMode = 3 ifTrue: [selected := 0. listTop := 0].
+    ^self prepareListSelectionForCount: self currentListCount
+!
+currentBrowserItemsVisibleFrom: firstIndex count: lineCount
+    workspace currentViewKind = 20 ifTrue: [^self openingMenuItemsVisibleFrom: firstIndex count: lineCount].
+    workspace currentViewKind = 21 ifTrue: [^workspace classNamesVisibleFrom: firstIndex count: lineCount].
+    ^workspace packageNamesVisibleFrom: firstIndex count: lineCount
+!
+openingMenuItemsVisibleFrom: firstIndex count: lineCount
+    lineCount < 1 ifTrue: [^''].
+    firstIndex < 1 ifTrue: [firstIndex := 1].
+    firstIndex > 3 ifTrue: [^''].
+    firstIndex = 1 ifTrue: [
+        lineCount = 1 ifTrue: [^'Workspace'].
+        lineCount = 2 ifTrue: [^'Workspace
+Class Browser'].
+        ^'Workspace
+Class Browser
+Project Browser'].
+    firstIndex = 2 ifTrue: [
+        lineCount = 1 ifTrue: [^'Class Browser'].
+        ^'Class Browser
+Project Browser'].
+    ^'Project Browser'
+!
+currentBrowserHeaderText
+    workspace currentViewKind = 20 ifTrue: [^'OPENING MENU'].
+    workspace currentViewKind = 21 ifTrue: [^'CLASSES'].
+    ^'PACKAGES'
+!
+currentBrowserSourceText
+    workspace currentViewKind = 20 ifTrue: [
+        ^'Choose a starting view. Enter or Ctrl-X opens the selected item.'].
+    workspace currentViewKind = 21 ifTrue: [
+        ^'Arrows move. Ctrl-B/Ctrl-V and PgUp/PgDn page. Enter or Ctrl-X opens class source.'].
+    ^'Arrows move. Ctrl-B/Ctrl-V and PgUp/PgDn page. Enter or Ctrl-X opens source.'
+!
 selectedIndex
     selected = nil ifTrue: [selected := 0].
     ^selected
@@ -942,7 +1034,7 @@ listTopLine
 !
 moveListSelectionBy: delta
     | visibleLines nextIndex count |
-    count := workspace packageCount.
+    count := self currentListCount.
     count = 0 ifTrue: [^5].
     nextIndex := selected + delta.
     nextIndex < 0 ifTrue: [nextIndex := 0].
@@ -966,6 +1058,10 @@ moveListSelectionPageBy: delta
 selectedPackageName
     workspace packageCount = 0 ifTrue: [^''].
     ^workspace packageNameAt: selected + 1
+!
+selectedClassName
+    workspace classCount = 0 ifTrue: [^''].
+    ^workspace classNameAt: selected + 1
 !
 updateToolStatus
     ^self
@@ -995,7 +1091,9 @@ currentStatusText
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
     tool statusText size > 0 ifTrue: [^tool statusText].
     viewKind := workspace currentViewKind.
+    viewKind = 20 ifTrue: [^'OPENING MENU'].
     viewKind = 14 ifTrue: [^'INTERACTIVE PACKAGE LIST'].
+    viewKind = 21 ifTrue: [^'INTERACTIVE CLASS LIST'].
     workspace isModified ifTrue: [^'SOURCE EDITOR :: MODIFIED'].
     viewKind = 5 ifTrue: [^'METHOD SOURCE :: SOURCE EDITOR READY'].
     viewKind = 7 ifTrue: [^'CLASS METHOD :: SOURCE EDITOR READY'].
@@ -1011,7 +1109,9 @@ currentFeedbackText
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
     tool feedbackText size > 0 ifTrue: [^tool feedbackText].
     viewKind := workspace currentViewKind.
+    viewKind = 20 ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  X SELECT  O CLOSE'].
     viewKind = 14 ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  X OPEN  O CLOSE'].
+    viewKind = 21 ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  X OPEN  O CLOSE'].
     viewKind = 5 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
     viewKind = 7 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
     viewKind = 8 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
@@ -1056,14 +1156,14 @@ scrollEditorPageBy: delta
     ^6
 !
 moveListSelectionToVisibleTop
-    workspace packageCount = 0 ifTrue: [^5].
+    self currentListCount = 0 ifTrue: [^5].
     selected := listTop.
     selected < 0 ifTrue: [selected := 0].
     ^5
 !
 moveListSelectionToVisibleBottom
     | visibleLines bottom count |
-    count := workspace packageCount.
+    count := self currentListCount.
     count = 0 ifTrue: [^5].
     visibleLines := self visibleListLines.
     visibleLines < 1 ifTrue: [visibleLines := 1].
@@ -1098,20 +1198,20 @@ handleByte: aByte onForm: form
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
     escape = 0 ifFalse: [^self handleEscapeByte: aByte].
     aByte = 27 ifTrue: [escape := 1. ^0].
-    workspace currentViewKind = 14 ifTrue: [^self handleBrowserByte: aByte].
+    self browserListViewActive ifTrue: [^self handleBrowserByte: aByte].
     ^self handleEditorByte: aByte tool: tool
 !
 handleEscapeByte: aByte
     escape = 3 ifTrue: [
         escape := 0.
         aByte = 126 ifTrue: [
-            workspace currentViewKind = 14 ifTrue: [^self moveListSelectionPageBy: -1].
+            self browserListViewActive ifTrue: [^self moveListSelectionPageBy: -1].
             ^self scrollEditorPageBy: -1].
         ^0].
     escape = 4 ifTrue: [
         escape := 0.
         aByte = 126 ifTrue: [
-            workspace currentViewKind = 14 ifTrue: [^self moveListSelectionPageBy: 1].
+            self browserListViewActive ifTrue: [^self moveListSelectionPageBy: 1].
             ^self scrollEditorPageBy: 1].
         ^0].
     escape = 1 ifTrue: [
@@ -1121,7 +1221,7 @@ handleEscapeByte: aByte
     aByte = 53 ifTrue: [escape := 3. ^0].
     aByte = 54 ifTrue: [escape := 4. ^0].
     escape := 0.
-    workspace currentViewKind = 14 ifTrue: [
+    self browserListViewActive ifTrue: [
         aByte = 65 ifTrue: [^self moveListSelectionBy: -1].
         aByte = 66 ifTrue: [^self moveListSelectionBy: 1].
         aByte = 72 ifTrue: [^self moveListSelectionToVisibleTop].
@@ -1136,21 +1236,69 @@ handleBrowserByte: aByte
     aByte = 16 ifTrue: [^self moveListSelectionBy: -1].
     aByte = 2 ifTrue: [^self moveListSelectionPageBy: -1].
     aByte = 22 ifTrue: [^self moveListSelectionPageBy: 1].
-    aByte = 13 ifTrue: [^self openSelectedPackageSource].
-    aByte = 24 ifTrue: [^self openSelectedPackageSource].
+    aByte = 13 ifTrue: [
+        workspace currentViewKind = 20 ifTrue: [^self openSelectedOpeningMenuItem].
+        workspace currentViewKind = 21 ifTrue: [^self openSelectedClassSource].
+        ^self openSelectedPackageSource].
+    aByte = 24 ifTrue: [
+        workspace currentViewKind = 20 ifTrue: [^self openSelectedOpeningMenuItem].
+        workspace currentViewKind = 21 ifTrue: [^self openSelectedClassSource].
+        ^self openSelectedPackageSource].
     aByte = 15 ifTrue: [^9].
     aByte = 4 ifTrue: [^9].
     ^0
 !
+openSelectedOpeningMenuItem
+    | tool |
+    selected = 0 ifTrue: [
+        tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+        tool setBrowserReturnViewKind: nil.
+        workspace setCurrentViewKind: 18.
+        workspace setCurrentTargetName: nil.
+        self ensureEditorCursorVisible.
+        ^1].
+    selected = 1 ifTrue: [
+        workspace setCurrentViewKind: 21.
+        workspace setCurrentTargetName: nil.
+        selected := 0.
+        listTop := 0.
+        self prepareListSelectionForCount: workspace classCount.
+        ^4].
+    workspace setCurrentViewKind: 14.
+    workspace setCurrentTargetName: nil.
+    selected := 0.
+    listTop := 0.
+    self prepareListSelectionForCount: workspace packageCount.
+    ^4
+!
 openSelectedPackageSource
-    | packageName source priorTarget |
+    | packageName source priorTarget tool |
     workspace packageCount = 0 ifTrue: [^4].
     self rememberPlainWorkspaceStateIfNeeded.
     packageName := self selectedPackageName.
     priorTarget := workspace currentTargetName.
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    tool setBrowserReturnViewKind: 14.
     workspace setCurrentViewKind: 13.
     workspace setCurrentTargetName: packageName.
     source := self packageSourceToOpenFor: packageName priorTarget: priorTarget.
+    workspace setContents: source.
+    Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: Workspace visibleTopLine.
+    Workspace collapseSelectionToCursor.
+    Workspace setVisibleOriginTop: 0 left: 0.
+    ^1
+!
+openSelectedClassSource
+    | className source priorTarget tool |
+    workspace classCount = 0 ifTrue: [^4].
+    self rememberPlainWorkspaceStateIfNeeded.
+    className := self selectedClassName.
+    priorTarget := workspace currentTargetName.
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    tool setBrowserReturnViewKind: 21.
+    workspace setCurrentViewKind: 8.
+    workspace setCurrentTargetName: className.
+    source := self classSourceToOpenFor: className priorTarget: priorTarget.
     workspace setContents: source.
     Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: Workspace visibleTopLine.
     Workspace collapseSelectionToCursor.
@@ -1177,6 +1325,13 @@ packageSourceToOpenFor: packageName priorTarget: priorTarget
     | source |
     source := KernelInstaller fileOutPackageNamed: packageName.
     priorTarget = packageName ifFalse: [^source].
+    workspace contents = nil ifTrue: [^source].
+    ^workspace contents
+!
+classSourceToOpenFor: className priorTarget: priorTarget
+    | source |
+    source := KernelInstaller fileOutClassNamed: className.
+    priorTarget = className ifFalse: [^source].
     workspace contents = nil ifTrue: [^source].
     ^workspace contents
 !
