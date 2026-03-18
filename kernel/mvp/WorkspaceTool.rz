@@ -34,11 +34,9 @@ browseRegeneratedFileInSource
     ^Workspace browseRegeneratedFileInSource
 !
 statusText
-    statusText = nil ifTrue: [^''].
     ^statusText
 !
 feedbackText
-    feedbackText = nil ifTrue: [^''].
     ^feedbackText
 !
 namedObjectOrNil: name

@@ -1077,6 +1077,8 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_REMEMBER_CURRENT_PLAIN_WORKSPACE_STATE_ON_TOOL", 338),
                 ("RECORZ_MVP_SELECTOR_REMEMBER_PLAIN_WORKSPACE_STATE_IF_NEEDED", 339),
                 ("RECORZ_MVP_SELECTOR_PACKAGE_SOURCE_TO_OPEN_FOR_PRIOR_TARGET", 340),
+                ("RECORZ_MVP_SELECTOR_SELECTED_INDEX", 341),
+                ("RECORZ_MVP_SELECTOR_LIST_TOP_LINE", 342),
             ],
         )
 
@@ -2153,7 +2155,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertEqual(len(dynamic_sections.class_seed_objects), 37)
         self.assertEqual(len(dynamic_sections.selector_seed_objects), len(mvp.SELECTOR_VALUE_ORDER))
-        self.assertEqual(len(dynamic_sections.compiled_method_seed_objects), 72)
+        self.assertEqual(
+            len(dynamic_sections.compiled_method_seed_objects),
+            len(mvp.COMPILED_METHOD_PROGRAM_BY_ENTRY_NAME),
+        )
         self.assertEqual(len(dynamic_sections.method_entry_seed_objects), len(mvp.METHOD_ENTRY_ORDER))
         self.assertEqual(len(dynamic_sections.method_seed_objects), len(mvp.METHOD_ENTRY_ORDER))
         self.assertEqual(
