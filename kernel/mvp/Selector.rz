@@ -720,3 +720,11 @@ RecorzKernelSelector: #classNameAt: order: 358
 !
 RecorzKernelSelector: #classNamesVisibleFrom:count: order: 359
 !
+RecorzKernelSelector: #browserReturnTargetName order: 360
+!
+RecorzKernelSelector: #setBrowserReturnViewKind:targetName: order: 361
+!
+RecorzKernelSelector: #returnFromSourceEditor order: 362
+!
+RecorzKernelSelector: #sourceEditorFallbackReturn order: 363
+!

@@ -156,7 +156,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_TOOL
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_CLASS_NAMES_VISIBLE_FROM_COUNT
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SOURCE_EDITOR_FALLBACK_RETURN
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -1367,6 +1367,18 @@ static const char *selector_name(uint16_t selector) {
             return "rememberPlainWorkspaceStateIfNeeded";
         case RECORZ_MVP_SELECTOR_PACKAGE_SOURCE_TO_OPEN_FOR_PRIOR_TARGET:
             return "packageSourceToOpenFor:priorTarget:";
+        case RECORZ_MVP_SELECTOR_BROWSER_RETURN_VIEW_KIND:
+            return "browserReturnViewKind";
+        case RECORZ_MVP_SELECTOR_BROWSER_RETURN_TARGET_NAME:
+            return "browserReturnTargetName";
+        case RECORZ_MVP_SELECTOR_SET_BROWSER_RETURN_VIEW_KIND:
+            return "setBrowserReturnViewKind:";
+        case RECORZ_MVP_SELECTOR_SET_BROWSER_RETURN_VIEW_KIND_TARGET_NAME:
+            return "setBrowserReturnViewKind:targetName:";
+        case RECORZ_MVP_SELECTOR_RETURN_FROM_SOURCE_EDITOR:
+            return "returnFromSourceEditor";
+        case RECORZ_MVP_SELECTOR_SOURCE_EDITOR_FALLBACK_RETURN:
+            return "sourceEditorFallbackReturn";
     }
     return "unknown";
 }

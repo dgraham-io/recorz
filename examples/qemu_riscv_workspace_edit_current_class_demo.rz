@@ -1,3 +1,18 @@
 Display clear.
-Workspace browseClassNamed: 'Display'.
+Workspace fileIn: 'RecorzKernelClass: #Grouped superclass: #Object instanceVariableNames: ''value''
+!
+RecorzKernelProtocol: ''accessing''
+!
+value
+    ^value
+!
+setValue: text
+    value := text.
+    ^self
+!
+RecorzKernelProtocol: ''printing''
+!
+printString
+    ^value'.
+Workspace browseClassNamed: 'Grouped'.
 Workspace editCurrent.

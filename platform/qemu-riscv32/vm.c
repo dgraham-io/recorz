@@ -190,7 +190,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_TOOL
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_CLASS_NAMES_VISIBLE_FROM_COUNT
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SOURCE_EDITOR_FALLBACK_RETURN
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -560,6 +560,7 @@ static int compare_source_names(const char *left, const char *right);
 static const char *runtime_string_allocate_copy(const char *text);
 static const char *runtime_string_intern_copy(const char *text);
 static void runtime_string_compact_live_references(void);
+static struct recorz_mvp_value small_integer_value(int32_t integer);
 static struct recorz_mvp_value boolean_value(uint8_t condition);
 static struct recorz_mvp_value object_value(uint16_t handle);
 static struct recorz_mvp_value string_value(const char *text);
@@ -766,7 +767,7 @@ static void workspace_accept_input_monitor_buffer(
     const struct recorz_mvp_heap_object *workspace_object
 );
 static const struct recorz_mvp_heap_object *workspace_global_object(void);
-static uint8_t workspace_send_tool_selector(uint16_t selector);
+static void workspace_set_browser_return_context(uint32_t view_kind, const char *target_name);
 static void workspace_reopen_in_place(
     const struct recorz_mvp_heap_object *object
 );
@@ -1657,8 +1658,16 @@ static const char *selector_name(uint16_t selector) {
             return "packageSourceToOpenFor:priorTarget:";
         case RECORZ_MVP_SELECTOR_BROWSER_RETURN_VIEW_KIND:
             return "browserReturnViewKind";
+        case RECORZ_MVP_SELECTOR_BROWSER_RETURN_TARGET_NAME:
+            return "browserReturnTargetName";
         case RECORZ_MVP_SELECTOR_SET_BROWSER_RETURN_VIEW_KIND:
             return "setBrowserReturnViewKind:";
+        case RECORZ_MVP_SELECTOR_SET_BROWSER_RETURN_VIEW_KIND_TARGET_NAME:
+            return "setBrowserReturnViewKind:targetName:";
+        case RECORZ_MVP_SELECTOR_RETURN_FROM_SOURCE_EDITOR:
+            return "returnFromSourceEditor";
+        case RECORZ_MVP_SELECTOR_SOURCE_EDITOR_FALLBACK_RETURN:
+            return "sourceEditorFallbackReturn";
         case RECORZ_MVP_SELECTOR_BROWSER_LIST_VIEW_ACTIVE:
             return "browserListViewActive";
         case RECORZ_MVP_SELECTOR_OPENING_MENU_OPTION_COUNT:
@@ -2034,6 +2043,23 @@ static uint32_t source_copy_next_chunk(const char **cursor_ref, char buffer[], u
     }
     *cursor_ref = cursor;
     return chunk_length;
+}
+
+static const char *source_unknown_identifier_error_text(const char *name) {
+    static char message[64 + METHOD_SOURCE_NAME_LIMIT];
+    const char *prefix = "live source identifier is unknown: ";
+    uint32_t offset = 0U;
+    uint32_t index = 0U;
+
+    while (prefix[index] != '\0' && offset + 1U < sizeof(message)) {
+        message[offset++] = prefix[index++];
+    }
+    index = 0U;
+    while (name != 0 && name[index] != '\0' && offset + 1U < sizeof(message)) {
+        message[offset++] = name[index++];
+    }
+    message[offset] = '\0';
+    return message;
 }
 
 static const char *source_parse_identifier(const char *cursor, char buffer[], uint32_t buffer_size);
@@ -3829,14 +3855,24 @@ static const struct recorz_mvp_heap_object *workspace_global_object(void) {
     return heap_object(workspace_handle);
 }
 
-static uint8_t workspace_send_tool_selector(uint16_t selector) {
+static void workspace_set_browser_return_context(uint32_t view_kind, const char *target_name) {
     uint16_t tool_handle = named_object_handle_for_name("BootWorkspaceTool");
+    struct recorz_mvp_value arguments[2];
 
     if (tool_handle == 0U) {
-        return 0U;
+        return;
     }
-    perform_send_and_pop_result(object_value(tool_handle), selector, 0U, 0, 0U);
-    return 1U;
+    arguments[0] = small_integer_value((int32_t)view_kind);
+    arguments[1] = (target_name == 0 || target_name[0] == '\0')
+        ? nil_value()
+        : string_value(runtime_string_allocate_copy(target_name));
+    (void)perform_send_and_pop_result(
+        object_value(tool_handle),
+        RECORZ_MVP_SELECTOR_SET_BROWSER_RETURN_VIEW_KIND_TARGET_NAME,
+        2U,
+        arguments,
+        0
+    );
 }
 
 static struct recorz_mvp_heap_object *workspace_tool_object_or_null(void) {
@@ -7919,26 +7955,6 @@ static uint8_t workspace_redraw_named_list_widget(
     return 1U;
 }
 
-static uint32_t workspace_browser_return_view_kind(void) {
-    uint16_t state_handle = named_object_handle_for_name("BootWorkspaceBrowserReturnState");
-    struct recorz_mvp_value result;
-
-    if (state_handle == 0U) {
-        return WORKSPACE_VIEW_NONE;
-    }
-    result = perform_send_and_pop_result(
-        object_value(state_handle),
-        RECORZ_MVP_SELECTOR_CONTENTS,
-        0U,
-        0,
-        0
-    );
-    if (result.kind != RECORZ_MVP_VALUE_SMALL_INTEGER || result.integer < 0) {
-        return WORKSPACE_VIEW_NONE;
-    }
-    return (uint32_t)result.integer;
-}
-
 static const char *workspace_package_names_visible_text(
     uint32_t first_index,
     uint32_t count,
@@ -7953,6 +7969,10 @@ static const char *workspace_class_names_visible_text(
     uint32_t count,
     char buffer[],
     uint32_t buffer_size
+);
+static const char *workspace_source_text_for_browser_target(
+    uint32_t view_kind,
+    const char *target_name
 );
 
 static const char *workspace_opening_menu_items_visible_text(
@@ -10751,6 +10771,7 @@ static void workspace_accept_current_in_place(
     struct recorz_mvp_value source_value;
     struct recorz_mvp_value view_kind_value;
     struct recorz_mvp_value target_name_value;
+    const char *refreshed_source;
     const struct recorz_mvp_heap_object *class_object;
     char class_name[METHOD_SOURCE_NAME_LIMIT];
     char selector_name_text[METHOD_SOURCE_NAME_LIMIT];
@@ -10783,10 +10804,7 @@ static void workspace_accept_current_in_place(
             object,
             file_out_package_source_by_name(target_name_value.string)
         );
-        workspace_render_package_source_browser(object, target_name_value.string);
-        return;
-    }
-    if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_SOURCE) {
+    } else if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_CLASS_SOURCE) {
         if (object->field_count <= workspace_current_target_name_field_index(object)) {
             machine_panic("Workspace acceptCurrent is missing the current class target");
         }
@@ -10805,41 +10823,43 @@ static void workspace_accept_current_in_place(
             object,
             file_out_class_source_by_name(target_name_value.string)
         );
-        workspace_render_class_source_browser(object, target_name_value.string);
-        return;
+    } else {
+        if ((uint32_t)view_kind_value.integer != WORKSPACE_VIEW_METHOD &&
+            (uint32_t)view_kind_value.integer != WORKSPACE_VIEW_CLASS_METHOD) {
+            machine_panic("Workspace acceptCurrent requires a method, class, or package source browser target");
+        }
+        class_object = workspace_target_class_for_file_in(object);
+        if (class_object == 0) {
+            machine_panic("Workspace acceptCurrent could not resolve the target class");
+        }
+        if (object->field_count <= workspace_current_target_name_field_index(object)) {
+            machine_panic("Workspace acceptCurrent is missing the current method target");
+        }
+        target_name_value = heap_get_field(object, workspace_current_target_name_field_index(object));
+        if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
+            target_name_value.string == 0 ||
+            target_name_value.string[0] == '\0') {
+            machine_panic("Workspace acceptCurrent is missing the current method target");
+        }
+        if (!workspace_parse_method_target_name(
+                target_name_value.string,
+                class_name,
+                sizeof(class_name),
+                selector_name_text,
+                sizeof(selector_name_text))) {
+            machine_panic("Workspace acceptCurrent current method target is invalid");
+        }
+        install_method_source_on_class(class_object, source_value.string);
     }
-    if ((uint32_t)view_kind_value.integer != WORKSPACE_VIEW_METHOD &&
-        (uint32_t)view_kind_value.integer != WORKSPACE_VIEW_CLASS_METHOD) {
-        machine_panic("Workspace acceptCurrent requires a method, class, or package source browser target");
-    }
-    class_object = workspace_target_class_for_file_in(object);
-    if (class_object == 0) {
-        machine_panic("Workspace acceptCurrent could not resolve the target class");
-    }
-    if (object->field_count <= workspace_current_target_name_field_index(object)) {
-        machine_panic("Workspace acceptCurrent is missing the current method target");
-    }
-    target_name_value = heap_get_field(object, workspace_current_target_name_field_index(object));
-    if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
-        target_name_value.string == 0 ||
-        target_name_value.string[0] == '\0') {
-        machine_panic("Workspace acceptCurrent is missing the current method target");
-    }
-    if (!workspace_parse_method_target_name(
-            target_name_value.string,
-            class_name,
-            sizeof(class_name),
-            selector_name_text,
-            sizeof(selector_name_text))) {
-        machine_panic("Workspace acceptCurrent current method target is invalid");
-    }
-    install_method_source_on_class(class_object, source_value.string);
-    workspace_render_method_browser(
-        object,
-        class_name,
-        selector_name_text,
-        (uint32_t)view_kind_value.integer == WORKSPACE_VIEW_METHOD ? "INST" : "CLASS"
+    refreshed_source = workspace_source_text_for_browser_target(
+        (uint32_t)view_kind_value.integer,
+        target_name_value.string
     );
+    if (refreshed_source != 0) {
+        workspace_remember_editor_current_source(object, refreshed_source);
+    }
+    workspace_input_monitor_clear_feedback();
+    workspace_input_monitor_set_status("INSTALL COMPLETE");
 }
 
 static uint8_t workspace_resolve_source_browser_target(
@@ -10966,38 +10986,6 @@ static const char *workspace_source_text_for_browser_target(
     return source;
 }
 
-static void workspace_render_source_browser_target(
-    const struct recorz_mvp_heap_object *object,
-    uint32_t view_kind,
-    const char *target_name
-) {
-    char class_name[METHOD_SOURCE_NAME_LIMIT];
-    char selector_name_text[METHOD_SOURCE_NAME_LIMIT];
-
-    if (view_kind == WORKSPACE_VIEW_CLASS_SOURCE) {
-        workspace_render_class_source_browser(object, target_name);
-        return;
-    }
-    if (view_kind == WORKSPACE_VIEW_PACKAGE_SOURCE) {
-        workspace_render_package_source_browser(object, target_name);
-        return;
-    }
-    if (!workspace_parse_method_target_name(
-            target_name,
-            class_name,
-            sizeof(class_name),
-            selector_name_text,
-            sizeof(selector_name_text))) {
-        machine_panic("Workspace source browser target is invalid");
-    }
-    workspace_render_method_browser(
-        object,
-        class_name,
-        selector_name_text,
-        view_kind == WORKSPACE_VIEW_METHOD ? "INST" : "CLASS"
-    );
-}
-
 static void workspace_revert_current_in_place(
     const struct recorz_mvp_heap_object *object
 ) {
@@ -11030,7 +11018,8 @@ static void workspace_revert_current_in_place(
         machine_panic("Workspace revertCurrent requires a source browser target");
     }
     workspace_remember_editor_current_source(object, source);
-    workspace_render_source_browser_target(object, normalized_view_kind, normalized_target_name);
+    workspace_input_monitor_clear_feedback();
+    workspace_input_monitor_set_status("SOURCE RESTORED");
 }
 
 static void workspace_run_current_tests_in_place(
@@ -11047,6 +11036,8 @@ static void workspace_run_current_tests_in_place(
     if (global_handles[RECORZ_MVP_GLOBAL_TEST_RUNNER] == 0U) {
         machine_panic("Workspace runCurrentTests requires TestRunner");
     }
+    workspace_input_monitor_clear_feedback();
+    workspace_input_monitor_set_status("TESTS RUNNING");
     test_runner_object = (const struct recorz_mvp_heap_object *)heap_object(
         global_handles[RECORZ_MVP_GLOBAL_TEST_RUNNER]
     );
@@ -11066,6 +11057,7 @@ static void workspace_run_current_tests_in_place(
             machine_panic("Workspace runCurrentTests is missing the current package target");
         }
         test_runner_run_package(test_runner_object, target_name_value.string);
+        workspace_input_monitor_set_status("TESTS COMPLETE");
         return;
     }
     if (target_name_value.kind != RECORZ_MVP_VALUE_STRING ||
@@ -11084,6 +11076,7 @@ static void workspace_run_current_tests_in_place(
             machine_panic("Workspace runCurrentTests could not resolve the target class");
         }
         test_runner_run_class(test_runner_object, class_object, target_name_value.string);
+        workspace_input_monitor_set_status("TESTS COMPLETE");
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_METHOD ||
@@ -11101,6 +11094,7 @@ static void workspace_run_current_tests_in_place(
             machine_panic("Workspace runCurrentTests could not resolve the target class");
         }
         test_runner_run_class(test_runner_object, class_object, class_name);
+        workspace_input_monitor_set_status("TESTS COMPLETE");
         return;
     }
     if ((uint32_t)view_kind_value.integer == WORKSPACE_VIEW_PROTOCOL ||
@@ -11118,6 +11112,7 @@ static void workspace_run_current_tests_in_place(
             machine_panic("Workspace runCurrentTests could not resolve the target class");
         }
         test_runner_run_class(test_runner_object, class_object, class_name);
+        workspace_input_monitor_set_status("TESTS COMPLETE");
         return;
     }
     machine_panic("Workspace runCurrentTests requires a class or package browser target");
@@ -11518,9 +11513,8 @@ static uint8_t workspace_session_redraw_from_image(void) {
     if (workspace_object != 0) {
         view_kind = workspace_current_view_kind_value(workspace_object);
     }
-    if (view_kind == WORKSPACE_VIEW_PACKAGE_SOURCE ||
-        (view_kind == WORKSPACE_VIEW_CLASS_SOURCE &&
-         workspace_browser_return_view_kind() == WORKSPACE_VIEW_INTERACTIVE_CLASSES)) {
+    if (workspace_view_kind_uses_image_session(view_kind) &&
+        !workspace_view_kind_is_image_session_browser_list(view_kind)) {
         return workspace_redraw_image_session_source_editor(workspace_object);
     }
     arguments[0] = object_value(heap_handle_for_object(default_form_object()));
@@ -11805,12 +11799,6 @@ static void workspace_edit_package_in_place(
     workspace_run_interactive_input_monitor(workspace_object);
 }
 
-static void workspace_run_interactive_package_list_browser(
-    const struct recorz_mvp_heap_object *workspace_object
-) {
-    workspace_run_interactive_image_session(workspace_object, 0U);
-}
-
 static void workspace_edit_current_in_place(
     const struct recorz_mvp_heap_object *object
 ) {
@@ -11835,6 +11823,7 @@ static void workspace_edit_current_in_place(
             target_name_value.string[0] == '\0') {
             machine_panic("Workspace editCurrent is missing the current package target");
         }
+        workspace_set_browser_return_context(WORKSPACE_VIEW_PACKAGE, target_name_value.string);
         source = file_out_package_source_by_name(target_name_value.string);
         workspace_remember_editor_current_source(object, source);
         workspace_remember_source(object, source);
@@ -11856,6 +11845,7 @@ static void workspace_edit_current_in_place(
             &source)) {
         machine_panic("Workspace editCurrent requires a class, method, protocol, or package browser target");
     }
+    workspace_set_browser_return_context((uint32_t)view_kind_value.integer, target_name_value.string);
     workspace_remember_editor_current_source(object, source);
     workspace_remember_source(object, source);
     workspace_remember_view(object, normalized_view_kind, normalized_target_name);
@@ -16414,6 +16404,18 @@ static void execute_entry_kernel_installer_file_out_class_named(
     push(string_value(file_out_class_source_by_name(arguments[0].string)));
 }
 
+static void panic_source_method_exceeds_compiled_method_capacity(void) {
+    if (compiling_method_class_handle != 0U &&
+        heap_handle_is_live(compiling_method_class_handle)) {
+        machine_puts("recorz qemu-riscv32 mvp: compile limit ");
+        machine_puts(class_name_for_object(heap_object(compiling_method_class_handle)));
+        machine_puts(">>");
+        machine_puts(selector_name(compiling_method_selector_id));
+        machine_putc('\n');
+    }
+    machine_panic("KernelInstaller source method exceeds compiled method capacity");
+}
+
 static uint8_t compile_source_operand_push(
     const struct recorz_mvp_heap_object *class_object,
     const char *name,
@@ -16430,7 +16432,7 @@ static uint8_t compile_source_operand_push(
     uint8_t global_id;
 
     if (*instruction_count >= COMPILED_METHOD_MAX_INSTRUCTIONS) {
-        machine_panic("KernelInstaller source method exceeds compiled method capacity");
+        panic_source_method_exceeds_compiled_method_capacity();
     }
     for (argument_index = 0U; argument_index < argument_count; ++argument_index) {
         if (argument_names[argument_index][0] != '\0' &&
@@ -16505,7 +16507,7 @@ static void compile_source_append_instruction(
     uint16_t operand_b
 ) {
     if (*instruction_count >= COMPILED_METHOD_MAX_INSTRUCTIONS) {
-        machine_panic("KernelInstaller source method exceeds compiled method capacity");
+        panic_source_method_exceeds_compiled_method_capacity();
     }
     instruction_words[(*instruction_count)++] = encode_compiled_method_word(opcode, operand_a, operand_b);
 }
@@ -17233,7 +17235,7 @@ static void compile_source_return_line(
     cursor = source_skip_horizontal_space(cursor);
     if (source_names_equal(cursor, "self")) {
         if (*instruction_count >= COMPILED_METHOD_MAX_INSTRUCTIONS) {
-            machine_panic("KernelInstaller source method exceeds compiled method capacity");
+            panic_source_method_exceeds_compiled_method_capacity();
         }
         instruction_words[(*instruction_count)++] = encode_compiled_method_word(COMPILED_METHOD_OP_RETURN_RECEIVER, 0U, 0U);
         return;
@@ -17575,7 +17577,7 @@ static struct recorz_mvp_value source_read_identifier(
     if (global_id != 0U) {
         return global_value(global_id);
     }
-    machine_panic("live source identifier is unknown");
+    machine_panic(source_unknown_identifier_error_text(name));
     return nil_value();
 }
 
@@ -18419,6 +18421,50 @@ static void file_in_method_chunks_on_class(
     }
 }
 
+static void install_method_chunk_on_class(
+    const struct recorz_mvp_heap_object *class_object,
+    const char *protocol_name,
+    const char *chunk
+) {
+    uint16_t compiled_method_handle;
+    uint16_t selector_id;
+    uint16_t argument_count;
+
+    if (remember_seeded_primitive_method_source(class_object, protocol_name, chunk)) {
+        return;
+    }
+    compiled_method_handle = compile_source_method_and_allocate(class_object, chunk, &selector_id, &argument_count);
+    validate_compiled_method(heap_object(compiled_method_handle), argument_count);
+    install_compiled_method_update(class_object, selector_id, argument_count, compiled_method_handle);
+    remember_live_method_source(
+        heap_handle_for_object(class_object),
+        selector_id,
+        (uint8_t)argument_count,
+        protocol_name,
+        chunk
+    );
+    if (gc_collection_allowed_for_current_phase()) {
+        (void)gc_collect_now();
+    }
+}
+
+static void install_method_source_on_class(
+    const struct recorz_mvp_heap_object *class_object,
+    const char *source
+) {
+    uint16_t compiled_method_handle;
+    uint16_t selector_id;
+    uint16_t argument_count;
+
+    compiled_method_handle = compile_source_method_and_allocate(class_object, source, &selector_id, &argument_count);
+    validate_compiled_method(heap_object(compiled_method_handle), argument_count);
+    install_compiled_method_update(class_object, selector_id, argument_count, compiled_method_handle);
+    remember_live_method_source(heap_handle_for_object(class_object), selector_id, (uint8_t)argument_count, "", source);
+    if (gc_collection_allowed_for_current_phase()) {
+        (void)gc_collect_now();
+    }
+}
+
 static void file_in_class_source_on_existing_class(
     const char *source,
     const struct recorz_mvp_heap_object *class_object
@@ -18483,50 +18529,6 @@ static void file_in_class_source_on_existing_class(
     }
     if (!saw_class_chunk || installed_method_count == 0U) {
         machine_panic("KernelInstaller class source did not install any methods");
-    }
-}
-
-static void install_method_chunk_on_class(
-    const struct recorz_mvp_heap_object *class_object,
-    const char *protocol_name,
-    const char *chunk
-) {
-    uint16_t compiled_method_handle;
-    uint16_t selector_id;
-    uint16_t argument_count;
-
-    if (remember_seeded_primitive_method_source(class_object, protocol_name, chunk)) {
-        return;
-    }
-    compiled_method_handle = compile_source_method_and_allocate(class_object, chunk, &selector_id, &argument_count);
-    validate_compiled_method(heap_object(compiled_method_handle), argument_count);
-    install_compiled_method_update(class_object, selector_id, argument_count, compiled_method_handle);
-    remember_live_method_source(
-        heap_handle_for_object(class_object),
-        selector_id,
-        (uint8_t)argument_count,
-        protocol_name,
-        chunk
-    );
-    if (gc_collection_allowed_for_current_phase()) {
-        (void)gc_collect_now();
-    }
-}
-
-static void install_method_source_on_class(
-    const struct recorz_mvp_heap_object *class_object,
-    const char *source
-) {
-    uint16_t compiled_method_handle;
-    uint16_t selector_id;
-    uint16_t argument_count;
-
-    compiled_method_handle = compile_source_method_and_allocate(class_object, source, &selector_id, &argument_count);
-    validate_compiled_method(heap_object(compiled_method_handle), argument_count);
-    install_compiled_method_update(class_object, selector_id, argument_count, compiled_method_handle);
-    remember_live_method_source(heap_handle_for_object(class_object), selector_id, (uint8_t)argument_count, "", source);
-    if (gc_collection_allowed_for_current_phase()) {
-        (void)gc_collect_now();
     }
 }
 

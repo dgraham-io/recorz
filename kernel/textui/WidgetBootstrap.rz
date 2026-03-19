@@ -446,13 +446,19 @@ browserReturnViewKind
     state = nil ifTrue: [^nil].
     ^state contents
 !
-setBrowserReturnViewKind: aViewKind
+browserReturnTargetName
+    | state |
+    state := self namedObjectOrNil: 'BootWorkspaceBrowserReturnState'.
+    state = nil ifTrue: [^nil].
+    ^state cursor
+!
+setBrowserReturnViewKind: aViewKind targetName: aTargetName
     | state |
     state := self namedObjectOrNil: 'BootWorkspaceBrowserReturnState'.
     state = nil ifTrue: [
         state := (KernelInstaller classNamed: 'WorkspaceReturnState') new.
         KernelInstaller rememberObject: state named: 'BootWorkspaceBrowserReturnState'].
-    state setContents: aViewKind cursor: nil selection: nil visibleOrigin: nil.
+    state setContents: aViewKind cursor: aTargetName selection: nil visibleOrigin: nil.
     ^aViewKind
 !
 visibleLeftColumn
@@ -543,36 +549,40 @@ dispatchWorkspaceCommandOnForm: aByte
     aByte = self saveRecoverySnapshotCommandByte ifTrue: [self saveRecoverySnapshot. ^9].
     ^0
 !
-dispatchSourceEditorCommandOnForm: aByte
-    | viewKind plainState returnViewKind |
-    aByte = self acceptCommandByte ifTrue: [self acceptCurrent. ^1].
-    aByte = self revertCommandByte ifTrue: [self revertCurrent. ^1].
-    aByte = self runTestsCommandByte ifTrue: [self runCurrentTests. ^1].
-    aByte = self printCommandByte ifTrue: [self printCurrent. ^1].
-    aByte = self doItCommandByte ifTrue: [self evaluateCurrent. ^1].
-    aByte = self alternateDoItCommandByte ifTrue: [self evaluateCurrent. ^1].
-    aByte = self saveAndReopenCommandByte ifTrue: [self saveAndReopen. ^9].
-    aByte = self saveRecoverySnapshotCommandByte ifTrue: [self saveRecoverySnapshot. ^9].
-    aByte = self returnToBrowserCommandByte ifTrue: [
-        plainState := self namedObjectOrNil: 'BootWorkspacePlainState'.
-        plainState = nil ifFalse: [
-            plainState contents = nil ifFalse: [
-                ^self restorePlainWorkspaceState]].
-        viewKind := Workspace currentViewKind.
-        viewKind = 5 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
-        viewKind = 7 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
-        viewKind = 8 ifTrue: [
-            returnViewKind := self browserReturnViewKind.
-            returnViewKind = 21 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 21. ^4].
-            Workspace setCurrentTargetName: nil.
-            Workspace setCurrentViewKind: 14.
-            ^4].
-        viewKind = 13 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
-        viewKind = 16 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
-        viewKind = 17 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
-        viewKind = 19 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
+returnFromSourceEditor
+    | plainState returnViewKind returnTargetName |
+    returnViewKind := self browserReturnViewKind.
+    returnTargetName := self browserReturnTargetName.
+    returnViewKind = nil ifFalse: [
+        self setBrowserReturnViewKind: nil targetName: nil.
+        Workspace setCurrentTargetName: returnTargetName.
+        Workspace setCurrentViewKind: returnViewKind.
+        returnViewKind = 20 ifTrue: [^4].
+        returnViewKind = 14 ifTrue: [^4].
+        returnViewKind = 21 ifTrue: [^4].
+        Workspace reopen.
         ^9].
-    ^0
+    plainState := self namedObjectOrNil: 'BootWorkspacePlainState'.
+    plainState = nil ifFalse: [
+        plainState contents = nil ifFalse: [
+            ^self restorePlainWorkspaceState]].
+    ^self sourceEditorFallbackReturn
+!
+sourceEditorFallbackReturn
+    | viewKind |
+    viewKind := Workspace currentViewKind.
+    viewKind = 5 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
+    viewKind = 7 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
+    viewKind = 8 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
+    viewKind = 13 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
+    viewKind = 16 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
+    viewKind = 17 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
+    viewKind = 19 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
+    ^9
+!
+dispatchSourceEditorCommandOnForm: aByte
+    aByte = self returnToBrowserCommandByte ifTrue: [^self returnFromSourceEditor].
+    ^self dispatchWorkspaceCommandOnForm: aByte
 !
 dispatchCommandOnForm: aByte
     | viewKind |
@@ -840,7 +850,7 @@ openOn: aWorkspace mode: aMode
         workspace setCurrentViewKind: 20.
         workspace setCurrentTargetName: nil.
         tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
-        tool setBrowserReturnViewKind: nil.
+        tool setBrowserReturnViewKind: nil targetName: nil.
         self prepareBrowserStateForMode: 0.
         Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: Workspace visibleTopLine.
         Workspace collapseSelectionToCursor.
@@ -1252,7 +1262,7 @@ openSelectedOpeningMenuItem
     | tool |
     selected = 0 ifTrue: [
         tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
-        tool setBrowserReturnViewKind: nil.
+        tool setBrowserReturnViewKind: nil targetName: nil.
         workspace setCurrentViewKind: 18.
         workspace setCurrentTargetName: nil.
         self ensureEditorCursorVisible.
@@ -1278,7 +1288,7 @@ openSelectedPackageSource
     packageName := self selectedPackageName.
     priorTarget := workspace currentTargetName.
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
-    tool setBrowserReturnViewKind: 14.
+    tool setBrowserReturnViewKind: 14 targetName: nil.
     workspace setCurrentViewKind: 13.
     workspace setCurrentTargetName: packageName.
     source := self packageSourceToOpenFor: packageName priorTarget: priorTarget.
@@ -1295,7 +1305,7 @@ openSelectedClassSource
     className := self selectedClassName.
     priorTarget := workspace currentTargetName.
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
-    tool setBrowserReturnViewKind: 21.
+    tool setBrowserReturnViewKind: 21 targetName: nil.
     workspace setCurrentViewKind: 8.
     workspace setCurrentTargetName: className.
     source := self classSourceToOpenFor: className priorTarget: priorTarget.
