@@ -829,6 +829,14 @@ static uint8_t workspace_view_kind_uses_image_session(uint32_t view_kind) {
     }
 }
 
+static uint8_t workspace_view_kind_is_image_session_browser_list(uint32_t view_kind) {
+    return (uint8_t)(
+        view_kind == WORKSPACE_VIEW_OPENING_MENU ||
+        view_kind == WORKSPACE_VIEW_PACKAGES ||
+        view_kind == WORKSPACE_VIEW_INTERACTIVE_CLASSES
+    );
+}
+
 static uint32_t workspace_image_session_mode_for_view_kind(uint32_t view_kind) {
     if (view_kind == WORKSPACE_VIEW_OPENING_MENU) {
         return 0U;
@@ -7818,7 +7826,7 @@ static uint8_t workspace_redraw_named_label_widget(
     return 1U;
 }
 
-static uint8_t workspace_redraw_image_session_package_source_editor(
+static uint8_t workspace_redraw_image_session_source_editor(
     const struct recorz_mvp_heap_object *workspace_object
 ) {
     const struct recorz_mvp_heap_object *form = default_form_object();
@@ -7911,14 +7919,112 @@ static uint8_t workspace_redraw_named_list_widget(
     return 1U;
 }
 
+static uint32_t workspace_browser_return_view_kind(void) {
+    uint16_t state_handle = named_object_handle_for_name("BootWorkspaceBrowserReturnState");
+    struct recorz_mvp_value result;
+
+    if (state_handle == 0U) {
+        return WORKSPACE_VIEW_NONE;
+    }
+    result = perform_send_and_pop_result(
+        object_value(state_handle),
+        RECORZ_MVP_SELECTOR_CONTENTS,
+        0U,
+        0,
+        0
+    );
+    if (result.kind != RECORZ_MVP_VALUE_SMALL_INTEGER || result.integer < 0) {
+        return WORKSPACE_VIEW_NONE;
+    }
+    return (uint32_t)result.integer;
+}
+
 static const char *workspace_package_names_visible_text(
     uint32_t first_index,
     uint32_t count,
     char buffer[],
     uint32_t buffer_size
 );
+static uint32_t workspace_current_view_kind_value(
+    const struct recorz_mvp_heap_object *workspace_object
+);
+static const char *workspace_class_names_visible_text(
+    uint32_t first_index,
+    uint32_t count,
+    char buffer[],
+    uint32_t buffer_size
+);
+
+static const char *workspace_opening_menu_items_visible_text(
+    uint32_t first_index,
+    uint32_t count,
+    char buffer[],
+    uint32_t buffer_size
+) {
+    static const char *const items[] = {
+        "Workspace",
+        "Class Browser",
+        "Project Browser",
+    };
+    uint32_t offset = 0U;
+    uint32_t index;
+    uint32_t item_count = (uint32_t)(sizeof(items) / sizeof(items[0]));
+
+    if (buffer_size == 0U) {
+        return "";
+    }
+    buffer[0] = '\0';
+    if (count == 0U) {
+        return buffer;
+    }
+    if (first_index == 0U) {
+        first_index = 1U;
+    }
+    if (first_index > item_count) {
+        return buffer;
+    }
+    for (index = first_index; index < first_index + count && index <= item_count; ++index) {
+        if (offset != 0U) {
+            append_text_checked(buffer, buffer_size, &offset, "\n");
+        }
+        append_text_checked(buffer, buffer_size, &offset, items[index - 1U]);
+    }
+    return buffer;
+}
+
+static const char *workspace_browser_list_items_visible_text(
+    uint32_t view_kind,
+    uint32_t first_index,
+    uint32_t count,
+    char buffer[],
+    uint32_t buffer_size
+) {
+    if (view_kind == WORKSPACE_VIEW_OPENING_MENU) {
+        return workspace_opening_menu_items_visible_text(
+            first_index,
+            count,
+            buffer,
+            buffer_size
+        );
+    }
+    if (view_kind == WORKSPACE_VIEW_INTERACTIVE_CLASSES) {
+        return workspace_class_names_visible_text(
+            first_index,
+            count,
+            buffer,
+            buffer_size
+        );
+    }
+    return workspace_package_names_visible_text(
+        first_index,
+        count,
+        buffer,
+        buffer_size
+    );
+}
 
 static uint8_t workspace_scroll_copy_image_session_browser_list(
+    const struct recorz_mvp_heap_object *workspace_object,
     uint32_t old_selected_index,
     uint32_t old_list_top_line
 ) {
@@ -7926,6 +8032,7 @@ static uint8_t workspace_scroll_copy_image_session_browser_list(
     uint32_t selected_index = workspace_session_selected_index();
     uint32_t list_top_line = workspace_session_list_top_line();
     uint32_t visible_lines = workspace_session_visible_list_lines();
+    uint32_t view_kind = workspace_current_view_kind_value(workspace_object);
     uint32_t line_height = text_line_height();
     int32_t top_delta = (int32_t)list_top_line - (int32_t)old_list_top_line;
     uint32_t content_top = workspace_browser_list_content_top();
@@ -7944,7 +8051,8 @@ static uint8_t workspace_scroll_copy_image_session_browser_list(
         old_selected_index < old_list_top_line + visible_lines) {
         workspace_clear_browser_list_selection_overlay(form, old_selected_index - old_list_top_line);
     }
-    visible_text = workspace_package_names_visible_text(
+    visible_text = workspace_browser_list_items_visible_text(
+        view_kind,
         list_top_line + 1U,
         visible_lines,
         workspace_surface_list_buffer,
@@ -11402,13 +11510,18 @@ static uint8_t workspace_session_redraw_from_image(void) {
     uint16_t object_handle = named_object_handle_for_name("BootWorkspaceSession");
     struct recorz_mvp_value arguments[1];
     const struct recorz_mvp_heap_object *workspace_object = workspace_global_object();
+    uint32_t view_kind = WORKSPACE_VIEW_NONE;
 
     if (object_handle == 0U) {
         return 0U;
     }
-    if (workspace_object != 0 &&
-        workspace_current_view_kind_value(workspace_object) == WORKSPACE_VIEW_PACKAGE_SOURCE) {
-        return workspace_redraw_image_session_package_source_editor(workspace_object);
+    if (workspace_object != 0) {
+        view_kind = workspace_current_view_kind_value(workspace_object);
+    }
+    if (view_kind == WORKSPACE_VIEW_PACKAGE_SOURCE ||
+        (view_kind == WORKSPACE_VIEW_CLASS_SOURCE &&
+         workspace_browser_return_view_kind() == WORKSPACE_VIEW_INTERACTIVE_CLASSES)) {
+        return workspace_redraw_image_session_source_editor(workspace_object);
     }
     arguments[0] = object_value(heap_handle_for_object(default_form_object()));
     (void)perform_send_and_pop_result(
@@ -11584,7 +11697,8 @@ static void workspace_run_interactive_image_session(
             render_counters_dump();
             continue;
         }
-        if (workspace_current_view_kind_value(workspace_object) != WORKSPACE_VIEW_PACKAGES) {
+        if (!workspace_view_kind_is_image_session_browser_list(
+                workspace_current_view_kind_value(workspace_object))) {
             old_cursor_line = workspace_cursor_line_value();
             old_cursor_column = workspace_cursor_column_value();
             old_top_line = workspace_cursor_top_line_value();
@@ -11601,7 +11715,8 @@ static void workspace_run_interactive_image_session(
             continue;
         }
         if (render_code == 6U &&
-            workspace_current_view_kind_value(workspace_object) != WORKSPACE_VIEW_PACKAGES &&
+            !workspace_view_kind_is_image_session_browser_list(
+                workspace_current_view_kind_value(workspace_object)) &&
             workspace_overlay_image_session_editor_cursor_move(
                 workspace_object,
                 old_cursor_line,
@@ -11611,8 +11726,10 @@ static void workspace_run_interactive_image_session(
             continue;
         }
         if (render_code == 5U &&
-            workspace_current_view_kind_value(workspace_object) == WORKSPACE_VIEW_PACKAGES &&
+            workspace_view_kind_is_image_session_browser_list(
+                workspace_current_view_kind_value(workspace_object)) &&
             workspace_scroll_copy_image_session_browser_list(
+                workspace_object,
                 old_browser_selected_index,
                 old_browser_list_top_line)) {
             continue;
@@ -11621,7 +11738,8 @@ static void workspace_run_interactive_image_session(
             render_code = 2U;
         }
         if (render_code == 1U &&
-            workspace_current_view_kind_value(workspace_object) != WORKSPACE_VIEW_PACKAGES &&
+            !workspace_view_kind_is_image_session_browser_list(
+                workspace_current_view_kind_value(workspace_object)) &&
             workspace_input_byte_is_status_only_command((uint8_t)ch)) {
             render_code = 7U;
         }
