@@ -5449,6 +5449,160 @@ static uint32_t workspace_package_count(void) {
     return package_count;
 }
 
+static uint32_t workspace_class_count(void) {
+    return dynamic_class_count;
+}
+
+static const char *workspace_class_name_at_index(uint32_t one_based_index) {
+    uint16_t dynamic_index;
+
+    if (one_based_index == 0U || one_based_index > dynamic_class_count) {
+        return 0;
+    }
+    for (dynamic_index = 0U; dynamic_index < dynamic_class_count; ++dynamic_index) {
+        if (dynamic_classes[dynamic_index].class_name[0] == '\0') {
+            continue;
+        }
+        if (one_based_index == 1U) {
+            return dynamic_classes[dynamic_index].class_name;
+        }
+        --one_based_index;
+    }
+    return 0;
+}
+
+static const char *workspace_class_names_visible_text(
+    uint32_t first_index,
+    uint32_t line_count,
+    char buffer[],
+    uint32_t buffer_size
+) {
+    uint32_t index;
+    uint32_t offset = 0U;
+
+    workspace_surface_reset_buffer(buffer, buffer_size);
+    if (first_index == 0U) {
+        first_index = 1U;
+    }
+    if (first_index > workspace_class_count()) {
+        return buffer;
+    }
+    for (index = 0U; index < line_count; ++index) {
+        const char *class_name = workspace_class_name_at_index(first_index + index);
+
+        if (class_name == 0) {
+            break;
+        }
+        workspace_surface_append_line(buffer, buffer_size, &offset, class_name);
+    }
+    return buffer;
+}
+
+static const char *workspace_package_name_at_index(uint32_t one_based_index) {
+    uint16_t package_index;
+
+    if (one_based_index == 0U || one_based_index > package_count) {
+        return 0;
+    }
+    for (package_index = 0U; package_index < package_count; ++package_index) {
+        if (live_packages[package_index].package_name[0] == '\0') {
+            continue;
+        }
+        if (one_based_index == 1U) {
+            return live_packages[package_index].package_name;
+        }
+        --one_based_index;
+    }
+    return 0;
+}
+
+static const char *workspace_package_names_visible_text(
+    uint32_t first_index,
+    uint32_t line_count,
+    char buffer[],
+    uint32_t buffer_size
+) {
+    uint32_t index;
+    uint32_t offset = 0U;
+
+    workspace_surface_reset_buffer(buffer, buffer_size);
+    if (first_index == 0U) {
+        first_index = 1U;
+    }
+    if (first_index > workspace_package_count()) {
+        return buffer;
+    }
+    for (index = 0U; index < line_count; ++index) {
+        const char *package_name = workspace_package_name_at_index(first_index + index);
+
+        if (package_name == 0) {
+            break;
+        }
+        workspace_surface_append_line(buffer, buffer_size, &offset, package_name);
+    }
+    return buffer;
+}
+
+static const char *workspace_visible_contents_text(
+    const struct recorz_mvp_heap_object *workspace_object,
+    uint32_t top_line,
+    uint32_t left_column,
+    uint32_t line_count,
+    uint32_t column_count,
+    char buffer[],
+    uint32_t buffer_size
+) {
+    struct recorz_mvp_value source_value = workspace_current_source_value(workspace_object);
+    const char *source = "";
+    uint32_t offset = 0U;
+    uint32_t current_line = 0U;
+    uint32_t current_column = 0U;
+    uint32_t lines_emitted = 0U;
+
+    if (buffer_size == 0U) {
+        return "";
+    }
+    buffer[0] = '\0';
+    if (line_count == 0U || column_count == 0U) {
+        return buffer;
+    }
+    if (source_value.kind == RECORZ_MVP_VALUE_STRING && source_value.string != 0) {
+        source = source_value.string;
+    }
+    while (*source != '\0' && lines_emitted < line_count) {
+        char ch = *source++;
+
+        if (current_line < top_line) {
+            if (ch == '\n') {
+                ++current_line;
+                current_column = 0U;
+            } else {
+                ++current_column;
+            }
+            continue;
+        }
+        if (ch == '\n') {
+            if (lines_emitted + 1U < line_count) {
+                append_text_checked(buffer, buffer_size, &offset, "\n");
+            }
+            ++lines_emitted;
+            ++current_line;
+            current_column = 0U;
+            continue;
+        }
+        if (current_column >= left_column &&
+            (current_column - left_column) < column_count) {
+            if (offset + 1U >= buffer_size) {
+                machine_panic("Workspace visible contents exceed buffer capacity");
+            }
+            buffer[offset++] = ch;
+            buffer[offset] = '\0';
+        }
+        ++current_column;
+    }
+    return buffer;
+}
+
 static uint32_t workspace_package_class_count(
     const char *package_name
 ) {
@@ -16529,6 +16683,319 @@ static void execute_entry_workspace_tool_named_object_or_nil(
         return;
     }
     push(object_value(object_handle));
+}
+
+static void execute_entry_workspace_package_count(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    push(small_integer_value((int32_t)workspace_package_count()));
+}
+
+static void execute_entry_workspace_class_count(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    push(small_integer_value((int32_t)workspace_class_count()));
+}
+
+static void execute_entry_workspace_class_name_at(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const char *class_name;
+    uint32_t index;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    index = small_integer_u32(
+        arguments[0],
+        "Workspace classNameAt: expects a positive small integer"
+    );
+    class_name = workspace_class_name_at_index(index);
+    if (class_name == 0) {
+        push(string_value(""));
+        return;
+    }
+    push(string_value(class_name));
+}
+
+static void execute_entry_workspace_class_names_visible_from_count(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint32_t first_index;
+    uint32_t count;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    first_index = small_integer_u32(
+        arguments[0],
+        "Workspace classNamesVisibleFrom:count: expects a positive first index"
+    );
+    count = small_integer_u32(
+        arguments[1],
+        "Workspace classNamesVisibleFrom:count: expects a non-negative line count"
+    );
+    push(string_value(runtime_string_intern_copy(
+        workspace_class_names_visible_text(
+            first_index,
+            count,
+            workspace_surface_list_buffer,
+            sizeof(workspace_surface_list_buffer)
+        ))));
+}
+
+static void execute_entry_workspace_package_name_at(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const char *package_name;
+    uint32_t index;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    index = small_integer_u32(
+        arguments[0],
+        "Workspace packageNameAt: expects a positive small integer"
+    );
+    package_name = workspace_package_name_at_index(index);
+    if (package_name == 0) {
+        push(string_value(""));
+        return;
+    }
+    push(string_value(package_name));
+}
+
+static void execute_entry_workspace_package_names_visible_from_count(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint32_t first_index;
+    uint32_t count;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    first_index = small_integer_u32(
+        arguments[0],
+        "Workspace packageNamesVisibleFrom:count: expects a positive first index"
+    );
+    count = small_integer_u32(
+        arguments[1],
+        "Workspace packageNamesVisibleFrom:count: expects a non-negative line count"
+    );
+    push(string_value(runtime_string_intern_copy(
+        workspace_package_names_visible_text(
+            first_index,
+            count,
+            workspace_surface_list_buffer,
+            sizeof(workspace_surface_list_buffer)
+        ))));
+}
+
+static void execute_entry_workspace_visible_contents_top_lines_columns(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint32_t top_line;
+    uint32_t line_count;
+    uint32_t column_count;
+
+    (void)receiver;
+    (void)text;
+    top_line = small_integer_u32(
+        arguments[0],
+        "Workspace visibleContentsTop:lines:columns: expects a non-negative top line"
+    );
+    line_count = small_integer_u32(
+        arguments[1],
+        "Workspace visibleContentsTop:lines:columns: expects a non-negative line count"
+    );
+    column_count = small_integer_u32(
+        arguments[2],
+        "Workspace visibleContentsTop:lines:columns: expects a non-negative column count"
+    );
+    push(string_value(runtime_string_intern_copy(
+        workspace_visible_contents_text(
+            object,
+            top_line,
+            0U,
+            line_count,
+            column_count,
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer)
+        ))));
+}
+
+static void execute_entry_workspace_visible_contents_top_left_lines_columns(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint32_t top_line;
+    uint32_t left_column;
+    uint32_t line_count;
+    uint32_t column_count;
+
+    (void)receiver;
+    (void)text;
+    top_line = small_integer_u32(
+        arguments[0],
+        "Workspace visibleContentsTop:left:lines:columns: expects a non-negative top line"
+    );
+    left_column = small_integer_u32(
+        arguments[1],
+        "Workspace visibleContentsTop:left:lines:columns: expects a non-negative left column"
+    );
+    line_count = small_integer_u32(
+        arguments[2],
+        "Workspace visibleContentsTop:left:lines:columns: expects a non-negative line count"
+    );
+    column_count = small_integer_u32(
+        arguments[3],
+        "Workspace visibleContentsTop:left:lines:columns: expects a non-negative column count"
+    );
+    push(string_value(runtime_string_intern_copy(
+        workspace_visible_contents_text(
+            object,
+            top_line,
+            left_column,
+            line_count,
+            column_count,
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer)
+        ))));
+}
+
+static void execute_entry_workspace_move_cursor_left(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    workspace_move_input_monitor_cursor_left(object);
+    push(receiver);
+}
+
+static void execute_entry_workspace_move_cursor_right(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    workspace_move_input_monitor_cursor_right(object);
+    push(receiver);
+}
+
+static void execute_entry_workspace_move_cursor_up(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    workspace_move_input_monitor_cursor_up(object);
+    push(receiver);
+}
+
+static void execute_entry_workspace_move_cursor_down(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    workspace_move_input_monitor_cursor_down(object);
+    push(receiver);
+}
+
+static void execute_entry_workspace_move_cursor_to_line_start(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    workspace_move_input_monitor_cursor_to_line_start(object);
+    push(receiver);
+}
+
+static void execute_entry_workspace_move_cursor_to_line_end(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    workspace_move_input_monitor_cursor_to_line_end(object);
+    push(receiver);
+}
+
+static void execute_entry_workspace_insert_code_point(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint32_t code_point;
+
+    (void)text;
+    code_point = small_integer_u32(
+        arguments[0],
+        "Workspace insertCodePoint: expects a non-negative small integer"
+    );
+    if (code_point > 255U) {
+        machine_panic("Workspace insertCodePoint: code point exceeds byte range");
+    }
+    workspace_insert_input_monitor_character(object, (char)code_point);
+    push(receiver);
+}
+
+static void execute_entry_workspace_delete_backward(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    workspace_backspace_input_monitor_character(object);
+    push(receiver);
 }
 
 static const recorz_mvp_method_entry_handler primitive_binding_handlers[RECORZ_MVP_PRIMITIVE_COUNT] = {
