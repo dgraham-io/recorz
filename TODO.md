@@ -9,6 +9,8 @@ Phase 1 is to build the first native Recorz development UI in the image using a 
 
 This TODO tracks the current Phase 1 contract. The broader language, typing, capability, HDL, and self-hosting aspirations in the formal specs are long-term direction, not the current implementation boundary.
 
+The staged work after Phase 1 is tracked in [docs/post_phase_1_roadmap.md](/Users/david/repos/recorz/docs/post_phase_1_roadmap.md).
+
 The immediate target is not a full window system. It is a credible initial in-image workspace and browser built on the same kind of primitive boundary Smalltalk-80 used.
 
 Reference:

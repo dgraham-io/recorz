@@ -21,6 +21,8 @@ import build_qemu_riscv_mvp_image as mvp  # noqa: E402
 SNAPSHOT_MAGIC = b"RCZT"
 SNAPSHOT_VERSION = 7
 SUPPORTED_SNAPSHOT_VERSIONS = {7}
+SNAPSHOT_COMPATIBILITY_PROFILE = "RV32MVP1"
+SNAPSHOT_COMPATIBILITY_LABEL = f"{SNAPSHOT_COMPATIBILITY_PROFILE} snapshot format v{SNAPSHOT_VERSION}"
 SNAPSHOT_HEADER_SIZE = 52
 SNAPSHOT_VALUE_SIZE = 8
 OBJECT_FIELD_LIMIT = 4
@@ -190,7 +192,9 @@ def parse_snapshot(blob: bytes) -> ParsedSnapshot:
         total_size=_read_u32_le(blob, 48),
     )
     if header.version not in SUPPORTED_SNAPSHOT_VERSIONS:
-        raise SnapshotInspectionError("snapshot version mismatch")
+        raise SnapshotInspectionError(
+            f"snapshot version mismatch: expected {SNAPSHOT_COMPATIBILITY_LABEL}, found v{header.version}"
+        )
     if header.object_count == 0:
         raise SnapshotInspectionError("snapshot object count is zero")
     if header.total_size != len(blob):
@@ -483,6 +487,8 @@ def inspect_snapshot(blob: bytes) -> dict[str, object]:
     return {
         "header": {
             "version": snapshot.header.version,
+            "compatibility_profile": SNAPSHOT_COMPATIBILITY_PROFILE,
+            "compatibility_label": SNAPSHOT_COMPATIBILITY_LABEL,
             "object_count": snapshot.header.object_count,
             "dynamic_class_count": snapshot.header.dynamic_class_count,
             "package_count": snapshot.header.package_count,

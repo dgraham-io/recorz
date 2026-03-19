@@ -539,6 +539,13 @@ sourceEditorViewKind: aViewKind
     ^false
 !
 dispatchWorkspaceCommandOnForm: aByte
+    | plainState |
+    aByte = self returnToBrowserCommandByte ifTrue: [
+        self browserReturnViewKind = nil ifFalse: [^self returnFromSourceEditor].
+        plainState := self namedObjectOrNil: 'BootWorkspacePlainState'.
+        plainState = nil ifFalse: [
+            plainState contents = nil ifFalse: [^self restorePlainWorkspaceState]].
+        ^0].
     aByte = self acceptCommandByte ifTrue: [self acceptCurrent. ^1].
     aByte = self revertCommandByte ifTrue: [self revertCurrent. ^1].
     aByte = self runTestsCommandByte ifTrue: [self runCurrentTests. ^1].
@@ -637,6 +644,24 @@ setWorkspaceName: aWorkspaceName
     | tool |
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
     ^tool setWorkspaceName: aWorkspaceName
+!
+developmentHome
+    | session tool |
+    self setContents: 'Workspace developmentHome.'.
+    self setCurrentViewKind: 20.
+    self setCurrentTargetName: nil.
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    tool setBrowserReturnViewKind: nil targetName: nil.
+    session := KernelInstaller objectNamed: 'BootWorkspaceSession'.
+    session openOn: self mode: 0.
+    ^self
+!
+browsePackagesInteractive
+    | session |
+    session := KernelInstaller objectNamed: 'BootWorkspaceSession'.
+    session openOn: self mode: 2.
+    self interactiveInputMonitor.
+    ^self
 !
 visibleOrigin
     | tool |
@@ -975,7 +1000,7 @@ browserListViewActive
     ^false
 !
 openingMenuOptionCount
-    ^3
+    ^4
 !
 currentListCount
     | viewKind |
@@ -1008,19 +1033,30 @@ currentBrowserItemsVisibleFrom: firstIndex count: lineCount
 openingMenuItemsVisibleFrom: firstIndex count: lineCount
     lineCount < 1 ifTrue: [^''].
     firstIndex < 1 ifTrue: [firstIndex := 1].
-    firstIndex > 3 ifTrue: [^''].
+    firstIndex > 4 ifTrue: [^''].
     firstIndex = 1 ifTrue: [
         lineCount = 1 ifTrue: [^'Workspace'].
         lineCount = 2 ifTrue: [^'Workspace
 Class Browser'].
-        ^'Workspace
+        lineCount = 3 ifTrue: [^'Workspace
 Class Browser
 Project Browser'].
+        ^'Workspace
+Class Browser
+Project Browser
+Memory Report'].
     firstIndex = 2 ifTrue: [
         lineCount = 1 ifTrue: [^'Class Browser'].
-        ^'Class Browser
+        lineCount = 2 ifTrue: [^'Class Browser
 Project Browser'].
-    ^'Project Browser'
+        ^'Class Browser
+Project Browser
+Memory Report'].
+    firstIndex = 3 ifTrue: [
+        lineCount = 1 ifTrue: [^'Project Browser'].
+        ^'Project Browser
+Memory Report'].
+    ^'Memory Report'
 !
 currentBrowserHeaderText
     workspace currentViewKind = 20 ifTrue: [^'OPENING MENU'].
@@ -1105,6 +1141,8 @@ currentStatusText
     viewKind = 14 ifTrue: [^'INTERACTIVE PACKAGE LIST'].
     viewKind = 21 ifTrue: [^'INTERACTIVE CLASS LIST'].
     workspace isModified ifTrue: [^'SOURCE EDITOR :: MODIFIED'].
+    viewKind = 18 ifTrue: [
+        workspace currentTargetName = 'Memory Report' ifTrue: [^'MEMORY REPORT']].
     viewKind = 5 ifTrue: [^'METHOD SOURCE :: SOURCE EDITOR READY'].
     viewKind = 7 ifTrue: [^'CLASS METHOD :: SOURCE EDITOR READY'].
     viewKind = 8 ifTrue: [^'CLASS SOURCE :: SOURCE EDITOR READY'].
@@ -1122,6 +1160,8 @@ currentFeedbackText
     viewKind = 20 ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  X SELECT  O CLOSE'].
     viewKind = 14 ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  X OPEN  O CLOSE'].
     viewKind = 21 ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  X OPEN  O CLOSE'].
+    viewKind = 18 ifTrue: [
+        workspace currentTargetName = 'Memory Report' ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  O RETURN']].
     viewKind = 5 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
     viewKind = 7 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
     viewKind = 8 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
@@ -1274,12 +1314,23 @@ openSelectedOpeningMenuItem
         listTop := 0.
         self prepareListSelectionForCount: workspace classCount.
         ^4].
-    workspace setCurrentViewKind: 14.
-    workspace setCurrentTargetName: nil.
-    selected := 0.
-    listTop := 0.
-    self prepareListSelectionForCount: workspace packageCount.
-    ^4
+    selected = 2 ifTrue: [
+        workspace setCurrentViewKind: 14.
+        workspace setCurrentTargetName: nil.
+        selected := 0.
+        listTop := 0.
+        self prepareListSelectionForCount: workspace packageCount.
+        ^4].
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    tool setBrowserReturnViewKind: 20 targetName: nil.
+    workspace setCurrentViewKind: 18.
+    workspace setCurrentTargetName: 'Memory Report'.
+    workspace setContents: KernelInstaller memoryReport.
+    Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: 0.
+    Workspace collapseSelectionToCursor.
+    Workspace setVisibleOriginTop: 0 left: 0.
+    self ensureEditorCursorVisible.
+    ^1
 !
 openSelectedPackageSource
     | packageName source priorTarget tool |

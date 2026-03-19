@@ -66,6 +66,7 @@
 #define SNAPSHOT_MAGIC_2 'Z'
 #define SNAPSHOT_MAGIC_3 'T'
 #define SNAPSHOT_VERSION 7U
+#define SNAPSHOT_COMPATIBILITY_PROFILE "RV32MVP1"
 #define DEBUG_DUMP_RENDER_COUNTERS_BYTE 0x1fU
 #define GC_TEMP_ROOT_LIMIT 8U
 #define SNAPSHOT_HEADER_SIZE 52U
@@ -15244,6 +15245,9 @@ static void emit_live_snapshot(void) {
         machine_panic("snapshot encoding size mismatch");
     }
 
+    machine_puts("recorz-snapshot-profile ");
+    machine_puts(SNAPSHOT_COMPATIBILITY_PROFILE);
+    machine_putc('\n');
     machine_puts("recorz-snapshot-begin ");
     panic_put_u32(total_size);
     machine_putc('\n');
@@ -15302,7 +15306,7 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
         machine_panic("snapshot magic mismatch");
     }
     if (read_u16_le(blob + 4U) != SNAPSHOT_VERSION) {
-        machine_panic("snapshot version mismatch");
+        machine_panic("snapshot version mismatch: expected RV32MVP1 snapshot v7");
     }
     object_count = read_u16_le(blob + 6U);
     dynamic_count = read_u16_le(blob + 8U);

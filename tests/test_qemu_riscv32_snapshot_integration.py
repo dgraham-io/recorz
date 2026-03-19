@@ -809,12 +809,15 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             snapshot_output=SNAPSHOT_DISPLAY_CURSOR_OUTPUT_PATH,
         )
         self.assertIn("recorz-snapshot-begin", save_log)
+        self.assertIn("recorz-snapshot-profile RV32MVP1", save_log)
         self.assertTrue(SNAPSHOT_DISPLAY_CURSOR_OUTPUT_PATH.exists())
 
         snapshot_summary = self.inspect_snapshot_summary(snapshot_path=SNAPSHOT_DISPLAY_CURSOR_OUTPUT_PATH)
         header = snapshot_summary.get("header")
         self.assertIsInstance(header, dict)
         assert isinstance(header, dict)
+        self.assertEqual(header["compatibility_profile"], "RV32MVP1")
+        self.assertEqual(header["compatibility_label"], "RV32MVP1 snapshot format v7")
         self.assertEqual(header["active_cursor_visible"], 1)
         self.assertEqual(header["active_cursor_x"], 12)
         self.assertEqual(header["active_cursor_y"], 34)
@@ -833,6 +836,35 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         self.assertIn("CURSOR VISIBLE", reload_log)
         self.assertIn("CURSOR X OK", reload_log)
         self.assertIn("CURSOR Y OK", reload_log)
+
+    def test_snapshot_version_mismatch_reports_the_expected_rv32_profile(self) -> None:
+        save_log = self.save_snapshot(
+            build_dir=SNAPSHOT_SAVE_BUILD_DIR,
+            example_path=SNAPSHOT_SAVE_DEMO_PATH,
+            snapshot_output=SNAPSHOT_OUTPUT_PATH,
+        )
+        self.assertIn("recorz-snapshot-profile RV32MVP1", save_log)
+        with tempfile.TemporaryDirectory(prefix="recorz-snapshot-version-mismatch-") as temp_dir:
+            corrupted_snapshot_path = Path(temp_dir) / "snapshot.bin"
+            corrupted_blob = bytearray(SNAPSHOT_OUTPUT_PATH.read_bytes())
+            corrupted_blob[4:6] = (6).to_bytes(2, byteorder="little")
+            corrupted_snapshot_path.write_bytes(corrupted_blob)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "tools" / "inspect_qemu_riscv_snapshot.py"),
+                    str(corrupted_snapshot_path),
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(
+                "snapshot version mismatch: expected RV32MVP1 snapshot format v7, found v6",
+                result.stderr,
+            )
 
     def test_external_file_in_payload_can_evolve_a_saved_snapshot(self) -> None:
         save_log = self.save_snapshot(
