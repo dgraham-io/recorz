@@ -111,6 +111,9 @@
 #define BLOCK_CLOSURE_FIELD_HOME_RECEIVER RECORZ_MVP_BLOCK_CLOSURE_FIELD_HOME_RECEIVER
 #define BLOCK_CLOSURE_FIELD_LEXICAL0 RECORZ_MVP_BLOCK_CLOSURE_FIELD_LEXICAL0
 #define BLOCK_CLOSURE_FIELD_LEXICAL1 RECORZ_MVP_BLOCK_CLOSURE_FIELD_LEXICAL1
+#define PROCESS_FIELD_LABEL RECORZ_MVP_PROCESS_FIELD_LABEL
+#define PROCESS_FIELD_STATE RECORZ_MVP_PROCESS_FIELD_STATE
+#define PROCESS_FIELD_CONTEXT RECORZ_MVP_PROCESS_FIELD_CONTEXT
 #define CONTEXT_FIELD_SENDER RECORZ_MVP_CONTEXT_FIELD_SENDER
 #define CONTEXT_FIELD_RECEIVER RECORZ_MVP_CONTEXT_FIELD_RECEIVER
 #define CONTEXT_FIELD_DETAIL RECORZ_MVP_CONTEXT_FIELD_DETAIL
@@ -159,8 +162,8 @@
 #define CHARACTER_SCANNER_STOP_CONTROL 4U
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
-#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_TOOL
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_CONTEXT_STACK_NAMED
+#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_PROCESS
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SET_LABEL_STATE_CONTEXT
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -1387,6 +1390,14 @@ static const char *selector_name(uint16_t selector) {
             return "objectDetailNamed:";
         case RECORZ_MVP_SELECTOR_CONTEXT_STACK_NAMED:
             return "contextStackNamed:";
+        case RECORZ_MVP_SELECTOR_LABEL:
+            return "label";
+        case RECORZ_MVP_SELECTOR_STATE:
+            return "state";
+        case RECORZ_MVP_SELECTOR_CONTEXT:
+            return "context";
+        case RECORZ_MVP_SELECTOR_SET_LABEL_STATE_CONTEXT:
+            return "setLabel:state:context:";
     }
     return "unknown";
 }
@@ -1463,6 +1474,8 @@ static const char *object_kind_name(uint8_t kind) {
             return "CursorFactory";
         case RECORZ_MVP_OBJECT_CHARACTER_SCANNER:
             return "CharacterScanner";
+        case RECORZ_MVP_OBJECT_PROCESS:
+            return "Process";
         case RECORZ_MVP_OBJECT_WORKSPACE_TOOL:
             return "WorkspaceTool";
     }
@@ -16981,6 +16994,31 @@ static void execute_entry_workspace_context_stack_named(
         machine_panic("Workspace contextStackNamed: expects an object name string");
     }
     push(string_value(workspace_context_stack_text_for_named_object(arguments[0].string)));
+}
+
+static void execute_entry_process_set_label_state_context(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_PROCESS) {
+        machine_panic("Process setLabel:state:context: expects a Process receiver");
+    }
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Process setLabel:state:context: expects a label string");
+    }
+    if (arguments[1].kind != RECORZ_MVP_VALUE_STRING || arguments[1].string == 0) {
+        machine_panic("Process setLabel:state:context: expects a state string");
+    }
+    if (arguments[2].kind != RECORZ_MVP_VALUE_NIL && arguments[2].kind != RECORZ_MVP_VALUE_OBJECT) {
+        machine_panic("Process setLabel:state:context: expects a context object or nil");
+    }
+    heap_set_field(heap_handle_for_object(object), PROCESS_FIELD_LABEL, arguments[0]);
+    heap_set_field(heap_handle_for_object(object), PROCESS_FIELD_STATE, arguments[1]);
+    heap_set_field(heap_handle_for_object(object), PROCESS_FIELD_CONTEXT, arguments[2]);
+    push(receiver);
 }
 
 static void execute_entry_workspace_package_count(

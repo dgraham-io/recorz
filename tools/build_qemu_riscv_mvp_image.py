@@ -1578,6 +1578,31 @@ def compile_kernel_method_program(class_name: str, instance_variables: list[str]
             lowered.append(encode_compiled_method_instruction("push_this_context"))
             instruction_index += 1
             continue
+        if instruction.opcode == "duplicate":
+            lowered.append(encode_compiled_method_instruction("dup"))
+            instruction_index += 1
+            continue
+        if instruction.opcode == "pop":
+            lowered.append(encode_compiled_method_instruction("pop"))
+            instruction_index += 1
+            continue
+        if instruction.opcode == "store_binding":
+            binding = instruction.operand
+            if not isinstance(binding, BindingRef):
+                raise LoweringError(
+                    f"Kernel method {class_name}>>{compiled.selector} expected a binding operand, found {binding!r}"
+                )
+            if binding.kind != "instance":
+                raise LoweringError(
+                    f"Kernel method {class_name}>>{compiled.selector} uses unsupported store binding kind {binding.kind!r}"
+                )
+            if binding.name not in field_indices:
+                raise LoweringError(
+                    f"Kernel method {class_name}>>{compiled.selector} uses unknown instance variable {binding.name!r}"
+                )
+            lowered.append(encode_compiled_method_instruction("store_field", field_indices[binding.name]))
+            instruction_index += 1
+            continue
         raise LoweringError(
             f"Kernel method {class_name}>>{compiled.selector} uses unsupported compiler opcode {instruction.opcode!r}"
         )

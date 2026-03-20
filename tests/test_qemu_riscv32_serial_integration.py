@@ -5934,6 +5934,70 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("alive", output)
             self.assertNotIn("panic:", output)
 
+    def test_workspace_browse_object_named_can_render_active_process_fields(self) -> None:
+        if not _workspace_object_detail_is_implemented():
+            self.skipTest("RV32 workspace object-detail primitive is not wired yet")
+        widget_source = (ROOT / "kernel" / "textui" / "WidgetBootstrap.rz").read_text(encoding="utf-8")
+        if "BootActiveProcess" not in widget_source:
+            self.skipTest("RV32 active-process object inspector is not wired yet")
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-active-process-object-browser-") as temp_dir:
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "build"
+            example_path = temp_path / "active_process_inspector_demo.rz"
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "Display clear.",
+                        "Workspace developmentHome.",
+                        "Workspace browseObjectNamed: 'BootActiveProcess'.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            elf_path = _build_elf(build_dir, example_path)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            normalized_output = output.replace("\n", "")
+            self.assertIn("OBJECT BROWSER", output)
+            self.assertIn("OBJECT: BootActiveProcess", normalized_output)
+            self.assertIn("CLASS: Process", output)
+            self.assertIn("label", output)
+            self.assertIn("state", output)
+            self.assertIn("context", output)
+            self.assertNotIn("panic:", output)
+
     def test_package_comment_round_trips_through_file_out_source(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-package-comment-") as temp_dir:
             build_dir = Path(temp_dir)

@@ -340,7 +340,6 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 mvp.encode_compiled_method_instruction("return_top"),
             ],
         )
-
     def test_loads_kernel_methods_from_class_source_files(self) -> None:
         sources = mvp.load_kernel_method_sources()
         transcript_show = sources["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW"]
@@ -351,6 +350,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         form_newline = sources["RECORZ_MVP_METHOD_ENTRY_FORM_NEWLINE"]
         form_be_display = sources["RECORZ_MVP_METHOD_ENTRY_FORM_BE_DISPLAY"]
         font_point_size = sources["RECORZ_MVP_METHOD_ENTRY_FONT_POINT_SIZE"]
+        process_setter = sources["RECORZ_MVP_METHOD_ENTRY_PROCESS_SET_LABEL_STATE_CONTEXT"]
 
         self.assertEqual(len(sources), len(mvp.METHOD_ENTRY_DEFINITIONS))
         self.assertEqual(
@@ -370,6 +370,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "FormFactory.rz",
                 "Glyphs.rz",
                 "KernelInstaller.rz",
+                "Process.rz",
                 "StyledText.rz",
                 "TestRunner.rz",
                 "TextFlow.rz",
@@ -452,6 +453,16 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(font_point_size.implementation_kind, mvp.KERNEL_METHOD_IMPLEMENTATION_COMPILED)
         self.assertIsNone(font_point_size.primitive_binding)
         self.assertEqual(font_point_size.source_text, "pointSize\n    ^pointSize")
+        self.assertEqual(process_setter.class_name, "Process")
+        self.assertEqual(process_setter.relative_path, "Process.rz")
+        self.assertEqual(process_setter.selector, "setLabel:state:context:")
+        self.assertEqual(process_setter.argument_count, 3)
+        self.assertEqual(process_setter.implementation_kind, mvp.KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE)
+        self.assertEqual(process_setter.primitive_binding, "processSetLabelStateContext")
+        self.assertEqual(
+            process_setter.source_text,
+            "setLabel: aLabel state: aState context: aContext\n    <primitive: #processSetLabelStateContext>",
+        )
 
     def test_splits_class_file_chunks_on_bang_lines(self) -> None:
         self.assertEqual(
@@ -676,6 +687,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLeftLinesColumns"], 62)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceBrowseInteractiveViews"], 79)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 98)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processSetLabelStateContext"], 111)
         for binding_name in _workspace_tool_primitive_bindings():
             self.assertIn(binding_name, mvp.PRIMITIVE_BINDING_VALUES)
         self.assertEqual(
@@ -689,6 +701,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(
             mvp.PRIMITIVE_BINDING_BY_ENTRY_NAME["RECORZ_MVP_METHOD_ENTRY_FORM_BE_DISPLAY"],
             mvp.PRIMITIVE_BINDING_VALUES["formBeDisplay"],
+        )
+        self.assertEqual(
+            mvp.PRIMITIVE_BINDING_BY_ENTRY_NAME["RECORZ_MVP_METHOD_ENTRY_PROCESS_SET_LABEL_STATE_CONTEXT"],
+            mvp.PRIMITIVE_BINDING_VALUES["processSetLabelStateContext"],
         )
 
     def test_derives_global_maps_from_boot_object_exports_and_selector_maps_from_source(self) -> None:
@@ -749,6 +765,14 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             "RECORZ_MVP_SELECTOR_CONTEXT_STACK_NAMED",
         )
         self.assertEqual(mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_CONTEXT_STACK_NAMED"], 373)
+        self.assertEqual(mvp.SELECTOR_IDS["label"], "RECORZ_MVP_SELECTOR_LABEL")
+        self.assertEqual(mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_LABEL"], 374)
+        self.assertEqual(mvp.SELECTOR_IDS["state"], "RECORZ_MVP_SELECTOR_STATE")
+        self.assertEqual(mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_STATE"], 375)
+        self.assertEqual(mvp.SELECTOR_IDS["context"], "RECORZ_MVP_SELECTOR_CONTEXT")
+        self.assertEqual(mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_CONTEXT"], 376)
+        self.assertEqual(mvp.SELECTOR_IDS["setLabel:state:context:"], "RECORZ_MVP_SELECTOR_SET_LABEL_STATE_CONTEXT")
+        self.assertEqual(mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SET_LABEL_STATE_CONTEXT"], 377)
         self.assertEqual(
             mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_FILE_IN_METHOD_CHUNKS_ON_CLASS"],
             26,
@@ -1130,6 +1154,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_OPEN_SELECTED_CONTEXT_DEBUGGER", 371),
                 ("RECORZ_MVP_SELECTOR_OBJECT_DETAIL_NAMED", 372),
                 ("RECORZ_MVP_SELECTOR_CONTEXT_STACK_NAMED", 373),
+                ("RECORZ_MVP_SELECTOR_LABEL", 374),
+                ("RECORZ_MVP_SELECTOR_STATE", 375),
+                ("RECORZ_MVP_SELECTOR_CONTEXT", 376),
+                ("RECORZ_MVP_SELECTOR_SET_LABEL_STATE_CONTEXT", 377),
             ],
         )
 
@@ -1146,7 +1174,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.OBJECT_KIND_SPECS[0], ("Transcript", "RECORZ_MVP_OBJECT_TRANSCRIPT"))
         self.assertEqual(
             mvp.OBJECT_KIND_SPECS[-1],
-            ("WorkspaceVisibleOrigin", "RECORZ_MVP_OBJECT_WORKSPACE_VISIBLE_ORIGIN"),
+            ("Process", "RECORZ_MVP_OBJECT_PROCESS"),
         )
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_IN_DESCRIPTOR_ORDER[0],
@@ -1192,11 +1220,12 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "CharacterScanner",
                 "WorkspaceTool",
                 "WorkspaceVisibleOrigin",
+                "Process",
             ],
         )
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_IN_DESCRIPTOR_ORDER[-1],
-            mvp.KernelClassHeader("WorkspaceVisibleOrigin", 36, 36, 30, ("topLine", "leftColumn")),
+            mvp.KernelClassHeader("Process", 37, 37, 31, ("label", "state", "context")),
         )
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_BY_NAME["Class"],
@@ -1218,6 +1247,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_BY_NAME["Context"],
             mvp.KernelClassHeader("Context", 23, 23, 14, ("sender", "receiver", "detail", "alive")),
+        )
+        self.assertEqual(
+            mvp.KERNEL_CLASS_HEADERS_BY_NAME["Process"],
+            mvp.KernelClassHeader("Process", 37, 37, 31, ("label", "state", "context")),
         )
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_BY_NAME["TestRunner"],
@@ -1270,7 +1303,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["BitBlt"], mvp.SEED_OBJECT_BITBLT)
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["CompiledMethod"], mvp.SEED_OBJECT_COMPILED_METHOD)
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["KernelInstaller"], mvp.SEED_OBJECT_KERNEL_INSTALLER)
-        self.assertEqual(mvp.OBJECT_KIND_DEFINITIONS[-1], ("RECORZ_MVP_OBJECT_WORKSPACE_VISIBLE_ORIGIN", 37))
+        self.assertEqual(mvp.OBJECT_KIND_DEFINITIONS[-1], ("RECORZ_MVP_OBJECT_PROCESS", 38))
         self.assertEqual(mvp.CLASS_FIELD_METHOD_START, mvp.kernel_instance_variable_index("Class", "methodStart"))
         self.assertEqual(mvp.METHOD_FIELD_ENTRY, mvp.kernel_instance_variable_index("MethodDescriptor", "entry"))
         self.assertEqual(
@@ -1399,6 +1432,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "CharacterScanner",
                 "WorkspaceTool",
                 "WorkspaceVisibleOrigin",
+                "Process",
             ],
         )
         self.assertEqual(
@@ -1460,8 +1494,9 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            mvp.METHOD_ENTRY_ORDER[-13:],
+            mvp.METHOD_ENTRY_ORDER[-18:],
             [
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_EVALUATE_CURRENT",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_PRINT_CURRENT",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_ACCEPT_CURRENT",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_REVERT_CURRENT",
@@ -1475,6 +1510,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_STATUS_TEXT",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_FEEDBACK_TEXT",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_NAMED_OBJECT_OR_NIL",
+                "RECORZ_MVP_METHOD_ENTRY_PROCESS_LABEL",
+                "RECORZ_MVP_METHOD_ENTRY_PROCESS_STATE",
+                "RECORZ_MVP_METHOD_ENTRY_PROCESS_CONTEXT",
+                "RECORZ_MVP_METHOD_ENTRY_PROCESS_SET_LABEL_STATE_CONTEXT",
             ],
         )
 
@@ -1878,6 +1917,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "CharacterScanner",
                 "WorkspaceTool",
                 "WorkspaceVisibleOrigin",
+                "Process",
             ],
         )
         self.assertEqual(
@@ -2152,7 +2192,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertIsNone(mvp.validate_dynamic_seed_build_step_specs())
         layout = mvp.build_seed_layout(140, mvp.CLASS_DESCRIPTOR_KIND_ORDER)
-        self.assertEqual(layout["class_descriptors"], mvp.SeedLayoutSection(140, 37))
+        self.assertEqual(
+            layout["class_descriptors"],
+            mvp.SeedLayoutSection(140, len(mvp.CLASS_DESCRIPTOR_KIND_ORDER)),
+        )
         self.assertEqual(
             layout["selectors"],
             mvp.SeedLayoutSection(140 + len(mvp.CLASS_DESCRIPTOR_KIND_ORDER), len(mvp.SELECTOR_VALUE_ORDER)),
@@ -2190,7 +2233,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         seed_objects, _seed_object_indices_by_name, _glyph_object_indices = mvp.build_fixed_boot_seed_objects()
         dynamic_sections = mvp.build_dynamic_seed_sections(seed_objects)
 
-        self.assertEqual(dynamic_sections.seed_layout["class_descriptors"], mvp.SeedLayoutSection(152, 37))
+        self.assertEqual(
+            dynamic_sections.seed_layout["class_descriptors"],
+            mvp.SeedLayoutSection(152, len(mvp.CLASS_DESCRIPTOR_KIND_ORDER)),
+        )
         self.assertEqual(dynamic_sections.class_indices[mvp.SEED_OBJECT_TRANSCRIPT], 153)
         self.assertEqual(dynamic_sections.class_indices[mvp.SEED_OBJECT_COMPILED_METHOD], 168)
         self.assertEqual(dynamic_sections.class_indices[mvp.SEED_OBJECT_KERNEL_INSTALLER], 169)
@@ -2206,7 +2252,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "selectors",
             ],
         )
-        self.assertEqual(len(dynamic_sections.class_seed_objects), 37)
+        self.assertEqual(len(dynamic_sections.class_seed_objects), len(mvp.CLASS_DESCRIPTOR_KIND_ORDER))
         self.assertEqual(len(dynamic_sections.selector_seed_objects), len(mvp.SELECTOR_VALUE_ORDER))
         self.assertEqual(
             len(dynamic_sections.compiled_method_seed_objects),
@@ -2440,6 +2486,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             "RECORZ_MVP_SELECTOR_BEHAVIOR",
             "RECORZ_MVP_SELECTOR_POINT_SIZE",
             "RECORZ_MVP_SELECTOR_FONT",
+            "RECORZ_MVP_SELECTOR_LABEL",
+            "RECORZ_MVP_SELECTOR_STATE",
+            "RECORZ_MVP_SELECTOR_CONTEXT",
+            "RECORZ_MVP_SELECTOR_SET_LABEL_STATE_CONTEXT",
         ):
             self.assertIn(f"{symbol} = {mvp.SELECTOR_VALUES[symbol]},", header)
         self.assertIn("enum recorz_mvp_literal_kind {", header)

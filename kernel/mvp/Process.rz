@@ -1,0 +1,14 @@
+RecorzKernelClass: #Process descriptorOrder: 37 objectKindOrder: 37 sourceBootOrder: 31 instanceVariableNames: 'label state context'
+!
+label
+    ^label
+!
+state
+    ^state
+!
+context
+    ^context
+!
+setLabel: aLabel state: aState context: aContext
+    <primitive: #processSetLabelStateContext>
+!

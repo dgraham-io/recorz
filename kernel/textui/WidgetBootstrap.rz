@@ -652,6 +652,7 @@ developmentHome
     self setContents: 'Workspace developmentHome.'.
     self setCurrentViewKind: 20.
     self setCurrentTargetName: nil.
+    KernelInstaller rememberObject: ((KernelInstaller classNamed: 'Process') new setLabel: 'Active Process' state: 'idle' context: nil) named: 'BootActiveProcess'.
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
     tool setBrowserReturnViewKind: nil targetName: nil.
     session := KernelInstaller objectNamed: 'BootWorkspaceSession'.
@@ -667,6 +668,7 @@ browsePackagesInteractive
 !
 captureDebugContext
     KernelInstaller rememberObject: thisContext named: 'BootWorkspaceDebugContext'.
+    KernelInstaller rememberObject: ((KernelInstaller classNamed: 'Process') new setLabel: 'Active Process' state: 'active' context: thisContext) named: 'BootActiveProcess'.
     ^self
 !
 visibleOrigin
@@ -1013,7 +1015,7 @@ isObjectInspectorBrowser
     ^workspace currentTargetName = 'OBJECT INSPECTOR'
 !
 objectInspectorCount
-    ^5
+    ^6
 !
 selectedObjectInspectorName
     selected = 0 ifTrue: [^'BootWorkspaceTool'].
@@ -1021,6 +1023,7 @@ selectedObjectInspectorName
     selected = 2 ifTrue: [^'BootBrowserSurface'].
     selected = 3 ifTrue: [^'BootTextRenderer'].
     selected = 4 ifTrue: [^'BootInputMonitorRenderer'].
+    selected = 5 ifTrue: [^'BootActiveProcess'].
     ^''
 !
 currentListCount
@@ -1062,7 +1065,8 @@ objectInspectorItemsVisibleFrom: firstIndex count: lineCount
 BootWorkspaceSession
 BootBrowserSurface
 BootTextRenderer
-BootInputMonitorRenderer'
+BootInputMonitorRenderer
+BootActiveProcess'
 !
 openingMenuItemsVisibleFrom: firstIndex count: lineCount
     lineCount < 1 ifTrue: [^''].

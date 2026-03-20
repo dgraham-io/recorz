@@ -746,3 +746,11 @@ RecorzKernelSelector: #objectDetailNamed: order: 371
 !
 RecorzKernelSelector: #contextStackNamed: order: 372
 !
+RecorzKernelSelector: #label order: 373
+!
+RecorzKernelSelector: #state order: 374
+!
+RecorzKernelSelector: #context order: 375
+!
+RecorzKernelSelector: #setLabel:state:context: order: 376
+!
