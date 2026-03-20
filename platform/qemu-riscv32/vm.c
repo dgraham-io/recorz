@@ -12088,11 +12088,13 @@ static const char *workspace_object_detail_text_for_named_object(const char *obj
 }
 
 static const char *workspace_context_stack_text_for_named_object(const char *object_name) {
+    const struct recorz_mvp_heap_object *named_object;
     const struct recorz_mvp_heap_object *context_object;
     const struct recorz_mvp_heap_object *sender_context_object;
     struct recorz_mvp_value receiver_value;
     struct recorz_mvp_value detail_value;
     struct recorz_mvp_value sender_value;
+    struct recorz_mvp_value process_context_value;
     char rendered_value[METHOD_SOURCE_LINE_LIMIT];
     char sender_text[METHOD_SOURCE_LINE_LIMIT];
     uint16_t object_handle;
@@ -12122,8 +12124,72 @@ static const char *workspace_context_stack_text_for_named_object(const char *obj
         );
         return workspace_object_detail_buffer;
     }
-    context_object = heap_object(object_handle);
-    if (context_object->kind != RECORZ_MVP_OBJECT_CONTEXT) {
+    named_object = heap_object(object_handle);
+    if (named_object->kind == RECORZ_MVP_OBJECT_PROCESS) {
+        process_context_value = heap_get_field(named_object, PROCESS_FIELD_CONTEXT);
+        workspace_surface_append_label_text(
+            workspace_object_detail_buffer,
+            sizeof(workspace_object_detail_buffer),
+            &offset,
+            "PROCESS",
+            object_name
+        );
+        workspace_surface_append_label_text(
+            workspace_object_detail_buffer,
+            sizeof(workspace_object_detail_buffer),
+            &offset,
+            "CLASS",
+            class_name_for_object(class_object_for_heap_object(named_object))
+        );
+        workspace_surface_append_line(
+            workspace_object_detail_buffer,
+            sizeof(workspace_object_detail_buffer),
+            &offset,
+            ""
+        );
+        if (process_context_value.kind == RECORZ_MVP_VALUE_NIL) {
+            workspace_surface_append_line(
+                workspace_object_detail_buffer,
+                sizeof(workspace_object_detail_buffer),
+                &offset,
+                "PROCESS HAS NO CONTEXT"
+            );
+            return workspace_object_detail_buffer;
+        }
+        if (process_context_value.kind != RECORZ_MVP_VALUE_OBJECT || process_context_value.integer == 0) {
+            workspace_surface_append_line(
+                workspace_object_detail_buffer,
+                sizeof(workspace_object_detail_buffer),
+                &offset,
+                "BROKEN PROCESS CONTEXT"
+            );
+            workspace_surface_append_label_text(
+                workspace_object_detail_buffer,
+                sizeof(workspace_object_detail_buffer),
+                &offset,
+                "context",
+                workspace_text_for_value(process_context_value, rendered_value, sizeof(rendered_value))
+            );
+            return workspace_object_detail_buffer;
+        }
+        context_object = heap_object((uint16_t)process_context_value.integer);
+        if (context_object->kind != RECORZ_MVP_OBJECT_CONTEXT) {
+            workspace_surface_append_line(
+                workspace_object_detail_buffer,
+                sizeof(workspace_object_detail_buffer),
+                &offset,
+                "NAMED PROCESS CONTEXT IS NOT A CONTEXT"
+            );
+            workspace_surface_append_label_text(
+                workspace_object_detail_buffer,
+                sizeof(workspace_object_detail_buffer),
+                &offset,
+                "context",
+                workspace_text_for_value(process_context_value, rendered_value, sizeof(rendered_value))
+            );
+            return workspace_object_detail_buffer;
+        }
+    } else if (named_object->kind != RECORZ_MVP_OBJECT_CONTEXT) {
         workspace_surface_append_label_text(
             workspace_object_detail_buffer,
             sizeof(workspace_object_detail_buffer),
@@ -12136,7 +12202,7 @@ static const char *workspace_context_stack_text_for_named_object(const char *obj
             sizeof(workspace_object_detail_buffer),
             &offset,
             "CLASS",
-            class_name_for_object(class_object_for_heap_object(context_object))
+            class_name_for_object(class_object_for_heap_object(named_object))
         );
         workspace_surface_append_line(
             workspace_object_detail_buffer,
@@ -12145,20 +12211,22 @@ static const char *workspace_context_stack_text_for_named_object(const char *obj
             "NAMED OBJECT IS NOT A CONTEXT"
         );
         return workspace_object_detail_buffer;
+    } else {
+        context_object = named_object;
+        workspace_surface_append_label_text(
+            workspace_object_detail_buffer,
+            sizeof(workspace_object_detail_buffer),
+            &offset,
+            "CONTEXT",
+            object_name
+        );
+        workspace_surface_append_line(
+            workspace_object_detail_buffer,
+            sizeof(workspace_object_detail_buffer),
+            &offset,
+            ""
+        );
     }
-    workspace_surface_append_label_text(
-        workspace_object_detail_buffer,
-        sizeof(workspace_object_detail_buffer),
-        &offset,
-        "CONTEXT",
-        object_name
-    );
-    workspace_surface_append_line(
-        workspace_object_detail_buffer,
-        sizeof(workspace_object_detail_buffer),
-        &offset,
-        ""
-    );
     while (1) {
         uint32_t sender_offset;
 

@@ -1031,7 +1031,9 @@ currentListCount
     viewKind := workspace currentViewKind.
     viewKind = 20 ifTrue: [^self openingMenuOptionCount].
     viewKind = 21 ifTrue: [
-        workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [^1].
+        workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [
+            (KernelInstaller objectNamed: 'BootActiveProcess') = nil ifTrue: [^0].
+            ^1].
         self isObjectInspectorBrowser ifTrue: [^self objectInspectorCount].
         ^workspace classCount].
     ^workspace packageCount
@@ -1054,7 +1056,12 @@ prepareBrowserStateForMode: aMode
 !
 currentBrowserItemsVisibleFrom: firstIndex count: lineCount
     workspace currentViewKind = 20 ifTrue: [^self openingMenuItemsVisibleFrom: firstIndex count: lineCount].
-    workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [^'Active Process'].
+    workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [
+        | process |
+        lineCount < 1 ifTrue: [^''].
+        process := KernelInstaller objectNamed: 'BootActiveProcess'.
+        process = nil ifTrue: [^''].
+        ^process label].
     self isObjectInspectorBrowser ifTrue: [^self objectInspectorItemsVisibleFrom: firstIndex count: lineCount].
     workspace currentViewKind = 21 ifTrue: [^workspace classNamesVisibleFrom: firstIndex count: lineCount].
     ^workspace packageNamesVisibleFrom: firstIndex count: lineCount
@@ -1088,7 +1095,7 @@ currentBrowserSourceText
     workspace currentViewKind = 20 ifTrue: [
         ^'Choose a starting view. Enter or Ctrl-X opens the selected item.'].
     workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [
-        ^'Single-process runtime. Enter or Ctrl-X opens debugger.'].
+        ^Workspace objectDetailNamed: 'BootActiveProcess'].
     self isObjectInspectorBrowser ifTrue: [
         ^'Select an object. Enter or Ctrl-X opens detail.'].
     workspace currentViewKind = 21 ifTrue: [
@@ -1163,7 +1170,11 @@ currentStatusText
     tool statusText size > 0 ifTrue: [^tool statusText].
     viewKind := workspace currentViewKind.
     viewKind = 20 ifTrue: [^'OPENING MENU'].
-    workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [^'PROCESS BROWSER'].
+    workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [
+        | process |
+        process := KernelInstaller objectNamed: 'BootActiveProcess'.
+        process = nil ifTrue: [^'PROCESS BROWSER'].
+        ^process state].
     self isObjectInspectorBrowser ifTrue: [^'OBJECT INSPECTOR'].
     viewKind = 14 ifTrue: [^'INTERACTIVE PACKAGE LIST'].
     viewKind = 21 ifTrue: [^'INTERACTIVE CLASS LIST'].
@@ -1439,7 +1450,7 @@ openSelectedContextDebugger
     tool setBrowserReturnViewKind: 21 targetName: 'PROCESS BROWSER'.
     workspace setCurrentViewKind: 18.
     workspace setCurrentTargetName: 'DEBUGGER'.
-    workspace setContents: (Workspace contextStackNamed: 'BootWorkspaceDebugContext').
+    workspace setContents: (Workspace contextStackNamed: 'BootActiveProcess').
     Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: 0.
     Workspace collapseSelectionToCursor.
     Workspace setVisibleOriginTop: 0 left: 0.
