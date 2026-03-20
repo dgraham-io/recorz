@@ -728,3 +728,19 @@ RecorzKernelSelector: #returnFromSourceEditor order: 362
 !
 RecorzKernelSelector: #sourceEditorFallbackReturn order: 363
 !
+RecorzKernelSelector: #captureDebugContext order: 364
+!
+RecorzKernelSelector: #isObjectInspectorBrowser order: 365
+!
+RecorzKernelSelector: #objectInspectorCount order: 366
+!
+RecorzKernelSelector: #selectedObjectInspectorName order: 367
+!
+RecorzKernelSelector: #objectInspectorItemsVisibleFrom:count: order: 368
+!
+RecorzKernelSelector: #openSelectedObjectInspector order: 369
+!
+RecorzKernelSelector: #openSelectedContextDebugger order: 370
+!
+RecorzKernelSelector: #objectDetailNamed: order: 371
+!

@@ -656,11 +656,12 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["formWriteStyledText"], 14)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceSetCurrentViewKind"], 35)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceSetCurrentTargetName"], 36)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspacePackageCount"], 56)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLinesColumns"], 59)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLeftLinesColumns"], 60)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceBrowseInteractiveViews"], 77)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 96)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceObjectDetailNamed"], 48)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspacePackageCount"], 57)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLinesColumns"], 60)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLeftLinesColumns"], 61)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceBrowseInteractiveViews"], 78)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 97)
         for binding_name in _workspace_tool_primitive_bindings():
             self.assertIn(binding_name, mvp.PRIMITIVE_BINDING_VALUES)
         self.assertEqual(
@@ -1101,6 +1102,14 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_SET_BROWSER_RETURN_VIEW_KIND_TARGET_NAME", 362),
                 ("RECORZ_MVP_SELECTOR_RETURN_FROM_SOURCE_EDITOR", 363),
                 ("RECORZ_MVP_SELECTOR_SOURCE_EDITOR_FALLBACK_RETURN", 364),
+                ("RECORZ_MVP_SELECTOR_CAPTURE_DEBUG_CONTEXT", 365),
+                ("RECORZ_MVP_SELECTOR_IS_OBJECT_INSPECTOR_BROWSER", 366),
+                ("RECORZ_MVP_SELECTOR_OBJECT_INSPECTOR_COUNT", 367),
+                ("RECORZ_MVP_SELECTOR_SELECTED_OBJECT_INSPECTOR_NAME", 368),
+                ("RECORZ_MVP_SELECTOR_OBJECT_INSPECTOR_ITEMS_VISIBLE_FROM_COUNT", 369),
+                ("RECORZ_MVP_SELECTOR_OPEN_SELECTED_OBJECT_INSPECTOR", 370),
+                ("RECORZ_MVP_SELECTOR_OPEN_SELECTED_CONTEXT_DEBUGGER", 371),
+                ("RECORZ_MVP_SELECTOR_OBJECT_DETAIL_NAMED", 372),
             ],
         )
 
@@ -1396,7 +1405,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            mvp.METHOD_ENTRY_ORDER[48:76],
+            mvp.METHOD_ENTRY_ORDER[48:77],
             [
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_FILE_IN",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTENTS",
@@ -1415,6 +1424,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_PROTOCOLS_FOR_CLASS_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_PROTOCOL_OF_CLASS_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_OBJECT_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_OBJECT_DETAIL_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_CLASS_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_METHOD_OF_CLASS_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_CLASS_METHODS_FOR_CLASS_NAMED",

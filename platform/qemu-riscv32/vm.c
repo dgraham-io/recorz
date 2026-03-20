@@ -191,7 +191,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_TOOL
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_SOURCE_EDITOR_FALLBACK_RETURN
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_OBJECT_DETAIL_NAMED
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -424,6 +424,7 @@ static char workspace_editor_source_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char workspace_surface_list_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char workspace_surface_editor_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char workspace_surface_source_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
+static char workspace_object_detail_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char workspace_surface_status_buffer[WORKSPACE_INPUT_MONITOR_FEEDBACK_LIMIT];
 static uint8_t workspace_input_monitor_capture_enabled = 0U;
 static uint8_t workspace_tool_status_dirty = 0U;
@@ -1695,6 +1696,22 @@ static const char *selector_name(uint16_t selector) {
             return "openSelectedClassSource";
         case RECORZ_MVP_SELECTOR_CLASS_SOURCE_TO_OPEN_FOR_PRIOR_TARGET:
             return "classSourceToOpenFor:priorTarget:";
+        case RECORZ_MVP_SELECTOR_CAPTURE_DEBUG_CONTEXT:
+            return "captureDebugContext";
+        case RECORZ_MVP_SELECTOR_IS_OBJECT_INSPECTOR_BROWSER:
+            return "isObjectInspectorBrowser";
+        case RECORZ_MVP_SELECTOR_OBJECT_INSPECTOR_COUNT:
+            return "objectInspectorCount";
+        case RECORZ_MVP_SELECTOR_SELECTED_OBJECT_INSPECTOR_NAME:
+            return "selectedObjectInspectorName";
+        case RECORZ_MVP_SELECTOR_OBJECT_INSPECTOR_ITEMS_VISIBLE_FROM_COUNT:
+            return "objectInspectorItemsVisibleFrom:count:";
+        case RECORZ_MVP_SELECTOR_OPEN_SELECTED_OBJECT_INSPECTOR:
+            return "openSelectedObjectInspector";
+        case RECORZ_MVP_SELECTOR_OPEN_SELECTED_CONTEXT_DEBUGGER:
+            return "openSelectedContextDebugger";
+        case RECORZ_MVP_SELECTOR_OBJECT_DETAIL_NAMED:
+            return "objectDetailNamed:";
     }
     return "unknown";
 }
@@ -11853,7 +11870,7 @@ static void workspace_edit_current_in_place(
     workspace_run_interactive_input_monitor(object);
 }
 
-static void workspace_render_dynamic_object_fields(
+static void workspace_render_object_fields_for_class(
     char buffer[],
     uint32_t buffer_size,
     uint32_t *offset,
@@ -11863,32 +11880,47 @@ static void workspace_render_dynamic_object_fields(
 ) {
     const struct recorz_mvp_dynamic_class_definition *dynamic_definition =
         dynamic_class_definition_for_handle(heap_handle_for_object(class_object));
+    const struct recorz_mvp_seed_class_source_record *seed_source =
+        &recorz_mvp_generated_seed_class_sources[class_instance_kind(class_object)];
     const struct recorz_mvp_heap_object *superclass_object = class_superclass_object_or_null(class_object);
+    uint8_t field_count = 0U;
     uint8_t field_index;
 
     if (depth > DYNAMIC_CLASS_LIMIT) {
         machine_panic("Workspace object browser class chain is invalid");
     }
     if (superclass_object != 0) {
-        workspace_render_dynamic_object_fields(buffer, buffer_size, offset, superclass_object, object, depth + 1U);
+        workspace_render_object_fields_for_class(buffer, buffer_size, offset, superclass_object, object, depth + 1U);
     }
-    if (dynamic_definition == 0) {
+    if (dynamic_definition != 0) {
+        field_count = dynamic_definition->instance_variable_count;
+    } else if (seed_source->class_name != 0) {
+        field_count = seed_source->instance_variable_count;
+    } else {
         return;
     }
-    for (field_index = 0U; field_index < dynamic_definition->instance_variable_count; ++field_index) {
+    if (offset != 0 && *offset != 0U) {
+        workspace_surface_append_line(buffer, buffer_size, offset, "");
+    }
+    workspace_surface_append_line(buffer, buffer_size, offset, class_name_for_object(class_object));
+    for (field_index = 0U; field_index < field_count; ++field_index) {
         uint8_t resolved_field_index;
+        const char *field_name;
 
-        if (!class_field_index_for_name(
-                class_object,
-                dynamic_definition->instance_variable_names[field_index],
-                &resolved_field_index)) {
+        field_name = dynamic_definition != 0 ?
+            dynamic_definition->instance_variable_names[field_index] :
+            seed_source->instance_variable_names[field_index];
+        if (field_name == 0 || field_name[0] == '\0') {
+            continue;
+        }
+        if (!class_field_index_for_name(class_object, field_name, &resolved_field_index)) {
             machine_panic("Workspace object browser could not resolve an instance variable");
         }
         workspace_surface_append_label_text(
             buffer,
             buffer_size,
             offset,
-            dynamic_definition->instance_variable_names[field_index],
+            field_name,
             workspace_text_for_value(
                 heap_get_field(object, resolved_field_index),
                 workspace_target_buffer,
@@ -11932,7 +11964,7 @@ static void workspace_render_object_browser(
         "SLOTS",
         object->field_count
     );
-    workspace_render_dynamic_object_fields(
+    workspace_render_object_fields_for_class(
         workspace_surface_source_buffer,
         sizeof(workspace_surface_source_buffer),
         &source_offset,
@@ -11945,7 +11977,7 @@ static void workspace_render_object_browser(
             workspace_surface_source_buffer,
             sizeof(workspace_surface_source_buffer),
             &source_offset,
-            "NO DYNAMIC FIELDS"
+            "NO INSPECTABLE FIELDS"
         );
     }
     workspace_require_browser_surface(
@@ -11954,6 +11986,89 @@ static void workspace_render_object_browser(
         workspace_surface_source_buffer,
         object_name,
         "OBJECT BROWSER"
+    );
+}
+
+static const char *workspace_object_detail_text_for_object(
+    const char *object_name,
+    const struct recorz_mvp_heap_object *object,
+    char buffer[],
+    uint32_t buffer_size
+) {
+    const struct recorz_mvp_heap_object *class_object = class_object_for_heap_object(object);
+    uint32_t offset = 0U;
+    uint32_t field_offset;
+
+    workspace_surface_reset_buffer(buffer, buffer_size);
+    workspace_surface_append_label_text(
+        buffer,
+        buffer_size,
+        &offset,
+        "OBJECT",
+        object_name == 0 ? "" : object_name
+    );
+    workspace_surface_append_label_text(
+        buffer,
+        buffer_size,
+        &offset,
+        "CLASS",
+        class_name_for_object(class_object)
+    );
+    workspace_surface_append_label_integer(
+        buffer,
+        buffer_size,
+        &offset,
+        "SLOTS",
+        object->field_count
+    );
+    field_offset = offset;
+    workspace_render_object_fields_for_class(
+        buffer,
+        buffer_size,
+        &offset,
+        class_object,
+        object,
+        0U
+    );
+    if (offset == field_offset) {
+        workspace_surface_append_line(buffer, buffer_size, &offset, "");
+        workspace_surface_append_line(buffer, buffer_size, &offset, "NO INSPECTABLE FIELDS");
+    }
+    return buffer;
+}
+
+static const char *workspace_object_detail_text_for_named_object(const char *object_name) {
+    uint16_t object_handle;
+    uint32_t offset = 0U;
+
+    workspace_surface_reset_buffer(
+        workspace_object_detail_buffer,
+        sizeof(workspace_object_detail_buffer)
+    );
+    if (object_name == 0 || object_name[0] == '\0') {
+        workspace_surface_append_line(
+            workspace_object_detail_buffer,
+            sizeof(workspace_object_detail_buffer),
+            &offset,
+            "UNRESOLVED OBJECT"
+        );
+        return workspace_object_detail_buffer;
+    }
+    object_handle = named_object_handle_for_name(object_name);
+    if (object_handle == 0U) {
+        workspace_surface_append_line(
+            workspace_object_detail_buffer,
+            sizeof(workspace_object_detail_buffer),
+            &offset,
+            "UNRESOLVED OBJECT"
+        );
+        return workspace_object_detail_buffer;
+    }
+    return workspace_object_detail_text_for_object(
+        object_name,
+        heap_object(object_handle),
+        workspace_object_detail_buffer,
+        sizeof(workspace_object_detail_buffer)
     );
 }
 
@@ -21066,6 +21181,21 @@ static void execute_entry_workspace_browse_object_named(
     workspace_remember_view(object, WORKSPACE_VIEW_OBJECT, arguments[0].string);
     workspace_render_object_browser(object, arguments[0].string, heap_object(object_handle));
     push(receiver);
+}
+
+static void execute_entry_workspace_object_detail_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace objectDetailNamed: expects an object name string");
+    }
+    push(string_value(workspace_object_detail_text_for_named_object(arguments[0].string)));
 }
 
 static void execute_entry_workspace_browse_method_of_class_named(

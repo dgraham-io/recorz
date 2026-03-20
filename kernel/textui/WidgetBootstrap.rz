@@ -546,6 +546,8 @@ dispatchWorkspaceCommandOnForm: aByte
         plainState = nil ifFalse: [
             plainState contents = nil ifFalse: [^self restorePlainWorkspaceState]].
         ^0].
+    Workspace currentTargetName = 'OBJECT INSPECTOR DETAIL' ifTrue: [^0].
+    Workspace currentTargetName = 'CONTEXT DEBUGGER' ifTrue: [^0].
     aByte = self acceptCommandByte ifTrue: [self acceptCurrent. ^1].
     aByte = self revertCommandByte ifTrue: [self revertCurrent. ^1].
     aByte = self runTestsCommandByte ifTrue: [self runCurrentTests. ^1].
@@ -661,6 +663,10 @@ browsePackagesInteractive
     session := KernelInstaller objectNamed: 'BootWorkspaceSession'.
     session openOn: self mode: 2.
     self interactiveInputMonitor.
+    ^self
+!
+captureDebugContext
+    KernelInstaller rememberObject: thisContext named: 'BootWorkspaceDebugContext'.
     ^self
 !
 visibleOrigin
@@ -1000,13 +1006,30 @@ browserListViewActive
     ^false
 !
 openingMenuOptionCount
-    ^4
+    ^6
+!
+isObjectInspectorBrowser
+    workspace currentViewKind = 21 ifFalse: [^false].
+    ^workspace currentTargetName = 'OBJECT INSPECTOR'
+!
+objectInspectorCount
+    ^5
+!
+selectedObjectInspectorName
+    selected = 0 ifTrue: [^'BootWorkspaceTool'].
+    selected = 1 ifTrue: [^'BootWorkspaceSession'].
+    selected = 2 ifTrue: [^'BootBrowserSurface'].
+    selected = 3 ifTrue: [^'BootTextRenderer'].
+    selected = 4 ifTrue: [^'BootInputMonitorRenderer'].
+    ^''
 !
 currentListCount
     | viewKind |
     viewKind := workspace currentViewKind.
     viewKind = 20 ifTrue: [^self openingMenuOptionCount].
-    viewKind = 21 ifTrue: [^workspace classCount].
+    viewKind = 21 ifTrue: [
+        self isObjectInspectorBrowser ifTrue: [^self objectInspectorCount].
+        ^workspace classCount].
     ^workspace packageCount
 !
 prepareListSelectionForCount: count
@@ -1027,45 +1050,38 @@ prepareBrowserStateForMode: aMode
 !
 currentBrowserItemsVisibleFrom: firstIndex count: lineCount
     workspace currentViewKind = 20 ifTrue: [^self openingMenuItemsVisibleFrom: firstIndex count: lineCount].
+    self isObjectInspectorBrowser ifTrue: [^self objectInspectorItemsVisibleFrom: firstIndex count: lineCount].
     workspace currentViewKind = 21 ifTrue: [^workspace classNamesVisibleFrom: firstIndex count: lineCount].
     ^workspace packageNamesVisibleFrom: firstIndex count: lineCount
 !
+objectInspectorItemsVisibleFrom: firstIndex count: lineCount
+    lineCount < 1 ifTrue: [^''].
+    ^'BootWorkspaceTool
+BootWorkspaceSession
+BootBrowserSurface
+BootTextRenderer
+BootInputMonitorRenderer'
+!
 openingMenuItemsVisibleFrom: firstIndex count: lineCount
     lineCount < 1 ifTrue: [^''].
-    firstIndex < 1 ifTrue: [firstIndex := 1].
-    firstIndex > 4 ifTrue: [^''].
-    firstIndex = 1 ifTrue: [
-        lineCount = 1 ifTrue: [^'Workspace'].
-        lineCount = 2 ifTrue: [^'Workspace
-Class Browser'].
-        lineCount = 3 ifTrue: [^'Workspace
-Class Browser
-Project Browser'].
-        ^'Workspace
+    ^'Workspace
 Class Browser
 Project Browser
-Memory Report'].
-    firstIndex = 2 ifTrue: [
-        lineCount = 1 ifTrue: [^'Class Browser'].
-        lineCount = 2 ifTrue: [^'Class Browser
-Project Browser'].
-        ^'Class Browser
-Project Browser
-Memory Report'].
-    firstIndex = 3 ifTrue: [
-        lineCount = 1 ifTrue: [^'Project Browser'].
-        ^'Project Browser
-Memory Report'].
-    ^'Memory Report'
+Memory Report
+Object Inspector
+Context Debugger'
 !
 currentBrowserHeaderText
     workspace currentViewKind = 20 ifTrue: [^'OPENING MENU'].
+    self isObjectInspectorBrowser ifTrue: [^'OBJECT INSPECTOR'].
     workspace currentViewKind = 21 ifTrue: [^'CLASSES'].
     ^'PACKAGES'
 !
 currentBrowserSourceText
     workspace currentViewKind = 20 ifTrue: [
         ^'Choose a starting view. Enter or Ctrl-X opens the selected item.'].
+    self isObjectInspectorBrowser ifTrue: [
+        ^'Select an object. Enter or Ctrl-X opens detail.'].
     workspace currentViewKind = 21 ifTrue: [
         ^'Arrows move. Ctrl-B/Ctrl-V and PgUp/PgDn page. Enter or Ctrl-X opens class source.'].
     ^'Arrows move. Ctrl-B/Ctrl-V and PgUp/PgDn page. Enter or Ctrl-X opens source.'
@@ -1138,8 +1154,11 @@ currentStatusText
     tool statusText size > 0 ifTrue: [^tool statusText].
     viewKind := workspace currentViewKind.
     viewKind = 20 ifTrue: [^'OPENING MENU'].
+    self isObjectInspectorBrowser ifTrue: [^'OBJECT INSPECTOR'].
     viewKind = 14 ifTrue: [^'INTERACTIVE PACKAGE LIST'].
     viewKind = 21 ifTrue: [^'INTERACTIVE CLASS LIST'].
+    workspace currentTargetName = 'OBJECT INSPECTOR DETAIL' ifTrue: [^'OBJECT INSPECTOR DETAIL'].
+    workspace currentTargetName = 'CONTEXT DEBUGGER' ifTrue: [^'CONTEXT DEBUGGER'].
     workspace isModified ifTrue: [^'SOURCE EDITOR :: MODIFIED'].
     viewKind = 18 ifTrue: [
         workspace currentTargetName = 'Memory Report' ifTrue: [^'MEMORY REPORT']].
@@ -1158,8 +1177,11 @@ currentFeedbackText
     tool feedbackText size > 0 ifTrue: [^tool feedbackText].
     viewKind := workspace currentViewKind.
     viewKind = 20 ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  X SELECT  O CLOSE'].
+    self isObjectInspectorBrowser ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  X DETAIL  O CLOSE'].
     viewKind = 14 ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  X OPEN  O CLOSE'].
     viewKind = 21 ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  X OPEN  O CLOSE'].
+    workspace currentTargetName = 'OBJECT INSPECTOR DETAIL' ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  O RETURN'].
+    workspace currentTargetName = 'CONTEXT DEBUGGER' ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  O RETURN'].
     viewKind = 18 ifTrue: [
         workspace currentTargetName = 'Memory Report' ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  O RETURN']].
     viewKind = 5 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
@@ -1321,15 +1343,25 @@ openSelectedOpeningMenuItem
         listTop := 0.
         self prepareListSelectionForCount: workspace packageCount.
         ^4].
-    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
-    tool setBrowserReturnViewKind: 20 targetName: nil.
-    workspace setCurrentViewKind: 18.
-    workspace setCurrentTargetName: 'Memory Report'.
-    workspace setContents: KernelInstaller memoryReport.
-    Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: 0.
-    Workspace collapseSelectionToCursor.
-    Workspace setVisibleOriginTop: 0 left: 0.
-    self ensureEditorCursorVisible.
+    selected = 3 ifTrue: [
+        tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+        tool setBrowserReturnViewKind: 20 targetName: nil.
+        workspace setCurrentViewKind: 18.
+        workspace setCurrentTargetName: 'Memory Report'.
+        workspace setContents: KernelInstaller memoryReport.
+        Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: 0.
+        Workspace collapseSelectionToCursor.
+        Workspace setVisibleOriginTop: 0 left: 0.
+        self ensureEditorCursorVisible.
+        ^1].
+    selected = 4 ifTrue: [
+        workspace setCurrentViewKind: 21.
+        workspace setCurrentTargetName: 'OBJECT INSPECTOR'.
+        selected := 0.
+        listTop := 0.
+        self prepareListSelectionForCount: self currentListCount.
+        ^4].
+    selected = 5 ifTrue: [^self openSelectedContextDebugger].
     ^1
 !
 openSelectedPackageSource
@@ -1351,6 +1383,7 @@ openSelectedPackageSource
 !
 openSelectedClassSource
     | className source priorTarget tool |
+    self isObjectInspectorBrowser ifTrue: [^self openSelectedObjectInspector].
     workspace classCount = 0 ifTrue: [^4].
     self rememberPlainWorkspaceStateIfNeeded.
     className := self selectedClassName.
@@ -1364,6 +1397,35 @@ openSelectedClassSource
     Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: Workspace visibleTopLine.
     Workspace collapseSelectionToCursor.
     Workspace setVisibleOriginTop: 0 left: 0.
+    ^1
+!
+openSelectedObjectInspector
+    | objectName tool |
+    objectName := self selectedObjectInspectorName.
+    objectName size = 0 ifTrue: [^4].
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    tool setBrowserReturnViewKind: 21 targetName: 'OBJECT INSPECTOR'.
+    workspace setCurrentViewKind: 18.
+    workspace setCurrentTargetName: 'OBJECT INSPECTOR DETAIL'.
+    workspace setContents: (Workspace objectDetailNamed: objectName).
+    Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: 0.
+    Workspace collapseSelectionToCursor.
+    Workspace setVisibleOriginTop: 0 left: 0.
+    self ensureEditorCursorVisible.
+    ^1
+!
+openSelectedContextDebugger
+    | tool |
+    workspace captureDebugContext.
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    tool setBrowserReturnViewKind: 20 targetName: nil.
+    workspace setCurrentViewKind: 18.
+    workspace setCurrentTargetName: 'CONTEXT DEBUGGER'.
+    workspace setContents: (Workspace objectDetailNamed: 'BootWorkspaceDebugContext').
+    Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: 0.
+    Workspace collapseSelectionToCursor.
+    Workspace setVisibleOriginTop: 0 left: 0.
+    self ensureEditorCursorVisible.
     ^1
 !
 rememberCurrentPlainWorkspaceStateOnTool: tool
@@ -1402,6 +1464,22 @@ handleEditorByte: aByte tool: tool
     aByte = 22 ifTrue: [^self scrollEditorPageBy: 1].
     commandResult := tool dispatchCommandOnForm: aByte.
     commandResult = 0 ifFalse: [^commandResult].
+    workspace currentTargetName = 'OBJECT INSPECTOR DETAIL' ifTrue: [
+        aByte = 1 ifTrue: [
+            workspace moveCursorToLineStart.
+            ^workspace finishEditorInteractionForLines: self visibleEditorLines visibleColumns: self visibleEditorColumns redrawCode: 6].
+        aByte = 5 ifTrue: [
+            workspace moveCursorToLineEnd.
+            ^workspace finishEditorInteractionForLines: self visibleEditorLines visibleColumns: self visibleEditorColumns redrawCode: 6].
+        ^0].
+    workspace currentTargetName = 'CONTEXT DEBUGGER' ifTrue: [
+        aByte = 1 ifTrue: [
+            workspace moveCursorToLineStart.
+            ^workspace finishEditorInteractionForLines: self visibleEditorLines visibleColumns: self visibleEditorColumns redrawCode: 6].
+        aByte = 5 ifTrue: [
+            workspace moveCursorToLineEnd.
+            ^workspace finishEditorInteractionForLines: self visibleEditorLines visibleColumns: self visibleEditorColumns redrawCode: 6].
+        ^0].
     ^workspace handleEditorInputByte: aByte visibleLines: self visibleEditorLines visibleColumns: self visibleEditorColumns
 !
 ensureEditorCursorVisible

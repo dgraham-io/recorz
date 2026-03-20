@@ -128,6 +128,30 @@ def _wait_for_nonempty_file(path: Path, *, timeout: float, description: str) -> 
     raise AssertionError(f"timed out waiting for {description}: {path}")
 
 
+def _write_object_browser_snapshot_example(
+    temp_path: Path,
+    name: str,
+    *,
+    save_snapshot: bool = False,
+) -> Path:
+    example_path = temp_path / name
+    lines = [
+        "Display clear.",
+        "KernelInstaller rememberObject: thisContext named: 'ctx'.",
+        "Workspace browseObjectNamed: 'ctx'.",
+    ]
+    if save_snapshot:
+        lines.append("KernelInstaller configureStartup: Workspace selectorNamed: 'reopen'.")
+        lines.append("KernelInstaller saveSnapshot.")
+    example_path.write_text("\n".join(lines), encoding="utf-8")
+    return example_path
+
+
+def _workspace_object_detail_is_implemented() -> bool:
+    vm_source = (ROOT / "platform" / "qemu-riscv32" / "vm.c").read_text(encoding="utf-8")
+    return "workspaceObjectDetailNamed" in vm_source or "workspace_object_detail_named" in vm_source
+
+
 SNAPSHOT_SAVE_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-snapshot-save-test"
 SNAPSHOT_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-snapshot-reload-test"
 SNAPSHOT_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "saved-live-image.bin"
@@ -1504,6 +1528,59 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             self.assertGreater(_region_histogram(class_data, class_width, 24, 640, 980, 744)[TEXT_FOREGROUND], 300)
             self.assertGreater(_region_histogram(package_data, package_width, 24, 640, 980, 744)[TEXT_FOREGROUND], 300)
             self.assertGreater(_region_diff_pixels(class_data, package_data, class_width, 20, 120, 980, 744), 1000)
+
+    def test_object_browser_snapshot_round_trips_through_saved_state(self) -> None:
+        if not _workspace_object_detail_is_implemented():
+            self.skipTest("RV32 workspace object-detail primitive is not wired yet")
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-context-inspector-snapshot-", dir="/tmp") as temp_dir:
+            temp_path = Path(temp_dir)
+            save_build_dir = temp_path / "save-build"
+            reload_build_dir = temp_path / "reload-build"
+            save_example_path = _write_object_browser_snapshot_example(
+                temp_path,
+                "object_browser_save_demo.rz",
+                save_snapshot=True,
+            )
+            reload_example_path = temp_path / "object_browser_reload_demo.rz"
+            reload_example_path.write_text(
+                "\n".join(
+                    [
+                        "Display clear.",
+                        "Workspace reopen.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            snapshot_output = temp_path / "object-browser-live-image.bin"
+
+            save_log = self.save_snapshot(
+                build_dir=save_build_dir,
+                example_path=save_example_path,
+                snapshot_output=snapshot_output,
+            )
+            self.assertIn("recorz-snapshot-begin", save_log)
+            self.assertIn("recorz-snapshot-profile RV32MVP1", save_log)
+            self.assertTrue(snapshot_output.exists())
+
+            snapshot_summary = self.inspect_workspace_snapshot(snapshot_path=snapshot_output)
+            self.assertEqual(snapshot_summary["current_view_kind"], 3)
+            self.assertEqual(snapshot_summary["current_target_name"], "ctx")
+
+            reload_log, width, height, data = self.render_demo(
+                build_dir=reload_build_dir,
+                example_path=reload_example_path,
+                snapshot_payload=snapshot_output,
+            )
+            self.assertEqual((width, height), (1024, 768))
+            self.assertIn("recorz qemu-riscv32 mvp: loaded snapshot", reload_log)
+            self.assertIn("OBJECT BROWSER", reload_log)
+            self.assertIn("OBJECT: ctx", reload_log)
+            self.assertIn("CLASS: Context", reload_log)
+            self.assertIn("sender", reload_log)
+            self.assertIn("receiver", reload_log)
+            self.assertGreater(_region_histogram(data, width, 24, 24, 980, 120)[TEXT_FOREGROUND], 300)
+            self.assertGreater(_region_histogram(data, width, 24, 120, 340, 300)[TEXT_FOREGROUND], 100)
+            self.assertGreater(_region_histogram(data, width, 336, 120, 980, 300)[TEXT_FOREGROUND], 100)
 
     def test_snapshot_resume_can_return_from_a_source_editor_to_the_same_plain_workspace(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-return-resume-") as temp_dir:

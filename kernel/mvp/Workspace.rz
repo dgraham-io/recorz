@@ -54,6 +54,9 @@ browseProtocol: protocolName ofClassNamed: className
 browseObjectNamed: objectName
     <primitive: #workspaceBrowseObjectNamed>
 !
+objectDetailNamed: objectName
+    <primitive: #workspaceObjectDetailNamed>
+!
 browseClassNamed: className
     <primitive: #workspaceBrowseClassNamed>
 !

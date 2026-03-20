@@ -214,6 +214,29 @@ def _write_workspace_session_probe_example(
     return example_path
 
 
+def _write_context_inspector_example(
+    temp_path: Path,
+    name: str,
+    *,
+    save_snapshot: bool = False,
+) -> Path:
+    example_path = temp_path / name
+    lines = [
+        "Display clear.",
+        "KernelInstaller rememberObject: thisContext named: 'ctx'.",
+        "Workspace browseObjectNamed: 'ctx'.",
+    ]
+    if save_snapshot:
+        lines.append("KernelInstaller saveSnapshot.")
+    example_path.write_text("\n".join(lines), encoding="utf-8")
+    return example_path
+
+
+def _workspace_object_detail_is_implemented() -> bool:
+    vm_source = (ROOT / "platform" / "qemu-riscv32" / "vm.c").read_text(encoding="utf-8")
+    return "workspaceObjectDetailNamed" in vm_source or "workspace_object_detail_named" in vm_source
+
+
 def _read_until_bytes(process: subprocess.Popen[bytes], marker: bytes, *, timeout: float) -> str:
     if process.stdout is None:
         raise AssertionError("QEMU process stdout is not available")
@@ -3102,6 +3125,190 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("SNAP", output)
             self.assertNotIn("panic:", output)
 
+    def test_workspace_development_home_opening_menu_lists_object_inspector_and_context_debugger_entries(self) -> None:
+        if not _workspace_object_detail_is_implemented():
+            self.skipTest("RV32 development-home inspector/debugger entries are not wired yet")
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-opening-menu-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "OPENING MENU", timeout=8.0)
+                if process.poll() is None:
+                    if process.stdin is None:
+                        self.fail("QEMU process stdin is not available")
+                    process.stdin.write("\x18")
+                    process.stdin.flush()
+                    output += _read_until_workspace_input_ready(process, timeout=8.0)
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("OPENING MENU", output)
+            self.assertIn("Workspace", output)
+            self.assertIn("Class Browser", output)
+            self.assertIn("Project Browser", output)
+            self.assertIn("Memory Report", output)
+            self.assertIn("Object Inspector", output)
+            self.assertIn("Context Debugger", output)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_development_home_menu_can_open_the_object_inspector(self) -> None:
+        if not _workspace_object_detail_is_implemented():
+            self.skipTest("RV32 development-home inspector/debugger entries are not wired yet")
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-object-inspector-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "OPENING MENU", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("\x0e\x0e\x0e\x0e\x18")
+                process.stdin.flush()
+                output += _read_until(process, "OBJECT INSPECTOR", timeout=8.0)
+                process.stdin.write("\x18")
+                process.stdin.flush()
+                output += _read_until(process, "visibleOrigin", timeout=8.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("OBJECT INSPECTOR", output)
+            self.assertIn("BootWorkspaceTool", output)
+            self.assertIn("statusText", output)
+            self.assertIn("feedbackText", output)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_development_home_menu_can_open_the_context_debugger(self) -> None:
+        if not _workspace_object_detail_is_implemented():
+            self.skipTest("RV32 development-home inspector/debugger entries are not wired yet")
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-context-debugger-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "OPENING MENU", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("\x0e\x0e\x0e\x0e\x0e\x18")
+                process.stdin.flush()
+                output += _read_until(process, "alive:", timeout=8.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("CONTEXT DEBUGGER", output)
+            self.assertIn("sender", output)
+            self.assertIn("receiver", output)
+            self.assertIn("detail", output)
+            self.assertIn("alive", output)
+            self.assertNotIn("panic:", output)
+
     def test_workspace_browse_packages_interactive_can_edit_a_package_and_return(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-package-home-") as temp_dir:
             build_dir = Path(temp_dir)
@@ -5665,6 +5872,60 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("OBJECT: FALSEVALUE", output)
             self.assertIn("CLASS: FALSE", output)
             self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
+
+    def test_workspace_browse_object_named_can_render_context_seeded_fields(self) -> None:
+        if not _workspace_object_detail_is_implemented():
+            self.skipTest("RV32 workspace object-detail primitive is not wired yet")
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-context-inspector-object-browser-") as temp_dir:
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "build"
+            example_path = _write_context_inspector_example(
+                temp_path,
+                "context_inspector_demo.rz",
+            )
+            elf_path = _build_elf(build_dir, example_path)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("OBJECT BROWSER", output)
+            self.assertIn("OBJECT: ctx", output)
+            self.assertIn("CLASS: Context", output)
+            self.assertIn("sender", output)
+            self.assertIn("receiver", output)
+            self.assertIn("detail", output)
+            self.assertIn("alive", output)
+            self.assertNotIn("panic:", output)
 
     def test_package_comment_round_trips_through_file_out_source(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-package-comment-") as temp_dir:
