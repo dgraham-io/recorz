@@ -3184,7 +3184,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("Project Browser", output)
             self.assertIn("Memory Report", output)
             self.assertIn("Object Inspector", output)
-            self.assertIn("Context Debugger", output)
+            self.assertIn("Process Browser", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_development_home_menu_can_open_the_object_inspector(self) -> None:
@@ -3249,10 +3249,10 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("feedbackText", output)
             self.assertNotIn("panic:", output)
 
-    def test_workspace_development_home_menu_can_open_the_context_debugger(self) -> None:
+    def test_workspace_development_home_menu_can_open_the_process_browser_and_debugger_detail(self) -> None:
         if not _workspace_object_detail_is_implemented():
             self.skipTest("RV32 development-home inspector/debugger entries are not wired yet")
-        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-context-debugger-") as temp_dir:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-process-browser-") as temp_dir:
             build_dir = Path(temp_dir)
             elf_path = _build_elf(build_dir, WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE)
             process = subprocess.Popen(
@@ -3287,6 +3287,11 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     self.fail("QEMU process stdin is not available")
                 process.stdin.write("\x0e\x0e\x0e\x0e\x0e\x18")
                 process.stdin.flush()
+                output += _read_until(process, "PROCESS BROWSER", timeout=8.0)
+                output += _read_until(process, "Active Process", timeout=8.0)
+                process.stdin.write("\x18")
+                process.stdin.flush()
+                output += _read_until(process, "DEBUGGER", timeout=8.0)
                 output += _read_until(process, "alive:", timeout=8.0)
                 if process.poll() is None:
                     process.kill()
@@ -3302,7 +3307,9 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     process.stdin.close()
 
             output = output.replace("\r", "")
-            self.assertIn("CONTEXT DEBUGGER", output)
+            self.assertIn("PROCESS BROWSER", output)
+            self.assertIn("Active Process", output)
+            self.assertIn("DEBUGGER", output)
             self.assertIn("sender", output)
             self.assertIn("receiver", output)
             self.assertIn("detail", output)

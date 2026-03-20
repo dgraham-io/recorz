@@ -547,7 +547,7 @@ dispatchWorkspaceCommandOnForm: aByte
             plainState contents = nil ifFalse: [^self restorePlainWorkspaceState]].
         ^0].
     Workspace currentTargetName = 'OBJECT INSPECTOR DETAIL' ifTrue: [^0].
-    Workspace currentTargetName = 'CONTEXT DEBUGGER' ifTrue: [^0].
+    Workspace currentTargetName = 'DEBUGGER' ifTrue: [^0].
     aByte = self acceptCommandByte ifTrue: [self acceptCurrent. ^1].
     aByte = self revertCommandByte ifTrue: [self revertCurrent. ^1].
     aByte = self runTestsCommandByte ifTrue: [self runCurrentTests. ^1].
@@ -1028,6 +1028,7 @@ currentListCount
     viewKind := workspace currentViewKind.
     viewKind = 20 ifTrue: [^self openingMenuOptionCount].
     viewKind = 21 ifTrue: [
+        workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [^1].
         self isObjectInspectorBrowser ifTrue: [^self objectInspectorCount].
         ^workspace classCount].
     ^workspace packageCount
@@ -1050,6 +1051,7 @@ prepareBrowserStateForMode: aMode
 !
 currentBrowserItemsVisibleFrom: firstIndex count: lineCount
     workspace currentViewKind = 20 ifTrue: [^self openingMenuItemsVisibleFrom: firstIndex count: lineCount].
+    workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [^'Active Process'].
     self isObjectInspectorBrowser ifTrue: [^self objectInspectorItemsVisibleFrom: firstIndex count: lineCount].
     workspace currentViewKind = 21 ifTrue: [^workspace classNamesVisibleFrom: firstIndex count: lineCount].
     ^workspace packageNamesVisibleFrom: firstIndex count: lineCount
@@ -1069,10 +1071,11 @@ Class Browser
 Project Browser
 Memory Report
 Object Inspector
-Context Debugger'
+Process Browser'
 !
 currentBrowserHeaderText
     workspace currentViewKind = 20 ifTrue: [^'OPENING MENU'].
+    workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [^'PROCESS BROWSER'].
     self isObjectInspectorBrowser ifTrue: [^'OBJECT INSPECTOR'].
     workspace currentViewKind = 21 ifTrue: [^'CLASSES'].
     ^'PACKAGES'
@@ -1080,6 +1083,8 @@ currentBrowserHeaderText
 currentBrowserSourceText
     workspace currentViewKind = 20 ifTrue: [
         ^'Choose a starting view. Enter or Ctrl-X opens the selected item.'].
+    workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [
+        ^'Single-process runtime. Enter or Ctrl-X opens debugger.'].
     self isObjectInspectorBrowser ifTrue: [
         ^'Select an object. Enter or Ctrl-X opens detail.'].
     workspace currentViewKind = 21 ifTrue: [
@@ -1154,11 +1159,12 @@ currentStatusText
     tool statusText size > 0 ifTrue: [^tool statusText].
     viewKind := workspace currentViewKind.
     viewKind = 20 ifTrue: [^'OPENING MENU'].
+    workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [^'PROCESS BROWSER'].
     self isObjectInspectorBrowser ifTrue: [^'OBJECT INSPECTOR'].
     viewKind = 14 ifTrue: [^'INTERACTIVE PACKAGE LIST'].
     viewKind = 21 ifTrue: [^'INTERACTIVE CLASS LIST'].
     workspace currentTargetName = 'OBJECT INSPECTOR DETAIL' ifTrue: [^'OBJECT INSPECTOR DETAIL'].
-    workspace currentTargetName = 'CONTEXT DEBUGGER' ifTrue: [^'CONTEXT DEBUGGER'].
+    workspace currentTargetName = 'DEBUGGER' ifTrue: [^'DEBUGGER'].
     workspace isModified ifTrue: [^'SOURCE EDITOR :: MODIFIED'].
     viewKind = 18 ifTrue: [
         workspace currentTargetName = 'Memory Report' ifTrue: [^'MEMORY REPORT']].
@@ -1177,11 +1183,12 @@ currentFeedbackText
     tool feedbackText size > 0 ifTrue: [^tool feedbackText].
     viewKind := workspace currentViewKind.
     viewKind = 20 ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  X SELECT  O CLOSE'].
+    workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  X DEBUG  O CLOSE'].
     self isObjectInspectorBrowser ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  X DETAIL  O CLOSE'].
     viewKind = 14 ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  X OPEN  O CLOSE'].
     viewKind = 21 ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  X OPEN  O CLOSE'].
     workspace currentTargetName = 'OBJECT INSPECTOR DETAIL' ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  O RETURN'].
-    workspace currentTargetName = 'CONTEXT DEBUGGER' ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  O RETURN'].
+    workspace currentTargetName = 'DEBUGGER' ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  O RETURN'].
     viewKind = 18 ifTrue: [
         workspace currentTargetName = 'Memory Report' ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  O RETURN']].
     viewKind = 5 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
@@ -1361,7 +1368,13 @@ openSelectedOpeningMenuItem
         listTop := 0.
         self prepareListSelectionForCount: self currentListCount.
         ^4].
-    selected = 5 ifTrue: [^self openSelectedContextDebugger].
+    selected = 5 ifTrue: [
+        workspace setCurrentViewKind: 21.
+        workspace setCurrentTargetName: 'PROCESS BROWSER'.
+        selected := 0.
+        listTop := 0.
+        self prepareListSelectionForCount: self currentListCount.
+        ^4].
     ^1
 !
 openSelectedPackageSource
@@ -1383,6 +1396,7 @@ openSelectedPackageSource
 !
 openSelectedClassSource
     | className source priorTarget tool |
+    workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [^self openSelectedContextDebugger].
     self isObjectInspectorBrowser ifTrue: [^self openSelectedObjectInspector].
     workspace classCount = 0 ifTrue: [^4].
     self rememberPlainWorkspaceStateIfNeeded.
@@ -1418,10 +1432,10 @@ openSelectedContextDebugger
     | tool |
     workspace captureDebugContext.
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
-    tool setBrowserReturnViewKind: 20 targetName: nil.
+    tool setBrowserReturnViewKind: 21 targetName: 'PROCESS BROWSER'.
     workspace setCurrentViewKind: 18.
-    workspace setCurrentTargetName: 'CONTEXT DEBUGGER'.
-    workspace setContents: (Workspace objectDetailNamed: 'BootWorkspaceDebugContext').
+    workspace setCurrentTargetName: 'DEBUGGER'.
+    workspace setContents: (Workspace contextStackNamed: 'BootWorkspaceDebugContext').
     Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: 0.
     Workspace collapseSelectionToCursor.
     Workspace setVisibleOriginTop: 0 left: 0.
@@ -1472,7 +1486,7 @@ handleEditorByte: aByte tool: tool
             workspace moveCursorToLineEnd.
             ^workspace finishEditorInteractionForLines: self visibleEditorLines visibleColumns: self visibleEditorColumns redrawCode: 6].
         ^0].
-    workspace currentTargetName = 'CONTEXT DEBUGGER' ifTrue: [
+    workspace currentTargetName = 'DEBUGGER' ifTrue: [
         aByte = 1 ifTrue: [
             workspace moveCursorToLineStart.
             ^workspace finishEditorInteractionForLines: self visibleEditorLines visibleColumns: self visibleEditorColumns redrawCode: 6].

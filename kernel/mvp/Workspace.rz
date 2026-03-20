@@ -57,6 +57,9 @@ browseObjectNamed: objectName
 objectDetailNamed: objectName
     <primitive: #workspaceObjectDetailNamed>
 !
+contextStackNamed: objectName
+    <primitive: #workspaceContextStackNamed>
+!
 browseClassNamed: className
     <primitive: #workspaceBrowseClassNamed>
 !

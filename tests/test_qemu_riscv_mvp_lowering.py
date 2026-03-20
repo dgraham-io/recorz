@@ -76,6 +76,20 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         )
         self.assertEqual(program.instructions[1].operand_a, "RECORZ_MVP_SELECTOR_DETAIL")
 
+    def test_lowers_workspace_context_stack_named(self) -> None:
+        program = mvp.build_program("Workspace contextStackNamed: 'BootWorkspaceDebugContext'")
+        self.assertEqual(
+            [instruction.opcode for instruction in program.instructions],
+            [
+                mvp.OP_PUSH_GLOBAL,
+                mvp.OP_PUSH_LITERAL,
+                mvp.OP_SEND,
+                mvp.OP_RETURN,
+            ],
+        )
+        self.assertEqual(program.instructions[0].operand_a, "RECORZ_MVP_GLOBAL_WORKSPACE")
+        self.assertEqual(program.instructions[2].operand_a, "RECORZ_MVP_SELECTOR_CONTEXT_STACK_NAMED")
+
     def test_lowers_top_level_block_literals_and_boolean_globals(self) -> None:
         program = mvp.build_program("true ifTrue: [ :x | x + 4 ] ifFalse: [ :x | x + 5 ]")
         literal_strings = [literal.value.strip() for literal in program.literals if literal.kind == mvp.LITERAL_STRING]
@@ -657,11 +671,11 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceSetCurrentViewKind"], 35)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceSetCurrentTargetName"], 36)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceObjectDetailNamed"], 48)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspacePackageCount"], 57)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLinesColumns"], 60)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLeftLinesColumns"], 61)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceBrowseInteractiveViews"], 78)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 97)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspacePackageCount"], 58)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLinesColumns"], 61)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLeftLinesColumns"], 62)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceBrowseInteractiveViews"], 79)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 98)
         for binding_name in _workspace_tool_primitive_bindings():
             self.assertIn(binding_name, mvp.PRIMITIVE_BINDING_VALUES)
         self.assertEqual(
@@ -730,6 +744,11 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_INSTALL_METHOD_SOURCE_ON_CLASS"],
             25,
         )
+        self.assertEqual(
+            mvp.SELECTOR_IDS["contextStackNamed:"],
+            "RECORZ_MVP_SELECTOR_CONTEXT_STACK_NAMED",
+        )
+        self.assertEqual(mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_CONTEXT_STACK_NAMED"], 373)
         self.assertEqual(
             mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_FILE_IN_METHOD_CHUNKS_ON_CLASS"],
             26,
@@ -1110,6 +1129,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_OPEN_SELECTED_OBJECT_INSPECTOR", 370),
                 ("RECORZ_MVP_SELECTOR_OPEN_SELECTED_CONTEXT_DEBUGGER", 371),
                 ("RECORZ_MVP_SELECTOR_OBJECT_DETAIL_NAMED", 372),
+                ("RECORZ_MVP_SELECTOR_CONTEXT_STACK_NAMED", 373),
             ],
         )
 
@@ -1405,7 +1425,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            mvp.METHOD_ENTRY_ORDER[48:77],
+            mvp.METHOD_ENTRY_ORDER[48:78],
             [
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_FILE_IN",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTENTS",
@@ -1425,6 +1445,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_PROTOCOL_OF_CLASS_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_OBJECT_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_OBJECT_DETAIL_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTEXT_STACK_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_CLASS_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_METHOD_OF_CLASS_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_CLASS_METHODS_FOR_CLASS_NAMED",

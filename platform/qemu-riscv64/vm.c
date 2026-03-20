@@ -111,6 +111,10 @@
 #define BLOCK_CLOSURE_FIELD_HOME_RECEIVER RECORZ_MVP_BLOCK_CLOSURE_FIELD_HOME_RECEIVER
 #define BLOCK_CLOSURE_FIELD_LEXICAL0 RECORZ_MVP_BLOCK_CLOSURE_FIELD_LEXICAL0
 #define BLOCK_CLOSURE_FIELD_LEXICAL1 RECORZ_MVP_BLOCK_CLOSURE_FIELD_LEXICAL1
+#define CONTEXT_FIELD_SENDER RECORZ_MVP_CONTEXT_FIELD_SENDER
+#define CONTEXT_FIELD_RECEIVER RECORZ_MVP_CONTEXT_FIELD_RECEIVER
+#define CONTEXT_FIELD_DETAIL RECORZ_MVP_CONTEXT_FIELD_DETAIL
+#define CONTEXT_FIELD_ALIVE RECORZ_MVP_CONTEXT_FIELD_ALIVE
 #define TEST_RUNNER_FIELD_PASSED RECORZ_MVP_TEST_RUNNER_FIELD_PASSED
 #define TEST_RUNNER_FIELD_FAILED RECORZ_MVP_TEST_RUNNER_FIELD_FAILED
 #define TEST_RUNNER_FIELD_TOTAL RECORZ_MVP_TEST_RUNNER_FIELD_TOTAL
@@ -156,7 +160,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_TOOL
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_OBJECT_DETAIL_NAMED
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_CONTEXT_STACK_NAMED
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -1379,6 +1383,10 @@ static const char *selector_name(uint16_t selector) {
             return "returnFromSourceEditor";
         case RECORZ_MVP_SELECTOR_SOURCE_EDITOR_FALLBACK_RETURN:
             return "sourceEditorFallbackReturn";
+        case RECORZ_MVP_SELECTOR_OBJECT_DETAIL_NAMED:
+            return "objectDetailNamed:";
+        case RECORZ_MVP_SELECTOR_CONTEXT_STACK_NAMED:
+            return "contextStackNamed:";
     }
     return "unknown";
 }
@@ -5289,6 +5297,266 @@ static void workspace_surface_append_label_integer(
     render_small_integer((int32_t)value);
     append_text_checked(line, sizeof(line), &line_offset, print_buffer);
     workspace_surface_append_line(buffer, buffer_size, offset, line);
+}
+
+static const char *workspace_object_detail_text_for_object(
+    const char *object_name,
+    const struct recorz_mvp_heap_object *object,
+    char buffer[],
+    uint32_t buffer_size
+) {
+    const struct recorz_mvp_heap_object *class_object = class_object_for_heap_object(object);
+    uint32_t offset = 0U;
+
+    workspace_surface_reset_buffer(buffer, buffer_size);
+    workspace_surface_append_label_text(
+        buffer,
+        buffer_size,
+        &offset,
+        "OBJECT",
+        object_name == 0 ? "" : object_name
+    );
+    workspace_surface_append_label_text(
+        buffer,
+        buffer_size,
+        &offset,
+        "CLASS",
+        class_name_for_object(class_object)
+    );
+    workspace_surface_append_label_integer(
+        buffer,
+        buffer_size,
+        &offset,
+        "SLOTS",
+        object->field_count
+    );
+    (void)class_object;
+    workspace_surface_append_line(buffer, buffer_size, &offset, "");
+    workspace_surface_append_line(buffer, buffer_size, &offset, "NO INSPECTABLE FIELDS");
+    return buffer;
+}
+
+static const char *workspace_object_detail_text_for_named_object(const char *object_name) {
+    uint16_t object_handle;
+    uint32_t offset = 0U;
+
+    workspace_surface_reset_buffer(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer)
+    );
+    if (object_name == 0 || object_name[0] == '\0') {
+        workspace_surface_append_line(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "UNRESOLVED OBJECT"
+        );
+        return workspace_surface_source_buffer;
+    }
+    object_handle = named_object_handle_for_name(object_name);
+    if (object_handle == 0U) {
+        workspace_surface_append_line(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "UNRESOLVED OBJECT"
+        );
+        return workspace_surface_source_buffer;
+    }
+    return workspace_object_detail_text_for_object(
+        object_name,
+        heap_object(object_handle),
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer)
+    );
+}
+
+static const char *workspace_context_stack_text_for_named_object(const char *object_name) {
+    const struct recorz_mvp_heap_object *context_object;
+    const struct recorz_mvp_heap_object *sender_context_object;
+    struct recorz_mvp_value receiver_value;
+    struct recorz_mvp_value detail_value;
+    struct recorz_mvp_value sender_value;
+    char rendered_value[METHOD_SOURCE_LINE_LIMIT];
+    char sender_text[METHOD_SOURCE_LINE_LIMIT];
+    uint16_t object_handle;
+    uint32_t frame_index = 0U;
+    uint32_t offset = 0U;
+
+    workspace_surface_reset_buffer(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer)
+    );
+    if (object_name == 0 || object_name[0] == '\0') {
+        workspace_surface_append_line(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "CONTEXT NAME IS EMPTY"
+        );
+        return workspace_surface_source_buffer;
+    }
+    object_handle = named_object_handle_for_name(object_name);
+    if (object_handle == 0U) {
+        workspace_surface_append_line(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "UNRESOLVED CONTEXT"
+        );
+        return workspace_surface_source_buffer;
+    }
+    context_object = heap_object(object_handle);
+    if (context_object->kind != RECORZ_MVP_OBJECT_CONTEXT) {
+        workspace_surface_append_label_text(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "OBJECT",
+            object_name
+        );
+        workspace_surface_append_label_text(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "CLASS",
+            class_name_for_object(class_object_for_heap_object(context_object))
+        );
+        workspace_surface_append_line(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "NAMED OBJECT IS NOT A CONTEXT"
+        );
+        return workspace_surface_source_buffer;
+    }
+    workspace_surface_append_label_text(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer),
+        &offset,
+        "CONTEXT",
+        object_name
+    );
+    workspace_surface_append_line(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer),
+        &offset,
+        ""
+    );
+    while (1) {
+        uint32_t sender_offset;
+
+        if (frame_index != 0U) {
+            workspace_surface_append_line(
+                workspace_surface_source_buffer,
+                sizeof(workspace_surface_source_buffer),
+                &offset,
+                ""
+            );
+        }
+        receiver_value = heap_get_field(context_object, CONTEXT_FIELD_RECEIVER);
+        detail_value = heap_get_field(context_object, CONTEXT_FIELD_DETAIL);
+        sender_value = heap_get_field(context_object, CONTEXT_FIELD_SENDER);
+        workspace_surface_append_label_integer(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "frame",
+            frame_index + 1U
+        );
+        workspace_surface_append_label_text(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "receiver",
+            workspace_text_for_value(receiver_value, rendered_value, sizeof(rendered_value))
+        );
+        workspace_surface_append_label_text(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "detail",
+            workspace_text_for_value(detail_value, rendered_value, sizeof(rendered_value))
+        );
+        workspace_surface_append_label_text(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "alive",
+            workspace_text_for_value(
+                heap_get_field(context_object, CONTEXT_FIELD_ALIVE),
+                rendered_value,
+                sizeof(rendered_value)
+            )
+        );
+        if (sender_value.kind == RECORZ_MVP_VALUE_NIL) {
+            workspace_surface_append_label_text(
+                workspace_surface_source_buffer,
+                sizeof(workspace_surface_source_buffer),
+                &offset,
+                "sender",
+                "nil"
+            );
+            break;
+        }
+        if (sender_value.kind != RECORZ_MVP_VALUE_OBJECT || sender_value.integer == 0) {
+            workspace_surface_append_line(
+                workspace_surface_source_buffer,
+                sizeof(workspace_surface_source_buffer),
+                &offset,
+                "BROKEN SENDER CHAIN"
+            );
+            workspace_surface_append_label_text(
+                workspace_surface_source_buffer,
+                sizeof(workspace_surface_source_buffer),
+                &offset,
+                "sender",
+                workspace_text_for_value(sender_value, rendered_value, sizeof(rendered_value))
+            );
+            break;
+        }
+        sender_context_object = heap_object((uint16_t)sender_value.integer);
+        if (sender_context_object->kind != RECORZ_MVP_OBJECT_CONTEXT) {
+            workspace_surface_append_line(
+                workspace_surface_source_buffer,
+                sizeof(workspace_surface_source_buffer),
+                &offset,
+                "BROKEN SENDER CHAIN"
+            );
+            workspace_surface_append_label_text(
+                workspace_surface_source_buffer,
+                sizeof(workspace_surface_source_buffer),
+                &offset,
+                "sender",
+                workspace_text_for_value(sender_value, rendered_value, sizeof(rendered_value))
+            );
+            break;
+        }
+        sender_text[0] = '\0';
+        sender_offset = 0U;
+        append_text_checked(sender_text, sizeof(sender_text), &sender_offset, "frame ");
+        render_small_integer((int32_t)(frame_index + 2U));
+        append_text_checked(sender_text, sizeof(sender_text), &sender_offset, print_buffer);
+        workspace_surface_append_label_text(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "sender",
+            sender_text
+        );
+        ++frame_index;
+        if (frame_index >= 32U) {
+            workspace_surface_append_line(
+                workspace_surface_source_buffer,
+                sizeof(workspace_surface_source_buffer),
+                &offset,
+                "SENDER CHAIN TRUNCATED"
+            );
+            break;
+        }
+        context_object = sender_context_object;
+    }
+    return workspace_surface_source_buffer;
 }
 
 static uint8_t workspace_draw_editor_surface_from_image(
@@ -16683,6 +16951,36 @@ static void execute_entry_workspace_tool_named_object_or_nil(
         return;
     }
     push(object_value(object_handle));
+}
+
+static void execute_entry_workspace_object_detail_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace objectDetailNamed: expects an object name string");
+    }
+    push(string_value(workspace_object_detail_text_for_named_object(arguments[0].string)));
+}
+
+static void execute_entry_workspace_context_stack_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace contextStackNamed: expects an object name string");
+    }
+    push(string_value(workspace_context_stack_text_for_named_object(arguments[0].string)));
 }
 
 static void execute_entry_workspace_package_count(

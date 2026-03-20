@@ -744,3 +744,5 @@ RecorzKernelSelector: #openSelectedContextDebugger order: 370
 !
 RecorzKernelSelector: #objectDetailNamed: order: 371
 !
+RecorzKernelSelector: #contextStackNamed: order: 372
+!
