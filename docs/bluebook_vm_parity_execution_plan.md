@@ -31,9 +31,10 @@ Stage 3 status note as of `2026-03-20` late:
 
 - the development-home opening-menu to active-process debugger path is stable enough to assert directly in framebuffer coverage
 - the development-home project-browser failing-test path is stable when tests are entered from package source instead of the package list
+- the multi-process browser now keeps `BootActiveProcess` first, and the non-default-process debugger handoff is assertion-covered
 - the remaining Stage 3 blockers are narrower:
-  - BP3.3 still needs stable non-default process selection and debugger handoff for multi-process fixtures
   - BP3.4 still needs intended primitive-failure debugger entry instead of panic-only behavior
+  - BP3.5 still needs debugger return-path coherence from the process-browser debugger flow
 
 That means the main execution path should currently focus on Stage 3 completion, while continuing to keep Stage 0 regression gates healthy.
 
@@ -556,9 +557,8 @@ This stage only begins once the earlier stages are functionally complete.
 
 Unless a regression in Stage 0 becomes urgent, the next tasks should be tackled in this order:
 
-1. `BP3.3` Remove skip-gates from process browser flows.
-2. `BP3.4` Stabilize debugger entry from development workflows.
-3. `BP3.5` Finish debugger return-path coherence.
+1. `BP3.4` Stabilize debugger entry from development workflows.
+2. `BP3.5` Finish debugger return-path coherence.
 4. Re-check Stage 3 exit criteria.
 5. Only then begin `BP4.1`.
 

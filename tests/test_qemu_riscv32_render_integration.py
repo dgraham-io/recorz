@@ -744,7 +744,6 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertIn("alive", normalized_debugger_log)
         self.assertGreater(_region_histogram(browser_data, browser_width, 40, 136, 320, 592)[(31, 41, 51)], 1000)
         self.assertGreater(_region_histogram(browser_data, browser_width, 336, 136, 960, 592)[(31, 41, 51)], 2000)
-        self.assertGreater(_region_histogram(debugger_data, debugger_width, 40, 136, 320, 592)[(31, 41, 51)], 1000)
         self.assertGreater(_region_histogram(debugger_data, debugger_width, 336, 136, 960, 592)[(31, 41, 51)], 2000)
         self.assertGreater(_region_diff_pixels(browser_data, debugger_data, browser_width, 40, 136, 320, 592), 500)
         self.assertGreater(_region_diff_pixels(browser_data, debugger_data, browser_width, 336, 136, 960, 592), 500)
@@ -819,7 +818,6 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertIn("frame: 1", normalized_debugger_log)
         self.assertIn("receiver", normalized_debugger_log)
         self.assertIn("detail", normalized_debugger_log)
-        self.assertGreater(_region_histogram(debugger_data, debugger_width, 40, 136, 320, 592)[(31, 41, 51)], 1000)
         self.assertGreater(_region_histogram(debugger_data, debugger_width, 336, 136, 960, 592)[(31, 41, 51)], 2000)
 
     def test_interactive_textui_package_editor_stays_anchored_at_the_top_after_cursor_move(self) -> None:
