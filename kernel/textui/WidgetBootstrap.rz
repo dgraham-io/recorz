@@ -399,7 +399,23 @@ revertCurrent
     ^Workspace revertCurrent
 !
 runCurrentTests
-    ^Workspace runCurrentTests
+    | state frameCount frameIndex |
+    Workspace runCurrentTests.
+    TestRunner failed > 0 ifTrue: [
+        Workspace captureDebugContext.
+        state := self namedObjectOrNil: 'BootWorkspaceDebuggerState'.
+        state = nil ifTrue: [
+            state := (KernelInstaller classNamed: 'WorkspaceReturnState') new.
+            KernelInstaller rememberObject: state named: 'BootWorkspaceDebuggerState'].
+        frameCount := Workspace contextFrameCountNamed: 'BootActiveProcess'.
+        frameIndex := frameCount = 0 ifTrue: [0] ifFalse: [1].
+        state setContents: 'BootActiveProcess' cursor: frameIndex selection: frameCount visibleOrigin: nil.
+        self setStatusText: TestRunner lastLabel.
+        self setFeedbackText: 'FAILED TEST'.
+        self setBrowserReturnViewKind: Workspace currentViewKind targetName: Workspace currentTargetName.
+        Workspace setCurrentViewKind: 21.
+        Workspace setCurrentTargetName: 'DEBUGGER'].
+    ^1
 !
 saveAndReopen
     ^Workspace saveAndReopen
@@ -1031,25 +1047,45 @@ selectedProcessName
     ^Workspace processNameAt: selected + 1
 !
 currentDebuggerTargetName
-    | tool process count index processName |
+    | tool state processName frameIndex frameCount |
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
-    process := tool namedObjectOrNil: 'BootWorkspaceDebugProcess'.
-    process = nil ifTrue: [^'BootActiveProcess'].
-    count := Workspace processCount.
-    index := 1.
-    [index <= count] whileTrue: [
-        processName := Workspace processNameAt: index.
-        (KernelInstaller objectNamed: processName) = process ifTrue: [^processName].
-        index := index + 1].
-    ^'BootActiveProcess'
+    state := tool namedObjectOrNil: 'BootWorkspaceDebuggerState'.
+    state = nil ifTrue: [
+        state := (KernelInstaller classNamed: 'WorkspaceReturnState') new.
+        KernelInstaller rememberObject: state named: 'BootWorkspaceDebuggerState'].
+    processName := state contents.
+    processName = nil ifTrue: [processName := 'BootActiveProcess'].
+    processName size = 0 ifTrue: [processName := 'BootActiveProcess'].
+    frameCount := Workspace contextFrameCountNamed: processName.
+    frameIndex := state cursor.
+    frameIndex = nil ifTrue: [frameIndex := 1].
+    frameCount = 0 ifTrue: [frameIndex := 0].
+    frameCount > 0 ifTrue: [
+        frameIndex < 1 ifTrue: [frameIndex := 1].
+        frameIndex > frameCount ifTrue: [frameIndex := frameCount]].
+    state setContents: processName cursor: frameIndex selection: frameCount visibleOrigin: nil.
+    ^processName
 !
 currentListCount
-    | viewKind |
+    | viewKind tool state count frameIndex |
     viewKind := workspace currentViewKind.
     viewKind = 20 ifTrue: [^self openingMenuOptionCount].
     viewKind = 21 ifTrue: [
         workspace currentTargetName = 'DEBUGGER' ifTrue: [
-            ^Workspace contextFrameCountNamed: self currentDebuggerTargetName].
+            count := Workspace contextFrameCountNamed: self currentDebuggerTargetName.
+            tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+            state := tool namedObjectOrNil: 'BootWorkspaceDebuggerState'.
+            frameIndex := 0.
+            count > 0 ifTrue: [frameIndex := 1].
+            state = nil ifFalse: [
+                state cursor = nil ifFalse: [frameIndex := state cursor]].
+            count = 0 ifTrue: [
+                selected := 0.
+                listTop := 0.
+                ^0].
+            selected := frameIndex - 1.
+            self prepareListSelectionForCount: count.
+            ^count].
         workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [
             ^Workspace processCount].
         self isObjectInspectorBrowser ifTrue: [^self objectInspectorCount].
@@ -1057,6 +1093,7 @@ currentListCount
     ^workspace packageCount
 !
 prepareListSelectionForCount: count
+    | tool state processName frameIndex |
     selected = nil ifTrue: [selected := 0].
     listTop = nil ifTrue: [listTop := 0].
     count = 0 ifTrue: [selected := 0].
@@ -1064,6 +1101,15 @@ prepareListSelectionForCount: count
         selected < 0 ifTrue: [selected := 0].
         selected > (count - 1) ifTrue: [selected := count - 1]].
     listTop < 0 ifTrue: [listTop := 0].
+    workspace currentTargetName = 'DEBUGGER' ifTrue: [
+        tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+        state := tool namedObjectOrNil: 'BootWorkspaceDebuggerState'.
+        state = nil ifFalse: [
+            processName := state contents.
+            processName = nil ifTrue: [processName := 'BootActiveProcess'].
+            processName size = 0 ifTrue: [processName := 'BootActiveProcess'].
+            frameIndex := count = 0 ifTrue: [0] ifFalse: [selected + 1].
+            state setContents: processName cursor: frameIndex selection: count visibleOrigin: nil]].
     ^self
 !
 prepareBrowserStateForMode: aMode
@@ -1102,7 +1148,7 @@ Process Browser'
 !
 currentBrowserHeaderText
     workspace currentViewKind = 20 ifTrue: [^'OPENING MENU'].
-    workspace currentTargetName = 'DEBUGGER' ifTrue: [^'DEBUGGER'].
+    workspace currentTargetName = 'DEBUGGER' ifTrue: [^self currentDebuggerTargetName].
     workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [^'PROCESS BROWSER'].
     self isObjectInspectorBrowser ifTrue: [^'OBJECT INSPECTOR'].
     workspace currentViewKind = 21 ifTrue: [^'CLASSES'].
@@ -1147,6 +1193,8 @@ moveListSelectionBy: delta
         selected > (listTop + visibleLines - 1) ifTrue: [
             listTop := selected - visibleLines + 1]].
     listTop < 0 ifTrue: [listTop := 0].
+    workspace currentTargetName = 'DEBUGGER' ifTrue: [
+        self prepareListSelectionForCount: count].
     ^5
 !
 moveListSelectionPageBy: delta
@@ -1193,7 +1241,7 @@ currentStatusText
     tool statusText size > 0 ifTrue: [^tool statusText].
     viewKind := workspace currentViewKind.
     viewKind = 20 ifTrue: [^'OPENING MENU'].
-    workspace currentTargetName = 'DEBUGGER' ifTrue: [^'DEBUGGER'].
+    workspace currentTargetName = 'DEBUGGER' ifTrue: [^self currentDebuggerTargetName].
     workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [
         | processName process |
         processName := self selectedProcessName.
@@ -1470,13 +1518,20 @@ openSelectedObjectInspector
     ^1
 !
 openSelectedContextDebugger
-    | tool processName process |
+    | tool processName state frameCount frameIndex |
     processName := self selectedProcessName.
     processName size = 0 ifTrue: [^4].
     processName = 'BootActiveProcess' ifTrue: [workspace captureDebugContext].
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
-    process := KernelInstaller objectNamed: processName.
-    KernelInstaller rememberObject: process named: 'BootWorkspaceDebugProcess'.
+    state := tool namedObjectOrNil: 'BootWorkspaceDebuggerState'.
+    state = nil ifTrue: [
+        state := (KernelInstaller classNamed: 'WorkspaceReturnState') new.
+        KernelInstaller rememberObject: state named: 'BootWorkspaceDebuggerState'].
+    frameCount := Workspace contextFrameCountNamed: processName.
+    frameIndex := frameCount = 0 ifTrue: [0] ifFalse: [1].
+    state setContents: processName cursor: frameIndex selection: frameCount visibleOrigin: nil.
+    tool setStatusText: ''.
+    tool setFeedbackText: ''.
     tool setBrowserReturnViewKind: 21 targetName: 'PROCESS BROWSER'.
     workspace setCurrentViewKind: 21.
     workspace setCurrentTargetName: 'DEBUGGER'.

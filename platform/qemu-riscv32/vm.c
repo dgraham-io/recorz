@@ -12124,9 +12124,6 @@ static uint32_t workspace_process_count(void) {
         }
         object = heap_object(named_objects[named_index].object_handle);
         if (object->kind == RECORZ_MVP_OBJECT_PROCESS) {
-            if (source_names_equal(named_objects[named_index].name, "BootWorkspaceDebugProcess")) {
-                continue;
-            }
             ++count;
         }
     }
@@ -12149,9 +12146,6 @@ static const struct recorz_mvp_named_object_binding *workspace_process_binding_a
         }
         object = heap_object(named_objects[named_index].object_handle);
         if (object->kind != RECORZ_MVP_OBJECT_PROCESS) {
-            continue;
-        }
-        if (source_names_equal(named_objects[named_index].name, "BootWorkspaceDebugProcess")) {
             continue;
         }
         ++current_index;

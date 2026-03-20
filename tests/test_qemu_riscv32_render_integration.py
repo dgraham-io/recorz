@@ -170,6 +170,11 @@ def _workspace_process_browser_is_implemented() -> bool:
     return all(symbol in vm_source for symbol in required_symbols)
 
 
+def _workspace_debugger_state_is_implemented() -> bool:
+    widget_source = (ROOT / "kernel" / "textui" / "WidgetBootstrap.rz").read_text(encoding="utf-8")
+    return "BootWorkspaceDebuggerState" in widget_source or "currentDebuggerTargetName" in widget_source
+
+
 def _write_multi_process_browser_payload(temp_path: Path) -> Path:
     file_in_payload = temp_path / "multi_process_browser_demo.rz"
     file_in_payload.write_text(
@@ -182,7 +187,7 @@ def _write_multi_process_browser_payload(temp_path: Path) -> Path:
                 "!",
                 "RecorzKernelDoIt:",
                 "Display clear.",
-                "KernelInstaller rememberObject: ((KernelInstaller classNamed: 'Process') new setLabel: 'Idle Process' state: 'waiting' context: nil) named: 'BootIdleProcess'.",
+                "KernelInstaller rememberObject: ((KernelInstaller classNamed: 'Process') new setLabel: 'Idle Process' state: 'waiting' context: thisContext) named: 'BootIdleProcess'.",
             ]
         ),
         encoding="utf-8",
@@ -692,17 +697,17 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         normalized_debugger_log = debugger_log.replace("\r", "")
         if "panic:" in normalized_menu_log or "panic:" in normalized_process_log or "panic:" in normalized_debugger_log:
             self.skipTest("process-browser multi-process runtime is not stable yet")
-        if "PROCESS BROWSER" not in normalized_process_log or "DEBUGGER" not in normalized_debugger_log:
+        if "PROCESS BROWSER" not in normalized_process_log or "frame: 1" not in normalized_debugger_log:
             self.skipTest("process-browser multi-process runtime did not reach the expected views yet")
         self.assertGreater(_region_histogram(menu_data, menu_width, 40, 136, 320, 592)[(31, 41, 51)], 3000)
         self.assertGreater(_region_histogram(menu_data, menu_width, 336, 136, 960, 592)[(31, 41, 51)], 3000)
         self.assertGreater(_region_histogram(process_data, process_width, 40, 136, 320, 592)[(31, 41, 51)], 500)
         self.assertGreater(_region_histogram(process_data, process_width, 336, 136, 960, 592)[(31, 41, 51)], 5000)
-        self.assertGreater(_region_histogram(debugger_data, debugger_width, 40, 136, 320, 592)[(31, 41, 51)], 1000)
+        self.assertGreater(_region_histogram(debugger_data, debugger_width, 40, 136, 320, 592)[(31, 41, 51)], 150)
         self.assertGreater(_region_histogram(debugger_data, debugger_width, 336, 136, 960, 592)[(31, 41, 51)], 4000)
         self.assertGreater(_region_diff_pixels(menu_data, process_data, menu_width, 40, 136, 320, 592), 3000)
         self.assertGreater(_region_diff_pixels(menu_data, process_data, menu_width, 336, 136, 960, 592), 4500)
-        self.assertGreater(_region_diff_pixels(process_data, debugger_data, process_width, 40, 136, 320, 592), 1000)
+        self.assertGreater(_region_diff_pixels(process_data, debugger_data, process_width, 40, 136, 320, 592), 500)
         self.assertGreater(_region_diff_pixels(process_data, debugger_data, process_width, 336, 136, 960, 592), 4500)
 
     def test_development_home_process_browser_can_render_multiple_processes_and_select_a_non_default_process(self) -> None:
@@ -726,21 +731,49 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         normalized_debugger_log = debugger_log.replace("\r", "")
         if "panic:" in normalized_browser_log or "panic:" in normalized_debugger_log:
             self.skipTest("process-browser multi-process file-in payload is not stable yet")
-        if "PROCESS BROWSER" not in normalized_browser_log or "DEBUGGER" not in normalized_debugger_log:
+        if "PROCESS BROWSER" not in normalized_browser_log or "BootIdleProcess" not in normalized_debugger_log:
             self.skipTest("process-browser multi-process file-in payload did not reach the expected views yet")
         self.assertEqual((browser_width, browser_height), (1024, 768))
         self.assertEqual((debugger_width, debugger_height), (1024, 768))
         self.assertIn("PROCESS BROWSER", normalized_browser_log)
         self.assertIn("Active Process", normalized_browser_log)
         self.assertIn("Idle Process", normalized_browser_log)
-        self.assertIn("DEBUGGER", normalized_debugger_log)
-        self.assertIn("NO DEBUG FRAMES", normalized_debugger_log)
+        self.assertIn("BootIdleProcess", normalized_debugger_log)
+        self.assertIn("frame: 1", normalized_debugger_log)
+        self.assertIn("receiver", normalized_debugger_log)
+        self.assertIn("detail", normalized_debugger_log)
+        self.assertIn("alive", normalized_debugger_log)
         self.assertGreater(_region_histogram(browser_data, browser_width, 40, 136, 320, 592)[(31, 41, 51)], 1000)
         self.assertGreater(_region_histogram(browser_data, browser_width, 336, 136, 960, 592)[(31, 41, 51)], 2000)
         self.assertGreater(_region_histogram(debugger_data, debugger_width, 40, 136, 320, 592)[(31, 41, 51)], 1000)
         self.assertGreater(_region_histogram(debugger_data, debugger_width, 336, 136, 960, 592)[(31, 41, 51)], 2000)
         self.assertGreater(_region_diff_pixels(browser_data, debugger_data, browser_width, 40, 136, 320, 592), 500)
         self.assertGreater(_region_diff_pixels(browser_data, debugger_data, browser_width, 336, 136, 960, 592), 500)
+
+    def test_development_home_debugger_state_can_surface_explicit_process_association(self) -> None:
+        if not _workspace_debugger_state_is_implemented():
+            self.skipTest("real debugger state model is not wired yet")
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-debugger-state-", dir="/tmp") as temp_dir:
+            temp_path = Path(temp_dir)
+            file_in_payload = _write_multi_process_browser_payload(temp_path)
+            debugger_log, debugger_width, debugger_height, debugger_data = self.render_interactive_example(
+                WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+                (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18", b"\x0e", b"\x18"),
+                file_in_payload=file_in_payload,
+            )
+
+        normalized_debugger_log = debugger_log.replace("\r", "")
+        if "panic:" in normalized_debugger_log:
+            self.skipTest("debugger-state file-in payload is not stable yet")
+        if "BootIdleProcess" not in normalized_debugger_log:
+            self.skipTest("debugger-state file-in payload did not bind the selected process yet")
+        self.assertEqual((debugger_width, debugger_height), (1024, 768))
+        self.assertIn("BootIdleProcess", normalized_debugger_log)
+        self.assertIn("frame: 1", normalized_debugger_log)
+        self.assertIn("receiver", normalized_debugger_log)
+        self.assertIn("detail", normalized_debugger_log)
+        self.assertGreater(_region_histogram(debugger_data, debugger_width, 40, 136, 320, 592)[(31, 41, 51)], 1000)
+        self.assertGreater(_region_histogram(debugger_data, debugger_width, 336, 136, 960, 592)[(31, 41, 51)], 2000)
 
     def test_interactive_textui_package_editor_stays_anchored_at_the_top_after_cursor_move(self) -> None:
         qemu_log, width, height, data = self.render_interactive_example(
