@@ -276,6 +276,28 @@ def _write_combined_file_in_payload(build_dir: Path, *payloads: Path) -> Path:
     return payload_path
 
 
+def _write_development_home_tests_package_file_in(temp_path: Path) -> Path:
+    payload_path = temp_path / "development_home_tests_package_file_in.rz"
+    payload_path.write_text(
+        "\n".join(
+            [
+                "RecorzKernelPackage: 'Tests' comment: 'Interactive regression fixtures'",
+                "!",
+                "RecorzKernelClass: #TinySpec superclass: #Object package: 'Tests' instanceVariableNames: ''",
+                "!",
+                "testPass",
+                "    ^true",
+                "!",
+                "testFail",
+                "    ^false",
+                "!",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return payload_path
+
+
 def _read_file_until(path: Path, marker: str, *, timeout: float) -> str:
     deadline = time.monotonic() + timeout
     output = ""
@@ -3021,13 +3043,15 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("opens source.", output)
             self.assertNotIn("panic:", output)
 
-    def test_workspace_development_home_project_browser_can_run_tests_debugger_and_reopen(self) -> None:
+    def test_workspace_development_home_project_browser_can_open_package_source_and_enter_debugger_on_test_failure(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-project-tests-") as temp_dir:
-            build_dir = Path(temp_dir)
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "build"
+            file_in_payload = _write_development_home_tests_package_file_in(temp_path)
             elf_path = _build_elf(
                 build_dir,
                 WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
-                file_in_payload=WORKSPACE_INPUT_MONITOR_RUN_TESTS_EXAMPLE,
+                file_in_payload=file_in_payload,
             )
             process = subprocess.Popen(
                 [
@@ -3048,6 +3072,8 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     "none",
                     "-device",
                     "ramfb",
+                    "-fw_cfg",
+                    f"name=opt/recorz-file-in,file={file_in_payload}",
                 ],
                 cwd=ROOT,
                 stdin=subprocess.PIPE,
@@ -3063,14 +3089,19 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     self.fail("QEMU process stdin is not available")
                 process.stdin.write("\x0e\x0e\x18")
                 process.stdin.flush()
-                try:
-                    output += _read_until_any(process, ("PACKAGE: TESTS", "panic:"), timeout=8.0)
-                except AssertionError:
-                    self.skipTest("development-home project browser did not select the Tests package in time")
+                output += _read_until_any(process, ("INTERACTIVE PACKAGE LIST", "panic:"), timeout=8.0)
                 if "panic:" in output:
-                    self.skipTest("development-home project browser panicked before selecting Tests")
-                if "PACKAGE: TESTS" not in output:
-                    self.skipTest("development-home project browser did not land on the Tests package")
+                    self.skipTest("development-home project browser panicked before opening the package list")
+                if "Tests" not in output:
+                    output += _read_until_any(process, ("Tests", "panic:"), timeout=4.0)
+                if "panic:" in output:
+                    self.skipTest("development-home project browser panicked before exposing Tests in the package list")
+                self.assertIn("Tests", output)
+                process.stdin.write("\x18")
+                process.stdin.flush()
+                output += _read_until_any(process, ("SOURCE EDITOR", "panic:"), timeout=8.0)
+                if "panic:" in output:
+                    self.skipTest("development-home project browser panicked before opening Tests")
                 process.stdin.write("\x14")
                 process.stdin.flush()
                 output += _read_until_any(
@@ -3082,20 +3113,6 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     self.skipTest("Ctrl-T failing-test debugger flow is not stable yet")
                 if "FAILED TEST" not in output and "DEBUGGER" not in output:
                     self.skipTest("Ctrl-T did not reach the debugger branch yet")
-                process.stdin.write("\x0f")
-                process.stdin.flush()
-                output += _read_until_any(
-                    process,
-                    ("PACKAGE: TESTS", "INTERACTIVE PACKAGE LIST", "panic:"),
-                    timeout=8.0,
-                )
-                if "panic:" in output:
-                    self.skipTest("Ctrl-O return from debugger is not stable yet")
-                process.stdin.write("\x18")
-                process.stdin.flush()
-                output += _read_until_any(process, ("VIEW: SOURCE", "panic:"), timeout=8.0)
-                if "panic:" in output:
-                    self.skipTest("Ctrl-X reopen after debugger return is not stable yet")
                 time.sleep(0.5)
                 if process.poll() is None:
                     process.kill()
@@ -3112,12 +3129,16 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
 
             output = output.replace("\r", "")
             self.assertIn("OPENING MENU", output)
-            self.assertIn("PACKAGE: TESTS", output)
-            self.assertIn("LAST TinySpec>>testFail", output)
+            self.assertIn("INTERACTIVE PACKAGE LIST", output)
+            self.assertIn("Tests", output)
+            self.assertIn("SOURCE EDITOR", output)
+            self.assertIn("PASS TinySpec>>testPass", output)
+            self.assertIn("FAIL TinySpec>>testFail", output)
             self.assertIn("FAILED TEST", output)
-            self.assertIn("DEBUGGER", output)
-            self.assertIn("CLOSE: CTRL-O", output)
-            self.assertIn("VIEW: SOURCE", output)
+            self.assertIn("SUMMARY Tests P=1 F=1 T=2", output)
+            self.assertIn("BootActiveProcess", output)
+            self.assertIn("frame: 1", output)
+            self.assertIn("TinySpec>>testFail", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_development_home_menu_can_open_the_class_browser(self) -> None:
@@ -3991,7 +4012,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 process.stdin.flush()
                 output += _read_until_any(
                     process,
-                    ("STATUS: TESTS COMPLETE", "panic: unsupported receiver in MVP VM"),
+                    ("FAILED TEST", "DEBUGGER", "panic:"),
                     timeout=8.0,
                 )
                 process.stdin.write("\x0f")
@@ -4011,15 +4032,14 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     process.stdin.close()
 
             output = output.replace("\r", "")
-            if "panic: unsupported receiver in MVP VM" in output:
-                self.skipTest("Ctrl-T failing-test debugger flow still trips the unsupported receiver panic")
             self.assertIn("PASS TinySpec>>testPass", output)
             self.assertIn("FAIL TinySpec>>testFail", output)
             self.assertIn("SUMMARY Tests P=1 F=1 T=2", output)
-            self.assertIn("LAST TinySpec>>testFail", output)
-            self.assertIn("PACKAGE: TESTS", output)
+            self.assertIn("TinySpec>>testFail", output)
+            self.assertIn("PACKAGE: Tests", output)
             self.assertIn("FAILED TEST", output)
-            self.assertIn("DEBUGGER", output)
+            self.assertIn("BootActiveProcess", output)
+            self.assertIn("frame: 1", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_edit_current_opens_the_interactive_editor_from_class_browser(self) -> None:

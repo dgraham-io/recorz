@@ -1192,6 +1192,11 @@ currentBrowserHeaderText
     workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [^'PROCESS BROWSER'].
     self isObjectInspectorBrowser ifTrue: [^'OBJECT INSPECTOR'].
     workspace currentViewKind = 21 ifTrue: [^'CLASSES'].
+    workspace currentViewKind = 14 ifTrue: [
+        | packageName |
+        packageName := self selectedPackageName.
+        packageName size > 0 ifTrue: [^packageName].
+        ^'PACKAGES'].
     ^'PACKAGES'
 !
 currentBrowserSourceText

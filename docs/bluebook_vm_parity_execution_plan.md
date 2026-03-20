@@ -30,9 +30,10 @@ As of `2026-03-20`, the project appears to be here:
 Stage 3 status note as of `2026-03-20` late:
 
 - the development-home opening-menu to active-process debugger path is stable enough to assert directly in framebuffer coverage
+- the development-home project-browser failing-test path is stable when tests are entered from package source instead of the package list
 - the remaining Stage 3 blockers are narrower:
   - BP3.3 still needs stable non-default process selection and debugger handoff for multi-process fixtures
-  - BP3.4 still needs stable failing-test debugger entry from the development-home project-browser path
+  - BP3.4 still needs intended primitive-failure debugger entry instead of panic-only behavior
 
 That means the main execution path should currently focus on Stage 3 completion, while continuing to keep Stage 0 regression gates healthy.
 
