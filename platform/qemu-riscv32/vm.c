@@ -12165,6 +12165,7 @@ static const struct recorz_mvp_named_object_binding *workspace_process_binding_a
     uint32_t one_based_index
 ) {
     const struct recorz_mvp_heap_object *object;
+    const struct recorz_mvp_named_object_binding *active_binding = 0;
     uint16_t named_index;
     uint32_t current_index = 0U;
 
@@ -12172,7 +12173,28 @@ static const struct recorz_mvp_named_object_binding *workspace_process_binding_a
         return 0;
     }
     for (named_index = 0U; named_index < named_object_count; ++named_index) {
+        if (!source_names_equal(named_objects[named_index].name, "BootActiveProcess")) {
+            continue;
+        }
         if (named_objects[named_index].object_handle == 0U) {
+            break;
+        }
+        object = heap_object(named_objects[named_index].object_handle);
+        if (!workspace_object_is_process_like(object)) {
+            break;
+        }
+        active_binding = &named_objects[named_index];
+        if (one_based_index == 1U) {
+            return active_binding;
+        }
+        current_index = 1U;
+        break;
+    }
+    for (named_index = 0U; named_index < named_object_count; ++named_index) {
+        if (named_objects[named_index].object_handle == 0U) {
+            continue;
+        }
+        if (source_names_equal(named_objects[named_index].name, "BootActiveProcess")) {
             continue;
         }
         object = heap_object(named_objects[named_index].object_handle);
