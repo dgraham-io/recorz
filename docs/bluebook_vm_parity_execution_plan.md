@@ -24,19 +24,18 @@ As of `2026-03-20`, the project appears to be here:
 - Stage 0: mostly established; keep as a regression lane.
 - Stage 1: mostly established; primitive-boundary discipline exists, and the first debugger-visible primitive-failure path is now in place.
 - Stage 2: mostly established; `Context`/`Process` visibility exists, but true scheduler semantics do not.
-- Stage 3: in progress.
-- Stages 4 through 8: still open.
+- Stage 3: complete.
+- Stages 4 through 8: still open, with Stage 4 now at the head of execution.
 
 Stage 3 status note as of `2026-03-21`:
 
 - the development-home opening-menu to active-process debugger path is stable enough to assert directly in framebuffer coverage
 - the development-home project-browser failing-test path is stable when tests are entered from package source instead of the package list
-- the multi-process browser now keeps `BootActiveProcess` first, and the non-default-process debugger handoff is assertion-covered
-- the input monitor now enters the debugger on an intended primitive/send failure instead of panicking, with direct serial coverage
-- the remaining Stage 3 blocker is narrower:
-  - BP3.5 still needs debugger return-path coherence from the process-browser debugger flow
+- the multi-process browser keeps `BootActiveProcess` first, the non-default-process debugger handoff is assertion-covered, and the debugger return path restores the selected process view without stale debugger status carryover
+- the input monitor enters the debugger on an intended primitive/send failure instead of panicking, with direct serial coverage
+- the main debugger/process-browser tests now assert instead of skipping
 
-That means the main execution path should currently focus on Stage 3 completion, while continuing to keep Stage 0 regression gates healthy.
+That closes Stage 3 and moves the main execution path to Stage 4 model extraction, while continuing to keep Stage 0 regression gates healthy.
 
 ## Global Completion Rules
 
@@ -258,7 +257,7 @@ This is the current main execution stage.
   Verify:
   - no skip-gate in the development-home `Ctrl-T` debugger-entry tests
 
-- [ ] `BP3.5` Finish debugger return-path coherence
+- [x] `BP3.5` Finish debugger return-path coherence
   Files:
   - `/Users/david/repos/recorz/kernel/textui/WidgetBootstrap.rz`
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_render_integration.py`
@@ -557,9 +556,9 @@ This stage only begins once the earlier stages are functionally complete.
 
 Unless a regression in Stage 0 becomes urgent, the next tasks should be tackled in this order:
 
-1. `BP3.5` Finish debugger return-path coherence.
-2. Re-check Stage 3 exit criteria.
-3. Only then begin `BP4.1`.
+1. `BP4.1` Extract browser state model.
+2. `BP4.2` Extract editor/source-holder model.
+3. `BP4.3` Move opening-menu and return routing into model APIs.
 
 ## Program Complete When
 

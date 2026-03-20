@@ -1443,6 +1443,55 @@ handleEscapeByte: aByte
     aByte = 70 ifTrue: [^self moveCursorToVisibleBottom].
     ^workspace handleEditorArrowByte: aByte visibleLines: self visibleEditorLines visibleColumns: self visibleEditorColumns
 !
+returnFromDebuggerBrowser
+    | plainState returnListTop returnSelectedIndex returnState returnTargetName returnViewKind tool |
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    returnState := tool namedObjectOrNil: 'BootWorkspaceBrowserReturnState'.
+    returnViewKind := nil.
+    returnTargetName := nil.
+    returnSelectedIndex := 0.
+    returnListTop := 0.
+    returnState = nil ifFalse: [
+        returnViewKind := returnState contents.
+        returnTargetName := returnState cursor.
+        returnState selection = nil ifFalse: [returnSelectedIndex := returnState selection].
+        returnState visibleOrigin = nil ifFalse: [returnListTop := returnState visibleOrigin]].
+    tool setBrowserReturnViewKind: nil targetName: nil.
+    returnViewKind = nil ifTrue: [
+        plainState := tool namedObjectOrNil: 'BootWorkspacePlainState'.
+        plainState = nil ifFalse: [
+            plainState contents = nil ifFalse: [^tool restorePlainWorkspaceState]].
+        tool setStatusText: ''.
+        tool setFeedbackText: ''.
+        ^9].
+    workspace setCurrentTargetName: returnTargetName.
+    workspace setCurrentViewKind: returnViewKind.
+    returnViewKind = 20 ifTrue: [
+        selected := returnSelectedIndex.
+        listTop := returnListTop.
+        self prepareListSelectionForCount: self currentListCount.
+        tool setStatusText: ''.
+        tool setFeedbackText: ''.
+        ^4].
+    returnViewKind = 14 ifTrue: [
+        selected := returnSelectedIndex.
+        listTop := returnListTop.
+        self prepareListSelectionForCount: self currentListCount.
+        tool setStatusText: ''.
+        tool setFeedbackText: ''.
+        ^4].
+    returnViewKind = 21 ifTrue: [
+        selected := returnSelectedIndex.
+        listTop := returnListTop.
+        self prepareListSelectionForCount: self currentListCount.
+        tool setStatusText: ''.
+        tool setFeedbackText: ''.
+        ^4].
+    tool setStatusText: ''.
+    tool setFeedbackText: ''.
+    Workspace reopen.
+    ^9
+!
 handleBrowserByte: aByte
     aByte = 14 ifTrue: [^self moveListSelectionBy: 1].
     aByte = 16 ifTrue: [^self moveListSelectionBy: -1].
@@ -1456,8 +1505,12 @@ handleBrowserByte: aByte
         workspace currentViewKind = 20 ifTrue: [^self openSelectedOpeningMenuItem].
         workspace currentViewKind = 21 ifTrue: [^self openSelectedClassSource].
         ^self openSelectedPackageSource].
-    aByte = 15 ifTrue: [^9].
-    aByte = 4 ifTrue: [^9].
+    aByte = 15 ifTrue: [
+        workspace currentTargetName = 'DEBUGGER' ifTrue: [^self returnFromDebuggerBrowser].
+        ^9].
+    aByte = 4 ifTrue: [
+        workspace currentTargetName = 'DEBUGGER' ifTrue: [^self returnFromDebuggerBrowser].
+        ^9].
     ^0
 !
 openSelectedOpeningMenuItem

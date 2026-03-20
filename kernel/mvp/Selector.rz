@@ -780,3 +780,5 @@ RecorzKernelSelector: #contextFrameSummariesVisibleFrom:count:named: order: 388
 !
 RecorzKernelSelector: #ensureProcessNamed:label:state:context: order: 389
 !
+RecorzKernelSelector: #returnFromDebuggerBrowser order: 390
+!

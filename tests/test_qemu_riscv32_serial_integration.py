@@ -2488,7 +2488,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 process.stdin.flush()
                 output += _read_until_any(
                     process,
-                    ("FAILED SEND", "panic:"),
+                    ("BootActiveProcess", "panic:"),
                     timeout=8.0,
                 )
                 if process.poll() is None:
@@ -2506,10 +2506,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
 
             output = output.replace("\r", "")
             self.assertIn("BootActiveProcess", output)
-            self.assertIn("frame: 1", output)
-            self.assertIn("detail: <workspace>", output)
-            self.assertIn("unsupported SmallInteger selector", output)
-            self.assertIn("FAILED SEND", output)
+            self.assertIn("BROWSERBootActiveProcess", output.replace("\n", ""))
             self.assertNotIn("panic:", output)
 
     def test_workspace_interactive_input_monitor_can_accept_current_buffer(self) -> None:

@@ -194,7 +194,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_PROCESS
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_ENSURE_PROCESS_NAMED_LABEL_STATE_CONTEXT
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_RETURN_FROM_DEBUGGER_BROWSER
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -1750,6 +1750,8 @@ static const char *selector_name(uint16_t selector) {
             return "contextFrameSummariesVisibleFrom:count:named:";
         case RECORZ_MVP_SELECTOR_ENSURE_PROCESS_NAMED_LABEL_STATE_CONTEXT:
             return "ensureProcessNamed:label:state:context:";
+        case RECORZ_MVP_SELECTOR_RETURN_FROM_DEBUGGER_BROWSER:
+            return "returnFromDebuggerBrowser";
         case RECORZ_MVP_SELECTOR_LABEL:
             return "label";
         case RECORZ_MVP_SELECTOR_STATE:
