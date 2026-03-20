@@ -1026,15 +1026,32 @@ selectedObjectInspectorName
     selected = 5 ifTrue: [^'BootActiveProcess'].
     ^''
 !
+selectedProcessName
+    self currentListCount = 0 ifTrue: [^''].
+    ^Workspace processNameAt: selected + 1
+!
+currentDebuggerTargetName
+    | tool process count index processName |
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    process := tool namedObjectOrNil: 'BootWorkspaceDebugProcess'.
+    process = nil ifTrue: [^'BootActiveProcess'].
+    count := Workspace processCount.
+    index := 1.
+    [index <= count] whileTrue: [
+        processName := Workspace processNameAt: index.
+        (KernelInstaller objectNamed: processName) = process ifTrue: [^processName].
+        index := index + 1].
+    ^'BootActiveProcess'
+!
 currentListCount
     | viewKind |
     viewKind := workspace currentViewKind.
     viewKind = 20 ifTrue: [^self openingMenuOptionCount].
     viewKind = 21 ifTrue: [
-        workspace currentTargetName = 'DEBUGGER' ifTrue: [^Workspace debugFrameCount].
+        workspace currentTargetName = 'DEBUGGER' ifTrue: [
+            ^Workspace contextFrameCountNamed: self currentDebuggerTargetName].
         workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [
-            (KernelInstaller objectNamed: 'BootActiveProcess') = nil ifTrue: [^0].
-            ^1].
+            ^Workspace processCount].
         self isObjectInspectorBrowser ifTrue: [^self objectInspectorCount].
         ^workspace classCount].
     ^workspace packageCount
@@ -1057,13 +1074,10 @@ prepareBrowserStateForMode: aMode
 !
 currentBrowserItemsVisibleFrom: firstIndex count: lineCount
     workspace currentViewKind = 20 ifTrue: [^self openingMenuItemsVisibleFrom: firstIndex count: lineCount].
-    workspace currentTargetName = 'DEBUGGER' ifTrue: [^Workspace debugFrameListFrom: firstIndex].
+    workspace currentTargetName = 'DEBUGGER' ifTrue: [
+        ^Workspace contextFrameSummariesVisibleFrom: firstIndex count: lineCount named: self currentDebuggerTargetName].
     workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [
-        | process |
-        lineCount < 1 ifTrue: [^''].
-        process := KernelInstaller objectNamed: 'BootActiveProcess'.
-        process = nil ifTrue: [^''].
-        ^process label].
+        ^Workspace processLabelsVisibleFrom: firstIndex count: lineCount].
     self isObjectInspectorBrowser ifTrue: [^self objectInspectorItemsVisibleFrom: firstIndex count: lineCount].
     workspace currentViewKind = 21 ifTrue: [^workspace classNamesVisibleFrom: firstIndex count: lineCount].
     ^workspace packageNamesVisibleFrom: firstIndex count: lineCount
@@ -1097,9 +1111,14 @@ currentBrowserHeaderText
 currentBrowserSourceText
     workspace currentViewKind = 20 ifTrue: [
         ^'Choose a starting view. Enter or Ctrl-X opens the selected item.'].
-    workspace currentTargetName = 'DEBUGGER' ifTrue: [^Workspace debugFrameDetailAt: selected].
+    workspace currentTargetName = 'DEBUGGER' ifTrue: [
+        self currentListCount = 0 ifTrue: [^'NO DEBUG FRAMES'].
+        ^Workspace contextFrameDetailAt: selected + 1 named: self currentDebuggerTargetName].
     workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [
-        ^Workspace objectDetailNamed: 'BootActiveProcess'].
+        | processName |
+        processName := self selectedProcessName.
+        processName size = 0 ifTrue: [^'NO PROCESSES'].
+        ^Workspace objectDetailNamed: processName].
     self isObjectInspectorBrowser ifTrue: [
         ^'Select an object. Enter or Ctrl-X opens detail.'].
     workspace currentViewKind = 21 ifTrue: [
@@ -1176,8 +1195,10 @@ currentStatusText
     viewKind = 20 ifTrue: [^'OPENING MENU'].
     workspace currentTargetName = 'DEBUGGER' ifTrue: [^'DEBUGGER'].
     workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [
-        | process |
-        process := KernelInstaller objectNamed: 'BootActiveProcess'.
+        | processName process |
+        processName := self selectedProcessName.
+        processName size = 0 ifTrue: [^'PROCESS BROWSER'].
+        process := KernelInstaller objectNamed: processName.
         process = nil ifTrue: [^'PROCESS BROWSER'].
         ^process state].
     self isObjectInspectorBrowser ifTrue: [^'OBJECT INSPECTOR'].
@@ -1449,9 +1470,13 @@ openSelectedObjectInspector
     ^1
 !
 openSelectedContextDebugger
-    | tool |
-    workspace captureDebugContext.
+    | tool processName process |
+    processName := self selectedProcessName.
+    processName size = 0 ifTrue: [^4].
+    processName = 'BootActiveProcess' ifTrue: [workspace captureDebugContext].
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    process := KernelInstaller objectNamed: processName.
+    KernelInstaller rememberObject: process named: 'BootWorkspaceDebugProcess'.
     tool setBrowserReturnViewKind: 21 targetName: 'PROCESS BROWSER'.
     workspace setCurrentViewKind: 21.
     workspace setCurrentTargetName: 'DEBUGGER'.

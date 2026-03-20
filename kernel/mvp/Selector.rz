@@ -766,3 +766,15 @@ RecorzKernelSelector: #debugFrameListFrom: order: 381
 !
 RecorzKernelSelector: #debugFrameDetailAt: order: 382
 !
+RecorzKernelSelector: #selectedProcessName order: 383
+!
+RecorzKernelSelector: #currentDebuggerTargetName order: 384
+!
+RecorzKernelSelector: #processCount order: 385
+!
+RecorzKernelSelector: #processNameAt: order: 386
+!
+RecorzKernelSelector: #processLabelsVisibleFrom:count: order: 387
+!
+RecorzKernelSelector: #contextFrameSummariesVisibleFrom:count:named: order: 388
+!

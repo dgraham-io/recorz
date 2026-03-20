@@ -194,7 +194,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_PROCESS
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_DEBUG_FRAME_DETAIL_AT
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_CONTEXT_FRAME_SUMMARIES_VISIBLE_FROM_COUNT_NAMED
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -428,6 +428,7 @@ static char workspace_surface_list_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char workspace_surface_editor_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char workspace_surface_source_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char workspace_object_detail_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
+static char workspace_process_list_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char workspace_context_stack_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char workspace_surface_status_buffer[WORKSPACE_INPUT_MONITOR_FEEDBACK_LIMIT];
 static uint8_t workspace_input_monitor_capture_enabled = 0U;
@@ -1730,6 +1731,18 @@ static const char *selector_name(uint16_t selector) {
             return "debugFrameListFrom:";
         case RECORZ_MVP_SELECTOR_DEBUG_FRAME_DETAIL_AT:
             return "debugFrameDetailAt:";
+        case RECORZ_MVP_SELECTOR_SELECTED_PROCESS_NAME:
+            return "selectedProcessName";
+        case RECORZ_MVP_SELECTOR_CURRENT_DEBUGGER_TARGET_NAME:
+            return "currentDebuggerTargetName";
+        case RECORZ_MVP_SELECTOR_PROCESS_COUNT:
+            return "processCount";
+        case RECORZ_MVP_SELECTOR_PROCESS_NAME_AT:
+            return "processNameAt:";
+        case RECORZ_MVP_SELECTOR_PROCESS_LABELS_VISIBLE_FROM_COUNT:
+            return "processLabelsVisibleFrom:count:";
+        case RECORZ_MVP_SELECTOR_CONTEXT_FRAME_SUMMARIES_VISIBLE_FROM_COUNT_NAMED:
+            return "contextFrameSummariesVisibleFrom:count:named:";
         case RECORZ_MVP_SELECTOR_LABEL:
             return "label";
         case RECORZ_MVP_SELECTOR_STATE:
@@ -12100,6 +12113,116 @@ static const char *workspace_object_detail_text_for_named_object(const char *obj
     );
 }
 
+static uint32_t workspace_process_count(void) {
+    const struct recorz_mvp_heap_object *object;
+    uint16_t named_index;
+    uint32_t count = 0U;
+
+    for (named_index = 0U; named_index < named_object_count; ++named_index) {
+        if (named_objects[named_index].object_handle == 0U) {
+            continue;
+        }
+        object = heap_object(named_objects[named_index].object_handle);
+        if (object->kind == RECORZ_MVP_OBJECT_PROCESS) {
+            if (source_names_equal(named_objects[named_index].name, "BootWorkspaceDebugProcess")) {
+                continue;
+            }
+            ++count;
+        }
+    }
+    return count;
+}
+
+static const struct recorz_mvp_named_object_binding *workspace_process_binding_at_index(
+    uint32_t one_based_index
+) {
+    const struct recorz_mvp_heap_object *object;
+    uint16_t named_index;
+    uint32_t current_index = 0U;
+
+    if (one_based_index < 1U) {
+        return 0;
+    }
+    for (named_index = 0U; named_index < named_object_count; ++named_index) {
+        if (named_objects[named_index].object_handle == 0U) {
+            continue;
+        }
+        object = heap_object(named_objects[named_index].object_handle);
+        if (object->kind != RECORZ_MVP_OBJECT_PROCESS) {
+            continue;
+        }
+        if (source_names_equal(named_objects[named_index].name, "BootWorkspaceDebugProcess")) {
+            continue;
+        }
+        ++current_index;
+        if (current_index == one_based_index) {
+            return &named_objects[named_index];
+        }
+    }
+    return 0;
+}
+
+static const char *workspace_process_name_at_index(uint32_t one_based_index) {
+    const struct recorz_mvp_named_object_binding *binding =
+        workspace_process_binding_at_index(one_based_index);
+
+    if (binding == 0) {
+        return 0;
+    }
+    return binding->name;
+}
+
+static const char *workspace_process_labels_visible_text(uint32_t first_index, uint32_t count) {
+    const struct recorz_mvp_named_object_binding *binding;
+    const struct recorz_mvp_heap_object *process_object;
+    struct recorz_mvp_value label_value;
+    const char *label_text;
+    uint32_t last_index;
+    uint32_t offset = 0U;
+    uint32_t process_index;
+
+    workspace_surface_reset_buffer(
+        workspace_process_list_buffer,
+        sizeof(workspace_process_list_buffer)
+    );
+    if (count == 0U) {
+        return workspace_process_list_buffer;
+    }
+    if (first_index < 1U) {
+        first_index = 1U;
+    }
+    last_index = first_index + count - 1U;
+    for (process_index = first_index; process_index <= last_index; ++process_index) {
+        binding = workspace_process_binding_at_index(process_index);
+        if (binding == 0) {
+            break;
+        }
+        process_object = heap_object(binding->object_handle);
+        label_value = heap_get_field(process_object, PROCESS_FIELD_LABEL);
+        label_text = binding->name;
+        if (label_value.kind == RECORZ_MVP_VALUE_STRING &&
+            label_value.string != 0 &&
+            label_value.string[0] != '\0') {
+            label_text = label_value.string;
+        }
+        if (offset != 0U) {
+            append_text_checked(
+                workspace_process_list_buffer,
+                sizeof(workspace_process_list_buffer),
+                &offset,
+                "\n"
+            );
+        }
+        append_text_checked(
+            workspace_process_list_buffer,
+            sizeof(workspace_process_list_buffer),
+            &offset,
+            label_text
+        );
+    }
+    return workspace_process_list_buffer;
+}
+
 static const struct recorz_mvp_heap_object *workspace_context_stack_context_for_named_object(
     const char *object_name,
     char buffer[],
@@ -12464,7 +12587,11 @@ static const char *workspace_context_stack_frame_detail_text_for_named_object(
     return workspace_context_stack_buffer;
 }
 
-static const char *workspace_debugger_frame_summaries_visible_from_text(uint32_t first_index) {
+static const char *workspace_context_frame_summaries_visible_from_count_named_text(
+    const char *object_name,
+    uint32_t first_index,
+    uint32_t count
+) {
     const struct recorz_mvp_heap_object *context_object;
     const struct recorz_mvp_heap_object *frame_object;
     struct recorz_mvp_value detail_value;
@@ -12474,13 +12601,14 @@ static const char *workspace_debugger_frame_summaries_visible_from_text(uint32_t
     uint32_t frame_count;
     uint32_t frame_index;
     uint32_t offset = 0U;
+    uint32_t rendered_count = 0U;
 
     workspace_surface_reset_buffer(
         workspace_context_stack_buffer,
         sizeof(workspace_context_stack_buffer)
     );
     context_object = workspace_context_stack_context_for_named_object(
-        "BootActiveProcess",
+        object_name,
         workspace_context_stack_buffer,
         sizeof(workspace_context_stack_buffer),
         &offset
@@ -12489,6 +12617,10 @@ static const char *workspace_debugger_frame_summaries_visible_from_text(uint32_t
         return workspace_context_stack_buffer;
     }
     frame_count = workspace_context_stack_frame_count_for_context_object(context_object);
+    if (count == 0U) {
+        workspace_context_stack_buffer[0] = '\0';
+        return workspace_context_stack_buffer;
+    }
     if (first_index < 1U) {
         first_index = 1U;
     }
@@ -12498,7 +12630,7 @@ static const char *workspace_debugger_frame_summaries_visible_from_text(uint32_t
     }
     workspace_context_stack_buffer[0] = '\0';
     offset = 0U;
-    for (frame_index = first_index; frame_index <= frame_count; ++frame_index) {
+    for (frame_index = first_index; frame_index <= frame_count && rendered_count < count; ++frame_index) {
         error_buffer[0] = '\0';
         error_offset = 0U;
         frame_object = workspace_context_stack_frame_object_for_index(
@@ -12559,8 +12691,17 @@ static const char *workspace_debugger_frame_summaries_visible_from_text(uint32_t
             &offset,
             workspace_text_for_value(detail_value, rendered_value, sizeof(rendered_value))
         );
+        ++rendered_count;
     }
     return workspace_context_stack_buffer;
+}
+
+static const char *workspace_debugger_frame_summaries_visible_from_text(uint32_t first_index) {
+    return workspace_context_frame_summaries_visible_from_count_named_text(
+        "BootActiveProcess",
+        first_index,
+        0xffffffffU
+    );
 }
 
 static const char *workspace_context_stack_text_for_named_object(const char *object_name) {
@@ -22028,6 +22169,96 @@ static void execute_entry_workspace_context_frame_detail_at_named(
         machine_panic("Workspace contextFrameDetailAt:named: expects an object name string");
     }
     push(string_value(workspace_context_stack_frame_detail_text_for_named_object(arguments[1].string, frame_index)));
+}
+
+static void execute_entry_workspace_process_count(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    push(small_integer_value((int32_t)workspace_process_count()));
+}
+
+static void execute_entry_workspace_process_name_at(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const char *process_name;
+    uint32_t index;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    index = small_integer_u32(
+        arguments[0],
+        "Workspace processNameAt: expects a positive small integer"
+    );
+    process_name = workspace_process_name_at_index(index);
+    if (process_name == 0) {
+        push(string_value(""));
+        return;
+    }
+    push(string_value(process_name));
+}
+
+static void execute_entry_workspace_process_labels_visible_from_count(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint32_t first_index;
+    uint32_t count;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    first_index = small_integer_u32(
+        arguments[0],
+        "Workspace processLabelsVisibleFrom:count: expects a positive first index"
+    );
+    count = small_integer_u32(
+        arguments[1],
+        "Workspace processLabelsVisibleFrom:count: expects a non-negative line count"
+    );
+    push(string_value(workspace_process_labels_visible_text(first_index, count)));
+}
+
+static void execute_entry_workspace_context_frame_summaries_visible_from_count_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint32_t first_index;
+    uint32_t count;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    first_index = small_integer_u32(
+        arguments[0],
+        "Workspace contextFrameSummariesVisibleFrom:count:named: expects a positive first index"
+    );
+    count = small_integer_u32(
+        arguments[1],
+        "Workspace contextFrameSummariesVisibleFrom:count:named: expects a non-negative line count"
+    );
+    if (arguments[2].kind != RECORZ_MVP_VALUE_STRING || arguments[2].string == 0) {
+        machine_panic("Workspace contextFrameSummariesVisibleFrom:count:named: expects an object name string");
+    }
+    push(string_value(workspace_context_frame_summaries_visible_from_count_named_text(
+        arguments[2].string,
+        first_index,
+        count
+    )));
 }
 
 static void execute_entry_workspace_debug_frame_count(

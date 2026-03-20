@@ -182,9 +182,7 @@ def _write_multi_process_browser_payload(temp_path: Path) -> Path:
                 "!",
                 "RecorzKernelDoIt:",
                 "Display clear.",
-                "KernelInstaller rememberObject: (KernelInstaller objectNamed: 'BootActiveProcess') named: 'BootIdleProcess'.",
-                "Workspace setCurrentViewKind: 21.",
-                "Workspace setCurrentTargetName: 'PROCESS BROWSER'.",
+                "KernelInstaller rememberObject: ((KernelInstaller classNamed: 'Process') new setLabel: 'Idle Process' state: 'waiting' context: nil) named: 'BootIdleProcess'.",
             ]
         ),
         encoding="utf-8",

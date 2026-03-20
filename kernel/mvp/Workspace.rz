@@ -78,6 +78,18 @@ debugFrameListFrom: index
 debugFrameDetailAt: zeroBasedIndex
     <primitive: #workspaceDebugFrameDetailAt>
 !
+processCount
+    <primitive: #workspaceProcessCount>
+!
+processNameAt: index
+    <primitive: #workspaceProcessNameAt>
+!
+processLabelsVisibleFrom: firstIndex count: lineCount
+    <primitive: #workspaceProcessLabelsVisibleFromCount>
+!
+contextFrameSummariesVisibleFrom: firstIndex count: lineCount named: objectName
+    <primitive: #workspaceContextFrameSummariesVisibleFromCountNamed>
+!
 browseClassNamed: className
     <primitive: #workspaceBrowseClassNamed>
 !
