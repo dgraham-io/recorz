@@ -2,6 +2,8 @@
 
 Recorz has already crossed the current Phase 1 contract. This roadmap defines the next sequence of work so the project keeps moving forward without collapsing back into an open-ended rewrite.
 
+The detailed Bluebook-parity execution plan is tracked in [docs/bluebook_vm_parity_roadmap.md](/Users/david/repos/recorz/docs/bluebook_vm_parity_roadmap.md).
+
 ## Guiding Rules
 
 - Keep RV32 as the primary development path until the next milestone is stable.
@@ -117,4 +119,3 @@ Candidate topics:
 Boundary:
 - do not move these into the critical path until the earlier stages are stable
 - keep them behind explicit design gates so they do not disrupt the native UI and image ownership work
-

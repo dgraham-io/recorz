@@ -4,7 +4,7 @@ Recorz is a Phase 1 Smalltalk/Strongtalk-inspired seed system built around a liv
 
 Today, Recorz already boots on QEMU RISC-V with framebuffer output, live source loading, snapshots, and an in-image workspace/editor. That is the implemented Phase 1 surface. The longer-term goal is a compact but expressive system that remains faithful to classic image-based development while opening room for gradual typing, systems work, hardware description, and capability-oriented isolation.
 
-The next staged work is tracked in [docs/post_phase_1_roadmap.md](/Users/david/repos/recorz/docs/post_phase_1_roadmap.md).
+The next staged work is tracked in [docs/post_phase_1_roadmap.md](/Users/david/repos/recorz/docs/post_phase_1_roadmap.md), with the detailed Bluebook-style runtime/tool parity plan in [docs/bluebook_vm_parity_roadmap.md](/Users/david/repos/recorz/docs/bluebook_vm_parity_roadmap.md).
 
 ![In-image Browser/Workspace](assets/images/browser_sreenshot.png)
 
