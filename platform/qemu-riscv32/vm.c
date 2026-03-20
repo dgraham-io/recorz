@@ -194,7 +194,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_PROCESS
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_CONTEXT_FRAME_SUMMARIES_VISIBLE_FROM_COUNT_NAMED
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_ENSURE_PROCESS_NAMED_LABEL_STATE_CONTEXT
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -1743,6 +1743,8 @@ static const char *selector_name(uint16_t selector) {
             return "processLabelsVisibleFrom:count:";
         case RECORZ_MVP_SELECTOR_CONTEXT_FRAME_SUMMARIES_VISIBLE_FROM_COUNT_NAMED:
             return "contextFrameSummariesVisibleFrom:count:named:";
+        case RECORZ_MVP_SELECTOR_ENSURE_PROCESS_NAMED_LABEL_STATE_CONTEXT:
+            return "ensureProcessNamed:label:state:context:";
         case RECORZ_MVP_SELECTOR_LABEL:
             return "label";
         case RECORZ_MVP_SELECTOR_STATE:
@@ -12113,6 +12115,35 @@ static const char *workspace_object_detail_text_for_named_object(const char *obj
     );
 }
 
+static uint8_t workspace_object_is_process_like(const struct recorz_mvp_heap_object *object) {
+    if (object->kind == RECORZ_MVP_OBJECT_PROCESS) {
+        return 1U;
+    }
+    return (uint8_t)source_names_equal(
+        class_name_for_object(class_object_for_heap_object(object)),
+        "Process"
+    );
+}
+
+static struct recorz_mvp_value workspace_process_context_value_for_named_object(
+    const char *object_name,
+    const struct recorz_mvp_heap_object *object
+) {
+    struct recorz_mvp_value process_context_value = heap_get_field(object, PROCESS_FIELD_CONTEXT);
+    uint16_t debug_context_handle;
+
+    if (process_context_value.kind != RECORZ_MVP_VALUE_NIL ||
+        object_name == 0 ||
+        !source_names_equal(object_name, "BootActiveProcess")) {
+        return process_context_value;
+    }
+    debug_context_handle = named_object_handle_for_name("BootWorkspaceDebugContext");
+    if (debug_context_handle == 0U) {
+        return process_context_value;
+    }
+    return object_value(debug_context_handle);
+}
+
 static uint32_t workspace_process_count(void) {
     const struct recorz_mvp_heap_object *object;
     uint16_t named_index;
@@ -12123,7 +12154,7 @@ static uint32_t workspace_process_count(void) {
             continue;
         }
         object = heap_object(named_objects[named_index].object_handle);
-        if (object->kind == RECORZ_MVP_OBJECT_PROCESS) {
+        if (workspace_object_is_process_like(object)) {
             ++count;
         }
     }
@@ -12145,7 +12176,7 @@ static const struct recorz_mvp_named_object_binding *workspace_process_binding_a
             continue;
         }
         object = heap_object(named_objects[named_index].object_handle);
-        if (object->kind != RECORZ_MVP_OBJECT_PROCESS) {
+        if (!workspace_object_is_process_like(object)) {
             continue;
         }
         ++current_index;
@@ -12248,8 +12279,8 @@ static const struct recorz_mvp_heap_object *workspace_context_stack_context_for_
         return 0;
     }
     named_object = heap_object(object_handle);
-    if (named_object->kind == RECORZ_MVP_OBJECT_PROCESS) {
-        process_context_value = heap_get_field(named_object, PROCESS_FIELD_CONTEXT);
+    if (workspace_object_is_process_like(named_object)) {
+        process_context_value = workspace_process_context_value_for_named_object(object_name, named_object);
         if (process_context_value.kind == RECORZ_MVP_VALUE_NIL) {
             workspace_surface_append_line(
                 buffer,
@@ -12736,8 +12767,8 @@ static const char *workspace_context_stack_text_for_named_object(const char *obj
         return workspace_object_detail_buffer;
     }
     named_object = heap_object(object_handle);
-    if (named_object->kind == RECORZ_MVP_OBJECT_PROCESS) {
-        process_context_value = heap_get_field(named_object, PROCESS_FIELD_CONTEXT);
+    if (workspace_object_is_process_like(named_object)) {
+        process_context_value = workspace_process_context_value_for_named_object(object_name, named_object);
         workspace_surface_append_label_text(
             workspace_object_detail_buffer,
             sizeof(workspace_object_detail_buffer),

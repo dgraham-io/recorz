@@ -27,6 +27,13 @@ As of `2026-03-20`, the project appears to be here:
 - Stage 3: in progress.
 - Stages 4 through 8: still open.
 
+Stage 3 status note as of `2026-03-20` late:
+
+- the development-home opening-menu to active-process debugger path is stable enough to assert directly in framebuffer coverage
+- the remaining Stage 3 blockers are narrower:
+  - BP3.3 still needs stable non-default process selection and debugger handoff for multi-process fixtures
+  - BP3.4 still needs stable failing-test debugger entry from the development-home project-browser path
+
 That means the main execution path should currently focus on Stage 3 completion, while continuing to keep Stage 0 regression gates healthy.
 
 ## Global Completion Rules

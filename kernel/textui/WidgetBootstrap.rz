@@ -422,11 +422,7 @@ runCurrentTests
             KernelInstaller rememberObject: returnState named: 'BootWorkspaceBrowserReturnState'].
         self setStatusText: TestRunner lastLabel.
         self setFeedbackText: 'FAILED TEST'.
-        returnState
-            setContents: Workspace currentViewKind
-            cursor: Workspace currentTargetName
-            selection: selectedIndex
-            visibleOrigin: topLine.
+        returnState setContents: Workspace currentViewKind cursor: Workspace currentTargetName selection: selectedIndex visibleOrigin: topLine.
         Workspace setCurrentViewKind: 21.
         Workspace setCurrentTargetName: 'DEBUGGER'].
     ^1
@@ -696,12 +692,22 @@ setWorkspaceName: aWorkspaceName
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
     ^tool setWorkspaceName: aWorkspaceName
 !
+ensureProcessNamed: processName label: aLabel state: aState context: aContext
+    | tool process |
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    process := tool namedObjectOrNil: processName.
+    process = nil ifTrue: [
+        process := (KernelInstaller classNamed: 'Process') new.
+        KernelInstaller rememberObject: process named: processName].
+    process setLabel: aLabel state: aState context: aContext.
+    ^process
+!
 developmentHome
     | session tool |
     self setContents: 'Workspace developmentHome.'.
     self setCurrentViewKind: 20.
     self setCurrentTargetName: nil.
-    KernelInstaller rememberObject: ((KernelInstaller classNamed: 'Process') new setLabel: 'Active Process' state: 'idle' context: nil) named: 'BootActiveProcess'.
+    self ensureProcessNamed: 'BootActiveProcess' label: 'Active Process' state: 'idle' context: nil.
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
     tool setBrowserReturnViewKind: nil targetName: nil.
     session := KernelInstaller objectNamed: 'BootWorkspaceSession'.
@@ -716,8 +722,9 @@ browsePackagesInteractive
     ^self
 !
 captureDebugContext
-    KernelInstaller rememberObject: thisContext named: 'BootWorkspaceDebugContext'.
-    KernelInstaller rememberObject: ((KernelInstaller classNamed: 'Process') new setLabel: 'Active Process' state: 'active' context: thisContext) named: 'BootActiveProcess'.
+    | context |
+    context := thisContext.
+    self ensureProcessNamed: 'BootActiveProcess' label: 'Active Process' state: 'active' context: context.
     ^self
 !
 visibleOrigin
@@ -1569,11 +1576,7 @@ openSelectedContextDebugger
     returnState = nil ifTrue: [
         returnState := (KernelInstaller classNamed: 'WorkspaceReturnState') new.
         KernelInstaller rememberObject: returnState named: 'BootWorkspaceBrowserReturnState'].
-    returnState
-        setContents: 21
-        cursor: 'PROCESS BROWSER'
-        selection: selected
-        visibleOrigin: listTop.
+    returnState setContents: 21 cursor: 'PROCESS BROWSER' selection: selected visibleOrigin: listTop.
     workspace setCurrentViewKind: 21.
     workspace setCurrentTargetName: 'DEBUGGER'.
     selected := 0.

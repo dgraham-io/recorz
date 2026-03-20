@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BUILD_DIR = ROOT / "misc" / "qemu-riscv32-dev-mvp"
 PPM_PATH = BUILD_DIR / "recorz-qemu-riscv32-mvp.ppm"
 QEMU_LOG_PATH = BUILD_DIR / "qemu.log"
+FILE_IN_FW_CFG_NAME = "opt/recorz-file-in"
 GLYPH_EXAMPLE = ROOT / "examples" / "qemu_riscv_source_glyph_demo.rz"
 IMAGE_SIDE_TEXT_RENDERER_EXAMPLE = ROOT / "examples" / "qemu_riscv_image_side_text_renderer_demo.rz"
 IMAGE_SIDE_FORM_WRITER_EXAMPLE = ROOT / "examples" / "qemu_riscv_image_side_form_writer_demo.rz"
@@ -180,14 +181,11 @@ def _write_multi_process_browser_payload(temp_path: Path) -> Path:
     file_in_payload.write_text(
         "\n".join(
             [
-                "RecorzKernelClass: #MultiProcessBrowserDemo superclass: #Object instanceVariableNames: ''''",
-                "!",
-                "noop",
-                "    ^self",
-                "!",
                 "RecorzKernelDoIt:",
-                "Display clear.",
-                "KernelInstaller rememberObject: ((KernelInstaller classNamed: 'Process') new setLabel: 'Idle Process' state: 'waiting' context: thisContext) named: 'BootIdleProcess'.",
+                "KernelInstaller rememberObject: thisContext named: 'BootIdleContext'.",
+                "KernelInstaller rememberObject: ((KernelInstaller classNamed: 'Process') new) named: 'BootIdleProcess'.",
+                "(KernelInstaller objectNamed: 'BootIdleProcess') setLabel: 'Idle Process' state: 'waiting' context: (KernelInstaller objectNamed: 'BootIdleContext').",
+                "!",
             ]
         ),
         encoding="utf-8",
@@ -317,6 +315,13 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
             "-monitor",
             f"unix:{monitor_sock},server,nowait",
         ]
+        if file_in_payload is not None:
+            qemu_command.extend(
+                [
+                    "-fw_cfg",
+                    f"name={FILE_IN_FW_CFG_NAME},file={file_in_payload}",
+                ]
+            )
         with qemu_log_path.open("w", encoding="utf-8") as log_file:
             process = subprocess.Popen(
                 qemu_command,
@@ -670,35 +675,29 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertLess(_region_histogram(data, width, 332, 160, 340, 560)[(31, 41, 51)], 200)
 
     def test_development_home_process_browser_and_debugger_render_distinct_frames(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-process-browser-", dir="/tmp") as temp_dir:
-            temp_path = Path(temp_dir)
-            file_in_payload = _write_multi_process_browser_payload(temp_path)
-            menu_log, menu_width, menu_height, menu_data = self.render_interactive_example(
-                WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
-                (),
-                file_in_payload=file_in_payload,
-            )
-            process_log, process_width, process_height, process_data = self.render_interactive_example(
-                WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
-                (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18"),
-                file_in_payload=file_in_payload,
-            )
-            debugger_log, debugger_width, debugger_height, debugger_data = self.render_interactive_example(
-                WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
-                (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18", b"\x18"),
-                file_in_payload=file_in_payload,
-            )
-
+        menu_log, menu_width, menu_height, menu_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (),
+        )
+        process_log, process_width, process_height, process_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18"),
+        )
+        debugger_log, debugger_width, debugger_height, debugger_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18", b"\x18"),
+        )
         self.assertEqual((menu_width, menu_height), (1024, 768))
         self.assertEqual((process_width, process_height), (1024, 768))
         self.assertEqual((debugger_width, debugger_height), (1024, 768))
         normalized_menu_log = menu_log.replace("\r", "")
         normalized_process_log = process_log.replace("\r", "")
         normalized_debugger_log = debugger_log.replace("\r", "")
-        if "panic:" in normalized_menu_log or "panic:" in normalized_process_log or "panic:" in normalized_debugger_log:
-            self.skipTest("process-browser multi-process runtime is not stable yet")
-        if "PROCESS BROWSER" not in normalized_process_log or "frame: 1" not in normalized_debugger_log:
-            self.skipTest("process-browser multi-process runtime did not reach the expected views yet")
+        self.assertNotIn("panic:", normalized_menu_log)
+        self.assertNotIn("panic:", normalized_process_log)
+        self.assertNotIn("panic:", normalized_debugger_log)
+        self.assertIn("PROCESS BROWSER", normalized_process_log)
+        self.assertIn("frame: 1", normalized_debugger_log)
         self.assertGreater(_region_histogram(menu_data, menu_width, 40, 136, 320, 592)[(31, 41, 51)], 3000)
         self.assertGreater(_region_histogram(menu_data, menu_width, 336, 136, 960, 592)[(31, 41, 51)], 3000)
         self.assertGreater(_region_histogram(process_data, process_width, 40, 136, 320, 592)[(31, 41, 51)], 500)

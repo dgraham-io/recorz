@@ -778,3 +778,5 @@ RecorzKernelSelector: #processLabelsVisibleFrom:count: order: 387
 !
 RecorzKernelSelector: #contextFrameSummariesVisibleFrom:count:named: order: 388
 !
+RecorzKernelSelector: #ensureProcessNamed:label:state:context: order: 389
+!
