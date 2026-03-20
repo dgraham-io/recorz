@@ -434,6 +434,7 @@ static char workspace_surface_status_buffer[WORKSPACE_INPUT_MONITOR_FEEDBACK_LIM
 static uint8_t workspace_input_monitor_capture_enabled = 0U;
 static uint8_t workspace_tool_status_dirty = 0U;
 static uint8_t workspace_tool_feedback_dirty = 0U;
+static uint8_t workspace_debugger_failure_requested = 0U;
 static uint32_t render_counter_editor_full_redraws = 0U;
 static uint32_t render_counter_editor_pane_redraws = 0U;
 static uint32_t render_counter_editor_cursor_redraws = 0U;
@@ -496,6 +497,10 @@ static struct recorz_mvp_value workspace_evaluate_source(const char *source);
 static struct recorz_mvp_value workspace_current_source_value(
     const struct recorz_mvp_heap_object *workspace_object
 );
+static uint32_t workspace_current_view_kind_value(
+    const struct recorz_mvp_heap_object *workspace_object
+);
+static uint8_t workspace_debugger_failure_is_requested(void);
 static uint8_t compiled_method_instruction_opcode(uint32_t instruction);
 static uint16_t compiled_method_instruction_operand_a(uint32_t instruction);
 static uint16_t compiled_method_instruction_operand_b(uint32_t instruction);
@@ -6525,6 +6530,108 @@ static void workspace_input_monitor_clear_feedback(void) {
     workspace_tool_sync_feedback_field();
 }
 
+static uint8_t workspace_debugger_failure_is_requested(void) {
+    return workspace_debugger_failure_requested;
+}
+
+static uint8_t workspace_view_kind_supports_failure_debugger(uint32_t view_kind) {
+    return (uint8_t)(
+        view_kind == WORKSPACE_VIEW_INPUT_MONITOR ||
+        view_kind == WORKSPACE_VIEW_METHOD ||
+        view_kind == WORKSPACE_VIEW_CLASS_METHOD ||
+        view_kind == WORKSPACE_VIEW_CLASS_SOURCE ||
+        view_kind == WORKSPACE_VIEW_PACKAGE_SOURCE ||
+        view_kind == WORKSPACE_VIEW_REGENERATED_BOOT_SOURCE ||
+        view_kind == WORKSPACE_VIEW_REGENERATED_KERNEL_SOURCE ||
+        view_kind == WORKSPACE_VIEW_REGENERATED_FILE_IN_SOURCE
+    );
+}
+
+static uint8_t workspace_enter_debugger_for_runtime_failure(
+    uint16_t sender_context_handle,
+    const char *status_text,
+    const char *feedback_text
+) {
+    uint16_t workspace_handle = global_handles[RECORZ_MVP_GLOBAL_WORKSPACE];
+    struct recorz_mvp_heap_object *workspace_object;
+    struct recorz_mvp_value target_name_value;
+    uint16_t active_process_handle;
+    uint16_t session_handle;
+    uint32_t view_kind;
+
+    if (sender_context_handle == 0U || !heap_handle_is_live(sender_context_handle)) {
+        return 0U;
+    }
+    if (!heap_handle_is_live(workspace_handle)) {
+        return 0U;
+    }
+    workspace_object = (struct recorz_mvp_heap_object *)heap_object(workspace_handle);
+    view_kind = workspace_current_view_kind_value(workspace_object);
+    if (!workspace_view_kind_supports_failure_debugger(view_kind)) {
+        return 0U;
+    }
+    target_name_value = heap_get_field(
+        workspace_object,
+        workspace_current_target_name_field_index(workspace_object)
+    );
+    if (target_name_value.kind == RECORZ_MVP_VALUE_STRING &&
+        target_name_value.string != 0 &&
+        source_names_equal(target_name_value.string, "DEBUGGER")) {
+        return 0U;
+    }
+    active_process_handle = named_object_handle_for_name("BootActiveProcess");
+    if (!heap_handle_is_live(active_process_handle) ||
+        heap_object(active_process_handle)->kind != RECORZ_MVP_OBJECT_PROCESS) {
+        active_process_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_PROCESS);
+        remember_named_object_handle(active_process_handle, "BootActiveProcess");
+    }
+    heap_set_field(
+        active_process_handle,
+        PROCESS_FIELD_LABEL,
+        string_value(runtime_string_allocate_copy("Active Process"))
+    );
+    heap_set_field(
+        active_process_handle,
+        PROCESS_FIELD_STATE,
+        string_value(runtime_string_allocate_copy("failed"))
+    );
+    heap_set_field(
+        active_process_handle,
+        PROCESS_FIELD_CONTEXT,
+        object_value(sender_context_handle)
+    );
+    workspace_tool_set_string_field(
+        WORKSPACE_TOOL_FIELD_STATUS_TEXT,
+        status_text == 0 ? "SEND FAILURE" : status_text
+    );
+    workspace_tool_set_string_field(
+        WORKSPACE_TOOL_FIELD_FEEDBACK_TEXT,
+        feedback_text == 0 ? "FAILED SEND" : feedback_text
+    );
+    workspace_input_monitor_status[0] = '\0';
+    workspace_input_monitor_feedback[0] = '\0';
+    workspace_tool_status_dirty = 0U;
+    workspace_tool_feedback_dirty = 0U;
+    heap_set_field(
+        workspace_handle,
+        workspace_current_view_kind_field_index(workspace_object),
+        small_integer_value((int32_t)WORKSPACE_VIEW_INTERACTIVE_CLASSES)
+    );
+    heap_set_field(
+        workspace_handle,
+        workspace_current_target_name_field_index(workspace_object),
+        string_value(runtime_string_allocate_copy("DEBUGGER"))
+    );
+    session_handle = named_object_handle_for_name("BootWorkspaceSession");
+    if (heap_handle_is_live(session_handle)) {
+        /* WorkspaceSession fields are: workspace selected listTop escape. */
+        heap_set_field(session_handle, 1U, small_integer_value(0));
+        heap_set_field(session_handle, 2U, small_integer_value(0));
+    }
+    workspace_debugger_failure_requested = 1U;
+    return 1U;
+}
+
 static void workspace_input_monitor_feedback_append_char(char ch) {
     uint32_t length = text_length(workspace_input_monitor_feedback);
     uint32_t index;
@@ -10692,6 +10799,9 @@ static void workspace_evaluate_input_monitor_buffer(
     workspace_remember_source(workspace_object, chunk_source);
     workspace_evaluate_source(workspace_source_for_evaluation(chunk_source));
     workspace_input_monitor_capture_enabled = 0U;
+    if (workspace_debugger_failure_is_requested()) {
+        return;
+    }
     workspace_input_monitor_set_status("DOIT COMPLETE");
     heap_set_field(
         workspace_handle,
@@ -10748,6 +10858,9 @@ static void workspace_print_input_monitor_buffer(
     workspace_remember_source(workspace_object, chunk_source);
     result = workspace_evaluate_source(workspace_source_for_evaluation(chunk_source));
     workspace_input_monitor_capture_enabled = 0U;
+    if (workspace_debugger_failure_is_requested()) {
+        return;
+    }
     workspace_input_monitor_feedback_append_line(
         workspace_text_for_value(result, rendered_value, sizeof(rendered_value))
     );
@@ -10820,6 +10933,9 @@ static void workspace_tool_print_current_in_place(
     workspace_remember_source(workspace_object, chunk_source);
     result = workspace_evaluate_source(workspace_source_for_evaluation(chunk_source));
     workspace_input_monitor_capture_enabled = 0U;
+    if (workspace_debugger_failure_is_requested()) {
+        return;
+    }
     workspace_input_monitor_feedback_append_line(
         workspace_text_for_value(result, rendered_value, sizeof(rendered_value))
     );
@@ -18835,7 +18951,8 @@ static struct recorz_mvp_source_eval_result source_send_message(
         context->current_context_handle,
         0
     );
-    return source_eval_value_result(pop_value());
+    receiver = pop_value();
+    return source_eval_value_result(receiver);
 }
 
 static struct recorz_mvp_source_eval_result source_evaluate_primary_expression(
@@ -19056,7 +19173,9 @@ static struct recorz_mvp_source_eval_result source_evaluate_expression(
         selector_name[selector_length] = '\0';
     } while (*part_cursor == ':');
     *cursor_out = cursor;
-    return source_send_message(context, receiver_result.value, selector_name, argument_count, arguments);
+    receiver_result = source_send_message(context, receiver_result.value, selector_name, argument_count, arguments);
+    *cursor_out = cursor;
+    return receiver_result;
 }
 
 static struct recorz_mvp_source_eval_result source_execute_block_closure(
@@ -23561,6 +23680,7 @@ static struct recorz_mvp_value workspace_evaluate_source(const char *source) {
     );
     uint16_t context_handle = source_home_context_at(home_context_index)->context_handle;
 
+    workspace_debugger_failure_requested = 0U;
     build_workspace_source_program(source, &program);
     executable.instruction_count = program.instruction_count;
     executable.literal_count = program.literal_count;
@@ -23951,6 +24071,13 @@ static void dispatch_heap_object_send(
             execute_block_closure_with_sender(object, argument_count, arguments, sender_context_handle);
             return;
         }
+        if (workspace_enter_debugger_for_runtime_failure(
+                sender_context_handle,
+                "BlockClosure only understands value/value:",
+                "FAILED SEND")) {
+            push(nil_value());
+            return;
+        }
         machine_panic("BlockClosure only understands value/value:");
     }
     class_object = class_object_for_heap_object(object);
@@ -23973,6 +24100,13 @@ static void dispatch_heap_object_send(
     }
     method_object = lookup_builtin_method_descriptor(class_object, selector, argument_count);
     if (method_object == 0) {
+        if (workspace_enter_debugger_for_runtime_failure(
+                sender_context_handle,
+                "selector is not understood by receiver class",
+                "FAILED SEND")) {
+            push(nil_value());
+            return;
+        }
         machine_panic("selector is not understood by receiver class");
     }
     entry_object = method_descriptor_entry_object(method_object);
@@ -24091,6 +24225,13 @@ static void perform_send_with_sender(
             push(string_value(print_buffer));
             return;
         }
+        if (workspace_enter_debugger_for_runtime_failure(
+                sender_context_handle,
+                "unsupported SmallInteger selector",
+                "FAILED SEND")) {
+            push(nil_value());
+            return;
+        }
         machine_panic("unsupported SmallInteger selector");
     }
 
@@ -24122,9 +24263,23 @@ static void perform_send_with_sender(
             push(small_integer_value((int32_t)(uint8_t)receiver.string[index]));
             return;
         }
+        if (workspace_enter_debugger_for_runtime_failure(
+                sender_context_handle,
+                "unsupported String selector",
+                "FAILED SEND")) {
+            push(nil_value());
+            return;
+        }
         machine_panic("unsupported String selector");
     }
 
+    if (workspace_enter_debugger_for_runtime_failure(
+            sender_context_handle,
+            "unsupported receiver in MVP VM",
+            "FAILED SEND")) {
+        push(nil_value());
+        return;
+    }
     machine_panic("unsupported receiver in MVP VM");
 }
 

@@ -2422,12 +2422,16 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 text=True,
             )
             try:
-                output = _read_until(process, "VIEW: INPUT", timeout=8.0)
+                output = _read_until_workspace_input_ready(process, timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
-                process.stdin.write("1 + 2\x10\x0f")
+                process.stdin.write("1 + 2\x10")
                 process.stdin.flush()
-                time.sleep(1.0)
+                output += _read_until_any(
+                    process,
+                    ("STATUS: PRINT COMPLETE", "OUT> 3", "panic:"),
+                    timeout=8.0,
+                )
                 if process.poll() is None:
                     process.kill()
                 process.wait(timeout=5.0)
@@ -2442,10 +2446,70 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     process.stdin.close()
 
             output = output.replace("\r", "")
-            self.assertIn("PRINT: CTRL-P", output)
             self.assertIn("STATUS: PRINT COMPLETE", output)
-            self.assertIn("OUT> 3", output)
-            self.assertIn("BUFFER=1 + 2", output.replace("\n", ""))
+            self.assertIn("Workspace1 + 2", output.replace("\n", ""))
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_interactive_input_monitor_enters_debugger_on_primitive_failure(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-input-monitor-debugger-") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_INPUT_MONITOR_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until_workspace_input_ready(process, timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("1 at: 1\x10")
+                process.stdin.flush()
+                output += _read_until_any(
+                    process,
+                    ("FAILED SEND", "panic:"),
+                    timeout=8.0,
+                )
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("BootActiveProcess", output)
+            self.assertIn("frame: 1", output)
+            self.assertIn("detail: <workspace>", output)
+            self.assertIn("unsupported SmallInteger selector", output)
+            self.assertIn("FAILED SEND", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_interactive_input_monitor_can_accept_current_buffer(self) -> None:

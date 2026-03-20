@@ -22,18 +22,18 @@ It is the working plan for day-to-day progress. The roadmap remains the high-lev
 As of `2026-03-20`, the project appears to be here:
 
 - Stage 0: mostly established; keep as a regression lane.
-- Stage 1: mostly established; primitive-boundary discipline exists, but debugger-visible primitive-failure entry is still incomplete.
+- Stage 1: mostly established; primitive-boundary discipline exists, and the first debugger-visible primitive-failure path is now in place.
 - Stage 2: mostly established; `Context`/`Process` visibility exists, but true scheduler semantics do not.
 - Stage 3: in progress.
 - Stages 4 through 8: still open.
 
-Stage 3 status note as of `2026-03-20` late:
+Stage 3 status note as of `2026-03-21`:
 
 - the development-home opening-menu to active-process debugger path is stable enough to assert directly in framebuffer coverage
 - the development-home project-browser failing-test path is stable when tests are entered from package source instead of the package list
 - the multi-process browser now keeps `BootActiveProcess` first, and the non-default-process debugger handoff is assertion-covered
-- the remaining Stage 3 blockers are narrower:
-  - BP3.4 still needs intended primitive-failure debugger entry instead of panic-only behavior
+- the input monitor now enters the debugger on an intended primitive/send failure instead of panicking, with direct serial coverage
+- the remaining Stage 3 blocker is narrower:
   - BP3.5 still needs debugger return-path coherence from the process-browser debugger flow
 
 That means the main execution path should currently focus on Stage 3 completion, while continuing to keep Stage 0 regression gates healthy.
@@ -246,7 +246,7 @@ This is the current main execution stage.
   Verify:
   - process-browser render and serial tests pass without skips
 
-- [ ] `BP3.4` Stabilize debugger entry from development workflows
+- [x] `BP3.4` Stabilize debugger entry from development workflows
   Files:
   - `/Users/david/repos/recorz/kernel/textui/WidgetBootstrap.rz`
   - `/Users/david/repos/recorz/platform/qemu-riscv32/vm.c`
@@ -557,10 +557,9 @@ This stage only begins once the earlier stages are functionally complete.
 
 Unless a regression in Stage 0 becomes urgent, the next tasks should be tackled in this order:
 
-1. `BP3.4` Stabilize debugger entry from development workflows.
-2. `BP3.5` Finish debugger return-path coherence.
-4. Re-check Stage 3 exit criteria.
-5. Only then begin `BP4.1`.
+1. `BP3.5` Finish debugger return-path coherence.
+2. Re-check Stage 3 exit criteria.
+3. Only then begin `BP4.1`.
 
 ## Program Complete When
 
