@@ -399,7 +399,7 @@ revertCurrent
     ^Workspace revertCurrent
 !
 runCurrentTests
-    | state frameCount frameIndex |
+    | state frameCount frameIndex session selectedIndex topLine returnState |
     Workspace runCurrentTests.
     TestRunner failed > 0 ifTrue: [
         Workspace captureDebugContext.
@@ -410,9 +410,23 @@ runCurrentTests
         frameCount := Workspace contextFrameCountNamed: 'BootActiveProcess'.
         frameIndex := frameCount = 0 ifTrue: [0] ifFalse: [1].
         state setContents: 'BootActiveProcess' cursor: frameIndex selection: frameCount visibleOrigin: nil.
+        session := self namedObjectOrNil: 'BootWorkspaceSession'.
+        selectedIndex := nil.
+        topLine := nil.
+        session = nil ifFalse: [
+            selectedIndex := session selectedIndex.
+            topLine := session listTopLine].
+        returnState := self namedObjectOrNil: 'BootWorkspaceBrowserReturnState'.
+        returnState = nil ifTrue: [
+            returnState := (KernelInstaller classNamed: 'WorkspaceReturnState') new.
+            KernelInstaller rememberObject: returnState named: 'BootWorkspaceBrowserReturnState'].
         self setStatusText: TestRunner lastLabel.
         self setFeedbackText: 'FAILED TEST'.
-        self setBrowserReturnViewKind: Workspace currentViewKind targetName: Workspace currentTargetName.
+        returnState
+            setContents: Workspace currentViewKind
+            cursor: Workspace currentTargetName
+            selection: selectedIndex
+            visibleOrigin: topLine.
         Workspace setCurrentViewKind: 21.
         Workspace setCurrentTargetName: 'DEBUGGER'].
     ^1
@@ -575,16 +589,35 @@ dispatchWorkspaceCommandOnForm: aByte
     ^0
 !
 returnFromSourceEditor
-    | plainState returnViewKind returnTargetName |
+    | plainState returnViewKind returnTargetName returnState returnSelectedIndex returnListTop wasDebugger |
     returnViewKind := self browserReturnViewKind.
     returnTargetName := self browserReturnTargetName.
+    returnState := self namedObjectOrNil: 'BootWorkspaceBrowserReturnState'.
+    returnSelectedIndex := 0.
+    returnListTop := 0.
+    returnState = nil ifFalse: [
+        returnState selection = nil ifFalse: [returnSelectedIndex := returnState selection].
+        returnState visibleOrigin = nil ifFalse: [returnListTop := returnState visibleOrigin]].
+    wasDebugger := Workspace currentTargetName = 'DEBUGGER'.
     returnViewKind = nil ifFalse: [
         self setBrowserReturnViewKind: nil targetName: nil.
         Workspace setCurrentTargetName: returnTargetName.
         Workspace setCurrentViewKind: returnViewKind.
-        returnViewKind = 20 ifTrue: [^4].
-        returnViewKind = 14 ifTrue: [^4].
-        returnViewKind = 21 ifTrue: [^4].
+        selected := returnSelectedIndex.
+        listTop := returnListTop.
+        returnViewKind = 20 ifTrue: [
+            self prepareListSelectionForCount: self currentListCount.
+            wasDebugger ifTrue: [self setStatusText: ''. self setFeedbackText: ''].
+            ^4].
+        returnViewKind = 14 ifTrue: [
+            self prepareListSelectionForCount: self currentListCount.
+            wasDebugger ifTrue: [self setStatusText: ''. self setFeedbackText: ''].
+            ^4].
+        returnViewKind = 21 ifTrue: [
+            self prepareListSelectionForCount: self currentListCount.
+            wasDebugger ifTrue: [self setStatusText: ''. self setFeedbackText: ''].
+            ^4].
+        wasDebugger ifTrue: [self setStatusText: ''. self setFeedbackText: ''].
         Workspace reopen.
         ^9].
     plainState := self namedObjectOrNil: 'BootWorkspacePlainState'.
@@ -1518,7 +1551,7 @@ openSelectedObjectInspector
     ^1
 !
 openSelectedContextDebugger
-    | tool processName state frameCount frameIndex |
+    | tool processName state frameCount frameIndex returnState |
     processName := self selectedProcessName.
     processName size = 0 ifTrue: [^4].
     processName = 'BootActiveProcess' ifTrue: [workspace captureDebugContext].
@@ -1532,7 +1565,15 @@ openSelectedContextDebugger
     state setContents: processName cursor: frameIndex selection: frameCount visibleOrigin: nil.
     tool setStatusText: ''.
     tool setFeedbackText: ''.
-    tool setBrowserReturnViewKind: 21 targetName: 'PROCESS BROWSER'.
+    returnState := tool namedObjectOrNil: 'BootWorkspaceBrowserReturnState'.
+    returnState = nil ifTrue: [
+        returnState := (KernelInstaller classNamed: 'WorkspaceReturnState') new.
+        KernelInstaller rememberObject: returnState named: 'BootWorkspaceBrowserReturnState'].
+    returnState
+        setContents: 21
+        cursor: 'PROCESS BROWSER'
+        selection: selected
+        visibleOrigin: listTop.
     workspace setCurrentViewKind: 21.
     workspace setCurrentTargetName: 'DEBUGGER'.
     selected := 0.

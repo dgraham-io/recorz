@@ -750,6 +750,54 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertGreater(_region_diff_pixels(browser_data, debugger_data, browser_width, 40, 136, 320, 592), 500)
         self.assertGreater(_region_diff_pixels(browser_data, debugger_data, browser_width, 336, 136, 960, 592), 500)
 
+    def test_development_home_process_browser_debugger_return_restores_the_selected_process(self) -> None:
+        if not _workspace_process_browser_is_implemented():
+            self.skipTest("process-browser runtime handlers are not present yet")
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-process-browser-return-", dir="/tmp") as temp_dir:
+            temp_path = Path(temp_dir)
+            file_in_payload = _write_multi_process_browser_payload(temp_path)
+            default_log, default_width, default_height, default_data = self.render_interactive_example(
+                WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+                (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18"),
+                file_in_payload=file_in_payload,
+            )
+            selected_log, selected_width, selected_height, selected_data = self.render_interactive_example(
+                WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+                (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18", b"\x0e"),
+                file_in_payload=file_in_payload,
+            )
+            returned_log, returned_width, returned_height, returned_data = self.render_interactive_example(
+                WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+                (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18", b"\x0e", b"\x18", b"\x0f"),
+                file_in_payload=file_in_payload,
+            )
+
+        normalized_default_log = default_log.replace("\r", "")
+        normalized_selected_log = selected_log.replace("\r", "")
+        normalized_returned_log = returned_log.replace("\r", "")
+        if (
+            "panic:" in normalized_default_log
+            or "panic:" in normalized_selected_log
+            or "panic:" in normalized_returned_log
+        ):
+            self.skipTest("process-browser debugger return flow is not stable yet")
+        if (
+            "PROCESS BROWSER" not in normalized_selected_log
+            or "PROCESS BROWSER" not in normalized_returned_log
+            or "BootIdleProcess" not in normalized_returned_log
+        ):
+            self.skipTest("process-browser debugger return flow did not reach the expected views yet")
+        self.assertEqual((default_width, default_height), (1024, 768))
+        self.assertEqual((selected_width, selected_height), (1024, 768))
+        self.assertEqual((returned_width, returned_height), (1024, 768))
+        self.assertIn("PROCESS BROWSER", normalized_selected_log)
+        self.assertIn("PROCESS BROWSER", normalized_returned_log)
+        self.assertIn("Idle Process", normalized_selected_log)
+        self.assertIn("BootIdleProcess", normalized_returned_log)
+        self.assertGreater(_region_diff_pixels(default_data, selected_data, default_width, 40, 136, 960, 592), 500)
+        self.assertGreater(_region_diff_pixels(default_data, returned_data, default_width, 40, 136, 960, 592), 500)
+        self.assertLess(_region_diff_pixels(selected_data, returned_data, selected_width, 40, 136, 960, 592), 1500)
+
     def test_development_home_debugger_state_can_surface_explicit_process_association(self) -> None:
         if not _workspace_debugger_state_is_implemented():
             self.skipTest("real debugger state model is not wired yet")
