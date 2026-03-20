@@ -3083,25 +3083,21 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             )
             try:
                 output = _read_until_any(process, ("OPENING MENU", "panic:"), timeout=8.0)
-                if "panic:" in output:
-                    self.skipTest("development-home project browser fixture panics before the opening menu appears")
+                self.assertNotIn("panic:", output)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
                 process.stdin.write("\x0e\x0e\x18")
                 process.stdin.flush()
                 output += _read_until_any(process, ("INTERACTIVE PACKAGE LIST", "panic:"), timeout=8.0)
-                if "panic:" in output:
-                    self.skipTest("development-home project browser panicked before opening the package list")
+                self.assertNotIn("panic:", output)
                 if "Tests" not in output:
                     output += _read_until_any(process, ("Tests", "panic:"), timeout=4.0)
-                if "panic:" in output:
-                    self.skipTest("development-home project browser panicked before exposing Tests in the package list")
+                self.assertNotIn("panic:", output)
                 self.assertIn("Tests", output)
                 process.stdin.write("\x18")
                 process.stdin.flush()
                 output += _read_until_any(process, ("SOURCE EDITOR", "panic:"), timeout=8.0)
-                if "panic:" in output:
-                    self.skipTest("development-home project browser panicked before opening Tests")
+                self.assertNotIn("panic:", output)
                 process.stdin.write("\x14")
                 process.stdin.flush()
                 output += _read_until_any(
@@ -3109,10 +3105,8 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     ("FAILED TEST", "DEBUGGER", "STATUS: TESTS COMPLETE", "panic:"),
                     timeout=8.0,
                 )
-                if "panic:" in output:
-                    self.skipTest("Ctrl-T failing-test debugger flow is not stable yet")
-                if "FAILED TEST" not in output and "DEBUGGER" not in output:
-                    self.skipTest("Ctrl-T did not reach the debugger branch yet")
+                self.assertNotIn("panic:", output)
+                self.assertTrue("FAILED TEST" in output or "DEBUGGER" in output)
                 time.sleep(0.5)
                 if process.poll() is None:
                     process.kill()
