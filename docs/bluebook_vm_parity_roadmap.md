@@ -1,5 +1,7 @@
 # Bluebook VM And Environment Parity Roadmap
 
+The step-by-step task breakdown for executing this roadmap lives in [docs/bluebook_vm_parity_execution_plan.md](/Users/david/repos/recorz/docs/bluebook_vm_parity_execution_plan.md).
+
 ## Purpose
 
 This roadmap defines the long-running plan for duplicating the practical functionality people associate with the Bluebook Smalltalk system, while preserving Recorz's current goals:
