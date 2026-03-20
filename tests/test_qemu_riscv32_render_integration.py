@@ -42,6 +42,7 @@ BROWSER_SURFACE_EXAMPLE = ROOT / "examples" / "qemu_riscv_browser_surface_demo.r
 WORKSPACE_PACKAGE_HOME_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_package_home_demo.rz"
 WORKSPACE_PACKAGE_SCROLL_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_package_scroll_demo.rz"
 WORKSPACE_STATUS_DIRTY_REDRAW_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_status_dirty_redraw_demo.rz"
+WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE = ROOT / "examples" / "qemu_riscv_image_development_home_boot.rz"
 
 
 def _render_build_dir(example_path: Optional[Path], file_in_payload: Optional[Path]) -> Path:
@@ -623,6 +624,37 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertEqual((width, height), (1024, 768))
         self.assertGreater(_region_histogram(data, width, 40, 136, 960, 592)[(31, 41, 51)], 5000)
         self.assertLess(_region_histogram(data, width, 332, 160, 340, 560)[(31, 41, 51)], 200)
+
+    def test_development_home_process_browser_and_debugger_render_distinct_frames(self) -> None:
+        menu_log, menu_width, menu_height, menu_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (),
+        )
+        process_log, process_width, process_height, process_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18"),
+        )
+        debugger_log, debugger_width, debugger_height, debugger_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18", b"\x18"),
+        )
+
+        self.assertEqual((menu_width, menu_height), (1024, 768))
+        self.assertEqual((process_width, process_height), (1024, 768))
+        self.assertEqual((debugger_width, debugger_height), (1024, 768))
+        self.assertNotIn("panic:", menu_log.replace("\r", ""))
+        self.assertNotIn("panic:", process_log.replace("\r", ""))
+        self.assertNotIn("panic:", debugger_log.replace("\r", ""))
+        self.assertGreater(_region_histogram(menu_data, menu_width, 40, 136, 320, 592)[(31, 41, 51)], 3000)
+        self.assertGreater(_region_histogram(menu_data, menu_width, 336, 136, 960, 592)[(31, 41, 51)], 3000)
+        self.assertGreater(_region_histogram(process_data, process_width, 40, 136, 320, 592)[(31, 41, 51)], 500)
+        self.assertGreater(_region_histogram(process_data, process_width, 336, 136, 960, 592)[(31, 41, 51)], 5000)
+        self.assertGreater(_region_histogram(debugger_data, debugger_width, 40, 136, 320, 592)[(31, 41, 51)], 1000)
+        self.assertGreater(_region_histogram(debugger_data, debugger_width, 336, 136, 960, 592)[(31, 41, 51)], 4000)
+        self.assertGreater(_region_diff_pixels(menu_data, process_data, menu_width, 40, 136, 320, 592), 3000)
+        self.assertGreater(_region_diff_pixels(menu_data, process_data, menu_width, 336, 136, 960, 592), 4500)
+        self.assertGreater(_region_diff_pixels(process_data, debugger_data, process_width, 40, 136, 320, 592), 1000)
+        self.assertGreater(_region_diff_pixels(process_data, debugger_data, process_width, 336, 136, 960, 592), 4500)
 
     def test_interactive_textui_package_editor_stays_anchored_at_the_top_after_cursor_move(self) -> None:
         qemu_log, width, height, data = self.render_interactive_example(

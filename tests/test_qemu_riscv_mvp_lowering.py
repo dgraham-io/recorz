@@ -90,6 +90,95 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(program.instructions[0].operand_a, "RECORZ_MVP_GLOBAL_WORKSPACE")
         self.assertEqual(program.instructions[2].operand_a, "RECORZ_MVP_SELECTOR_CONTEXT_STACK_NAMED")
 
+    def test_lowers_workspace_context_frame_queries(self) -> None:
+        count_program = mvp.build_program("Workspace contextFrameCountNamed: 'BootActiveProcess'")
+        summary_program = mvp.build_program("Workspace contextFrameSummaryAt: 1 named: 'BootActiveProcess'")
+        detail_program = mvp.build_program("Workspace contextFrameDetailAt: 1 named: 'BootActiveProcess'")
+
+        self.assertEqual(
+            [instruction.opcode for instruction in count_program.instructions],
+            [
+                mvp.OP_PUSH_GLOBAL,
+                mvp.OP_PUSH_LITERAL,
+                mvp.OP_SEND,
+                mvp.OP_RETURN,
+            ],
+        )
+        self.assertEqual(count_program.instructions[0].operand_a, "RECORZ_MVP_GLOBAL_WORKSPACE")
+        self.assertEqual(count_program.instructions[2].operand_a, "RECORZ_MVP_SELECTOR_CONTEXT_FRAME_COUNT_NAMED")
+
+        self.assertEqual(
+            [instruction.opcode for instruction in summary_program.instructions],
+            [
+                mvp.OP_PUSH_GLOBAL,
+                mvp.OP_PUSH_LITERAL,
+                mvp.OP_PUSH_LITERAL,
+                mvp.OP_SEND,
+                mvp.OP_RETURN,
+            ],
+        )
+        self.assertEqual(summary_program.instructions[0].operand_a, "RECORZ_MVP_GLOBAL_WORKSPACE")
+        self.assertEqual(summary_program.instructions[3].operand_a, "RECORZ_MVP_SELECTOR_CONTEXT_FRAME_SUMMARY_AT_NAMED")
+
+        self.assertEqual(
+            [instruction.opcode for instruction in detail_program.instructions],
+            [
+                mvp.OP_PUSH_GLOBAL,
+                mvp.OP_PUSH_LITERAL,
+                mvp.OP_PUSH_LITERAL,
+                mvp.OP_SEND,
+                mvp.OP_RETURN,
+            ],
+        )
+        self.assertEqual(detail_program.instructions[0].operand_a, "RECORZ_MVP_GLOBAL_WORKSPACE")
+        self.assertEqual(detail_program.instructions[3].operand_a, "RECORZ_MVP_SELECTOR_CONTEXT_FRAME_DETAIL_AT_NAMED")
+
+    def test_lowers_workspace_debugger_frame_queries(self) -> None:
+        count_program = mvp.build_program("Workspace debugFrameCount")
+        summaries_program = mvp.build_program("Workspace debugFrameListFrom: 1")
+        detail_program = mvp.build_program("Workspace debugFrameDetailAt: 0")
+
+        self.assertEqual(
+            [instruction.opcode for instruction in count_program.instructions],
+            [
+                mvp.OP_PUSH_GLOBAL,
+                mvp.OP_SEND,
+                mvp.OP_RETURN,
+            ],
+        )
+        self.assertEqual(count_program.instructions[0].operand_a, "RECORZ_MVP_GLOBAL_WORKSPACE")
+        self.assertEqual(count_program.instructions[1].operand_a, "RECORZ_MVP_SELECTOR_DEBUG_FRAME_COUNT")
+
+        self.assertEqual(
+            [instruction.opcode for instruction in summaries_program.instructions],
+            [
+                mvp.OP_PUSH_GLOBAL,
+                mvp.OP_PUSH_LITERAL,
+                mvp.OP_SEND,
+                mvp.OP_RETURN,
+            ],
+        )
+        self.assertEqual(summaries_program.instructions[0].operand_a, "RECORZ_MVP_GLOBAL_WORKSPACE")
+        self.assertEqual(
+            summaries_program.instructions[2].operand_a,
+            "RECORZ_MVP_SELECTOR_DEBUG_FRAME_LIST_FROM",
+        )
+
+        self.assertEqual(
+            [instruction.opcode for instruction in detail_program.instructions],
+            [
+                mvp.OP_PUSH_GLOBAL,
+                mvp.OP_PUSH_LITERAL,
+                mvp.OP_SEND,
+                mvp.OP_RETURN,
+            ],
+        )
+        self.assertEqual(detail_program.instructions[0].operand_a, "RECORZ_MVP_GLOBAL_WORKSPACE")
+        self.assertEqual(
+            detail_program.instructions[2].operand_a,
+            "RECORZ_MVP_SELECTOR_DEBUG_FRAME_DETAIL_AT",
+        )
+
     def test_lowers_top_level_block_literals_and_boolean_globals(self) -> None:
         program = mvp.build_program("true ifTrue: [ :x | x + 4 ] ifFalse: [ :x | x + 5 ]")
         literal_strings = [literal.value.strip() for literal in program.literals if literal.kind == mvp.LITERAL_STRING]
@@ -340,6 +429,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 mvp.encode_compiled_method_instruction("return_top"),
             ],
         )
+
     def test_loads_kernel_methods_from_class_source_files(self) -> None:
         sources = mvp.load_kernel_method_sources()
         transcript_show = sources["RECORZ_MVP_METHOD_ENTRY_TRANSCRIPT_SHOW"]
@@ -351,6 +441,12 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         form_be_display = sources["RECORZ_MVP_METHOD_ENTRY_FORM_BE_DISPLAY"]
         font_point_size = sources["RECORZ_MVP_METHOD_ENTRY_FONT_POINT_SIZE"]
         process_setter = sources["RECORZ_MVP_METHOD_ENTRY_PROCESS_SET_LABEL_STATE_CONTEXT"]
+        frame_count = sources["RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTEXT_FRAME_COUNT_NAMED"]
+        frame_summary = sources["RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTEXT_FRAME_SUMMARY_AT_NAMED"]
+        frame_detail = sources["RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTEXT_FRAME_DETAIL_AT_NAMED"]
+        debugger_frame_count = sources["RECORZ_MVP_METHOD_ENTRY_WORKSPACE_DEBUG_FRAME_COUNT"]
+        debugger_frame_summaries = sources["RECORZ_MVP_METHOD_ENTRY_WORKSPACE_DEBUG_FRAME_LIST_FROM"]
+        debugger_frame_detail = sources["RECORZ_MVP_METHOD_ENTRY_WORKSPACE_DEBUG_FRAME_DETAIL_AT"]
 
         self.assertEqual(len(sources), len(mvp.METHOD_ENTRY_DEFINITIONS))
         self.assertEqual(
@@ -462,6 +558,33 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(
             process_setter.source_text,
             "setLabel: aLabel state: aState context: aContext\n    <primitive: #processSetLabelStateContext>",
+        )
+        self.assertEqual(frame_count.class_name, "Workspace")
+        self.assertEqual(frame_count.selector, "contextFrameCountNamed:")
+        self.assertEqual(frame_count.argument_count, 1)
+        self.assertEqual(frame_summary.class_name, "Workspace")
+        self.assertEqual(frame_summary.selector, "contextFrameSummaryAt:named:")
+        self.assertEqual(frame_summary.argument_count, 2)
+        self.assertEqual(frame_detail.class_name, "Workspace")
+        self.assertEqual(frame_detail.selector, "contextFrameDetailAt:named:")
+        self.assertEqual(frame_detail.argument_count, 2)
+        self.assertEqual(debugger_frame_count.class_name, "Workspace")
+        self.assertEqual(debugger_frame_count.selector, "debugFrameCount")
+        self.assertEqual(debugger_frame_count.argument_count, 0)
+        self.assertEqual(debugger_frame_count.primitive_binding, "workspaceDebugFrameCount")
+        self.assertEqual(debugger_frame_summaries.class_name, "Workspace")
+        self.assertEqual(debugger_frame_summaries.selector, "debugFrameListFrom:")
+        self.assertEqual(debugger_frame_summaries.argument_count, 1)
+        self.assertEqual(
+            debugger_frame_summaries.primitive_binding,
+            "workspaceDebugFrameListFrom",
+        )
+        self.assertEqual(debugger_frame_detail.class_name, "Workspace")
+        self.assertEqual(debugger_frame_detail.selector, "debugFrameDetailAt:")
+        self.assertEqual(debugger_frame_detail.argument_count, 1)
+        self.assertEqual(
+            debugger_frame_detail.primitive_binding,
+            "workspaceDebugFrameDetailAt",
         )
 
     def test_splits_class_file_chunks_on_bang_lines(self) -> None:
@@ -682,12 +805,15 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceSetCurrentViewKind"], 35)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceSetCurrentTargetName"], 36)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceObjectDetailNamed"], 48)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspacePackageCount"], 58)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLinesColumns"], 61)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLeftLinesColumns"], 62)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceBrowseInteractiveViews"], 79)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 98)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processSetLabelStateContext"], 111)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceDebugFrameCount"], 53)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceDebugFrameListFrom"], 54)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceDebugFrameDetailAt"], 55)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspacePackageCount"], 64)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLinesColumns"], 67)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLeftLinesColumns"], 68)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceBrowseInteractiveViews"], 85)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 104)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processSetLabelStateContext"], 117)
         for binding_name in _workspace_tool_primitive_bindings():
             self.assertIn(binding_name, mvp.PRIMITIVE_BINDING_VALUES)
         self.assertEqual(
@@ -764,15 +890,69 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             mvp.SELECTOR_IDS["contextStackNamed:"],
             "RECORZ_MVP_SELECTOR_CONTEXT_STACK_NAMED",
         )
+        self.assertEqual(mvp.SELECTOR_IDS["contextFrameCountNamed:"], "RECORZ_MVP_SELECTOR_CONTEXT_FRAME_COUNT_NAMED")
+        self.assertEqual(
+            mvp.SELECTOR_IDS["contextFrameSummaryAt:named:"],
+            "RECORZ_MVP_SELECTOR_CONTEXT_FRAME_SUMMARY_AT_NAMED",
+        )
+        self.assertEqual(
+            mvp.SELECTOR_IDS["contextFrameDetailAt:named:"],
+            "RECORZ_MVP_SELECTOR_CONTEXT_FRAME_DETAIL_AT_NAMED",
+        )
         self.assertEqual(mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_CONTEXT_STACK_NAMED"], 373)
         self.assertEqual(mvp.SELECTOR_IDS["label"], "RECORZ_MVP_SELECTOR_LABEL")
-        self.assertEqual(mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_LABEL"], 374)
+        self.assertEqual(
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_LABEL"],
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_CONTEXT_STACK_NAMED"] + 1,
+        )
         self.assertEqual(mvp.SELECTOR_IDS["state"], "RECORZ_MVP_SELECTOR_STATE")
-        self.assertEqual(mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_STATE"], 375)
+        self.assertEqual(
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_STATE"],
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_LABEL"] + 1,
+        )
         self.assertEqual(mvp.SELECTOR_IDS["context"], "RECORZ_MVP_SELECTOR_CONTEXT")
-        self.assertEqual(mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_CONTEXT"], 376)
+        self.assertEqual(
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_CONTEXT"],
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_STATE"] + 1,
+        )
         self.assertEqual(mvp.SELECTOR_IDS["setLabel:state:context:"], "RECORZ_MVP_SELECTOR_SET_LABEL_STATE_CONTEXT")
-        self.assertEqual(mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SET_LABEL_STATE_CONTEXT"], 377)
+        self.assertEqual(
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SET_LABEL_STATE_CONTEXT"],
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_CONTEXT"] + 1,
+        )
+        self.assertEqual(
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_CONTEXT_FRAME_COUNT_NAMED"],
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_SET_LABEL_STATE_CONTEXT"] + 1,
+        )
+        self.assertEqual(
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_CONTEXT_FRAME_SUMMARY_AT_NAMED"],
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_CONTEXT_FRAME_COUNT_NAMED"] + 1,
+        )
+        self.assertEqual(
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_CONTEXT_FRAME_DETAIL_AT_NAMED"],
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_CONTEXT_FRAME_SUMMARY_AT_NAMED"] + 1,
+        )
+        self.assertEqual(mvp.SELECTOR_IDS["debugFrameCount"], "RECORZ_MVP_SELECTOR_DEBUG_FRAME_COUNT")
+        self.assertEqual(
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_DEBUG_FRAME_COUNT"],
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_CONTEXT_FRAME_DETAIL_AT_NAMED"] + 1,
+        )
+        self.assertEqual(
+            mvp.SELECTOR_IDS["debugFrameListFrom:"],
+            "RECORZ_MVP_SELECTOR_DEBUG_FRAME_LIST_FROM",
+        )
+        self.assertEqual(
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_DEBUG_FRAME_LIST_FROM"],
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_DEBUG_FRAME_COUNT"] + 1,
+        )
+        self.assertEqual(
+            mvp.SELECTOR_IDS["debugFrameDetailAt:"],
+            "RECORZ_MVP_SELECTOR_DEBUG_FRAME_DETAIL_AT",
+        )
+        self.assertEqual(
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_DEBUG_FRAME_DETAIL_AT"],
+            mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_DEBUG_FRAME_LIST_FROM"] + 1,
+        )
         self.assertEqual(
             mvp.SELECTOR_VALUES["RECORZ_MVP_SELECTOR_FILE_IN_METHOD_CHUNKS_ON_CLASS"],
             26,
@@ -1158,6 +1338,12 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_STATE", 375),
                 ("RECORZ_MVP_SELECTOR_CONTEXT", 376),
                 ("RECORZ_MVP_SELECTOR_SET_LABEL_STATE_CONTEXT", 377),
+                ("RECORZ_MVP_SELECTOR_CONTEXT_FRAME_COUNT_NAMED", 378),
+                ("RECORZ_MVP_SELECTOR_CONTEXT_FRAME_SUMMARY_AT_NAMED", 379),
+                ("RECORZ_MVP_SELECTOR_CONTEXT_FRAME_DETAIL_AT_NAMED", 380),
+                ("RECORZ_MVP_SELECTOR_DEBUG_FRAME_COUNT", 381),
+                ("RECORZ_MVP_SELECTOR_DEBUG_FRAME_LIST_FROM", 382),
+                ("RECORZ_MVP_SELECTOR_DEBUG_FRAME_DETAIL_AT", 383),
             ],
         )
 
@@ -1459,7 +1645,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            mvp.METHOD_ENTRY_ORDER[48:78],
+            mvp.METHOD_ENTRY_ORDER[48:81],
             [
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_FILE_IN",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTENTS",
@@ -1480,6 +1666,12 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_OBJECT_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_OBJECT_DETAIL_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTEXT_STACK_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTEXT_FRAME_COUNT_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTEXT_FRAME_SUMMARY_AT_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTEXT_FRAME_DETAIL_AT_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_DEBUG_FRAME_COUNT",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_DEBUG_FRAME_LIST_FROM",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_DEBUG_FRAME_DETAIL_AT",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_CLASS_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_METHOD_OF_CLASS_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_CLASS_METHODS_FOR_CLASS_NAMED",
@@ -1488,9 +1680,6 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_CLASS_METHOD_OF_CLASS_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_FILE_OUT_CLASS_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_FILE_OUT_PACKAGE_NAMED",
-                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_PACKAGE_COUNT",
-                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_PACKAGE_NAME_AT",
-                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_PACKAGE_NAMES_VISIBLE_FROM_COUNT",
             ],
         )
         self.assertEqual(

@@ -60,6 +60,24 @@ objectDetailNamed: objectName
 contextStackNamed: objectName
     <primitive: #workspaceContextStackNamed>
 !
+contextFrameCountNamed: objectName
+    <primitive: #workspaceContextFrameCountNamed>
+!
+contextFrameSummaryAt: index named: objectName
+    <primitive: #workspaceContextFrameSummaryAtNamed>
+!
+contextFrameDetailAt: index named: objectName
+    <primitive: #workspaceContextFrameDetailAtNamed>
+!
+debugFrameCount
+    <primitive: #workspaceDebugFrameCount>
+!
+debugFrameListFrom: index
+    <primitive: #workspaceDebugFrameListFrom>
+!
+debugFrameDetailAt: zeroBasedIndex
+    <primitive: #workspaceDebugFrameDetailAt>
+!
 browseClassNamed: className
     <primitive: #workspaceBrowseClassNamed>
 !

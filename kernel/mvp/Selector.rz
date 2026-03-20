@@ -754,3 +754,15 @@ RecorzKernelSelector: #context order: 375
 !
 RecorzKernelSelector: #setLabel:state:context: order: 376
 !
+RecorzKernelSelector: #contextFrameCountNamed: order: 377
+!
+RecorzKernelSelector: #contextFrameSummaryAt:named: order: 378
+!
+RecorzKernelSelector: #contextFrameDetailAt:named: order: 379
+!
+RecorzKernelSelector: #debugFrameCount order: 380
+!
+RecorzKernelSelector: #debugFrameListFrom: order: 381
+!
+RecorzKernelSelector: #debugFrameDetailAt: order: 382
+!
