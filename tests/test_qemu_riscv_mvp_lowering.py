@@ -179,6 +179,63 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             "RECORZ_MVP_SELECTOR_DEBUG_FRAME_DETAIL_AT",
         )
 
+    def test_lowers_workspace_process_browser_and_selected_process_debugger_queries(self) -> None:
+        required_selectors = [
+            "processCount",
+            "processNameAt:",
+            "processLabelsVisibleFrom:count:",
+            "contextFrameSummariesVisibleFrom:count:named:",
+        ]
+        missing = [selector for selector in required_selectors if selector not in mvp.SELECTOR_IDS]
+        if missing:
+            self.skipTest(f"process-browser selectors are not present yet: {', '.join(missing)}")
+
+        count_program = mvp.build_program("Workspace processCount")
+        name_program = mvp.build_program("Workspace processNameAt: 1")
+        labels_program = mvp.build_program("Workspace processLabelsVisibleFrom: 1 count: 3")
+        summaries_program = mvp.build_program("Workspace contextFrameSummariesVisibleFrom: 1 count: 3 named: 'BootIdleProcess'")
+
+        self.assertEqual(
+            [instruction.opcode for instruction in count_program.instructions],
+            [mvp.OP_PUSH_GLOBAL, mvp.OP_SEND, mvp.OP_RETURN],
+        )
+        self.assertEqual(count_program.instructions[0].operand_a, "RECORZ_MVP_GLOBAL_WORKSPACE")
+        self.assertEqual(count_program.instructions[1].operand_a, "RECORZ_MVP_SELECTOR_PROCESS_COUNT")
+
+        self.assertEqual(
+            [instruction.opcode for instruction in name_program.instructions],
+            [mvp.OP_PUSH_GLOBAL, mvp.OP_PUSH_LITERAL, mvp.OP_SEND, mvp.OP_RETURN],
+        )
+        self.assertEqual(name_program.instructions[0].operand_a, "RECORZ_MVP_GLOBAL_WORKSPACE")
+        self.assertEqual(name_program.instructions[2].operand_a, "RECORZ_MVP_SELECTOR_PROCESS_NAME_AT")
+
+        self.assertEqual(
+            [instruction.opcode for instruction in labels_program.instructions],
+            [mvp.OP_PUSH_GLOBAL, mvp.OP_PUSH_LITERAL, mvp.OP_PUSH_LITERAL, mvp.OP_SEND, mvp.OP_RETURN],
+        )
+        self.assertEqual(labels_program.instructions[0].operand_a, "RECORZ_MVP_GLOBAL_WORKSPACE")
+        self.assertEqual(
+            labels_program.instructions[3].operand_a,
+            "RECORZ_MVP_SELECTOR_PROCESS_LABELS_VISIBLE_FROM_COUNT",
+        )
+
+        self.assertEqual(
+            [instruction.opcode for instruction in summaries_program.instructions],
+            [
+                mvp.OP_PUSH_GLOBAL,
+                mvp.OP_PUSH_LITERAL,
+                mvp.OP_PUSH_LITERAL,
+                mvp.OP_PUSH_LITERAL,
+                mvp.OP_SEND,
+                mvp.OP_RETURN,
+            ],
+        )
+        self.assertEqual(summaries_program.instructions[0].operand_a, "RECORZ_MVP_GLOBAL_WORKSPACE")
+        self.assertEqual(
+            summaries_program.instructions[4].operand_a,
+            "RECORZ_MVP_SELECTOR_CONTEXT_FRAME_SUMMARIES_VISIBLE_FROM_COUNT_NAMED",
+        )
+
     def test_lowers_top_level_block_literals_and_boolean_globals(self) -> None:
         program = mvp.build_program("true ifTrue: [ :x | x + 4 ] ifFalse: [ :x | x + 5 ]")
         literal_strings = [literal.value.strip() for literal in program.literals if literal.kind == mvp.LITERAL_STRING]
@@ -808,12 +865,16 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceDebugFrameCount"], 53)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceDebugFrameListFrom"], 54)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceDebugFrameDetailAt"], 55)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspacePackageCount"], 64)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLinesColumns"], 67)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLeftLinesColumns"], 68)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceBrowseInteractiveViews"], 85)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 104)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processSetLabelStateContext"], 117)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceProcessCount"], 56)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceProcessNameAt"], 57)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceProcessLabelsVisibleFromCount"], 58)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceContextFrameSummariesVisibleFromCountNamed"], 59)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspacePackageCount"], 68)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLinesColumns"], 71)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLeftLinesColumns"], 72)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceBrowseInteractiveViews"], 89)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 108)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processSetLabelStateContext"], 121)
         for binding_name in _workspace_tool_primitive_bindings():
             self.assertIn(binding_name, mvp.PRIMITIVE_BINDING_VALUES)
         self.assertEqual(
@@ -1344,6 +1405,12 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_DEBUG_FRAME_COUNT", 381),
                 ("RECORZ_MVP_SELECTOR_DEBUG_FRAME_LIST_FROM", 382),
                 ("RECORZ_MVP_SELECTOR_DEBUG_FRAME_DETAIL_AT", 383),
+                ("RECORZ_MVP_SELECTOR_SELECTED_PROCESS_NAME", 384),
+                ("RECORZ_MVP_SELECTOR_CURRENT_DEBUGGER_TARGET_NAME", 385),
+                ("RECORZ_MVP_SELECTOR_PROCESS_COUNT", 386),
+                ("RECORZ_MVP_SELECTOR_PROCESS_NAME_AT", 387),
+                ("RECORZ_MVP_SELECTOR_PROCESS_LABELS_VISIBLE_FROM_COUNT", 388),
+                ("RECORZ_MVP_SELECTOR_CONTEXT_FRAME_SUMMARIES_VISIBLE_FROM_COUNT_NAMED", 389),
             ],
         )
 
@@ -1645,7 +1712,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            mvp.METHOD_ENTRY_ORDER[48:81],
+            mvp.METHOD_ENTRY_ORDER[48:85],
             [
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_FILE_IN",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTENTS",
@@ -1672,6 +1739,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_DEBUG_FRAME_COUNT",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_DEBUG_FRAME_LIST_FROM",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_DEBUG_FRAME_DETAIL_AT",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_PROCESS_COUNT",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_PROCESS_NAME_AT",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_PROCESS_LABELS_VISIBLE_FROM_COUNT",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTEXT_FRAME_SUMMARIES_VISIBLE_FROM_COUNT_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_CLASS_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_METHOD_OF_CLASS_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_CLASS_METHODS_FOR_CLASS_NAMED",
