@@ -6052,83 +6052,7 @@ static void test_runner_run_package(
     );
 }
 
-static void workspace_remember_view(
-    const struct recorz_mvp_heap_object *workspace_object,
-    uint32_t view_kind,
-    const char *target_name
-) {
-    uint16_t workspace_handle = heap_handle_for_object(workspace_object);
-
-    heap_set_field(
-        workspace_handle,
-        workspace_current_view_kind_field_index(workspace_object),
-        small_integer_value((int32_t)view_kind)
-    );
-    if (target_name == 0 || target_name[0] == '\0') {
-        heap_set_field(
-            workspace_handle,
-            workspace_current_target_name_field_index(workspace_object),
-            nil_value()
-        );
-        return;
-    }
-    heap_set_field(
-        workspace_handle,
-        workspace_current_target_name_field_index(workspace_object),
-        string_value(target_name)
-    );
-}
-
-static void workspace_capture_plain_return_state_if_needed(
-    const struct recorz_mvp_heap_object *workspace_object
-) {
-    uint16_t tool_handle;
-    struct recorz_mvp_value view_kind_value;
-    struct recorz_mvp_value target_name_value;
-    struct recorz_mvp_value current_source_value;
-    struct recorz_mvp_value arguments[1];
-
-    if (workspace_object == 0) {
-        return;
-    }
-    view_kind_value = heap_get_field(
-        workspace_object,
-        workspace_current_view_kind_field_index(workspace_object)
-    );
-    if (view_kind_value.kind == RECORZ_MVP_VALUE_SMALL_INTEGER &&
-        (uint32_t)view_kind_value.integer != WORKSPACE_VIEW_INPUT_MONITOR) {
-        return;
-    }
-    if (view_kind_value.kind != RECORZ_MVP_VALUE_NIL &&
-        view_kind_value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
-        return;
-    }
-    target_name_value = heap_get_field(
-        workspace_object,
-        workspace_current_target_name_field_index(workspace_object)
-    );
-    if (target_name_value.kind != RECORZ_MVP_VALUE_NIL) {
-        return;
-    }
-    tool_handle = named_object_handle_for_name("BootWorkspaceTool");
-    if (tool_handle == 0U) {
-        return;
-    }
-    current_source_value = workspace_current_source_value(workspace_object);
-    if (current_source_value.kind == RECORZ_MVP_VALUE_STRING &&
-        current_source_value.string != 0) {
-        arguments[0] = current_source_value;
-    } else {
-        arguments[0] = string_value("");
-    }
-    (void)perform_send_and_pop_result(
-        object_value(tool_handle),
-        RECORZ_MVP_SELECTOR_REMEMBER_PLAIN_WORKSPACE_STATE_CONTENTS,
-        1U,
-        arguments,
-        0
-    );
-}
+#include "../shared/recorz_mvp_workspace_plain_state_impl.h"
 
 static void workspace_remember_input_monitor_view(
     const struct recorz_mvp_heap_object *workspace_object
@@ -8561,20 +8485,17 @@ static const char *workspace_source_text_for_browser_target(
     const char *target_name
 );
 
-static const char *workspace_opening_menu_items_visible_text(
+static const char *workspace_browser_list_items_visible_text(
+    uint32_t view_kind,
     uint32_t first_index,
     uint32_t count,
     char buffer[],
     uint32_t buffer_size
 ) {
-    static const char *const items[] = {
-        "Workspace",
-        "Class Browser",
-        "Project Browser",
-    };
+    uint16_t session_handle;
+    struct recorz_mvp_value arguments[2];
+    struct recorz_mvp_value items_value;
     uint32_t offset = 0U;
-    uint32_t index;
-    uint32_t item_count = (uint32_t)(sizeof(items) / sizeof(items[0]));
 
     if (buffer_size == 0U) {
         return "";
@@ -8583,35 +8504,23 @@ static const char *workspace_opening_menu_items_visible_text(
     if (count == 0U) {
         return buffer;
     }
-    if (first_index == 0U) {
-        first_index = 1U;
-    }
-    if (first_index > item_count) {
-        return buffer;
-    }
-    for (index = first_index; index < first_index + count && index <= item_count; ++index) {
-        if (offset != 0U) {
-            append_text_checked(buffer, buffer_size, &offset, "\n");
+    if (workspace_view_kind_uses_image_session(view_kind)) {
+        session_handle = named_object_handle_for_name("BootWorkspaceSession");
+        if (session_handle != 0U) {
+            arguments[0] = small_integer_value((int32_t)first_index);
+            arguments[1] = small_integer_value((int32_t)count);
+            items_value = perform_send_and_pop_result(
+                object_value(session_handle),
+                RECORZ_MVP_SELECTOR_CURRENT_BROWSER_ITEMS_VISIBLE_FROM_COUNT,
+                2U,
+                arguments,
+                0
+            );
+            if (items_value.kind == RECORZ_MVP_VALUE_STRING && items_value.string != 0) {
+                append_text_checked(buffer, buffer_size, &offset, items_value.string);
+                return buffer;
+            }
         }
-        append_text_checked(buffer, buffer_size, &offset, items[index - 1U]);
-    }
-    return buffer;
-}
-
-static const char *workspace_browser_list_items_visible_text(
-    uint32_t view_kind,
-    uint32_t first_index,
-    uint32_t count,
-    char buffer[],
-    uint32_t buffer_size
-) {
-    if (view_kind == WORKSPACE_VIEW_OPENING_MENU) {
-        return workspace_opening_menu_items_visible_text(
-            first_index,
-            count,
-            buffer,
-            buffer_size
-        );
     }
     if (view_kind == WORKSPACE_VIEW_INTERACTIVE_CLASSES) {
         return workspace_class_names_visible_text(

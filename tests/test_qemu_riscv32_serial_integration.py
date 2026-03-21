@@ -3592,7 +3592,11 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     self.fail("QEMU process stdin is not available")
                 process.stdin.write("\x0e\x0e\x0e\x0e\x0e\x0e\x18")
                 process.stdin.flush()
-                output += _read_until(process, "PRIM", timeout=8.0)
+                output += _read_until_any(
+                    process,
+                    ("RUNTIME METADATA", "Runtime MetadataR"),
+                    timeout=12.0,
+                )
                 process.stdin.write("\x0f")
                 process.stdin.flush()
                 output += _read_until(process, "OPENING MENU", timeout=8.0)

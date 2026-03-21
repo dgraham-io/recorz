@@ -44,6 +44,14 @@ Exit criteria:
 
 Goal: keep shrinking the C runtime toward a primitive boundary.
 
+Status:
+- active
+- the first Stage 2 slice is landed:
+  - plain-workspace capture now delegates to image-side session policy when `BootWorkspaceSession` exists
+  - RV32 incremental image-session list redraw now asks the image for visible list text instead of hardcoding the opening menu and browser contents in `vm.c`
+  - the shared plain-state helper is now factored in `/Users/david/repos/recorz/platform/shared/recorz_mvp_workspace_plain_state_impl.h`
+- the next Stage 2 work is still the larger C-owned reopen and input-monitor return policy
+
 Work items:
 - move any remaining browser-return and tool routing policy into image-side code
 - remove duplicated RV32/RV64 helper logic where it is mechanically shared

@@ -249,7 +249,7 @@ Keep shrinking the C runtime toward a primitive boundary.
 
 ### Open Tasks
 
-- [ ] `PP2.1` Runtime policy inventory
+- [x] `PP2.1` Runtime policy inventory
   Files:
   - `/Users/david/repos/recorz/platform/qemu-riscv32/vm.c`
   - `/Users/david/repos/recorz/platform/qemu-riscv64/vm.c`
@@ -262,6 +262,17 @@ Keep shrinking the C runtime toward a primitive boundary.
     - mechanical helper to factor
   Verify:
   - docs update plus lowering/build checks
+
+  Current inventory after the first Stage 2 slice:
+  - moved out of direct C policy ownership:
+    - plain-workspace capture now delegates to image-side `BootWorkspaceSession>>rememberPlainWorkspaceStateIfNeeded` through the shared helper in `/Users/david/repos/recorz/platform/shared/recorz_mvp_workspace_plain_state_impl.h`
+    - RV32 incremental image-session list redraw now asks `BootWorkspaceSession>>currentBrowserItemsVisibleFrom:count:` for visible items instead of hardcoding opening-menu/package/class contents in `vm.c`
+  - still C-owned and remaining:
+    - `workspace_remember_input_monitor_view` on both arches
+    - `workspace_reopen_in_place` on both arches
+    - RV32 image-session mode routing and some redraw-category interpretation
+    - RV64 native interactive input-monitor command loop
+    - browser/source target normalization in `workspace_source_text_for_browser_target`
 
 - [ ] `PP2.2` Move remaining return/detail routing into image-side models
   Files:
@@ -276,7 +287,7 @@ Keep shrinking the C runtime toward a primitive boundary.
   Verify:
   - serial, render, and snapshot return-path tests
 
-- [ ] `PP2.3` Thin the native session redraw contract
+- [x] `PP2.3` Thin the native session redraw contract
   Files:
   - `/Users/david/repos/recorz/platform/qemu-riscv32/vm.c`
   - `/Users/david/repos/recorz/platform/qemu-riscv64/vm.c`
@@ -289,7 +300,11 @@ Keep shrinking the C runtime toward a primitive boundary.
   - targeted render tests
   - RV32 and RV64 builds
 
-- [ ] `PP2.4` Shared RV32/RV64 helper extraction
+  Current result:
+  - RV32 incremental image-session list redraw now asks `BootWorkspaceSession>>currentBrowserItemsVisibleFrom:count:` for visible items instead of hardcoding opening-menu/package/class contents in `vm.c`
+  - the stale three-item opening-menu fallback was removed from the native redraw path
+
+- [x] `PP2.4` Shared RV32/RV64 helper extraction
   Files:
   - `/Users/david/repos/recorz/platform/shared/`
   - `/Users/david/repos/recorz/platform/qemu-riscv32/`
@@ -300,6 +315,10 @@ Keep shrinking the C runtime toward a primitive boundary.
   Verify:
   - RV32 `all`
   - RV64 `all`
+
+  Current result:
+  - `workspace_remember_view` and `workspace_capture_plain_return_state_if_needed` now live in `/Users/david/repos/recorz/platform/shared/recorz_mvp_workspace_plain_state_impl.h`
+  - the shared plain-state helper now delegates to image-side session policy when `BootWorkspaceSession` exists and falls back to the older tool-based path for early bootstrap flows
 
 - [ ] `PP2.5` Stage 2 closure matrix
   Files:
@@ -487,12 +506,12 @@ Reopen broader Recorz directions from a stable base without letting them collaps
 
 Unless a blocking regression appears elsewhere, the next tasks should be tackled in this order:
 
-1. `PP2.1` Runtime policy inventory.
-2. `PP2.2` Move remaining return/detail routing into image-side models.
-3. `PP2.3` Thin the native session redraw contract.
-4. `PP2.4` Shared RV32/RV64 helper extraction.
+1. `PP2.2` Move remaining return/detail routing into image-side models.
+2. `PP2.5` Stage 2 closure matrix.
+3. `PP3.1` Lock the current honest RV64 contract.
+4. `PP3.2` RV64 default-payload boot to opening menu.
 
-That sequence is intentional. Stage 1 is now closed, so the project should keep shrinking the VM before broadening RV64 validation or self-hosting scope.
+That sequence is intentional. The first Stage 2 slice is landed, but the reopen and input-monitor return policy is still the next reduction target before the program moves on to RV64 and self-hosting work.
 
 ## Program Complete When
 
