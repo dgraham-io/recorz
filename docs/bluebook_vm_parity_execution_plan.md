@@ -28,7 +28,8 @@ As of `2026-03-21`, the project appears to be here:
 - Stage 4: complete.
 - Stage 5: complete.
 - Stage 6: complete.
-- Stages 7 and 8: still open, with Stage 7 now at the head of execution.
+- Stage 7: complete.
+- Stage 8: still open, and now at the head of execution.
 
 Stage 3 status note as of `2026-03-21`:
 
@@ -63,6 +64,14 @@ Stage 6 status note as of `2026-03-21`:
 - intended development-path failures now enter the debugger with a materialized `Context` instead of falling straight into panic-only behavior, while corruption and unsupported runtime states remain hard failures
 - debugger state is carried through image-owned browser return state, so process-browser and debugger handoff/return are coherent across active-process and scheduled-process flows
 - the Stage 6 serial, render, lowering, and RV32 build gates are green, and the current debugger/process-browser framebuffer assertions no longer rely on the older skip-gated expectations
+
+Stage 7 status note as of `2026-03-21`:
+
+- seed-source file-out and regeneration now tolerate seeded classes that exist in the generated source registry before they have been lazily instantiated into the live image, so regenerated boot/kernel source stays aligned with debugger, inspector, and process-browser growth
+- runtime metadata is now inspectable from the development-home opening menu, with the RV32 runtime surfacing profile, image, selector, method-entry, primitive, package, class, source, and process counts through an image-owned browser view
+- the host Python builders now emit selector and primitive-binding registries and keep runtime-binding generation derivational, while the docs explicitly keep host builders in a bootstrap-only mechanical role instead of reabsorbing image-side tool policy
+- process-browser and debugger browser state now survives snapshot save/reopen through the image-owned session/browser model, with reopened debugger/process views rendered from the saved browser model instead of falling back to the plain class browser
+- the Stage 7 lowering, runtime-metadata serial/render, snapshot reopen, regeneration alignment, builder smoke, and full RV32 build gates are green under the unchanged `32M` target
 
 ## Global Completion Rules
 
@@ -495,9 +504,9 @@ This stage should only begin once Stage 5 yields a stable multi-process runtime.
 
 This stage keeps the expanded tool stack aligned with Recorz's image-owned direction.
 
-### Open Tasks
+### Completed Tasks
 
-- [ ] `BP7.1` File-out/file-in cleanliness for tool classes
+- [x] `BP7.1` File-out/file-in cleanliness for tool classes
   Files:
   - `/Users/david/repos/recorz/kernel/mvp/`
   - `/Users/david/repos/recorz/kernel/textui/`
@@ -507,7 +516,7 @@ This stage keeps the expanded tool stack aligned with Recorz's image-owned direc
   Verify:
   - regeneration tests
 
-- [ ] `BP7.2` Regeneration-safe runtime metadata
+- [x] `BP7.2` Regeneration-safe runtime metadata
   Files:
   - `/Users/david/repos/recorz/tools/build_qemu_riscv_mvp_image.py`
   - `/Users/david/repos/recorz/tools/generate_qemu_riscv_mvp_runtime_bindings_header.py`
@@ -517,7 +526,7 @@ This stage keeps the expanded tool stack aligned with Recorz's image-owned direc
   Verify:
   - lowering and regeneration tests
 
-- [ ] `BP7.3` In-image inspection of regenerated source and runtime state
+- [x] `BP7.3` In-image inspection of regenerated source and runtime state
   Files:
   - `/Users/david/repos/recorz/kernel/textui/WidgetBootstrap.rz`
   - `/Users/david/repos/recorz/kernel/mvp/Workspace.rz`
@@ -526,7 +535,7 @@ This stage keeps the expanded tool stack aligned with Recorz's image-owned direc
   Verify:
   - serial/render regeneration tests
 
-- [ ] `BP7.4` Keep host builders mechanical
+- [x] `BP7.4` Keep host builders mechanical
   Files:
   - `/Users/david/repos/recorz/tools/`
   - `/Users/david/repos/recorz/docs/`
@@ -537,7 +546,7 @@ This stage keeps the expanded tool stack aligned with Recorz's image-owned direc
   - docs review
   - regeneration smoke tests
 
-- [ ] `BP7.5` Snapshot and regeneration survival of new tools
+- [x] `BP7.5` Snapshot and regeneration survival of new tools
   Files:
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_snapshot_integration.py`
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_regeneration_integration.py`
@@ -601,9 +610,9 @@ This stage only begins once the earlier stages are functionally complete.
 
 Unless a regression in Stage 0 becomes urgent, the next tasks should be tackled in this order:
 
-1. `BP7.1` File-out/file-in cleanliness for tool classes.
-2. `BP7.2` Regeneration-safe runtime metadata.
-3. `BP7.3` In-image inspection of regenerated source and runtime state.
+1. `BP8.1` Remove remaining roadmap-related skip-gates.
+2. `BP8.2` Run the full RV32 validation matrix.
+3. `BP8.3` RV64 smoke-suite validation.
 
 ## Program Complete When
 

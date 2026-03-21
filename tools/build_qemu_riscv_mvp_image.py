@@ -259,6 +259,16 @@ class KernelSelectorDeclaration:
 
 
 @dataclass(frozen=True)
+class KernelPrimitiveBindingOwner:
+    binding_name: str
+    entry_name: str
+    class_name: str
+    selector: str
+    argument_count: int
+    relative_path: str
+
+
+@dataclass(frozen=True)
 class KernelRootDeclaration:
     root_name: str
     object_name: str
@@ -803,8 +813,20 @@ def load_kernel_class_headers() -> dict[str, KernelClassHeader]:
     if actual_descriptor_orders != expected_descriptor_orders:
         raise LoweringError(
             "kernel MVP class headers must declare a contiguous descriptorOrder range starting at 0"
-    )
+        )
     return class_headers_by_name
+
+
+def load_kernel_class_relative_paths() -> dict[str, str]:
+    class_relative_paths: dict[str, str] = {}
+
+    for source_unit in KERNEL_SOURCE_UNITS:
+        class_header = parse_kernel_class_header(source_unit.chunk_sources[0], source_unit.relative_path)
+        if class_header.class_name in class_relative_paths:
+            raise LoweringError(f"kernel MVP class {class_header.class_name} is declared more than once")
+        class_relative_paths[class_header.class_name] = source_unit.relative_path
+
+    return class_relative_paths
 
 
 def object_kind_constant_name_from_class_name(class_name: str) -> str:
@@ -815,6 +837,7 @@ def object_kind_constant_name_from_class_name(class_name: str) -> str:
 
 KERNEL_SOURCE_UNITS = load_kernel_source_units()
 KERNEL_CLASS_HEADERS_BY_NAME = load_kernel_class_headers()
+KERNEL_CLASS_RELATIVE_PATHS_BY_NAME = load_kernel_class_relative_paths()
 KERNEL_CLASS_HEADERS_IN_DESCRIPTOR_ORDER = sorted(
     KERNEL_CLASS_HEADERS_BY_NAME.values(),
     key=lambda class_header: class_header.descriptor_order,
@@ -1210,6 +1233,27 @@ def kernel_primitive_binding_constant_name(binding_name: str) -> str:
 
 def kernel_primitive_handler_name(binding_name: str) -> str:
     return f"execute_entry_{lower_snake_name(binding_name)}"
+
+
+def validate_kernel_primitive_binding_symbol_names(binding_names: list[str] | tuple[str, ...]) -> None:
+    binding_name_by_constant_name: dict[str, str] = {}
+    binding_name_by_handler_name: dict[str, str] = {}
+
+    for binding_name in binding_names:
+        constant_name = kernel_primitive_binding_constant_name(binding_name)
+        prior_binding_name = binding_name_by_constant_name.get(constant_name)
+        if prior_binding_name is not None and prior_binding_name != binding_name:
+            raise LoweringError(
+                f"primitive binding names {prior_binding_name!r} and {binding_name!r} map to the same constant {constant_name}"
+            )
+        binding_name_by_constant_name[constant_name] = binding_name
+        handler_name = kernel_primitive_handler_name(binding_name)
+        prior_handler_binding_name = binding_name_by_handler_name.get(handler_name)
+        if prior_handler_binding_name is not None and prior_handler_binding_name != binding_name:
+            raise LoweringError(
+                f"primitive binding names {prior_handler_binding_name!r} and {binding_name!r} map to the same handler {handler_name}"
+            )
+        binding_name_by_handler_name[handler_name] = binding_name
 
 
 def kernel_field_constant_name(class_name: str, field_name: str) -> str:
@@ -1714,6 +1758,19 @@ for entry_name, source in KERNEL_METHOD_SOURCE_BY_ENTRY_NAME.items():
     if source.primitive_binding not in PRIMITIVE_BINDING_VALUES:
         PRIMITIVE_BINDING_VALUES[source.primitive_binding] = len(PRIMITIVE_BINDING_VALUES) + 1
     PRIMITIVE_BINDING_BY_ENTRY_NAME[entry_name] = PRIMITIVE_BINDING_VALUES[source.primitive_binding]
+validate_kernel_primitive_binding_symbol_names(tuple(PRIMITIVE_BINDING_VALUES))
+PRIMITIVE_BINDING_OWNERS_IN_ENTRY_ORDER = tuple(
+    KernelPrimitiveBindingOwner(
+        binding_name=source.primitive_binding if source.primitive_binding is not None else "",
+        entry_name=entry_name,
+        class_name=source.class_name,
+        selector=source.selector,
+        argument_count=source.argument_count,
+        relative_path=source.relative_path,
+    )
+    for entry_name, source in KERNEL_METHOD_SOURCE_BY_ENTRY_NAME.items()
+    if source.implementation_kind == KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE
+)
 SELECTOR_VALUE_ORDER = [value for _constant_name, value in SELECTOR_DEFINITIONS]
 COMPILED_METHOD_ENTRY_ORDER = [
     entry_name for entry_name in METHOD_ENTRY_ORDER if entry_name in COMPILED_METHOD_PROGRAM_BY_ENTRY_NAME
@@ -1725,6 +1782,7 @@ def append_generated_seed_class_source_registry(lines: list[str]) -> None:
         [
             "struct recorz_mvp_seed_class_source_record {",
             "    const char *class_name;",
+            "    const char *relative_path;",
             "    const char *canonical_source;",
             "    const char *builder_source;",
             "    uint8_t descriptor_order;",
@@ -1735,7 +1793,7 @@ def append_generated_seed_class_source_registry(lines: list[str]) -> None:
             "};",
             "",
             "static const struct recorz_mvp_seed_class_source_record recorz_mvp_generated_seed_class_sources[] = {",
-            "    {0, 0, 0, 0, 0, -1, 0, {0, 0, 0, 0}},",
+            "    {0, 0, 0, 0, 0, 0, -1, 0, {0, 0, 0, 0}},",
         ]
     )
     for class_header in KERNEL_CLASS_HEADERS_IN_OBJECT_KIND_ORDER:
@@ -1748,6 +1806,7 @@ def append_generated_seed_class_source_registry(lines: list[str]) -> None:
             + ", ".join(
                 [
                     json.dumps(class_header.class_name),
+                    json.dumps(KERNEL_CLASS_RELATIVE_PATHS_BY_NAME[class_header.class_name]),
                     json.dumps(KERNEL_CANONICAL_CLASS_SOURCES_BY_NAME[class_header.class_name]),
                     json.dumps(KERNEL_BUILDER_CLASS_SOURCES_BY_NAME[class_header.class_name]),
                     f"{class_header.descriptor_order}",
@@ -1755,6 +1814,112 @@ def append_generated_seed_class_source_registry(lines: list[str]) -> None:
                     f"{source_boot_order}",
                     f"{len(class_header.instance_variables)}",
                     "{" + ", ".join(instance_variable_literals) + "}",
+                ]
+            )
+            + "},"
+        )
+    lines.extend(
+        [
+            "};",
+            "",
+        ]
+    )
+
+
+def append_generated_selector_registry(lines: list[str]) -> None:
+    lines.extend(
+        [
+            "struct recorz_mvp_selector_record {",
+            "    const char *selector;",
+            "    const char *constant_name;",
+            "    const char *relative_path;",
+            "    uint16_t value;",
+            "    uint16_t declaration_order;",
+            "};",
+            "",
+            "static const struct recorz_mvp_selector_record recorz_mvp_generated_selectors[] = {",
+            "    {0, 0, 0, 0, 0},",
+        ]
+    )
+    for declaration in KERNEL_SELECTOR_DECLARATIONS_IN_ORDER:
+        constant_name = SELECTOR_IDS[declaration.selector]
+        lines.append(
+            "    {"
+            + ", ".join(
+                [
+                    json.dumps(declaration.selector),
+                    json.dumps(constant_name),
+                    json.dumps(declaration.relative_path),
+                    f"{SELECTOR_VALUES[constant_name]}",
+                    f"{declaration.selector_order}",
+                ]
+            )
+            + "},"
+        )
+    lines.extend(
+        [
+            "};",
+            "",
+        ]
+    )
+
+
+def append_generated_primitive_binding_registry(lines: list[str]) -> None:
+    lines.extend(
+        [
+            "struct recorz_mvp_primitive_binding_record {",
+            "    const char *binding_name;",
+            "    const char *constant_name;",
+            "    const char *handler_name;",
+            "    uint16_t value;",
+            "};",
+            "",
+            "static const struct recorz_mvp_primitive_binding_record recorz_mvp_generated_primitive_bindings[] = {",
+            "    {0, 0, 0, 0},",
+        ]
+    )
+    for binding_name, binding_id in sorted(PRIMITIVE_BINDING_VALUES.items(), key=lambda item: item[1]):
+        lines.append(
+            "    {"
+            + ", ".join(
+                [
+                    json.dumps(binding_name),
+                    json.dumps(kernel_primitive_binding_constant_name(binding_name)),
+                    json.dumps(kernel_primitive_handler_name(binding_name)),
+                    f"{binding_id}",
+                ]
+            )
+            + "},"
+        )
+    lines.extend(
+        [
+            "};",
+            "",
+            "struct recorz_mvp_primitive_binding_owner_record {",
+            "    uint16_t primitive_binding_value;",
+            "    const char *entry_name;",
+            "    const char *class_name;",
+            "    const char *selector;",
+            "    uint8_t argument_count;",
+            "    const char *relative_path;",
+            "};",
+            "",
+            "static const struct recorz_mvp_primitive_binding_owner_record "
+            "recorz_mvp_generated_primitive_binding_owners[] = {",
+            "    {0, 0, 0, 0, 0, 0},",
+        ]
+    )
+    for owner in PRIMITIVE_BINDING_OWNERS_IN_ENTRY_ORDER:
+        lines.append(
+            "    {"
+            + ", ".join(
+                [
+                    f"{PRIMITIVE_BINDING_VALUES[owner.binding_name]}",
+                    json.dumps(owner.entry_name),
+                    json.dumps(owner.class_name),
+                    json.dumps(owner.selector),
+                    f"{owner.argument_count}",
+                    json.dumps(owner.relative_path),
                 ]
             )
             + "},"
@@ -1832,7 +1997,18 @@ def render_generated_runtime_bindings_header() -> str:
     append_enum_definition(lines, "recorz_mvp_object_kind", OBJECT_KIND_DEFINITIONS)
     append_enum_definition(lines, "recorz_mvp_seed_field_kind", SEED_FIELD_KIND_DEFINITIONS)
     append_enum_definition(lines, "recorz_mvp_seed_root", SEED_ROOT_DEFINITIONS)
+    append_macro_definition(
+        lines,
+        "RECORZ_MVP_GENERATED_SEED_CLASS_SOURCE_RECORD_COUNT",
+        f"{len(KERNEL_CLASS_HEADERS_IN_OBJECT_KIND_ORDER) + 1}U",
+    )
     append_generated_seed_class_source_registry(lines)
+    append_macro_definition(
+        lines,
+        "RECORZ_MVP_GENERATED_SELECTOR_RECORD_COUNT",
+        f"{len(KERNEL_SELECTOR_DECLARATIONS_IN_ORDER) + 1}U",
+    )
+    append_generated_selector_registry(lines)
     lines.append("enum recorz_mvp_method_entry {")
     for entry_name in METHOD_ENTRY_ORDER:
         lines.append(f"    {entry_name} = {METHOD_ENTRY_VALUES[entry_name]},")
@@ -1851,6 +2027,17 @@ def render_generated_runtime_bindings_header() -> str:
         [
             "};",
             "",
+            f"#define RECORZ_MVP_GENERATED_PRIMITIVE_BINDING_RECORD_COUNT {len(PRIMITIVE_BINDING_VALUES) + 1}U",
+            (
+                "#define RECORZ_MVP_GENERATED_PRIMITIVE_BINDING_OWNER_RECORD_COUNT "
+                f"{len(PRIMITIVE_BINDING_OWNERS_IN_ENTRY_ORDER) + 1}U"
+            ),
+            "",
+        ]
+    )
+    append_generated_primitive_binding_registry(lines)
+    lines.extend(
+        [
             "#define RECORZ_MVP_GENERATED_PRIMITIVE_BINDING_HANDLERS \\",
         ]
     )
@@ -1876,6 +2063,28 @@ def render_generated_runtime_bindings_header() -> str:
 def render_generated_primitive_bindings_header() -> str:
     # Compatibility shim for the prior helper name.
     return render_generated_runtime_bindings_header()
+
+
+def write_output_bytes_if_changed(path: Path, data: bytes) -> bool:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() and path.read_bytes() == data:
+        return False
+    temporary_output = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        temporary_output.write_bytes(data)
+        os.replace(temporary_output, path)
+    finally:
+        if temporary_output.exists():
+            temporary_output.unlink()
+    return True
+
+
+def write_output_text_if_changed(path: Path, text: str, *, encoding: str = "utf-8") -> bool:
+    return write_output_bytes_if_changed(path, text.encode(encoding))
+
+
+def write_generated_runtime_bindings_header(output_path: Path) -> bool:
+    return write_output_text_if_changed(output_path, render_generated_runtime_bindings_header(), encoding="utf-8")
 
 
 class Lowerer:
@@ -2990,10 +3199,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("image_output", type=Path, help="Generated boot image path")
     args = parser.parse_args(argv)
 
-    source_text = args.source.read_text()
+    source_text = args.source.read_text(encoding="utf-8")
     program = build_boot_program(source_text)
-    args.image_output.parent.mkdir(parents=True, exist_ok=True)
-    args.image_output.write_bytes(build_image_manifest(program))
+    write_output_bytes_if_changed(args.image_output, build_image_manifest(program))
     return 0
 
 

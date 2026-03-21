@@ -919,17 +919,18 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceSpawnProcessNamedSource"], 60)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceYield"], 61)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceContextFrameSummariesVisibleFromCountNamed"], 62)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspacePackageCount"], 71)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLinesColumns"], 74)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLeftLinesColumns"], 75)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceBrowseInteractiveViews"], 92)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 114)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processSetLabelStateContext"], 127)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processSuspend"], 128)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processResume"], 129)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processStepInto"], 130)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processStepOver"], 131)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processTerminate"], 132)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceRuntimeMetadata"], 71)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspacePackageCount"], 72)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLinesColumns"], 75)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLeftLinesColumns"], 76)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceBrowseInteractiveViews"], 93)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 115)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processSetLabelStateContext"], 128)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processSuspend"], 129)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processResume"], 130)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processStepInto"], 131)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processStepOver"], 132)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processTerminate"], 133)
         for binding_name in _workspace_tool_primitive_bindings():
             self.assertIn(binding_name, mvp.PRIMITIVE_BINDING_VALUES)
         self.assertEqual(
@@ -1493,6 +1494,8 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_DEBUGGER_STEP_OVER", 414),
                 ("RECORZ_MVP_SELECTOR_STEP_INTO", 415),
                 ("RECORZ_MVP_SELECTOR_STEP_OVER", 416),
+                ("RECORZ_MVP_SELECTOR_RUNTIME_METADATA", 417),
+                ("RECORZ_MVP_SELECTOR_IS_READ_ONLY_DETAIL_TARGET", 418),
             ],
         )
 

@@ -832,3 +832,7 @@ RecorzKernelSelector: #stepInto order: 414
 !
 RecorzKernelSelector: #stepOver order: 415
 !
+RecorzKernelSelector: #runtimeMetadata order: 416
+!
+RecorzKernelSelector: #isReadOnlyDetailTarget order: 417
+!

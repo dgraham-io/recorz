@@ -147,6 +147,49 @@ def _write_object_browser_snapshot_example(
     return example_path
 
 
+def _write_workspace_reopen_example(temp_path: Path, name: str) -> Path:
+    example_path = temp_path / name
+    example_path.write_text(
+        "\n".join(
+            [
+                "Display clear.",
+                "Workspace reopen.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return example_path
+
+
+def _write_development_home_tool_snapshot_example(
+    temp_path: Path,
+    name: str,
+    *,
+    selection_steps: int,
+    open_count: int,
+) -> Path:
+    example_path = temp_path / name
+    lines = [
+        "| session form |",
+        "Display clear.",
+        "Workspace developmentHome.",
+        "session := KernelInstaller objectNamed: 'BootWorkspaceSession'.",
+        "form := Display defaultForm.",
+    ]
+    for _ in range(selection_steps):
+        lines.append("session handleByte: 14 onForm: form.")
+    for _ in range(open_count):
+        lines.append("session handleByte: 24 onForm: form.")
+    lines.extend(
+        [
+            "KernelInstaller configureStartup: Workspace selectorNamed: 'reopen'.",
+            "KernelInstaller saveSnapshot.",
+        ]
+    )
+    example_path.write_text("\n".join(lines), encoding="utf-8")
+    return example_path
+
+
 def _workspace_object_detail_is_implemented() -> bool:
     vm_source = (ROOT / "platform" / "qemu-riscv32" / "vm.c").read_text(encoding="utf-8")
     return "workspaceObjectDetailNamed" in vm_source or "workspace_object_detail_named" in vm_source
@@ -466,6 +509,59 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         if result.returncode != 0:
             self.fail(f"QEMU RV32 save-snapshot flow failed\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}")
         return (build_dir / "qemu.log").read_text(encoding="utf-8")
+
+    def save_snapshot_from_file_in_payload(
+        self,
+        *,
+        elf_path: Path,
+        file_in_payload: Path,
+        snapshot_output: Path,
+    ) -> str:
+        if not elf_path.exists():
+            self.skipTest(f"prebuilt RV32 elf is not available: {elf_path}")
+        process = subprocess.Popen(
+            [
+                "qemu-system-riscv32",
+                "-machine",
+                "virt",
+                "-m",
+                "32M",
+                "-smp",
+                "1",
+                "-kernel",
+                str(elf_path),
+                "-serial",
+                "stdio",
+                "-monitor",
+                "none",
+                "-display",
+                "none",
+                "-device",
+                "ramfb",
+                "-fw_cfg",
+                f"name=opt/recorz-file-in,file={file_in_payload}",
+            ],
+            cwd=ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        try:
+            try:
+                output, _ = process.communicate(timeout=SNAPSHOT_SERIAL_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                output, _ = process.communicate(timeout=5.0)
+        finally:
+            if process.stdout is not None:
+                process.stdout.close()
+
+        snapshot = self.extract_snapshot_bytes(output)
+        if snapshot is None:
+            self.fail(f"prebuilt RV32 file-in run did not emit a snapshot\nstdout:\n{output}")
+        snapshot_output.parent.mkdir(parents=True, exist_ok=True)
+        snapshot_output.write_bytes(snapshot)
+        return output
 
     def render_demo(
         self,
@@ -1683,6 +1779,116 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             self.assertGreater(_region_histogram(data, width, 24, 24, 980, 120)[TEXT_FOREGROUND], 300)
             self.assertGreater(_region_histogram(data, width, 24, 120, 340, 300)[TEXT_FOREGROUND], 100)
             self.assertGreater(_region_histogram(data, width, 336, 120, 980, 300)[TEXT_FOREGROUND], 100)
+
+    def test_snapshot_can_reopen_workspace_process_browser_state_without_demo_specific_program(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-process-browser-snapshot-", dir="/tmp") as temp_dir:
+            temp_path = Path(temp_dir)
+            save_build_dir = temp_path / "save-build"
+            snapshot_output = temp_path / "process-browser-live-image.bin"
+            save_example_path = _write_development_home_tool_snapshot_example(
+                temp_path,
+                "process_browser_snapshot_demo.rz",
+                selection_steps=5,
+                open_count=1,
+            )
+            reload_example_path = _write_workspace_reopen_example(
+                temp_path,
+                "process_browser_reload_demo.rz",
+            )
+
+            save_log = self.save_snapshot(
+                build_dir=save_build_dir,
+                example_path=save_example_path,
+                snapshot_output=snapshot_output,
+            )
+            self.assertIn("recorz-snapshot-begin", save_log)
+            self.assertTrue(snapshot_output.exists())
+
+            snapshot_summary = self.inspect_snapshot_summary(snapshot_path=snapshot_output)
+            workspace_summary = snapshot_summary.get("workspace")
+            workspace_session = snapshot_summary.get("workspace_session")
+            self.assertIsInstance(workspace_summary, dict)
+            self.assertIsInstance(workspace_session, dict)
+            assert isinstance(workspace_summary, dict)
+            assert isinstance(workspace_session, dict)
+            self.assertEqual(workspace_summary["current_view_kind"], 21)
+            self.assertEqual(workspace_summary["current_target_name"], "PROCESS BROWSER")
+            self.assertEqual(workspace_session["selected"], 0)
+            self.assertEqual(workspace_session["list_top"], 0)
+
+            reload_log, width, height, data = self.render_snapshot_frame(
+                build_dir=temp_path / "reload-build",
+                example_path=reload_example_path,
+                snapshot_payload=snapshot_output,
+                ready_marker="PROCESS BROWSER",
+            )
+
+            self.assertEqual((width, height), (1024, 768))
+            self.assertIn("recorz qemu-riscv32 mvp: loaded snapshot", reload_log)
+            self.assertIn("PROCESS BROWSER", reload_log)
+            self.assertIn("Active Process", reload_log)
+            self.assertIn("OBJECT: BootActiveProcess", reload_log)
+            self.assertIn("CLASS: Process", reload_log)
+            self.assertNotIn("panic:", reload_log)
+            self.assertGreater(
+                _region_histogram(data, width, 24, 92, 980, 360)[TEXT_FOREGROUND],
+                1000,
+            )
+
+    def test_snapshot_can_reopen_workspace_debugger_state_without_demo_specific_program(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-debugger-snapshot-", dir="/tmp") as temp_dir:
+            temp_path = Path(temp_dir)
+            save_build_dir = temp_path / "save-build"
+            snapshot_output = temp_path / "debugger-live-image.bin"
+            save_example_path = _write_development_home_tool_snapshot_example(
+                temp_path,
+                "debugger_snapshot_demo.rz",
+                selection_steps=5,
+                open_count=2,
+            )
+            reload_example_path = _write_workspace_reopen_example(
+                temp_path,
+                "debugger_reload_demo.rz",
+            )
+
+            save_log = self.save_snapshot(
+                build_dir=save_build_dir,
+                example_path=save_example_path,
+                snapshot_output=snapshot_output,
+            )
+            self.assertIn("recorz-snapshot-begin", save_log)
+            self.assertTrue(snapshot_output.exists())
+
+            snapshot_summary = self.inspect_snapshot_summary(snapshot_path=snapshot_output)
+            workspace_summary = snapshot_summary.get("workspace")
+            workspace_session = snapshot_summary.get("workspace_session")
+            self.assertIsInstance(workspace_summary, dict)
+            self.assertIsInstance(workspace_session, dict)
+            assert isinstance(workspace_summary, dict)
+            assert isinstance(workspace_session, dict)
+            self.assertEqual(workspace_summary["current_view_kind"], 21)
+            self.assertEqual(workspace_summary["current_target_name"], "DEBUGGER")
+            self.assertEqual(workspace_session["selected"], 0)
+            self.assertEqual(workspace_session["list_top"], 0)
+
+            reload_log, width, height, data = self.render_snapshot_frame(
+                build_dir=temp_path / "reload-build",
+                example_path=reload_example_path,
+                snapshot_payload=snapshot_output,
+                ready_marker="BootActiveProcess",
+            )
+
+            self.assertEqual((width, height), (1024, 768))
+            self.assertIn("recorz qemu-riscv32 mvp: loaded snapshot", reload_log)
+            self.assertIn("BootActiveProcess", reload_log)
+            self.assertIn("frame: 1", reload_log)
+            self.assertIn("receiver", reload_log)
+            self.assertIn("detail", reload_log)
+            self.assertNotIn("panic:", reload_log)
+            self.assertGreater(
+                _region_histogram(data, width, 24, 120, 980, 700)[TEXT_FOREGROUND],
+                500,
+            )
 
     def test_snapshot_resume_can_return_from_a_source_editor_to_the_same_plain_workspace(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-return-resume-") as temp_dir:

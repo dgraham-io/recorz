@@ -20,7 +20,7 @@
 #define METHOD_SOURCE_NAME_LIMIT 96U
 #define CLASS_COMMENT_LIMIT 128U
 #define PACKAGE_COMMENT_LIMIT CLASS_COMMENT_LIMIT
-#define METHOD_SOURCE_CHUNK_LIMIT 2048U
+#define METHOD_SOURCE_CHUNK_LIMIT 3072U
 #define PACKAGE_SOURCE_BUFFER_LIMIT 98304U
 #define FILE_OUT_SOURCE_BUFFER_LIMIT 131072U
 #define FILE_IN_SOURCE_BUFFER_LIMIT 131072U
@@ -205,8 +205,8 @@
 #define CHARACTER_SCANNER_STOP_CONTROL 4U
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
-#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_EDITOR_MODEL
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_STEP_OVER
+#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_DEBUGGER_MODEL
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_IS_READ_ONLY_DETAIL_TARGET
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -539,6 +539,17 @@ static char file_in_source_io_buffer[FILE_IN_SOURCE_BUFFER_LIMIT + 1U];
 static char regenerated_source_io_buffer[REGENERATED_SOURCE_BUFFER_LIMIT];
 static char runtime_string_pool[RUNTIME_STRING_POOL_LIMIT];
 static uint32_t runtime_string_pool_offset = 0U;
+static const char recorz_mvp_image_profile_name[] = {
+    RECORZ_MVP_IMAGE_PROFILE_0,
+    RECORZ_MVP_IMAGE_PROFILE_1,
+    RECORZ_MVP_IMAGE_PROFILE_2,
+    RECORZ_MVP_IMAGE_PROFILE_3,
+    RECORZ_MVP_IMAGE_PROFILE_4,
+    RECORZ_MVP_IMAGE_PROFILE_5,
+    RECORZ_MVP_IMAGE_PROFILE_6,
+    RECORZ_MVP_IMAGE_PROFILE_7,
+    '\0'
+};
 static uint8_t gc_mark_bits[(HEAP_LIMIT + 7U) / 8U];
 static uint16_t gc_temp_roots[GC_TEMP_ROOT_LIMIT];
 static uint8_t gc_temp_root_count = 0U;
@@ -1216,6 +1227,10 @@ static const char *selector_name(uint16_t selector) {
             return "fileOutClassNamed:";
         case RECORZ_MVP_SELECTOR_MEMORY_REPORT:
             return "memoryReport";
+        case RECORZ_MVP_SELECTOR_RUNTIME_METADATA:
+            return "runtimeMetadata";
+        case RECORZ_MVP_SELECTOR_IS_READ_ONLY_DETAIL_TARGET:
+            return "isReadOnlyDetailTarget";
         case RECORZ_MVP_SELECTOR_BROWSE_PROTOCOLS_FOR_CLASS_NAMED:
             return "browseProtocolsForClassNamed:";
         case RECORZ_MVP_SELECTOR_BROWSE_PROTOCOL_OF_CLASS_NAMED:
@@ -17031,6 +17046,35 @@ static const char *kernel_memory_report_text(void) {
     return runtime_string_allocate_copy(buffer);
 }
 
+static const char *workspace_runtime_metadata_text(void) {
+    char buffer[MEMORY_REPORT_BUFFER_SIZE];
+    uint32_t offset = 0U;
+    uint32_t seed_class_count =
+        (uint32_t)(sizeof(recorz_mvp_generated_seed_class_sources) /
+                   sizeof(recorz_mvp_generated_seed_class_sources[0])) -
+        1U;
+
+    buffer[0] = '\0';
+    append_memory_report_text(buffer, &offset, "RUNTIME METADATA\n");
+    append_memory_report_text(buffer, &offset, "RUN ");
+    append_memory_report_text(buffer, &offset, RECORZ_MVP_PROFILE_NAME);
+    append_memory_report_text(buffer, &offset, "\n");
+    append_memory_report_text(buffer, &offset, "IMG ");
+    append_memory_report_text(buffer, &offset, recorz_mvp_image_profile_name);
+    append_memory_report_text(buffer, &offset, "\n");
+    append_memory_report_stat(buffer, &offset, "KIND", MAX_OBJECT_KIND);
+    append_memory_report_stat(buffer, &offset, "SEED", seed_class_count);
+    append_memory_report_stat(buffer, &offset, "SELS", MAX_SELECTOR_ID);
+    append_memory_report_stat(buffer, &offset, "METH", RECORZ_MVP_METHOD_ENTRY_COUNT - 1U);
+    append_memory_report_stat(buffer, &offset, "PRIM", RECORZ_MVP_PRIMITIVE_COUNT - 1U);
+    append_memory_report_stat(buffer, &offset, "PKGS", package_count);
+    append_memory_report_stat(buffer, &offset, "DCLS", dynamic_class_count);
+    append_memory_report_stat(buffer, &offset, "MSRC", live_method_source_count);
+    append_memory_report_stat(buffer, &offset, "PROC", current_scheduled_process_count());
+    append_memory_report_stat(buffer, &offset, "ACTS", current_scheduled_activation_count());
+    return runtime_string_allocate_copy(buffer);
+}
+
 static void snapshot_encode_value(
     uint8_t *slot,
     struct recorz_mvp_value value,
@@ -21598,9 +21642,14 @@ static const char *file_out_class_source_text(
     uint32_t offset = 0U;
     uint8_t wrote_any_chunk = 0U;
 
+    seed_source = seed_class_source_record_for_name(class_name);
     class_object = lookup_class_by_name(class_name);
     if (class_object == 0) {
-        machine_panic("KernelInstaller fileOutClassNamed: could not resolve class");
+        if (seed_source == 0 ||
+            (seed_source->builder_source == 0 && seed_source->canonical_source == 0)) {
+            machine_panic("KernelInstaller fileOutClassNamed: could not resolve class");
+        }
+        return seed_source->builder_source != 0 ? seed_source->builder_source : seed_source->canonical_source;
     }
     class_handle = heap_handle_for_object(class_object);
     dynamic_definition = dynamic_class_definition_for_handle(class_handle);
@@ -22831,6 +22880,19 @@ static void execute_entry_workspace_contents(
     (void)arguments;
     (void)text;
     push(workspace_current_source_value(object));
+}
+
+static void execute_entry_workspace_runtime_metadata(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    push(string_value(workspace_runtime_metadata_text()));
 }
 
 static void execute_entry_workspace_set_contents(

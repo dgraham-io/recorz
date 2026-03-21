@@ -19,6 +19,9 @@ DEV_FILE_IN_UPDATE_EXAMPLE = ROOT / "examples" / "qemu_riscv_image_first_transcr
 IMAGE_BUILDER = ROOT / "tools" / "build_qemu_riscv_mvp_image.py"
 RUNTIME_BINDINGS_GENERATOR = ROOT / "tools" / "generate_qemu_riscv_mvp_runtime_bindings_header.py"
 IMAGE_INSPECTOR = ROOT / "tools" / "inspect_qemu_riscv_mvp_image.py"
+REGENERATED_BOOT_SOURCE_EXTRACTOR = ROOT / "tools" / "extract_qemu_riscv_regenerated_boot_source.py"
+REGENERATED_KERNEL_SOURCE_EXTRACTOR = ROOT / "tools" / "extract_qemu_riscv_regenerated_kernel_source.py"
+PREBUILT_DEVELOPMENT_HOME_ELF_PATH = ROOT / "misc" / "qemu-riscv32-dev-mvp" / "recorz-qemu-riscv32-mvp.elf"
 
 
 @unittest.skipUnless(
@@ -55,6 +58,91 @@ class QemuRiscv32RegenerationIntegrationTests(unittest.TestCase):
         qemu_log = (build_dir / "qemu.log").read_text(encoding="utf-8")
         return (
             qemu_log,
+            regenerated_source_path,
+            regenerated_source_path.read_text(encoding="utf-8"),
+            regenerated_kernel_source_path,
+            regenerated_kernel_source_path.read_text(encoding="utf-8"),
+        )
+
+    def regenerate_boot_source_from_prebuilt_elf(
+        self,
+        *,
+        build_dir: Path,
+        file_in_payload: Path,
+    ) -> tuple[str, Path, str, Path, str]:
+        regenerated_source_path = build_dir / "regenerated_boot_source.rz"
+        regenerated_kernel_source_path = build_dir / "regenerated_kernel_source.rz"
+        qemu_log_path = build_dir / "qemu.log"
+
+        if not PREBUILT_DEVELOPMENT_HOME_ELF_PATH.exists():
+            self.skipTest("prebuilt RV32 development-home elf is not available")
+
+        build_dir.mkdir(parents=True, exist_ok=True)
+        process = subprocess.Popen(
+            [
+                "qemu-system-riscv32",
+                "-machine",
+                "virt",
+                "-m",
+                "32M",
+                "-smp",
+                "1",
+                "-kernel",
+                str(PREBUILT_DEVELOPMENT_HOME_ELF_PATH),
+                "-serial",
+                "stdio",
+                "-monitor",
+                "none",
+                "-display",
+                "none",
+                "-device",
+                "ramfb",
+                "-fw_cfg",
+                f"name=opt/recorz-file-in,file={file_in_payload}",
+            ],
+            cwd=ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        try:
+            try:
+                output, _ = process.communicate(timeout=45.0)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                output, _ = process.communicate(timeout=5.0)
+        finally:
+            if process.stdout is not None:
+                process.stdout.close()
+
+        qemu_log_path.write_text(output, encoding="utf-8")
+        for extractor_path, output_path, description in (
+            (REGENERATED_BOOT_SOURCE_EXTRACTOR, regenerated_source_path, "boot source"),
+            (REGENERATED_KERNEL_SOURCE_EXTRACTOR, regenerated_kernel_source_path, "kernel source"),
+        ):
+            result = subprocess.run(
+                [
+                    "python3",
+                    str(extractor_path),
+                    str(qemu_log_path),
+                    str(output_path),
+                    "--timeout",
+                    "1.0",
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    f"regenerated {description} extraction from prebuilt RV32 elf failed\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}\n"
+                    f"log:\n{output}"
+                )
+
+        return (
+            output,
             regenerated_source_path,
             regenerated_source_path.read_text(encoding="utf-8"),
             regenerated_kernel_source_path,
@@ -229,6 +317,99 @@ class QemuRiscv32RegenerationIntegrationTests(unittest.TestCase):
             self.assertIn("profile: RV64MVP1", inspect_output)
             self.assertIn("selector_objects=103", inspect_output)
             self.assertIn("method_entries=89", inspect_output)
+
+    def test_source_authority_and_runtime_bindings_keep_debugger_inspector_and_process_browser_metadata_aligned(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory(prefix="regen-", dir=ROOT / "misc") as temp_dir:
+            temp_root = Path(temp_dir)
+            (
+                regenerated_log,
+                _regenerated_source_path,
+                regenerated_source,
+                _regenerated_kernel_source_path,
+                regenerated_kernel_source,
+            ) = self.regenerate_boot_source(
+                build_dir=temp_root / "tool-source",
+                example_path=PACKAGE_HOME_REGENERATION_EXAMPLE,
+            )
+
+            build_dir = temp_root / "runtime-bindings"
+            self.run_make(
+                f"BUILD_DIR={build_dir}",
+                f"EXAMPLE={PACKAGE_HOME_REGENERATION_EXAMPLE}",
+                "clean",
+                "all",
+            )
+            header_path = build_dir / "recorz_mvp_generated_runtime_bindings.h"
+            header_text = header_path.read_text(encoding="utf-8")
+            widget_bootstrap = (ROOT / "kernel" / "textui" / "WidgetBootstrap.rz").read_text(encoding="utf-8")
+            workspace_tool_source = (ROOT / "kernel" / "mvp" / "WorkspaceTool.rz").read_text(encoding="utf-8")
+            workspace_source = (ROOT / "kernel" / "mvp" / "Workspace.rz").read_text(encoding="utf-8")
+
+            self.assertIn("recorz-regenerated-kernel-source-begin", regenerated_log)
+            self.assertIn("recorz-regenerated-boot-source-begin", regenerated_log)
+            self.assertIn("RecorzKernelPackage: ''TextUI''", regenerated_source)
+            self.assertIn("RecorzKernelClass: #WorkspaceReturnState", regenerated_source)
+            self.assertIn("RecorzKernelClass: #WorkspaceBrowserModel", regenerated_source)
+            self.assertIn("Object Inspector", regenerated_source)
+            self.assertIn("Process Browser", regenerated_source)
+            self.assertIn(
+                "rememberDebuggerProcess: processName frameIndex: frameIndex frameCount: frameCount",
+                regenerated_source,
+            )
+            self.assertIn("RecorzKernelClass: #WorkspaceReturnState", regenerated_kernel_source)
+            self.assertIn("RecorzKernelClass: #WorkspaceBrowserModel", regenerated_kernel_source)
+            self.assertIn("RecorzKernelClass: #WorkspaceDebuggerModel", regenerated_kernel_source)
+            self.assertIn("RecorzKernelSelector: #browseRegeneratedBootSource", regenerated_kernel_source)
+            self.assertIn("RecorzKernelSelector: #browseRegeneratedKernelSource", regenerated_kernel_source)
+            self.assertIn("RecorzKernelSelector: #receiverDetail", regenerated_kernel_source)
+            self.assertIn("RecorzKernelSelector: #senderDetail", regenerated_kernel_source)
+            self.assertIn("RecorzKernelSelector: #temporariesDetail", regenerated_kernel_source)
+            self.assertIn("RecorzKernelSelector: #debuggerProceed", regenerated_kernel_source)
+            self.assertIn("RecorzKernelSelector: #debuggerStepInto", regenerated_kernel_source)
+            self.assertIn("RecorzKernelSelector: #debuggerStepOver", regenerated_kernel_source)
+
+            self.assertIn("openSelectedObjectInspector", widget_bootstrap)
+            self.assertIn("openSelectedContextDebugger", widget_bootstrap)
+            self.assertIn("debuggerProceed", widget_bootstrap)
+            self.assertIn("debuggerStepInto", widget_bootstrap)
+            self.assertIn("debuggerStepOver", widget_bootstrap)
+            self.assertIn("Object Inspector", widget_bootstrap)
+            self.assertIn("Process Browser", widget_bootstrap)
+            self.assertIn("rememberDebuggerProcess: processName frameIndex: frameIndex frameCount: frameCount", widget_bootstrap)
+            self.assertIn("browseRegeneratedKernelSource", workspace_tool_source)
+            self.assertIn("browseRegeneratedBootSource", workspace_tool_source)
+            self.assertIn("browseRegeneratedFileInSource", workspace_tool_source)
+            self.assertIn("browseRegeneratedKernelSource", workspace_source)
+            self.assertIn("browseRegeneratedBootSource", workspace_source)
+
+            for symbol in (
+                "RECORZ_MVP_OBJECT_WORKSPACE_RETURN_STATE",
+                "RECORZ_MVP_OBJECT_WORKSPACE_BROWSER_MODEL",
+                "RECORZ_MVP_OBJECT_WORKSPACE_DEBUGGER_MODEL",
+                "RECORZ_MVP_SELECTOR_OPEN_SELECTED_OBJECT_INSPECTOR",
+                "RECORZ_MVP_SELECTOR_OPEN_SELECTED_CONTEXT_DEBUGGER",
+                "RECORZ_MVP_SELECTOR_RETURN_FROM_DEBUGGER_BROWSER",
+                "RECORZ_MVP_SELECTOR_RECEIVER_DETAIL",
+                "RECORZ_MVP_SELECTOR_SENDER_DETAIL",
+                "RECORZ_MVP_SELECTOR_TEMPORARIES_DETAIL",
+                "RECORZ_MVP_SELECTOR_CONTEXT_FRAME_AT_NAMED",
+                "RECORZ_MVP_SELECTOR_CURRENT_DEBUGGER_STATE",
+                "RECORZ_MVP_SELECTOR_SET_DEBUGGER_DETAIL_MODE",
+                "RECORZ_MVP_SELECTOR_REFRESH_DEBUGGER_STATE",
+                "RECORZ_MVP_SELECTOR_DEBUGGER_PROCEED",
+                "RECORZ_MVP_SELECTOR_DEBUGGER_STEP_INTO",
+                "RECORZ_MVP_SELECTOR_DEBUGGER_STEP_OVER",
+                "RECORZ_MVP_SELECTOR_STEP_INTO",
+                "RECORZ_MVP_SELECTOR_STEP_OVER",
+                "RECORZ_MVP_PRIMITIVE_CONTEXT_RECEIVER_DETAIL",
+                "RECORZ_MVP_PRIMITIVE_CONTEXT_SENDER_DETAIL",
+                "RECORZ_MVP_PRIMITIVE_CONTEXT_TEMPORARIES_DETAIL",
+                "RECORZ_MVP_PRIMITIVE_PROCESS_STEP_INTO",
+                "RECORZ_MVP_PRIMITIVE_PROCESS_STEP_OVER",
+            ):
+                self.assertIn(symbol, header_text)
 
     def test_regenerated_boot_source_includes_textui_package_and_bootstrap_do_its(self) -> None:
         with tempfile.TemporaryDirectory(prefix="regen-", dir=ROOT / "misc") as temp_dir:

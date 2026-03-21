@@ -6,6 +6,8 @@ Today, Recorz already boots on QEMU RISC-V with framebuffer output, live source 
 
 The next staged work is tracked in [docs/post_phase_1_roadmap.md](/Users/david/repos/recorz/docs/post_phase_1_roadmap.md), with the detailed Bluebook-style runtime/tool parity plan in [docs/bluebook_vm_parity_roadmap.md](/Users/david/repos/recorz/docs/bluebook_vm_parity_roadmap.md).
 
+The host Python builders remain bootstrap machinery. Files like [build_qemu_riscv_mvp_image.py](/Users/david/repos/recorz/tools/build_qemu_riscv_mvp_image.py) and [generate_qemu_riscv_mvp_runtime_bindings_header.py](/Users/david/repos/recorz/tools/generate_qemu_riscv_mvp_runtime_bindings_header.py) should stay mechanical and derivational, with workspace, browser, debugger, and process-tool policy owned by the image-side source.
+
 ![In-image Browser/Workspace](assets/images/browser_sreenshot.png)
 
 *The screenshot shows the live package browser and workspace editor running on the RV32 target.*

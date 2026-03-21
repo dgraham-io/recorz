@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    args.output.write_text(mvp.render_generated_runtime_bindings_header(), encoding="utf-8")
+    mvp.write_generated_runtime_bindings_header(args.output)
 
 
 if __name__ == "__main__":

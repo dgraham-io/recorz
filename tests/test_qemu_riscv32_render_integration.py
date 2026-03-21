@@ -745,6 +745,40 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertGreater(_region_histogram(data, width, 40, 136, 960, 592)[(31, 41, 51)], 5000)
         self.assertLess(_region_histogram(data, width, 332, 160, 340, 560)[(31, 41, 51)], 200)
 
+    def test_development_home_runtime_metadata_browser_renders_and_returns_to_the_opening_menu(self) -> None:
+        menu_log, menu_width, menu_height, menu_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (),
+            initial_settle_delay=3.0,
+        )
+        metadata_log, metadata_width, metadata_height, metadata_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18"),
+        )
+        returned_log, returned_width, returned_height, returned_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18", b"\x0f"),
+        )
+
+        normalized_menu_log = menu_log.replace("\r", "")
+        normalized_metadata_log = metadata_log.replace("\r", "")
+        normalized_returned_log = returned_log.replace("\r", "")
+        self.assertEqual((menu_width, menu_height), (1024, 768))
+        self.assertEqual((metadata_width, metadata_height), (1024, 768))
+        self.assertEqual((returned_width, returned_height), (1024, 768))
+        self.assertNotIn("panic:", normalized_menu_log)
+        self.assertNotIn("panic:", normalized_metadata_log)
+        self.assertNotIn("panic:", normalized_returned_log)
+        self.assertIn("OPENING MENU", normalized_menu_log)
+        self.assertIn("RUNTIME METADATA", normalized_metadata_log)
+        self.assertIn("RUN DEV", normalized_metadata_log)
+        self.assertIn("IMG RV64MVP1", normalized_metadata_log)
+        self.assertIn("SELS", normalized_metadata_log)
+        self.assertIn("PRIM", normalized_metadata_log)
+        self.assertIn("OPENING MENU", normalized_returned_log)
+        self.assertGreater(_region_diff_pixels(menu_data, metadata_data, menu_width, 40, 136, 960, 592), 3500)
+        self.assertGreater(_region_diff_pixels(metadata_data, returned_data, metadata_width, 40, 136, 960, 592), 3500)
+
     def test_development_home_process_browser_and_debugger_render_distinct_frames(self) -> None:
         menu_log, menu_width, menu_height, menu_data = self.render_interactive_example(
             WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,

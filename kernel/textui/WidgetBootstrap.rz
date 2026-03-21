@@ -537,8 +537,7 @@ dispatchWorkspaceCommandOnForm: aByte
         plainState = nil ifFalse: [
             plainState contents = nil ifFalse: [^self restorePlainWorkspaceState]].
         ^0].
-    Workspace currentTargetName = 'OBJECT INSPECTOR DETAIL' ifTrue: [^0].
-    Workspace currentTargetName = 'DEBUGGER' ifTrue: [^0].
+    self isReadOnlyDetailTarget ifTrue: [^0].
     aByte = self acceptCommandByte ifTrue: [self acceptCurrent. ^1].
     aByte = self revertCommandByte ifTrue: [self revertCurrent. ^1].
     aByte = self runTestsCommandByte ifTrue: [self runCurrentTests. ^1].
@@ -1029,14 +1028,18 @@ KernelInstaller rememberObject: ((KernelInstaller classNamed: 'BrowserSurface') 
 RecorzKernelClass: #WorkspaceSession superclass: #Object package: 'TextUI' instanceVariableNames: 'workspace browserModel escape'
 !
 openOn: aWorkspace mode: aMode
-    | tool |
+    | browserModelClass tool |
     workspace := aWorkspace.
     escape := 0.
+    browserModelClass := KernelInstaller classNamed: 'WorkspaceBrowserModel'.
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
-    browserModel := tool namedObjectOrNil: 'BootWorkspaceBrowserModel'.
     browserModel = nil ifTrue: [
-        browserModel := (KernelInstaller classNamed: 'WorkspaceBrowserModel') new.
-        KernelInstaller rememberObject: browserModel named: 'BootWorkspaceBrowserModel'].
+        browserModel := tool namedObjectOrNil: 'BootWorkspaceBrowserModel'].
+    browserModel = nil ifTrue: [
+        browserModel := browserModelClass new].
+    browserModel class = browserModelClass ifFalse: [
+        browserModel := browserModelClass new].
+    KernelInstaller rememberObject: browserModel named: 'BootWorkspaceBrowserModel'.
     aMode = 0 ifTrue: [
         workspace setCurrentViewKind: 20.
         workspace setCurrentTargetName: nil.
@@ -1056,11 +1059,14 @@ openOn: aWorkspace mode: aMode
         ^4].
     aMode = 3 ifTrue: [
         workspace setCurrentViewKind: 21.
-        workspace setCurrentTargetName: nil.
-        browserModel setSelectedIndex: 0 listTop: 0.
-        Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: Workspace visibleTopLine.
-        Workspace collapseSelectionToCursor.
-        Workspace setVisibleOriginTop: 0 left: 0.
+        workspace currentTargetName = nil ifTrue: [
+            workspace setCurrentTargetName: nil.
+            browserModel setSelectedIndex: 0 listTop: 0.
+            Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: Workspace visibleTopLine.
+            Workspace collapseSelectionToCursor.
+            Workspace setVisibleOriginTop: 0 left: 0.
+            ^4].
+        self prepareBrowserStateForMode: 1.
         ^4].
     workspace currentViewKind = nil ifTrue: [workspace setCurrentViewKind: 18].
     self browserListViewActive ifTrue: [
@@ -1167,7 +1173,14 @@ browserListViewActive
     ^false
 !
 openingMenuOptionCount
-    ^6
+    ^7
+!
+isReadOnlyDetailTarget
+    workspace currentTargetName = 'OBJECT INSPECTOR DETAIL' ifTrue: [^true].
+    workspace currentTargetName = 'DEBUGGER' ifTrue: [^true].
+    workspace currentTargetName = 'Memory Report' ifTrue: [^true].
+    workspace currentTargetName = 'Runtime Metadata' ifTrue: [^true].
+    ^false
 !
 isObjectInspectorBrowser
     workspace currentViewKind = 21 ifFalse: [^false].
@@ -1363,7 +1376,8 @@ Class Browser
 Project Browser
 Memory Report
 Object Inspector
-Process Browser'
+Process Browser
+Runtime Metadata'
 !
 currentBrowserHeaderText
     workspace currentViewKind = 20 ifTrue: [^'OPENING MENU'].
@@ -1494,6 +1508,8 @@ currentStatusText
     workspace isModified ifTrue: [^'SOURCE EDITOR :: MODIFIED'].
     viewKind = 18 ifTrue: [
         workspace currentTargetName = 'Memory Report' ifTrue: [^'MEMORY REPORT']].
+    viewKind = 18 ifTrue: [
+        workspace currentTargetName = 'Runtime Metadata' ifTrue: [^'RUNTIME METADATA']].
     viewKind = 5 ifTrue: [^'METHOD SOURCE :: SOURCE EDITOR READY'].
     viewKind = 7 ifTrue: [^'CLASS METHOD :: SOURCE EDITOR READY'].
     viewKind = 8 ifTrue: [^'CLASS SOURCE :: SOURCE EDITOR READY'].
@@ -1517,6 +1533,8 @@ currentFeedbackText
     workspace currentTargetName = 'OBJECT INSPECTOR DETAIL' ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  O RETURN'].
     viewKind = 18 ifTrue: [
         workspace currentTargetName = 'Memory Report' ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  O RETURN']].
+    viewKind = 18 ifTrue: [
+        workspace currentTargetName = 'Runtime Metadata' ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  O RETURN']].
     viewKind = 5 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
     viewKind = 7 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
     viewKind = 8 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
@@ -1761,6 +1779,17 @@ openSelectedOpeningMenuItem
         browserModel setSelectedIndex: 0 listTop: 0.
         self prepareListSelectionForCount: self currentListCount.
         ^4].
+    self selectedIndex = 6 ifTrue: [
+        tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+        tool setBrowserReturnViewKind: 20 targetName: nil.
+        workspace setCurrentViewKind: 18.
+        workspace setCurrentTargetName: 'Runtime Metadata'.
+        workspace setContents: Workspace runtimeMetadata.
+        Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: 0.
+        Workspace collapseSelectionToCursor.
+        Workspace setVisibleOriginTop: 0 left: 0.
+        self ensureEditorCursorVisible.
+        ^1].
     ^1
 !
 openSelectedPackageSource
@@ -1874,15 +1903,7 @@ handleEditorByte: aByte tool: tool
     aByte = 22 ifTrue: [^self scrollEditorPageBy: 1].
     commandResult := tool dispatchCommandOnForm: aByte.
     commandResult = 0 ifFalse: [^commandResult].
-    workspace currentTargetName = 'OBJECT INSPECTOR DETAIL' ifTrue: [
-        aByte = 1 ifTrue: [
-            workspace moveCursorToLineStart.
-            ^workspace finishEditorInteractionForLines: self visibleEditorLines visibleColumns: self visibleEditorColumns redrawCode: 6].
-        aByte = 5 ifTrue: [
-            workspace moveCursorToLineEnd.
-            ^workspace finishEditorInteractionForLines: self visibleEditorLines visibleColumns: self visibleEditorColumns redrawCode: 6].
-        ^0].
-    workspace currentTargetName = 'DEBUGGER' ifTrue: [
+    self isReadOnlyDetailTarget ifTrue: [
         aByte = 1 ifTrue: [
             workspace moveCursorToLineStart.
             ^workspace finishEditorInteractionForLines: self visibleEditorLines visibleColumns: self visibleEditorColumns redrawCode: 6].

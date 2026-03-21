@@ -123,6 +123,9 @@ fileOutClassNamed: className
 fileOutPackageNamed: packageName
     <primitive: #workspaceFileOutPackageNamed>
 !
+runtimeMetadata
+    <primitive: #workspaceRuntimeMetadata>
+!
 packageCount
     <primitive: #workspacePackageCount>
 !
