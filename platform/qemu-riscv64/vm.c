@@ -374,8 +374,8 @@ static struct recorz_mvp_value workspace_current_source_value(
 );
 static struct recorz_mvp_value object_value(uint16_t handle);
 static uint8_t compiled_method_instruction_opcode(uint32_t instruction);
-static uint8_t compiled_method_instruction_operand_a(uint32_t instruction);
-static uint16_t compiled_method_instruction_operand_b(uint32_t instruction);
+static uint16_t compiled_method_instruction_operand_a(uint8_t opcode, uint32_t instruction);
+static uint16_t compiled_method_instruction_operand_b(uint8_t opcode, uint32_t instruction);
 static uint8_t workspace_parse_method_target_name(
     const char *target_name,
     char class_name[],
@@ -3175,6 +3175,18 @@ static void append_memory_report_line(
     append_memory_report_text(buffer, offset, "\n");
 }
 
+static void append_memory_report_stat(
+    char buffer[],
+    uint32_t *offset,
+    const char *label,
+    uint32_t value
+) {
+    append_memory_report_text(buffer, offset, label);
+    append_memory_report_text(buffer, offset, " ");
+    append_memory_report_u32(buffer, offset, value);
+    append_memory_report_text(buffer, offset, "\n");
+}
+
 static uint16_t heap_allocate(uint8_t kind) {
     uint16_t handle;
     uint32_t field_index;
@@ -3423,7 +3435,7 @@ static uint16_t compiled_method_lexical_count(const struct recorz_mvp_heap_objec
             opcode != COMPILED_METHOD_OP_STORE_LEXICAL) {
             continue;
         }
-        lexical_index = compiled_method_instruction_operand_b(instruction);
+        lexical_index = compiled_method_instruction_operand_b(opcode, instruction);
         if ((uint16_t)(lexical_index + 1U) > lexical_count) {
             lexical_count = (uint16_t)(lexical_index + 1U);
         }
@@ -3435,12 +3447,18 @@ static uint8_t compiled_method_instruction_opcode(uint32_t instruction) {
     return (uint8_t)(instruction & 0xFFU);
 }
 
-static uint8_t compiled_method_instruction_operand_a(uint32_t instruction) {
-    return (uint8_t)((instruction >> 8) & 0xFFU);
+static uint16_t compiled_method_instruction_operand_a(uint8_t opcode, uint32_t instruction) {
+    if (opcode == COMPILED_METHOD_OP_SEND) {
+        return (uint16_t)((instruction >> 8U) & 0xFFFFU);
+    }
+    return (uint16_t)((instruction >> 8U) & 0xFFU);
 }
 
-static uint16_t compiled_method_instruction_operand_b(uint32_t instruction) {
-    return (uint16_t)((instruction >> 16) & 0xFFFFU);
+static uint16_t compiled_method_instruction_operand_b(uint8_t opcode, uint32_t instruction) {
+    if (opcode == COMPILED_METHOD_OP_SEND) {
+        return (uint16_t)((instruction >> 24U) & 0xFFU);
+    }
+    return (uint16_t)((instruction >> 16U) & 0xFFFFU);
 }
 
 static uint32_t class_method_count(const struct recorz_mvp_heap_object *class_object) {
@@ -5919,6 +5937,336 @@ static const char *workspace_context_stack_frame_detail_text_for_named_object(
         sender_text
     );
     return workspace_context_stack_buffer;
+}
+
+static uint16_t workspace_context_frame_handle_for_index_named(
+    const char *object_name,
+    uint32_t frame_index
+) {
+    const struct recorz_mvp_heap_object *context_object;
+    uint32_t offset = 0U;
+
+    workspace_surface_reset_buffer(
+        workspace_context_stack_buffer,
+        sizeof(workspace_context_stack_buffer)
+    );
+    context_object = workspace_context_stack_context_for_named_object(
+        object_name,
+        workspace_context_stack_buffer,
+        sizeof(workspace_context_stack_buffer),
+        &offset
+    );
+    if (context_object == 0) {
+        return 0U;
+    }
+    context_object = workspace_context_stack_frame_object_for_index(
+        context_object,
+        frame_index,
+        workspace_context_stack_buffer,
+        sizeof(workspace_context_stack_buffer),
+        &offset
+    );
+    if (context_object == 0) {
+        return 0U;
+    }
+    return heap_handle_for_object(context_object);
+}
+
+static const char *workspace_context_value_detail_text_for_value(
+    const char *role_name,
+    struct recorz_mvp_value value
+) {
+    char rendered_value[METHOD_SOURCE_LINE_LIMIT];
+    uint32_t offset = 0U;
+
+    workspace_surface_reset_buffer(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer)
+    );
+    if (role_name != 0 && role_name[0] != '\0') {
+        workspace_surface_append_label_text(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "ROLE",
+            role_name
+        );
+    }
+    if (value.kind == RECORZ_MVP_VALUE_OBJECT) {
+        const struct recorz_mvp_heap_object *value_object = heap_object_for_value(value);
+        const char *object_name = workspace_named_object_name_for_handle((uint16_t)value.integer);
+
+        if (value_object->kind == RECORZ_MVP_OBJECT_CONTEXT) {
+            workspace_surface_append_label_text(
+                workspace_surface_source_buffer,
+                sizeof(workspace_surface_source_buffer),
+                &offset,
+                "OBJECT",
+                object_name == 0 ? "Context" : object_name
+            );
+            workspace_surface_append_label_text(
+                workspace_surface_source_buffer,
+                sizeof(workspace_surface_source_buffer),
+                &offset,
+                "receiver",
+                workspace_text_for_value(
+                    heap_get_field(value_object, CONTEXT_FIELD_RECEIVER),
+                    rendered_value,
+                    sizeof(rendered_value)
+                )
+            );
+            workspace_surface_append_label_text(
+                workspace_surface_source_buffer,
+                sizeof(workspace_surface_source_buffer),
+                &offset,
+                "detail",
+                workspace_text_for_value(
+                    heap_get_field(value_object, CONTEXT_FIELD_DETAIL),
+                    rendered_value,
+                    sizeof(rendered_value)
+                )
+            );
+            workspace_surface_append_label_text(
+                workspace_surface_source_buffer,
+                sizeof(workspace_surface_source_buffer),
+                &offset,
+                "sender",
+                workspace_text_for_value(
+                    heap_get_field(value_object, CONTEXT_FIELD_SENDER),
+                    rendered_value,
+                    sizeof(rendered_value)
+                )
+            );
+            workspace_surface_append_label_text(
+                workspace_surface_source_buffer,
+                sizeof(workspace_surface_source_buffer),
+                &offset,
+                "alive",
+                workspace_text_for_value(
+                    heap_get_field(value_object, CONTEXT_FIELD_ALIVE),
+                    rendered_value,
+                    sizeof(rendered_value)
+                )
+            );
+            return workspace_surface_source_buffer;
+        }
+        return workspace_object_detail_text_for_object(
+            object_name == 0 ? class_name_for_object(class_object_for_heap_object(value_object)) : object_name,
+            value_object,
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer)
+        );
+    }
+    if (value.kind == RECORZ_MVP_VALUE_NIL) {
+        workspace_surface_append_label_text(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "KIND",
+            "Nil"
+        );
+        workspace_surface_append_label_text(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "VALUE",
+            "nil"
+        );
+        return workspace_surface_source_buffer;
+    }
+    if (value.kind == RECORZ_MVP_VALUE_SMALL_INTEGER) {
+        workspace_surface_append_label_text(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "KIND",
+            "SmallInteger"
+        );
+        workspace_surface_append_label_text(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "VALUE",
+            workspace_text_for_value(value, rendered_value, sizeof(rendered_value))
+        );
+        return workspace_surface_source_buffer;
+    }
+    if (value.kind == RECORZ_MVP_VALUE_STRING) {
+        workspace_surface_append_label_text(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "KIND",
+            "String"
+        );
+        workspace_surface_append_label_text(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "VALUE",
+            value.string == 0 ? "" : value.string
+        );
+        workspace_surface_append_label_integer(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "SIZE",
+            text_length(value.string == 0 ? "" : value.string)
+        );
+        return workspace_surface_source_buffer;
+    }
+    workspace_surface_append_label_text(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer),
+        &offset,
+        "KIND",
+        "UNKNOWN"
+    );
+    return workspace_surface_source_buffer;
+}
+
+static const char *workspace_context_receiver_detail_text_for_handle(uint16_t context_handle) {
+    const struct recorz_mvp_heap_object *context_object;
+    uint32_t offset = 0U;
+
+    workspace_surface_reset_buffer(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer)
+    );
+    if (context_handle == 0U || context_handle > heap_size) {
+        workspace_surface_append_line(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "UNRESOLVED CONTEXT"
+        );
+        return workspace_surface_source_buffer;
+    }
+    context_object = heap_object(context_handle);
+    if (context_object->kind != RECORZ_MVP_OBJECT_CONTEXT) {
+        workspace_surface_append_line(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "UNRESOLVED CONTEXT"
+        );
+        return workspace_surface_source_buffer;
+    }
+    return workspace_context_value_detail_text_for_value(
+        "receiver",
+        heap_get_field(context_object, CONTEXT_FIELD_RECEIVER)
+    );
+}
+
+static const char *workspace_context_sender_detail_text_for_handle(uint16_t context_handle) {
+    const struct recorz_mvp_heap_object *context_object;
+    uint32_t offset = 0U;
+
+    workspace_surface_reset_buffer(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer)
+    );
+    if (context_handle == 0U || context_handle > heap_size) {
+        workspace_surface_append_line(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "UNRESOLVED CONTEXT"
+        );
+        return workspace_surface_source_buffer;
+    }
+    context_object = heap_object(context_handle);
+    if (context_object->kind != RECORZ_MVP_OBJECT_CONTEXT) {
+        workspace_surface_append_line(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "UNRESOLVED CONTEXT"
+        );
+        return workspace_surface_source_buffer;
+    }
+    return workspace_context_value_detail_text_for_value(
+        "sender",
+        heap_get_field(context_object, CONTEXT_FIELD_SENDER)
+    );
+}
+
+static const char *workspace_context_temporaries_detail_text_for_handle(uint16_t context_handle) {
+    const struct recorz_mvp_heap_object *context_object;
+    uint32_t offset = 0U;
+
+    workspace_surface_reset_buffer(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer)
+    );
+    if (context_handle == 0U || context_handle > heap_size) {
+        workspace_surface_append_line(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "UNRESOLVED CONTEXT"
+        );
+        return workspace_surface_source_buffer;
+    }
+    context_object = heap_object(context_handle);
+    if (context_object->kind != RECORZ_MVP_OBJECT_CONTEXT) {
+        workspace_surface_append_line(
+            workspace_surface_source_buffer,
+            sizeof(workspace_surface_source_buffer),
+            &offset,
+            "UNRESOLVED CONTEXT"
+        );
+        return workspace_surface_source_buffer;
+    }
+    workspace_surface_append_line(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer),
+        &offset,
+        "ARGUMENTS"
+    );
+    workspace_surface_append_line(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer),
+        &offset,
+        "UNAVAILABLE ON RV64"
+    );
+    workspace_surface_append_line(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer),
+        &offset,
+        ""
+    );
+    workspace_surface_append_line(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer),
+        &offset,
+        "LEXICALS"
+    );
+    workspace_surface_append_line(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer),
+        &offset,
+        "UNAVAILABLE ON RV64"
+    );
+    workspace_surface_append_line(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer),
+        &offset,
+        ""
+    );
+    workspace_surface_append_line(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer),
+        &offset,
+        "STACK"
+    );
+    workspace_surface_append_line(
+        workspace_surface_source_buffer,
+        sizeof(workspace_surface_source_buffer),
+        &offset,
+        "UNAVAILABLE ON RV64"
+    );
+    return workspace_surface_source_buffer;
 }
 
 static const char *workspace_context_frame_summaries_visible_from_count_named_text(
@@ -9810,7 +10158,7 @@ static void validate_compiled_method(
     while (pending_count != 0U) {
         uint32_t instruction;
         uint8_t opcode;
-        uint8_t operand_a;
+        uint16_t operand_a;
         uint16_t operand_b;
         uint32_t send_count;
         uint8_t stack_depth;
@@ -9821,8 +10169,8 @@ static void validate_compiled_method(
         stack_depth = discovered_stack_depth[instruction_index];
         instruction = compiled_method_instruction_word(compiled_method, instruction_index);
         opcode = compiled_method_instruction_opcode(instruction);
-        operand_a = compiled_method_instruction_operand_a(instruction);
-        operand_b = compiled_method_instruction_operand_b(instruction);
+        operand_a = compiled_method_instruction_operand_a(opcode, instruction);
+        operand_b = compiled_method_instruction_operand_b(opcode, instruction);
         switch (opcode) {
             case COMPILED_METHOD_OP_PUSH_GLOBAL:
                 if (operand_a < RECORZ_MVP_GLOBAL_TRANSCRIPT || operand_a > MAX_GLOBAL_ID) {
@@ -12675,8 +13023,8 @@ static struct recorz_mvp_instruction decode_instruction_word(uint32_t instructio
     struct recorz_mvp_instruction decoded;
 
     decoded.opcode = compiled_method_instruction_opcode(instruction);
-    decoded.operand_a = compiled_method_instruction_operand_a(instruction);
-    decoded.operand_b = compiled_method_instruction_operand_b(instruction);
+    decoded.operand_a = compiled_method_instruction_operand_a(decoded.opcode, instruction);
+    decoded.operand_b = compiled_method_instruction_operand_b(decoded.opcode, instruction);
     return decoded;
 }
 
@@ -17817,6 +18165,82 @@ static void execute_entry_workspace_context_frame_detail_at_named(
     push(string_value(workspace_context_stack_frame_detail_text_for_named_object(arguments[1].string, frame_index)));
 }
 
+static void execute_entry_workspace_context_frame_at_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint32_t frame_index;
+    uint16_t context_handle;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    frame_index = small_integer_u32(
+        arguments[0],
+        "Workspace contextFrameAt:named: expects a positive small integer frame index"
+    );
+    if (arguments[1].kind != RECORZ_MVP_VALUE_STRING || arguments[1].string == 0) {
+        machine_panic("Workspace contextFrameAt:named: expects an object name string");
+    }
+    if (frame_index == 0U) {
+        push(nil_value());
+        return;
+    }
+    context_handle = workspace_context_frame_handle_for_index_named(arguments[1].string, frame_index);
+    if (context_handle == 0U) {
+        push(nil_value());
+        return;
+    }
+    push(object_value(context_handle));
+}
+
+static void execute_entry_context_receiver_detail(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_CONTEXT) {
+        machine_panic("Context receiverDetail expects a Context receiver");
+    }
+    push(string_value(workspace_context_receiver_detail_text_for_handle(heap_handle_for_object(object))));
+}
+
+static void execute_entry_context_sender_detail(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_CONTEXT) {
+        machine_panic("Context senderDetail expects a Context receiver");
+    }
+    push(string_value(workspace_context_sender_detail_text_for_handle(heap_handle_for_object(object))));
+}
+
+static void execute_entry_context_temporaries_detail(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_CONTEXT) {
+        machine_panic("Context temporariesDetail expects a Context receiver");
+    }
+    push(string_value(workspace_context_temporaries_detail_text_for_handle(heap_handle_for_object(object))));
+}
+
 static void execute_entry_workspace_process_count(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -17978,6 +18402,167 @@ static void execute_entry_process_set_label_state_context(
     heap_set_field(heap_handle_for_object(object), PROCESS_FIELD_LABEL, arguments[0]);
     heap_set_field(heap_handle_for_object(object), PROCESS_FIELD_STATE, arguments[1]);
     heap_set_field(heap_handle_for_object(object), PROCESS_FIELD_CONTEXT, arguments[2]);
+    push(receiver);
+}
+
+static void execute_entry_workspace_debugger_model_set_process_name_frame_index_frame_count_detail_mode(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_WORKSPACE_DEBUGGER_MODEL) {
+        machine_panic(
+            "WorkspaceDebuggerModel setProcessName:frameIndex:frameCount:detailMode: expects a WorkspaceDebuggerModel receiver"
+        );
+    }
+    heap_set_field(
+        heap_handle_for_object(object),
+        RECORZ_MVP_WORKSPACE_DEBUGGER_MODEL_FIELD_PROCESS_NAME,
+        arguments[0]
+    );
+    heap_set_field(
+        heap_handle_for_object(object),
+        RECORZ_MVP_WORKSPACE_DEBUGGER_MODEL_FIELD_FRAME_INDEX,
+        arguments[1]
+    );
+    heap_set_field(
+        heap_handle_for_object(object),
+        RECORZ_MVP_WORKSPACE_DEBUGGER_MODEL_FIELD_FRAME_COUNT,
+        arguments[2]
+    );
+    heap_set_field(
+        heap_handle_for_object(object),
+        RECORZ_MVP_WORKSPACE_DEBUGGER_MODEL_FIELD_DETAIL_MODE,
+        arguments[3]
+    );
+    push(receiver);
+}
+
+static void execute_entry_process_suspend(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_PROCESS) {
+        machine_panic("Process suspend expects a Process receiver");
+    }
+    heap_set_field(heap_handle_for_object(object), PROCESS_FIELD_STATE, string_value("suspended"));
+    push(receiver);
+}
+
+static void execute_entry_process_resume(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_PROCESS) {
+        machine_panic("Process resume expects a Process receiver");
+    }
+    heap_set_field(heap_handle_for_object(object), PROCESS_FIELD_STATE, string_value("active"));
+    push(receiver);
+}
+
+static void execute_entry_process_step_into(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_PROCESS) {
+        machine_panic("Process stepInto expects a Process receiver");
+    }
+    heap_set_field(heap_handle_for_object(object), PROCESS_FIELD_STATE, string_value("active"));
+    push(receiver);
+}
+
+static void execute_entry_process_step_over(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_PROCESS) {
+        machine_panic("Process stepOver expects a Process receiver");
+    }
+    heap_set_field(heap_handle_for_object(object), PROCESS_FIELD_STATE, string_value("active"));
+    push(receiver);
+}
+
+static void execute_entry_process_terminate(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_PROCESS) {
+        machine_panic("Process terminate expects a Process receiver");
+    }
+    heap_set_field(heap_handle_for_object(object), PROCESS_FIELD_STATE, string_value("terminated"));
+    push(receiver);
+}
+
+static void execute_entry_workspace_spawn_process_named_source(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    const struct recorz_mvp_heap_object *process_class;
+    uint16_t process_handle;
+    uint8_t instance_kind;
+    uint8_t field_count;
+    uint8_t field_index;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace spawnProcessNamed:source: expects a process name string");
+    }
+    if (arguments[1].kind != RECORZ_MVP_VALUE_STRING || arguments[1].string == 0) {
+        machine_panic("Workspace spawnProcessNamed:source: expects a source string");
+    }
+    process_class = lookup_class_by_name("Process");
+    if (process_class == 0) {
+        machine_panic("Workspace spawnProcessNamed:source: could not resolve Process");
+    }
+    instance_kind = (uint8_t)class_instance_kind(process_class);
+    process_handle = heap_allocate(instance_kind);
+    heap_set_class(process_handle, heap_handle_for_object(process_class));
+    field_count = live_instance_field_count_for_class(process_class);
+    for (field_index = 0U; field_index < field_count; ++field_index) {
+        heap_set_field(process_handle, field_index, nil_value());
+    }
+    heap_set_field(process_handle, PROCESS_FIELD_LABEL, arguments[0]);
+    heap_set_field(process_handle, PROCESS_FIELD_STATE, string_value("runnable"));
+    heap_set_field(process_handle, PROCESS_FIELD_CONTEXT, nil_value());
+    remember_named_object_handle(process_handle, arguments[0].string);
+    push(object_value(process_handle));
+}
+
+static void execute_entry_workspace_yield(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)arguments;
+    (void)text;
     push(receiver);
 }
 

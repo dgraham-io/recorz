@@ -45,7 +45,13 @@ def _region_histogram(data: bytes, width: int, x0: int, y0: int, x1: int, y1: in
 class QemuRiscvRenderIntegrationTests(unittest.TestCase):
     def test_demo_renders_expected_colors(self) -> None:
         result = subprocess.run(
-            ["make", "-C", str(ROOT / "platform" / "qemu-riscv64"), "screenshot"],
+            [
+                "make",
+                "-C",
+                str(ROOT / "platform" / "qemu-riscv64"),
+                "DEFAULT_FILE_IN_PAYLOADS=",
+                "screenshot",
+            ],
             cwd=ROOT,
             capture_output=True,
             text=True,

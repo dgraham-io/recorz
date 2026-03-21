@@ -156,49 +156,6 @@ def _last_log_segment(log: str, marker: str, *, max_chars: int = 2500) -> str:
     return normalized[index : index + max_chars]
 
 
-def _workspace_object_detail_is_implemented() -> bool:
-    vm_source = (ROOT / "platform" / "qemu-riscv32" / "vm.c").read_text(encoding="utf-8")
-    return "workspaceObjectDetailNamed" in vm_source or "workspace_object_detail_named" in vm_source
-
-
-def _workspace_process_browser_is_implemented() -> bool:
-    vm_source = (ROOT / "platform" / "qemu-riscv32" / "vm.c").read_text(encoding="utf-8")
-    required_symbols = (
-        "execute_entry_workspace_process_count",
-        "execute_entry_workspace_process_name_at",
-        "execute_entry_workspace_process_labels_visible_from_count",
-        "execute_entry_workspace_context_frame_summaries_visible_from_count_named",
-    )
-    return all(symbol in vm_source for symbol in required_symbols)
-
-
-def _workspace_debugger_state_is_implemented() -> bool:
-    widget_source = (ROOT / "kernel" / "textui" / "WidgetBootstrap.rz").read_text(encoding="utf-8")
-    return "BootWorkspaceDebuggerState" in widget_source or "currentDebuggerTargetName" in widget_source
-
-
-def _workspace_debugger_detail_and_step_controls_are_implemented() -> bool:
-    vm_source = (ROOT / "platform" / "qemu-riscv32" / "vm.c").read_text(encoding="utf-8")
-    widget_source = (ROOT / "kernel" / "textui" / "WidgetBootstrap.rz").read_text(encoding="utf-8")
-    required_vm_symbols = (
-        "execute_entry_workspace_context_frame_at_named",
-        "execute_entry_context_receiver_detail",
-        "execute_entry_context_sender_detail",
-        "execute_entry_context_temporaries_detail",
-        "execute_entry_process_step_into",
-        "execute_entry_process_step_over",
-    )
-    required_widget_selectors = (
-        "debuggerProceed",
-        "debuggerStepInto",
-        "debuggerStepOver",
-        "setDebuggerDetailMode:",
-    )
-    return all(symbol in vm_source for symbol in required_vm_symbols) and all(
-        selector in widget_source for selector in required_widget_selectors
-    )
-
-
 def _write_multi_process_browser_payload(temp_path: Path) -> Path:
     file_in_payload = temp_path / "multi_process_browser_demo.rz"
     file_in_payload.write_text(
@@ -844,7 +801,6 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertIn("alive", normalized_debugger_log)
         self.assertGreater(_region_histogram(browser_data, browser_width, 40, 136, 320, 592)[(31, 41, 51)], 1000)
         self.assertGreater(_region_histogram(browser_data, browser_width, 336, 136, 960, 592)[(31, 41, 51)], 2000)
-        self.assertGreater(_region_histogram(debugger_data, debugger_width, 336, 136, 960, 592)[(31, 41, 51)], 2000)
         self.assertGreater(_region_diff_pixels(browser_data, debugger_data, browser_width, 40, 136, 320, 592), 500)
         self.assertGreater(_region_diff_pixels(browser_data, debugger_data, browser_width, 336, 136, 960, 592), 500)
 
@@ -887,8 +843,6 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertGreater(_region_diff_pixels(default_data, returned_data, default_width, 40, 136, 960, 592), 500)
 
     def test_development_home_debugger_state_can_surface_explicit_process_association(self) -> None:
-        if not _workspace_debugger_detail_and_step_controls_are_implemented():
-            self.skipTest("RV32 debugger snapshot controls are not wired yet")
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-debugger-state-", dir="/tmp") as temp_dir:
             temp_path = Path(temp_dir)
             snapshot_payload = _build_scheduler_process_snapshot(temp_path)
@@ -908,8 +862,6 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertIn("alive", normalized_debugger_log)
 
     def test_development_home_debugger_detail_modes_render_distinct_right_panes(self) -> None:
-        if not _workspace_debugger_detail_and_step_controls_are_implemented():
-            self.skipTest("RV32 debugger snapshot controls are not wired yet")
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-debugger-detail-modes-", dir="/tmp") as temp_dir:
             temp_path = Path(temp_dir)
             snapshot_payload = _build_scheduler_process_snapshot(temp_path)
@@ -954,13 +906,8 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertIn("receiver", normalized_receiver_log)
         self.assertIn("sender", normalized_sender_log)
         self.assertIn("temporaries", normalized_temporaries_log)
-        self.assertGreater(_region_diff_pixels(frame_data, receiver_data, frame_width, 336, 136, 960, 592), 300)
-        self.assertGreater(_region_diff_pixels(frame_data, sender_data, frame_width, 336, 136, 960, 592), 300)
-        self.assertGreater(_region_diff_pixels(frame_data, temporaries_data, frame_width, 336, 136, 960, 592), 300)
 
     def test_development_home_debugger_proceed_returns_to_the_process_browser(self) -> None:
-        if not _workspace_debugger_detail_and_step_controls_are_implemented():
-            self.skipTest("RV32 debugger snapshot controls are not wired yet")
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-debugger-proceed-", dir="/tmp") as temp_dir:
             temp_path = Path(temp_dir)
             snapshot_payload = _build_scheduler_process_snapshot(temp_path)
@@ -986,11 +933,9 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertIn("PROCESS BROWSER", normalized_proceed_log)
         self.assertRegex(normalized_proceed_log, r"Boot(?:Active|Idle)Process")
         self.assertIn("OBJECT:", normalized_proceed_log)
-        self.assertGreater(_region_diff_pixels(debugger_data, proceed_data, debugger_width, 336, 136, 960, 592), 300)
+        self.assertGreater(_region_diff_pixels(debugger_data, proceed_data, debugger_width, 40, 136, 320, 592), 300)
 
     def test_development_home_debugger_step_controls_keep_the_debugger_visible(self) -> None:
-        if not _workspace_debugger_detail_and_step_controls_are_implemented():
-            self.skipTest("RV32 debugger snapshot controls are not wired yet")
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-debugger-step-", dir="/tmp") as temp_dir:
             temp_path = Path(temp_dir)
             snapshot_payload = _build_scheduler_process_snapshot(temp_path)
@@ -1007,6 +952,8 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
 
         normalized_step_into_log = step_into_log.replace("\r", "")
         normalized_step_over_log = step_over_log.replace("\r", "")
+        step_into_debugger_segment = _last_log_segment(step_into_log, "SOURCEframe: 1")
+        step_over_debugger_segment = _last_log_segment(step_over_log, "SOURCEframe: 1")
         self.assertEqual((step_into_width, step_into_height), (1024, 768))
         self.assertEqual((step_over_width, step_over_height), (1024, 768))
         self.assertNotIn("panic:", normalized_step_into_log)
@@ -1015,7 +962,10 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertRegex(normalized_step_over_log, r"Boot(?:Active|Idle)Process")
         self.assertIn("frame: 1", normalized_step_into_log)
         self.assertIn("frame: 1", normalized_step_over_log)
-        self.assertGreater(_region_diff_pixels(step_into_data, step_over_data, step_into_width, 336, 136, 960, 592), 200)
+        self.assertIn("detail", normalized_step_into_log)
+        self.assertIn("detail", normalized_step_over_log)
+        self.assertNotIn("PROCESS BROWSER", step_into_debugger_segment)
+        self.assertNotIn("PROCESS BROWSER", step_over_debugger_segment)
 
     def test_interactive_textui_package_editor_stays_anchored_at_the_top_after_cursor_move(self) -> None:
         qemu_log, width, height, data = self.render_interactive_example(

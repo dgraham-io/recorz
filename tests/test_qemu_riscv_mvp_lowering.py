@@ -187,8 +187,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             "contextFrameSummariesVisibleFrom:count:named:",
         ]
         missing = [selector for selector in required_selectors if selector not in mvp.SELECTOR_IDS]
-        if missing:
-            self.skipTest(f"process-browser selectors are not present yet: {', '.join(missing)}")
+        self.assertEqual(missing, [])
 
         count_program = mvp.build_program("Workspace processCount")
         name_program = mvp.build_program("Workspace processNameAt: 1")

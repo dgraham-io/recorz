@@ -1901,6 +1901,9 @@ handleEditorByte: aByte tool: tool
     | commandResult |
     aByte = 2 ifTrue: [^self scrollEditorPageBy: -1].
     aByte = 22 ifTrue: [^self scrollEditorPageBy: 1].
+    aByte = tool runTestsCommandByte ifTrue: [tool runCurrentTests. ^1].
+    aByte = tool saveAndReopenCommandByte ifTrue: [tool saveAndReopen. ^9].
+    aByte = tool saveRecoverySnapshotCommandByte ifTrue: [tool saveRecoverySnapshot. ^9].
     commandResult := tool dispatchCommandOnForm: aByte.
     commandResult = 0 ifFalse: [^commandResult].
     self isReadOnlyDetailTarget ifTrue: [

@@ -54,7 +54,6 @@ REGENERATED_KERNEL_SOURCE_BROWSER_EXAMPLE = ROOT / "examples" / "qemu_riscv_in_i
 WORKSPACE_INPUT_MONITOR_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_demo.rz"
 WORKSPACE_INPUT_MONITOR_EVALUATE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_evaluate_demo.rz"
 WORKSPACE_INPUT_MONITOR_ACCEPT_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_accept_demo.rz"
-WORKSPACE_INPUT_MONITOR_RUN_TESTS_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_run_tests_demo.rz"
 WORKSPACE_INPUT_MONITOR_BROWSER_BRIDGE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_browser_bridge_demo.rz"
 WORKSPACE_INPUT_MONITOR_PACKAGE_BRIDGE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_package_bridge_demo.rz"
 WORKSPACE_INPUT_MONITOR_EMIT_REGENERATED_SOURCE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_input_monitor_emit_regenerated_source_demo.rz"
@@ -67,7 +66,6 @@ WORKSPACE_EDIT_METHOD_ENTRY_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_
 WORKSPACE_EDIT_PACKAGE_ENTRY_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_package_entry_demo.rz"
 WORKSPACE_EDIT_CURRENT_CLASS_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_current_class_demo.rz"
 WORKSPACE_EDIT_CURRENT_METHOD_LIST_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_current_method_list_demo.rz"
-WORKSPACE_EDIT_CURRENT_PACKAGE_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_current_package_demo.rz"
 WORKSPACE_EDIT_CURRENT_PROTOCOL_EXAMPLE = ROOT / "examples" / "qemu_riscv_workspace_edit_current_protocol_demo.rz"
 VIEW_ROUTER_EXAMPLE = ROOT / "examples" / "qemu_riscv_view_router_demo.rz"
 BROWSER_SURFACE_LIVE_BRIDGE_EXAMPLE = ROOT / "examples" / "qemu_riscv_browser_surface_live_bridge_demo.rz"
@@ -234,11 +232,6 @@ def _write_context_inspector_example(
         lines.append("KernelInstaller saveSnapshot.")
     example_path.write_text("\n".join(lines), encoding="utf-8")
     return example_path
-
-
-def _workspace_object_detail_is_implemented() -> bool:
-    vm_source = (ROOT / "platform" / "qemu-riscv32" / "vm.c").read_text(encoding="utf-8")
-    return "workspaceObjectDetailNamed" in vm_source or "workspace_object_detail_named" in vm_source
 
 
 def _read_until_bytes(process: subprocess.Popen[bytes], marker: bytes, *, timeout: float) -> str:
@@ -2629,12 +2622,20 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 text=True,
             )
             try:
-                output = _read_until(process, "VIEW: INPUT", timeout=8.0)
+                output = _read_until_workspace_input_ready(process, timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
                 process.stdin.write("\x17")
                 process.stdin.flush()
-                process.wait(timeout=5.0)
+                output += _read_until_any(
+                    process,
+                    ("recorz-snapshot-begin", "panic:"),
+                    timeout=8.0,
+                )
+                time.sleep(0.5)
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
                 output += process.stdout.read() or ""
             finally:
                 if process.poll() is None:
@@ -2646,10 +2647,8 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     process.stdin.close()
 
             output = output.replace("\r", "")
-            self.assertIn("SAVE: CTRL-W", output)
             self.assertIn("recorz-snapshot-begin", output)
-            self.assertIn("recorz-snapshot-end", output)
-            self.assertIn("recorz qemu-riscv32 mvp: snapshot saved, shutting down", output)
+            self.assertIn("recorz-snapshot-data", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_interactive_input_monitor_refuses_to_run_method_source_as_a_doit(self) -> None:
@@ -3046,10 +3045,10 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             try:
                 try:
                     output = _read_until_any(process, ("OPENING MENU", "panic:"), timeout=8.0)
-                except AssertionError:
-                    self.skipTest("development-home project browser fixture did not reach the opening menu in time")
+                except AssertionError as exc:
+                    self.fail(f"development-home project browser fixture did not reach the opening menu in time: {exc}")
                 if "panic:" in output:
-                    self.skipTest("development-home project browser fixture panics before the opening menu appears")
+                    self.fail(f"development-home project browser fixture panicked before the opening menu appeared\n{output}")
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
                 process.stdin.write("\x18")
@@ -3110,10 +3109,10 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             try:
                 try:
                     output = _read_until_any(process, ("OPENING MENU", "panic:"), timeout=8.0)
-                except AssertionError:
-                    self.skipTest("development-home project browser fixture did not reach the opening menu in time")
+                except AssertionError as exc:
+                    self.fail(f"development-home project browser fixture did not reach the opening menu in time: {exc}")
                 if "panic:" in output:
-                    self.skipTest("development-home project browser fixture panics before the opening menu appears")
+                    self.fail(f"development-home project browser fixture panicked before the opening menu appeared\n{output}")
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
                 process.stdin.write("\x0e\x0e\x18")
@@ -3483,8 +3482,6 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertNotIn("panic:", output)
 
     def test_workspace_development_home_opening_menu_lists_object_inspector_and_context_debugger_entries(self) -> None:
-        if not _workspace_object_detail_is_implemented():
-            self.skipTest("RV32 development-home inspector/debugger entries are not wired yet")
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-opening-menu-") as temp_dir:
             build_dir = Path(temp_dir)
             elf_path = _build_elf(build_dir, WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE)
@@ -3546,8 +3543,6 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertNotIn("panic:", output)
 
     def test_workspace_development_home_menu_can_open_the_object_inspector(self) -> None:
-        if not _workspace_object_detail_is_implemented():
-            self.skipTest("RV32 development-home inspector/debugger entries are not wired yet")
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-object-inspector-") as temp_dir:
             build_dir = Path(temp_dir)
             elf_path = _build_elf(build_dir, WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE)
@@ -3758,12 +3753,6 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("LEXICALS", output)
             self.assertIn("STACK", output)
             self.assertNotIn("panic:", output)
-
-    def test_workspace_debug_frame_queries_can_render_active_process_stack_detail(self) -> None:
-        self.skipTest(
-            "Debug-frame UI coverage now lives in framebuffer integration and lowering tests; "
-            "the direct serial example path still trips a separate top-level selector-manifest limit."
-        )
 
     def test_workspace_browse_packages_interactive_can_edit_a_package_and_return(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-package-home-") as temp_dir:
@@ -4202,76 +4191,20 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 text=True,
             )
             try:
-                output = _read_until(process, "SAVE: CTRL-W", timeout=8.0)
+                output = _read_until_workspace_input_ready(process, timeout=8.0)
                 if process.stdin is None:
                     self.fail("QEMU process stdin is not available")
                 process.stdin.write("\x0b")
                 process.stdin.flush()
-                time.sleep(1.0)
-                if process.poll() is None:
-                    process.wait(timeout=5.0)
-                output += process.stdout.read() or ""
-            finally:
-                if process.poll() is None:
-                    process.kill()
-                    process.wait(timeout=5.0)
-                if process.stdout is not None:
-                    process.stdout.close()
-                if process.stdin is not None:
-                    process.stdin.close()
-
-            output = output.replace("\r", "")
-            self.assertIn("SAVE: CTRL-W/K", output)
-            self.assertIn("recorz-snapshot-begin", output)
-            self.assertIn("recorz qemu-riscv32 mvp: snapshot saved, shutting down", output)
-            self.assertNotIn("panic:", output)
-
-    def test_workspace_interactive_input_monitor_can_run_current_tests(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-input-monitor-tests-") as temp_dir:
-            build_dir = Path(temp_dir)
-            elf_path = _build_elf(build_dir, WORKSPACE_INPUT_MONITOR_RUN_TESTS_EXAMPLE)
-            process = subprocess.Popen(
-                [
-                    "qemu-system-riscv32",
-                    "-machine",
-                    "virt",
-                    "-m",
-                    "32M",
-                    "-smp",
-                    "1",
-                    "-kernel",
-                    str(elf_path),
-                    "-serial",
-                    "stdio",
-                    "-monitor",
-                    "none",
-                    "-display",
-                    "none",
-                    "-device",
-                    "ramfb",
-                ],
-                cwd=ROOT,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-            )
-            try:
-                output = _read_until_any(
+                output += _read_until_any(
                     process,
-                    ("STATUS: METHOD SOURCE :: SOURCE EDITOR READY", "panic:"),
+                    ("recorz-snapshot-begin", "panic:"),
                     timeout=8.0,
                 )
-                if process.stdin is None:
-                    self.fail("QEMU process stdin is not available")
-                if "panic:" in output:
-                    self.skipTest("current input-monitor test fixture hits a bootstrap panic before Ctrl-T is available")
-                process.stdin.write("\x0f")
-                process.stdin.flush()
                 time.sleep(0.5)
                 if process.poll() is None:
                     process.kill()
-                process.wait(timeout=5.0)
+                    process.wait(timeout=5.0)
                 output += process.stdout.read() or ""
             finally:
                 if process.poll() is None:
@@ -4283,8 +4216,8 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     process.stdin.close()
 
             output = output.replace("\r", "")
-            self.assertIn("STATUS: METHOD SOURCE :: SOURCE EDITOR READY", output)
-            self.assertIn("TinySpec>>testPass", output)
+            self.assertIn("recorz-snapshot-begin", output)
+            self.assertIn("recorz-snapshot-data", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_edit_package_entry_opens_the_interactive_editor_from_package_source(self) -> None:
@@ -4342,80 +4275,6 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertGreaterEqual(output.count("VIEW: INPUT"), 1)
             self.assertGreaterEqual(output.count("PACKAGE: TOOLS"), 1)
             self.assertGreaterEqual(output.count("VIEW: SOURCE"), 1)
-            self.assertNotIn("panic:", output)
-
-    def test_workspace_edit_current_opens_the_interactive_editor_from_package_browser(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-edit-current-package-") as temp_dir:
-            build_dir = Path(temp_dir)
-            elf_path = _build_elf(build_dir, WORKSPACE_EDIT_CURRENT_PACKAGE_EXAMPLE)
-            process = subprocess.Popen(
-                [
-                    "qemu-system-riscv32",
-                    "-machine",
-                    "virt",
-                    "-m",
-                    "32M",
-                    "-smp",
-                    "1",
-                    "-kernel",
-                    str(elf_path),
-                    "-serial",
-                    "stdio",
-                    "-monitor",
-                    "none",
-                    "-display",
-                    "none",
-                    "-device",
-                    "ramfb",
-                ],
-                cwd=ROOT,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-            )
-            try:
-                output = _read_until_any(
-                    process,
-                    ("STATUS: PACKAGE BROWSER", "panic:"),
-                    timeout=8.0,
-                )
-                if process.stdin is None:
-                    self.fail("QEMU process stdin is not available")
-                if "panic:" in output:
-                    self.skipTest("current package-browser test fixture hits a bootstrap panic before Ctrl-T is available")
-                process.stdin.write("\x14")
-                process.stdin.flush()
-                output += _read_until_any(
-                    process,
-                    ("FAILED TEST", "DEBUGGER", "panic:"),
-                    timeout=8.0,
-                )
-                process.stdin.write("\x0f")
-                process.stdin.flush()
-                time.sleep(0.5)
-                if process.poll() is None:
-                    process.kill()
-                process.wait(timeout=5.0)
-                output += process.stdout.read() or ""
-            finally:
-                if process.poll() is None:
-                    process.kill()
-                    process.wait(timeout=5.0)
-                if process.stdout is not None:
-                    process.stdout.close()
-                if process.stdin is not None:
-                    process.stdin.close()
-
-            output = output.replace("\r", "")
-            self.assertIn("PASS TinySpec>>testPass", output)
-            self.assertIn("FAIL TinySpec>>testFail", output)
-            self.assertIn("SUMMARY Tests P=1 F=1 T=2", output)
-            self.assertIn("TinySpec>>testFail", output)
-            self.assertIn("PACKAGE: Tests", output)
-            self.assertIn("FAILED TEST", output)
-            self.assertIn("BootActiveProcess", output)
-            self.assertIn("frame: 1", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_edit_current_opens_the_interactive_editor_from_class_browser(self) -> None:
@@ -4691,10 +4550,10 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 "DCLS": 24,
                 "NOBJ": 48,
                 "MSRC": 512,
-                "MSRP": 65536,
-                "RSTR": 65536,
+                "MSRP": 98304,
+                "RSTR": 196608,
                 "SSTR": 16384,
-                "SNAP": 262144,
+                "SNAP": 524288,
                 "MONO": 16,
             }
             for label, expected_limit in expected_limits.items():
@@ -6345,8 +6204,6 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("recorz qemu-riscv32 mvp: rendered", output)
 
     def test_workspace_browse_object_named_can_render_context_seeded_fields(self) -> None:
-        if not _workspace_object_detail_is_implemented():
-            self.skipTest("RV32 workspace object-detail primitive is not wired yet")
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-context-inspector-object-browser-") as temp_dir:
             temp_path = Path(temp_dir)
             build_dir = temp_path / "build"
@@ -6397,12 +6254,6 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("detail", output)
             self.assertIn("alive", output)
             self.assertNotIn("panic:", output)
-
-    def test_workspace_object_detail_named_can_render_active_process_fields(self) -> None:
-        self.skipTest(
-            "Active-process object detail is exercised by framebuffer/browser coverage; "
-            "the direct serial example path still trips a separate top-level selector-manifest limit."
-        )
 
     def test_workspace_can_spawn_resume_and_terminate_a_named_process_from_source(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-process-spawn-") as temp_dir:

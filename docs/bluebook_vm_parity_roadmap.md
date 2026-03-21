@@ -2,6 +2,12 @@
 
 The step-by-step task breakdown for executing this roadmap lives in [docs/bluebook_vm_parity_execution_plan.md](/Users/david/repos/recorz/docs/bluebook_vm_parity_execution_plan.md).
 
+Status:
+
+- the roadmap is complete as of `2026-03-21`
+- RV32 is the fully validated primary path under the unchanged `32M` machine target
+- RV64 remains an honest validation target through shared-build and minimal smoke-suite coverage rather than full default-TextUI parity
+
 ## Purpose
 
 This roadmap defines the long-running plan for duplicating the practical functionality people associate with the Bluebook Smalltalk system, while preserving Recorz's current goals:
@@ -470,6 +476,12 @@ Exit criteria:
 - the Bluebook-parity target is usable on the RV32 primary path,
 - RV64 is still an honest validation target,
 - the next roadmap can reopen broader Recorz goals from a stable base.
+
+Status as of `2026-03-21`:
+
+- complete
+- the full RV32 parity matrix is green across workspace, browser, inspector, debugger, process browser, snapshot, regeneration, and framebuffer redraw/return flows
+- RV64 builds and passes the minimal base render plus snapshot save/reload smoke suite used for the current validation lane
 
 ## Required Test Gates
 

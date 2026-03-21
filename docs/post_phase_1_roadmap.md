@@ -2,7 +2,8 @@
 
 Recorz has already crossed the current Phase 1 contract. This roadmap defines the next sequence of work so the project keeps moving forward without collapsing back into an open-ended rewrite.
 
-The detailed Bluebook-parity execution plan is tracked in [docs/bluebook_vm_parity_roadmap.md](/Users/david/repos/recorz/docs/bluebook_vm_parity_roadmap.md).
+The detailed Bluebook-parity execution plan is tracked in [docs/bluebook_vm_parity_roadmap.md](/Users/david/repos/recorz/docs/bluebook_vm_parity_roadmap.md) and [docs/bluebook_vm_parity_execution_plan.md](/Users/david/repos/recorz/docs/bluebook_vm_parity_execution_plan.md).
+That program is now complete on the RV32 primary path, so this document should be read as the next planning layer beyond the finished Bluebook-parity tranche.
 
 ## Guiding Rules
 

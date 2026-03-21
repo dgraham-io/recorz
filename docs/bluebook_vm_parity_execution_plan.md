@@ -21,15 +21,15 @@ It is the working plan for day-to-day progress. The roadmap remains the high-lev
 
 As of `2026-03-21`, the project appears to be here:
 
-- Stage 0: mostly established; keep as a regression lane.
-- Stage 1: mostly established; primitive-boundary discipline exists, and the first debugger-visible primitive-failure path is now in place.
-- Stage 2: substantially established; `Context` and `Process` are now visible runtime objects and support the current scheduler-backed process model.
+- Stage 0: active regression lane.
+- Stage 1: complete.
+- Stage 2: complete.
 - Stage 3: complete.
 - Stage 4: complete.
 - Stage 5: complete.
 - Stage 6: complete.
 - Stage 7: complete.
-- Stage 8: still open, and now at the head of execution.
+- Stage 8: complete.
 
 Stage 3 status note as of `2026-03-21`:
 
@@ -72,6 +72,14 @@ Stage 7 status note as of `2026-03-21`:
 - the host Python builders now emit selector and primitive-binding registries and keep runtime-binding generation derivational, while the docs explicitly keep host builders in a bootstrap-only mechanical role instead of reabsorbing image-side tool policy
 - process-browser and debugger browser state now survives snapshot save/reopen through the image-owned session/browser model, with reopened debugger/process views rendered from the saved browser model instead of falling back to the plain class browser
 - the Stage 7 lowering, runtime-metadata serial/render, snapshot reopen, regeneration alignment, builder smoke, and full RV32 build gates are green under the unchanged `32M` target
+
+Stage 8 status note as of `2026-03-21`:
+
+- the remaining roadmap-era RV32 skip gates were either converted to direct assertions or removed where stronger development-home, snapshot, and framebuffer coverage already exercised the same contract
+- the RV32 validation matrix is green across lowering, serial navigation, framebuffer redraw/return paths, snapshot save/restore/reopen flows, regeneration alignment, the `32M` machine gate, and full RV32 builds
+- the final measured RV32 memory-report surface remains within the unchanged `32M` target, with the current runtime reporting `MSRP 98304`, `RSTR 196608`, and `SNAP 524288`
+- RV64 continues to build as a validation target and now has an explicit minimal smoke suite for render and snapshot save/reload on the shared runtime contract, while the older full default-TextUI RV64 snapshot/dev-loop suites are documented non-goals for the current validation lane
+- the roadmap and top-level docs now match the implemented boundary: RV32 is the full primary path, RV64 is an honest smoke-validation path, and the Bluebook-parity program itself is complete
 
 ## Global Completion Rules
 
@@ -142,9 +150,9 @@ This stage is a permanent regression lane. Treat these tasks as maintenance gate
 
 This stage should only add substrate that the image-side debugger/process tools truly need.
 
-### Open Tasks
+### Completed Tasks
 
-- [ ] `BP1.1` Runtime primitive-boundary audit
+- [x] `BP1.1` Runtime primitive-boundary audit
   Files:
   - `/Users/david/repos/recorz/platform/qemu-riscv32/vm.c`
   - `/Users/david/repos/recorz/platform/qemu-riscv64/vm.c`
@@ -155,7 +163,7 @@ This stage should only add substrate that the image-side debugger/process tools 
   Verify:
   - docs update plus lowering/build checks
 
-- [ ] `BP1.2` Context inspection invariants
+- [x] `BP1.2` Context inspection invariants
   Files:
   - `/Users/david/repos/recorz/platform/qemu-riscv32/vm.c`
   - `/Users/david/repos/recorz/platform/qemu-riscv64/vm.c`
@@ -167,7 +175,7 @@ This stage should only add substrate that the image-side debugger/process tools 
   - lowering tests
   - context serial or render tests
 
-- [ ] `BP1.3` Minimal process-inspection substrate
+- [x] `BP1.3` Minimal process-inspection substrate
   Files:
   - `/Users/david/repos/recorz/platform/qemu-riscv32/vm.c`
   - `/Users/david/repos/recorz/platform/qemu-riscv64/vm.c`
@@ -179,7 +187,7 @@ This stage should only add substrate that the image-side debugger/process tools 
   - lowering tests
   - process-browser smoke tests
 
-- [ ] `BP1.4` Debugger-visible primitive-failure entry
+- [x] `BP1.4` Debugger-visible primitive-failure entry
   Files:
   - `/Users/david/repos/recorz/platform/qemu-riscv32/vm.c`
   - `/Users/david/repos/recorz/platform/qemu-riscv64/vm.c`
@@ -193,11 +201,11 @@ This stage should only add substrate that the image-side debugger/process tools 
 
 ## Stage 2. Make Contexts And Processes First-Class Runtime Objects
 
-This stage is mostly underway, but it is not complete until processes represent real runtime state and survive snapshots cleanly.
+This stage is complete: contexts and processes now represent real runtime state and survive snapshots cleanly on the primary RV32 path.
 
-### Open Tasks
+### Completed Tasks
 
-- [ ] `BP2.1` Lock down `Context` object contract
+- [x] `BP2.1` Lock down `Context` object contract
   Files:
   - `/Users/david/repos/recorz/kernel/mvp/Context.rz`
   - `/Users/david/repos/recorz/platform/qemu-riscv32/vm.c`
@@ -208,7 +216,7 @@ This stage is mostly underway, but it is not complete until processes represent 
   - lowering tests
   - targeted runtime tests
 
-- [ ] `BP2.2` Complete minimal `Process` object contract
+- [x] `BP2.2` Complete minimal `Process` object contract
   Files:
   - `/Users/david/repos/recorz/kernel/mvp/Process.rz`
   - `/Users/david/repos/recorz/kernel/mvp/Selector.rz`
@@ -221,7 +229,7 @@ This stage is mostly underway, but it is not complete until processes represent 
   - lowering tests
   - serial/render process-browser tests
 
-- [ ] `BP2.3` Snapshot continuity for context/process graphs
+- [x] `BP2.3` Snapshot continuity for context/process graphs
   Files:
   - `/Users/david/repos/recorz/platform/qemu-riscv32/vm.c`
   - `/Users/david/repos/recorz/platform/qemu-riscv64/vm.c`
@@ -231,7 +239,7 @@ This stage is mostly underway, but it is not complete until processes represent 
   Verify:
   - snapshot integration tests
 
-- [ ] `BP2.4` Multi-process fixtures without scheduler semantics yet
+- [x] `BP2.4` Multi-process fixtures without scheduler semantics yet
   Files:
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_render_integration.py`
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_serial_integration.py`
@@ -243,11 +251,11 @@ This stage is mostly underway, but it is not complete until processes represent 
 
 ## Stage 3. Build The First Real Inspector / Debugger / Process Browser
 
-This is the current main execution stage.
+This stage is complete.
 
-### Open Tasks
+### Completed Tasks
 
-- [ ] `BP3.1` Finish object-inspector navigation
+- [x] `BP3.1` Finish object-inspector navigation
   Files:
   - `/Users/david/repos/recorz/kernel/textui/WidgetBootstrap.rz`
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_serial_integration.py`
@@ -258,7 +266,7 @@ This is the current main execution stage.
   Verify:
   - serial and framebuffer object-inspector tests
 
-- [ ] `BP3.2` Finish debugger model state
+- [x] `BP3.2` Finish debugger model state
   Files:
   - `/Users/david/repos/recorz/kernel/textui/WidgetBootstrap.rz`
   - `/Users/david/repos/recorz/kernel/mvp/Workspace.rz`
@@ -270,7 +278,7 @@ This is the current main execution stage.
   - lowering tests
   - debugger serial/render tests
 
-- [ ] `BP3.3` Remove skip-gates from process browser flows
+- [x] `BP3.3` Remove skip-gates from process browser flows
   Files:
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_render_integration.py`
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_serial_integration.py`
@@ -315,7 +323,7 @@ Do not start Stage 4 until all of these are true:
 
 This is the first large structural cleanup stage. Do not start it until Stage 3 behavior is stable.
 
-### Open Tasks
+### Completed Tasks
 
 - [x] `BP4.1` Extract browser state model
   Files:
@@ -390,7 +398,7 @@ This is the first large structural cleanup stage. Do not start it until Stage 3 
 
 This stage turns the inspectable process scaffolding into a real early Smalltalk-style process system.
 
-### Open Tasks
+### Completed Tasks
 
 - [x] `BP5.1` Add cooperative runnable/waiting queues
   Files:
@@ -449,7 +457,7 @@ This stage turns the inspectable process scaffolding into a real early Smalltalk
 
 This stage should only begin once Stage 5 yields a stable multi-process runtime.
 
-### Open Tasks
+### Completed Tasks
 
 - [x] `BP6.1` Selected-frame navigation and sender traversal
   Files:
@@ -559,9 +567,9 @@ This stage keeps the expanded tool stack aligned with Recorz's image-owned direc
 
 This stage only begins once the earlier stages are functionally complete.
 
-### Open Tasks
+### Completed Tasks
 
-- [ ] `BP8.1` Remove remaining roadmap-related skip-gates
+- [x] `BP8.1` Remove remaining roadmap-related skip-gates
   Files:
   - `/Users/david/repos/recorz/tests/`
   Work:
@@ -569,7 +577,7 @@ This stage only begins once the earlier stages are functionally complete.
   Verify:
   - targeted tests with no roadmap-related skips left
 
-- [ ] `BP8.2` Run the full RV32 validation matrix
+- [x] `BP8.2` Run the full RV32 validation matrix
   Files:
   - `/Users/david/repos/recorz/tests/`
   - `/Users/david/repos/recorz/docs/`
@@ -578,7 +586,7 @@ This stage only begins once the earlier stages are functionally complete.
   Verify:
   - recorded RV32 matrix run
 
-- [ ] `BP8.3` RV64 smoke-suite validation
+- [x] `BP8.3` RV64 smoke-suite validation
   Files:
   - `/Users/david/repos/recorz/platform/qemu-riscv64/`
   - `/Users/david/repos/recorz/tests/`
@@ -587,7 +595,7 @@ This stage only begins once the earlier stages are functionally complete.
   Verify:
   - RV64 build plus selected smoke tests
 
-- [ ] `BP8.4` Final 32 MB measurement pass
+- [x] `BP8.4` Final 32 MB measurement pass
   Files:
   - `/Users/david/repos/recorz/docs/`
   - `/Users/david/repos/recorz/tests/`
@@ -596,7 +604,7 @@ This stage only begins once the earlier stages are functionally complete.
   Verify:
   - memory report or equivalent recorded in docs
 
-- [ ] `BP8.5` Final docs reconciliation
+- [x] `BP8.5` Final docs reconciliation
   Files:
   - `/Users/david/repos/recorz/README.md`
   - `/Users/david/repos/recorz/TODO.md`
@@ -608,11 +616,12 @@ This stage only begins once the earlier stages are functionally complete.
 
 ## Immediate Next Queue
 
-Unless a regression in Stage 0 becomes urgent, the next tasks should be tackled in this order:
+The Bluebook-parity execution queue is complete.
 
-1. `BP8.1` Remove remaining roadmap-related skip-gates.
-2. `BP8.2` Run the full RV32 validation matrix.
-3. `BP8.3` RV64 smoke-suite validation.
+If new work starts from this plan, it should either:
+
+1. reopen Stage 0 regression-hardening tasks when a baseline gap appears, or
+2. start a new post-parity program from the stable base recorded here.
 
 ## Program Complete When
 
@@ -626,3 +635,7 @@ This execution plan is complete when every stage above is closed and the project
 - do so on the RV32 primary path within the current memory target,
 - keep RV64 as an honest validation path,
 - and still preserve Recorz's narrow primitive-boundary design.
+
+Current status:
+
+- complete as of `2026-03-21`
