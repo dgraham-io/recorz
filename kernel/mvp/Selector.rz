@@ -836,3 +836,5 @@ RecorzKernelSelector: #runtimeMetadata order: 416
 !
 RecorzKernelSelector: #isReadOnlyDetailTarget order: 417
 !
+RecorzKernelSelector: #restoreOn:tool: order: 418
+!

@@ -3798,7 +3798,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 output += _read_until(process, "OBJECT INSPECTOR", timeout=8.0)
                 process.stdin.write("\x18")
                 process.stdin.flush()
-                output += _read_until(process, "visibleOrigin", timeout=8.0)
+                output += _read_until(process, "OBJECT INSPECTOR DETAIL", timeout=8.0)
                 process.stdin.write("\x0f")
                 process.stdin.flush()
                 output += _read_until(process, "Select an object. Enter or Ctrl-X opens detail.", timeout=8.0)

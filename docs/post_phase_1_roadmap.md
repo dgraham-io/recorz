@@ -45,12 +45,12 @@ Exit criteria:
 Goal: keep shrinking the C runtime toward a primitive boundary.
 
 Status:
-- active
-- the first Stage 2 slice is landed:
-  - plain-workspace capture now delegates to image-side session policy when `BootWorkspaceSession` exists
-  - RV32 incremental image-session list redraw now asks the image for visible list text instead of hardcoding the opening menu and browser contents in `vm.c`
-  - the shared plain-state helper is now factored in `/Users/david/repos/recorz/platform/shared/recorz_mvp_workspace_plain_state_impl.h`
-- the next Stage 2 work is still the larger C-owned reopen and input-monitor return policy
+- complete as of `2026-03-21`
+- landed results:
+  - plain-workspace capture now delegates to image-side session policy only when `BootWorkspaceSession` is actually attached to the current `Workspace`, with safe fallback to the older tool path for early bootstrap/save/regeneration flows
+  - browser return, opening-menu restore, read-only detail exit, and plain-workspace restore now live in image-side model APIs rather than C-owned reopen policy
+  - RV32 incremental image-session list redraw asks the image for visible list text instead of hardcoding opening-menu and browser contents in `vm.c`
+  - the shared plain-state helper remains factored in `/Users/david/repos/recorz/platform/shared/recorz_mvp_workspace_plain_state_impl.h`
 
 Work items:
 - move any remaining browser-return and tool routing policy into image-side code
@@ -71,6 +71,11 @@ Exit criteria:
 ## Stage 3 - Restore RV64 As Validation
 
 Goal: keep RV64 honest so RV32 does not become the only maintained target.
+
+Status:
+- active
+- current target is still an honest smoke-validation lane, not full default-TextUI parity
+- the next required proof points are default-payload boot to the opening menu, one read-only browser-return flow, and snapshot save/reload on that same payload
 
 Work items:
 - keep RV64 building against the current selector and snapshot surface

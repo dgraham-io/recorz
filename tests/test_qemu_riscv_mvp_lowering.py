@@ -441,6 +441,43 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(seed_section[2], program_section[2] + program_section[3])
         self.assertGreater(seed_section[3], 0)
 
+    def test_describes_builder_ownership_and_image_manifest_layout(self) -> None:
+        program = mvp.build_program("Transcript show: 'HELLO'; cr")
+        summary = mvp.describe_builder_ownership()
+        manifest = mvp.build_image_manifest(program)
+        layout = mvp.describe_image_manifest(program)
+        entry_section = struct.unpack_from(
+            mvp.IMAGE_SECTION_FORMAT,
+            manifest,
+            struct.calcsize(mvp.IMAGE_HEADER_FORMAT),
+        )
+        program_section = struct.unpack_from(
+            mvp.IMAGE_SECTION_FORMAT,
+            manifest,
+            struct.calcsize(mvp.IMAGE_HEADER_FORMAT) + struct.calcsize(mvp.IMAGE_SECTION_FORMAT),
+        )
+        seed_section = struct.unpack_from(
+            mvp.IMAGE_SECTION_FORMAT,
+            manifest,
+            struct.calcsize(mvp.IMAGE_HEADER_FORMAT) + (2 * struct.calcsize(mvp.IMAGE_SECTION_FORMAT)),
+        )
+
+        self.assertEqual(summary.runtime_spec_path, str(mvp.RUNTIME_SPEC_PATH))
+        self.assertEqual(summary.source_root, str(ROOT / "kernel" / "mvp"))
+        self.assertIn("generated runtime bindings header", summary.generated_text_outputs)
+        self.assertIn("image manifest", summary.generated_binary_outputs)
+        self.assertIn("selector declarations", summary.derived_metadata_surfaces)
+        self.assertIn("primitive bindings", summary.derived_metadata_surfaces)
+        self.assertEqual(layout.section_count, 3)
+        self.assertEqual(layout.feature_flags, mvp.IMAGE_FEATURE_FNV1A32)
+        self.assertEqual(layout.entry_offset, entry_section[2])
+        self.assertEqual(layout.entry_length, entry_section[3])
+        self.assertEqual(layout.program_offset, program_section[2])
+        self.assertEqual(layout.program_length, program_section[3])
+        self.assertEqual(layout.seed_offset, seed_section[2])
+        self.assertEqual(layout.seed_length, seed_section[3])
+        self.assertEqual(layout.seed_offset, layout.program_offset + layout.program_length)
+
     def test_compiles_kernel_method_source_to_tiny_compiled_method(self) -> None:
         self.assertEqual(
             mvp.compile_kernel_method_program(
@@ -1495,6 +1532,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_STEP_OVER", 416),
                 ("RECORZ_MVP_SELECTOR_RUNTIME_METADATA", 417),
                 ("RECORZ_MVP_SELECTOR_IS_READ_ONLY_DETAIL_TARGET", 418),
+                ("RECORZ_MVP_SELECTOR_RESTORE_ON_TOOL", 419),
             ],
         )
 

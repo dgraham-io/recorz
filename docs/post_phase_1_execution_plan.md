@@ -24,7 +24,7 @@ As of `2026-03-21`, the project appears to be here:
 
 - Bluebook-parity execution plan: complete on the RV32 primary path.
 - Stage 1: complete.
-- Stage 2: open.
+- Stage 2: complete.
 - Stage 3: open.
 - Stage 4: open.
 - Stage 5: open.
@@ -274,7 +274,7 @@ Keep shrinking the C runtime toward a primitive boundary.
     - RV64 native interactive input-monitor command loop
     - browser/source target normalization in `workspace_source_text_for_browser_target`
 
-- [ ] `PP2.2` Move remaining return/detail routing into image-side models
+- [x] `PP2.2` Move remaining return/detail routing into image-side models
   Files:
   - `/Users/david/repos/recorz/kernel/textui/WidgetBootstrap.rz`
   - `/Users/david/repos/recorz/kernel/mvp/WorkspaceBrowserModel.rz`
@@ -286,6 +286,11 @@ Keep shrinking the C runtime toward a primitive boundary.
   - keep `vm.c` concerned with render/update/input primitives, not menu semantics
   Verify:
   - serial, render, and snapshot return-path tests
+
+  Current result:
+  - image-side `restoreOn:tool:` model APIs now own browser return, opening-menu state restoration, read-only detail exit, and plain-workspace restore decisions
+  - `WorkspaceTool>>returnFromSourceEditor` and `WorkspaceSession>>returnFromDebuggerBrowser` now delegate to model restore APIs instead of keeping those decisions in C-side reopen policy
+  - the shared plain-state helper now only delegates to `BootWorkspaceSession` when that session is actually attached to the current `Workspace`; early bootstrap/save/regeneration flows fall back to the older tool path instead of panicking
 
 - [x] `PP2.3` Thin the native session redraw contract
   Files:
@@ -320,7 +325,7 @@ Keep shrinking the C runtime toward a primitive boundary.
   - `workspace_remember_view` and `workspace_capture_plain_return_state_if_needed` now live in `/Users/david/repos/recorz/platform/shared/recorz_mvp_workspace_plain_state_impl.h`
   - the shared plain-state helper now delegates to image-side session policy when `BootWorkspaceSession` exists and falls back to the older tool-based path for early bootstrap flows
 
-- [ ] `PP2.5` Stage 2 closure matrix
+- [x] `PP2.5` Stage 2 closure matrix
   Files:
   - `/Users/david/repos/recorz/tests/`
   Work:
@@ -328,6 +333,17 @@ Keep shrinking the C runtime toward a primitive boundary.
   Verify:
   - recorded RV32 matrix run
   - RV32 and RV64 builds
+
+Recorded Stage 2 closure matrix on `2026-03-21`:
+
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_dev_loop_integration`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_snapshot_integration.QemuRiscv32SnapshotIntegrationTests.test_snapshot_version_mismatch_reports_the_expected_rv32_profile tests.test_qemu_riscv32_snapshot_integration.QemuRiscv32SnapshotIntegrationTests.test_snapshot_can_reopen_workspace_browser_state_without_demo_specific_program tests.test_qemu_riscv32_snapshot_integration.QemuRiscv32SnapshotIntegrationTests.test_snapshot_can_reopen_workspace_class_source_browser_state_without_demo_specific_program tests.test_qemu_riscv32_snapshot_integration.QemuRiscv32SnapshotIntegrationTests.test_snapshot_can_reopen_workspace_package_source_browser_state_without_demo_specific_program tests.test_qemu_riscv32_snapshot_integration.QemuRiscv32SnapshotIntegrationTests.test_snapshot_can_reopen_workspace_object_inspector_state_across_repeated_cycles tests.test_qemu_riscv32_snapshot_integration.QemuRiscv32SnapshotIntegrationTests.test_snapshot_can_reopen_workspace_debugger_state_across_repeated_cycles`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_menu_workspace_can_return_to_the_opening_menu tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_menu_project_browser_can_return_to_the_opening_menu tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_package_source_can_return_to_the_project_browser tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_menu_class_browser_can_return_to_the_opening_menu tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_class_source_can_return_to_the_class_browser tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_menu_can_open_the_memory_report_and_return tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_menu_can_open_the_runtime_metadata_browser_and_return tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_menu_object_inspector_can_return_to_the_opening_menu tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_object_inspector_detail_can_return_to_the_list tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_menu_process_browser_can_return_to_the_opening_menu tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_process_browser_debugger_can_return_to_the_process_browser`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_render_integration.QemuRiscv32RenderIntegrationTests.test_development_home_runtime_metadata_browser_renders_and_returns_to_the_opening_menu tests.test_qemu_riscv32_render_integration.QemuRiscv32RenderIntegrationTests.test_development_home_class_browser_renders_and_returns_to_the_opening_menu tests.test_qemu_riscv32_render_integration.QemuRiscv32RenderIntegrationTests.test_development_home_memory_report_renders_and_returns_to_the_opening_menu tests.test_qemu_riscv32_render_integration.QemuRiscv32RenderIntegrationTests.test_development_home_package_source_renders_and_returns_to_the_project_browser tests.test_qemu_riscv32_render_integration.QemuRiscv32RenderIntegrationTests.test_development_home_object_inspector_detail_renders_and_returns_to_the_list tests.test_qemu_riscv32_render_integration.QemuRiscv32RenderIntegrationTests.test_development_home_class_source_renders_and_returns_to_the_class_browser tests.test_qemu_riscv32_render_integration.QemuRiscv32RenderIntegrationTests.test_development_home_process_browser_debugger_return_restores_the_selected_process`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_regeneration_integration.QemuRiscv32RegenerationIntegrationTests.test_host_builder_can_use_regenerated_kernel_source_as_the_kernel_authority tests.test_qemu_riscv32_regeneration_integration.QemuRiscv32RegenerationIntegrationTests.test_regenerated_boot_source_recreates_seeded_class_edit_state_after_cold_boot tests.test_qemu_riscv32_regeneration_integration.QemuRiscv32RegenerationIntegrationTests.test_image_can_emit_regenerated_boot_source_that_recreates_the_same_framebuffer_state tests.test_qemu_riscv32_regeneration_integration.QemuRiscv32RegenerationIntegrationTests.test_source_authority_and_runtime_bindings_keep_debugger_inspector_and_process_browser_metadata_aligned tests.test_qemu_riscv32_regeneration_integration.QemuRiscv32RegenerationIntegrationTests.test_dev_snapshot_can_regenerate_sources_from_current_image_state`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv_mvp_lowering`
+- `make -C /Users/david/repos/recorz/platform/qemu-riscv32 BUILD_DIR=/tmp/recorz-qemu-riscv32-stage2-closure all`
+- `make -C /Users/david/repos/recorz/platform/qemu-riscv64 BUILD_DIR=/tmp/recorz-qemu-riscv64-stage2-closure all`
 
 ## Stage 3. Restore RV64 As Validation
 
@@ -506,12 +522,12 @@ Reopen broader Recorz directions from a stable base without letting them collaps
 
 Unless a blocking regression appears elsewhere, the next tasks should be tackled in this order:
 
-1. `PP2.2` Move remaining return/detail routing into image-side models.
-2. `PP2.5` Stage 2 closure matrix.
-3. `PP3.1` Lock the current honest RV64 contract.
-4. `PP3.2` RV64 default-payload boot to opening menu.
+1. `PP3.1` Lock the current honest RV64 contract.
+2. `PP3.2` RV64 default-payload boot to opening menu.
+3. `PP3.3` RV64 runtime-metadata and browser smoke.
+4. `PP4.1` Host-builder ownership audit.
 
-That sequence is intentional. The first Stage 2 slice is landed, but the reopen and input-monitor return policy is still the next reduction target before the program moves on to RV64 and self-hosting work.
+That sequence is intentional. Stage 2 is now closed, so the next program head is the RV64 validation lane. The self-hosting audit stays next in line, but only after the honest RV64 contract is explicit again.
 
 ## Program Complete When
 

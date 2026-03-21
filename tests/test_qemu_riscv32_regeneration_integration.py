@@ -315,7 +315,7 @@ class QemuRiscv32RegenerationIntegrationTests(unittest.TestCase):
             self.assertIn("RecorzKernelSelector: #show:", _regenerated_kernel_source)
             self.assertIn("RecorzKernelGlyphBitmapFamily:", _regenerated_kernel_source)
             self.assertIn("profile: RV64MVP1", inspect_output)
-            self.assertIn("selector_objects=418", inspect_output)
+            self.assertIn("selector_objects=419", inspect_output)
             self.assertIn("method_entries=237", inspect_output)
 
     def test_source_authority_and_runtime_bindings_keep_debugger_inspector_and_process_browser_metadata_aligned(

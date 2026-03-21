@@ -30,6 +30,8 @@ static void workspace_capture_plain_return_state_if_needed(
 ) {
     uint16_t session_handle;
     uint16_t tool_handle;
+    const struct recorz_mvp_heap_object *session_object;
+    uint8_t session_workspace_field_index;
     struct recorz_mvp_value view_kind_value;
     struct recorz_mvp_value target_name_value;
     struct recorz_mvp_value current_source_value;
@@ -40,14 +42,26 @@ static void workspace_capture_plain_return_state_if_needed(
     }
     session_handle = named_object_handle_for_name("BootWorkspaceSession");
     if (session_handle != 0U) {
-        (void)perform_send_and_pop_result(
-            object_value(session_handle),
-            RECORZ_MVP_SELECTOR_REMEMBER_PLAIN_WORKSPACE_STATE_IF_NEEDED,
-            0U,
-            0,
-            0
-        );
-        return;
+        session_object = heap_object(session_handle);
+        if (class_field_index_for_name(
+                class_object_for_heap_object(session_object),
+                "workspace",
+                &session_workspace_field_index)) {
+            struct recorz_mvp_value session_workspace_value =
+                heap_get_field(session_object, session_workspace_field_index);
+
+            if (session_workspace_value.kind == RECORZ_MVP_VALUE_OBJECT &&
+                heap_object_for_value(session_workspace_value) == workspace_object) {
+                (void)perform_send_and_pop_result(
+                    object_value(session_handle),
+                    RECORZ_MVP_SELECTOR_REMEMBER_PLAIN_WORKSPACE_STATE_IF_NEEDED,
+                    0U,
+                    0,
+                    0
+                );
+                return;
+            }
+        }
     }
     view_kind_value = heap_get_field(
         workspace_object,

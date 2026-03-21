@@ -474,23 +474,10 @@ rememberPlainWorkspaceStateContents: plainContents
     ^editorModel
 !
 restorePlainWorkspaceState
-    | plainContents savedCursor savedOrigin savedSelection state |
+    | state |
     state := self namedObjectOrNil: 'BootWorkspacePlainState'.
     state = nil ifTrue: [^0].
-    plainContents := state contents.
-    Workspace setCurrentViewKind: 18.
-    Workspace setCurrentTargetName: nil.
-    Workspace setContents: plainContents.
-    savedCursor := state cursor.
-    Workspace cursor moveToIndex: savedCursor index line: savedCursor line column: savedCursor column topLine: savedCursor topLine.
-    savedSelection := state selection.
-    Workspace selection setStartLine: savedSelection startLine startColumn: savedSelection startColumn endLine: savedSelection endLine endColumn: savedSelection endColumn.
-    savedOrigin := state visibleOrigin.
-    Workspace setVisibleOriginTop: savedOrigin topLine left: savedOrigin visibleLeftColumn.
-    self setStatusText: ''.
-    self setFeedbackText: ''.
-    state clear.
-    ^1
+    ^state restoreOn: Workspace tool: self
 !
 acceptCommandByte
     ^24
@@ -549,36 +536,12 @@ dispatchWorkspaceCommandOnForm: aByte
     ^0
 !
 returnFromSourceEditor
-    | browserModel count plainState returnViewKind returnTargetName returnState returnSelectedIndex returnListTop wasDebugger |
+    | browserModel plainState redrawCode |
     browserModel := self namedObjectOrNil: 'BootWorkspaceBrowserModel'.
-    returnViewKind := self browserReturnViewKind.
-    returnTargetName := self browserReturnTargetName.
-    returnState := nil.
-    browserModel = nil ifFalse: [returnState := browserModel returnState].
-    returnSelectedIndex := 0.
-    returnListTop := 0.
-    returnState = nil ifFalse: [
-        returnState selection = nil ifFalse: [returnSelectedIndex := returnState selection].
-        returnState visibleOrigin = nil ifFalse: [returnListTop := returnState visibleOrigin]].
-    wasDebugger := Workspace currentTargetName = 'DEBUGGER'.
-    returnViewKind = nil ifFalse: [
-        self setBrowserReturnViewKind: nil targetName: nil.
-        Workspace setCurrentTargetName: returnTargetName.
-        Workspace setCurrentViewKind: returnViewKind.
-        count := nil.
-        returnViewKind = 20 ifTrue: [count := 7].
-        returnViewKind = 14 ifTrue: [count := Workspace packageCount].
-        returnViewKind = 21 ifTrue: [
-            count := Workspace classCount.
-            returnTargetName = 'OBJECT INSPECTOR' ifTrue: [count := 6].
-            returnTargetName = 'PROCESS BROWSER' ifTrue: [count := Workspace processCount]].
-        browserModel = nil ifFalse: [
-            browserModel setSelectedIndex: returnSelectedIndex listTop: returnListTop.
-            count = nil ifFalse: [browserModel prepareListSelectionForCount: count]].
-        wasDebugger ifTrue: [self setStatusText: ''. self setFeedbackText: ''].
-        count = nil ifFalse: [^4].
-        Workspace reopen.
-        ^9].
+    redrawCode := nil.
+    browserModel = nil ifFalse: [
+        redrawCode := browserModel restoreOn: Workspace tool: self].
+    redrawCode = nil ifFalse: [^redrawCode].
     plainState := self namedObjectOrNil: 'BootWorkspacePlainState'.
     plainState = nil ifFalse: [
         plainState contents = nil ifFalse: [
@@ -740,6 +703,34 @@ rememberDebuggerProcess: processName frameIndex: frameIndex frameCount: frameCou
     debuggerState setContents: processName cursor: frameIndex selection: frameCount visibleOrigin: detailMode.
     ^processName
 !
+restoreOn: workspace tool: tool
+    | count returnListTop returnSelectedIndex returnTargetName returnViewKind |
+    returnState = nil ifTrue: [^nil].
+    returnViewKind := returnState contents.
+    returnTargetName := returnState cursor.
+    returnSelectedIndex := 0.
+    returnListTop := 0.
+    returnState selection = nil ifFalse: [returnSelectedIndex := returnState selection].
+    returnState visibleOrigin = nil ifFalse: [returnListTop := returnState visibleOrigin].
+    returnState := nil.
+    returnViewKind = nil ifTrue: [^nil].
+    workspace setCurrentTargetName: returnTargetName.
+    workspace setCurrentViewKind: returnViewKind.
+    count := nil.
+    returnViewKind = 20 ifTrue: [count := 7].
+    returnViewKind = 14 ifTrue: [count := Workspace packageCount].
+    returnViewKind = 21 ifTrue: [
+        count := Workspace classCount.
+        returnTargetName = 'OBJECT INSPECTOR' ifTrue: [count := 6].
+        returnTargetName = 'PROCESS BROWSER' ifTrue: [count := Workspace processCount]].
+    self setSelectedIndex: returnSelectedIndex listTop: returnListTop.
+    count = nil ifFalse: [self prepareListSelectionForCount: count].
+    tool setStatusText: ''.
+    tool setFeedbackText: ''.
+    count = nil ifFalse: [^4].
+    Workspace reopen.
+    ^9
+!
 RecorzKernelClass: #WorkspaceEditorModel instanceVariableNames: 'contents cursor selection visibleOrigin'
 !
 setContents: aContents cursor: aCursor selection: aSelection visibleOrigin: anOrigin
@@ -755,6 +746,23 @@ clear
     selection := nil.
     visibleOrigin := nil.
     ^self
+!
+restoreOn: workspace tool: tool
+    | plainContents savedCursor savedOrigin savedSelection |
+    plainContents := contents.
+    workspace setCurrentViewKind: 18.
+    workspace setCurrentTargetName: nil.
+    workspace setContents: plainContents.
+    savedCursor := cursor.
+    workspace cursor moveToIndex: savedCursor index line: savedCursor line column: savedCursor column topLine: savedCursor topLine.
+    savedSelection := selection.
+    workspace selection setStartLine: savedSelection startLine startColumn: savedSelection startColumn endLine: savedSelection endLine endColumn: savedSelection endColumn.
+    savedOrigin := visibleOrigin.
+    workspace setVisibleOriginTop: savedOrigin topLine left: savedOrigin visibleLeftColumn.
+    tool setStatusText: ''.
+    tool setFeedbackText: ''.
+    self clear.
+    ^1
 !
 RecorzKernelClass: #Workspace descriptorOrder: 19 objectKindOrder: 19 sourceBootOrder: 11 instanceVariableNames: 'currentViewKind currentTargetName currentSource lastSource'
 !
@@ -1654,50 +1662,17 @@ handleEscapeByte: aByte
     ^workspace handleEditorArrowByte: aByte visibleLines: self visibleEditorLines visibleColumns: self visibleEditorColumns
 !
 returnFromDebuggerBrowser
-    | plainState returnListTop returnSelectedIndex returnState returnTargetName returnViewKind tool |
+    | plainState redrawCode tool |
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
-    returnState := browserModel contents.
-    returnViewKind := nil.
-    returnTargetName := nil.
-    returnSelectedIndex := 0.
-    returnListTop := 0.
-    returnState = nil ifFalse: [
-        returnViewKind := returnState contents.
-        returnTargetName := returnState cursor.
-        returnState selection = nil ifFalse: [returnSelectedIndex := returnState selection].
-        returnState visibleOrigin = nil ifFalse: [returnListTop := returnState visibleOrigin]].
-    tool setBrowserReturnViewKind: nil targetName: nil.
-    returnViewKind = nil ifTrue: [
+    redrawCode := browserModel restoreOn: workspace tool: tool.
+    redrawCode = nil ifTrue: [
         plainState := tool namedObjectOrNil: 'BootWorkspacePlainState'.
         plainState = nil ifFalse: [
             plainState contents = nil ifFalse: [^tool restorePlainWorkspaceState]].
         tool setStatusText: ''.
         tool setFeedbackText: ''.
         ^9].
-    workspace setCurrentTargetName: returnTargetName.
-    workspace setCurrentViewKind: returnViewKind.
-    returnViewKind = 20 ifTrue: [
-        browserModel setSelectedIndex: returnSelectedIndex listTop: returnListTop.
-        self prepareListSelectionForCount: self currentListCount.
-        tool setStatusText: ''.
-        tool setFeedbackText: ''.
-        ^4].
-    returnViewKind = 14 ifTrue: [
-        browserModel setSelectedIndex: returnSelectedIndex listTop: returnListTop.
-        self prepareListSelectionForCount: self currentListCount.
-        tool setStatusText: ''.
-        tool setFeedbackText: ''.
-        ^4].
-    returnViewKind = 21 ifTrue: [
-        browserModel setSelectedIndex: returnSelectedIndex listTop: returnListTop.
-        self prepareListSelectionForCount: self currentListCount.
-        tool setStatusText: ''.
-        tool setFeedbackText: ''.
-        ^4].
-    tool setStatusText: ''.
-    tool setFeedbackText: ''.
-    Workspace reopen.
-    ^9
+    ^redrawCode
 !
 handleBrowserByte: aByte
     aByte = 14 ifTrue: [^self moveListSelectionBy: 1].
