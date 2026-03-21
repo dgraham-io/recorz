@@ -18,6 +18,12 @@ suspend
 resume
     <primitive: #processResume>
 !
+stepInto
+    <primitive: #processStepInto>
+!
+stepOver
+    <primitive: #processStepOver>
+!
 terminate
     <primitive: #processTerminate>
 !

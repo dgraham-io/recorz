@@ -206,7 +206,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_EDITOR_MODEL
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_TERMINATE
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_STEP_OVER
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -384,6 +384,7 @@ enum recorz_mvp_scheduled_process_state {
     RECORZ_MVP_PROCESS_STATE_RUNNING = 3,
     RECORZ_MVP_PROCESS_STATE_SUSPENDED = 4,
     RECORZ_MVP_PROCESS_STATE_TERMINATED = 5,
+    RECORZ_MVP_PROCESS_STATE_FAILED = 6,
 };
 
 enum recorz_mvp_scheduled_activation_kind {
@@ -397,6 +398,13 @@ enum recorz_mvp_scheduler_run_event {
     RECORZ_MVP_SCHEDULER_EVENT_YIELDED = 1,
     RECORZ_MVP_SCHEDULER_EVENT_SUSPENDED = 2,
     RECORZ_MVP_SCHEDULER_EVENT_TERMINATED = 3,
+    RECORZ_MVP_SCHEDULER_EVENT_FAILED = 4,
+};
+
+enum recorz_mvp_scheduler_debug_mode {
+    RECORZ_MVP_SCHEDULER_DEBUG_NONE = 0,
+    RECORZ_MVP_SCHEDULER_DEBUG_STEP_INTO = 1,
+    RECORZ_MVP_SCHEDULER_DEBUG_STEP_OVER = 2,
 };
 
 enum recorz_mvp_scheduler_send_result_kind {
@@ -512,6 +520,7 @@ static char panic_live_selector_name[METHOD_SOURCE_NAME_LIMIT];
 static char workspace_object_detail_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char workspace_process_list_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char workspace_context_stack_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
+static char workspace_context_detail_buffer[PACKAGE_SOURCE_BUFFER_LIMIT + 1U];
 static char workspace_surface_status_buffer[WORKSPACE_INPUT_MONITOR_FEEDBACK_LIMIT];
 static uint8_t workspace_input_monitor_capture_enabled = 0U;
 static uint8_t workspace_tool_status_dirty = 0U;
@@ -550,6 +559,9 @@ static int16_t scheduled_active_process_index = -1;
 static uint8_t scheduled_yield_requested = 0U;
 static uint8_t scheduled_suspend_requested = 0U;
 static uint8_t scheduled_terminate_requested = 0U;
+static uint8_t scheduled_debug_mode = RECORZ_MVP_SCHEDULER_DEBUG_NONE;
+static int16_t scheduled_debug_target_process_index = -1;
+static uint32_t scheduled_debug_start_depth = 0U;
 
 static uint16_t seeded_handles[HEAP_LIMIT];
 static const char *panic_phase = "idle";
@@ -653,6 +665,8 @@ static void scheduled_process_remove_from_runnable_queue(uint16_t process_index)
 static void scheduled_process_append_runnable_queue(uint16_t process_index);
 static uint16_t scheduled_process_create_named_source(const char *process_name, const char *source_text);
 static void scheduled_process_resume_by_index(uint16_t process_index);
+static void scheduled_process_step_into_by_handle(uint16_t process_handle);
+static void scheduled_process_step_over_by_handle(uint16_t process_handle);
 static enum recorz_mvp_scheduler_run_event scheduled_process_run_by_index(uint16_t process_index);
 static struct recorz_mvp_scheduler_send_result scheduled_send_for_activation(
     struct recorz_mvp_scheduled_activation_record *record,
@@ -1890,6 +1904,40 @@ static const char *selector_name(uint16_t selector) {
             return "resume";
         case RECORZ_MVP_SELECTOR_TERMINATE:
             return "terminate";
+        case RECORZ_MVP_SELECTOR_RECEIVER_DETAIL:
+            return "receiverDetail";
+        case RECORZ_MVP_SELECTOR_SENDER_DETAIL:
+            return "senderDetail";
+        case RECORZ_MVP_SELECTOR_TEMPORARIES_DETAIL:
+            return "temporariesDetail";
+        case RECORZ_MVP_SELECTOR_CONTEXT_FRAME_AT_NAMED:
+            return "contextFrameAt:named:";
+        case RECORZ_MVP_SELECTOR_PROCESS_NAME:
+            return "processName";
+        case RECORZ_MVP_SELECTOR_FRAME_INDEX:
+            return "frameIndex";
+        case RECORZ_MVP_SELECTOR_FRAME_COUNT:
+            return "frameCount";
+        case RECORZ_MVP_SELECTOR_DETAIL_MODE:
+            return "detailMode";
+        case RECORZ_MVP_SELECTOR_SET_PROCESS_NAME_FRAME_INDEX_FRAME_COUNT_DETAIL_MODE:
+            return "setProcessName:frameIndex:frameCount:detailMode:";
+        case RECORZ_MVP_SELECTOR_CURRENT_DEBUGGER_STATE:
+            return "currentDebuggerState";
+        case RECORZ_MVP_SELECTOR_SET_DEBUGGER_DETAIL_MODE:
+            return "setDebuggerDetailMode:";
+        case RECORZ_MVP_SELECTOR_REFRESH_DEBUGGER_STATE:
+            return "refreshDebuggerState";
+        case RECORZ_MVP_SELECTOR_DEBUGGER_PROCEED:
+            return "debuggerProceed";
+        case RECORZ_MVP_SELECTOR_DEBUGGER_STEP_INTO:
+            return "debuggerStepInto";
+        case RECORZ_MVP_SELECTOR_DEBUGGER_STEP_OVER:
+            return "debuggerStepOver";
+        case RECORZ_MVP_SELECTOR_STEP_INTO:
+            return "stepInto";
+        case RECORZ_MVP_SELECTOR_STEP_OVER:
+            return "stepOver";
     }
     return "unknown";
 }
@@ -4206,6 +4254,8 @@ static const char *scheduled_process_state_text(uint8_t state) {
             return "running";
         case RECORZ_MVP_PROCESS_STATE_SUSPENDED:
             return "suspended";
+        case RECORZ_MVP_PROCESS_STATE_FAILED:
+            return "failed";
         case RECORZ_MVP_PROCESS_STATE_TERMINATED:
             return "terminated";
         default:
@@ -13101,6 +13151,409 @@ static const char *workspace_context_stack_frame_detail_text_for_named_object(
     return workspace_context_stack_buffer;
 }
 
+static uint16_t workspace_context_frame_handle_for_index_named(
+    const char *object_name,
+    uint32_t frame_index
+) {
+    const struct recorz_mvp_heap_object *context_object;
+    uint32_t offset = 0U;
+
+    workspace_surface_reset_buffer(
+        workspace_context_stack_buffer,
+        sizeof(workspace_context_stack_buffer)
+    );
+    context_object = workspace_context_stack_context_for_named_object(
+        object_name,
+        workspace_context_stack_buffer,
+        sizeof(workspace_context_stack_buffer),
+        &offset
+    );
+    if (context_object == 0) {
+        return 0U;
+    }
+    context_object = workspace_context_stack_frame_object_for_index(
+        context_object,
+        frame_index,
+        workspace_context_stack_buffer,
+        sizeof(workspace_context_stack_buffer),
+        &offset
+    );
+    if (context_object == 0) {
+        return 0U;
+    }
+    return heap_handle_for_object(context_object);
+}
+
+static const char *workspace_value_detail_text_for_value(
+    const char *role_name,
+    struct recorz_mvp_value value,
+    char buffer[],
+    uint32_t buffer_size
+) {
+    char rendered_value[METHOD_SOURCE_LINE_LIMIT];
+    uint32_t offset = 0U;
+
+    workspace_surface_reset_buffer(buffer, buffer_size);
+    if (role_name != 0 && role_name[0] != '\0') {
+        workspace_surface_append_label_text(
+            buffer,
+            buffer_size,
+            &offset,
+            "ROLE",
+            role_name
+        );
+    }
+    if (value.kind == RECORZ_MVP_VALUE_OBJECT) {
+        const struct recorz_mvp_heap_object *object = heap_object_for_value(value);
+        const char *object_name = workspace_named_object_name_for_handle((uint16_t)value.integer);
+
+        if (object->kind == RECORZ_MVP_OBJECT_CONTEXT) {
+            workspace_surface_append_label_text(
+                buffer,
+                buffer_size,
+                &offset,
+                "OBJECT",
+                object_name == 0 ? "Context" : object_name
+            );
+            workspace_surface_append_label_text(
+                buffer,
+                buffer_size,
+                &offset,
+                "receiver",
+                workspace_text_for_value(
+                    heap_get_field(object, CONTEXT_FIELD_RECEIVER),
+                    rendered_value,
+                    sizeof(rendered_value)
+                )
+            );
+            workspace_surface_append_label_text(
+                buffer,
+                buffer_size,
+                &offset,
+                "detail",
+                workspace_text_for_value(
+                    heap_get_field(object, CONTEXT_FIELD_DETAIL),
+                    rendered_value,
+                    sizeof(rendered_value)
+                )
+            );
+            workspace_surface_append_label_text(
+                buffer,
+                buffer_size,
+                &offset,
+                "sender",
+                workspace_text_for_value(
+                    heap_get_field(object, CONTEXT_FIELD_SENDER),
+                    rendered_value,
+                    sizeof(rendered_value)
+                )
+            );
+            workspace_surface_append_label_text(
+                buffer,
+                buffer_size,
+                &offset,
+                "alive",
+                workspace_text_for_value(
+                    heap_get_field(object, CONTEXT_FIELD_ALIVE),
+                    rendered_value,
+                    sizeof(rendered_value)
+                )
+            );
+            return buffer;
+        }
+
+        {
+            const char *detail_text = workspace_object_detail_text_for_object(
+                object_name == 0 ? class_name_for_object(class_object_for_heap_object(object)) : object_name,
+                object,
+                workspace_object_detail_buffer,
+                sizeof(workspace_object_detail_buffer)
+            );
+
+            if (offset != 0U) {
+                append_text_checked(buffer, buffer_size, &offset, "\n");
+            }
+            append_text_checked(buffer, buffer_size, &offset, detail_text);
+            return buffer;
+        }
+    }
+    if (value.kind == RECORZ_MVP_VALUE_NIL) {
+        workspace_surface_append_label_text(
+            buffer,
+            buffer_size,
+            &offset,
+            "KIND",
+            "Nil"
+        );
+        workspace_surface_append_label_text(
+            buffer,
+            buffer_size,
+            &offset,
+            "VALUE",
+            "nil"
+        );
+        return buffer;
+    }
+    if (value.kind == RECORZ_MVP_VALUE_SMALL_INTEGER) {
+        workspace_surface_append_label_text(
+            buffer,
+            buffer_size,
+            &offset,
+            "KIND",
+            "SmallInteger"
+        );
+        workspace_surface_append_label_text(
+            buffer,
+            buffer_size,
+            &offset,
+            "VALUE",
+            workspace_text_for_value(value, rendered_value, sizeof(rendered_value))
+        );
+        return buffer;
+    }
+    if (value.kind == RECORZ_MVP_VALUE_STRING) {
+        workspace_surface_append_label_text(
+            buffer,
+            buffer_size,
+            &offset,
+            "KIND",
+            "String"
+        );
+        workspace_surface_append_label_text(
+            buffer,
+            buffer_size,
+            &offset,
+            "VALUE",
+            value.string == 0 ? "" : value.string
+        );
+        workspace_surface_append_label_integer(
+            buffer,
+            buffer_size,
+            &offset,
+            "SIZE",
+            text_length(value.string == 0 ? "" : value.string)
+        );
+        return buffer;
+    }
+    workspace_surface_append_label_text(
+        buffer,
+        buffer_size,
+        &offset,
+        "KIND",
+        "UNKNOWN"
+    );
+    return buffer;
+}
+
+static const char *workspace_context_receiver_detail_text_for_handle(uint16_t context_handle) {
+    const struct recorz_mvp_heap_object *context_object;
+    uint32_t offset = 0U;
+
+    workspace_surface_reset_buffer(
+        workspace_context_detail_buffer,
+        sizeof(workspace_context_detail_buffer)
+    );
+    if (!heap_handle_is_live(context_handle)) {
+        workspace_surface_append_line(
+            workspace_context_detail_buffer,
+            sizeof(workspace_context_detail_buffer),
+            &offset,
+            "UNRESOLVED CONTEXT"
+        );
+        return workspace_context_detail_buffer;
+    }
+    context_object = heap_object(context_handle);
+    if (context_object->kind != RECORZ_MVP_OBJECT_CONTEXT) {
+        workspace_surface_append_line(
+            workspace_context_detail_buffer,
+            sizeof(workspace_context_detail_buffer),
+            &offset,
+            "UNRESOLVED CONTEXT"
+        );
+        return workspace_context_detail_buffer;
+    }
+    return workspace_value_detail_text_for_value(
+        "receiver",
+        heap_get_field(context_object, CONTEXT_FIELD_RECEIVER),
+        workspace_context_detail_buffer,
+        sizeof(workspace_context_detail_buffer)
+    );
+}
+
+static const char *workspace_context_sender_detail_text_for_handle(uint16_t context_handle) {
+    const struct recorz_mvp_heap_object *context_object;
+    uint32_t offset = 0U;
+
+    workspace_surface_reset_buffer(
+        workspace_context_detail_buffer,
+        sizeof(workspace_context_detail_buffer)
+    );
+    if (!heap_handle_is_live(context_handle)) {
+        workspace_surface_append_line(
+            workspace_context_detail_buffer,
+            sizeof(workspace_context_detail_buffer),
+            &offset,
+            "UNRESOLVED CONTEXT"
+        );
+        return workspace_context_detail_buffer;
+    }
+    context_object = heap_object(context_handle);
+    if (context_object->kind != RECORZ_MVP_OBJECT_CONTEXT) {
+        workspace_surface_append_line(
+            workspace_context_detail_buffer,
+            sizeof(workspace_context_detail_buffer),
+            &offset,
+            "UNRESOLVED CONTEXT"
+        );
+        return workspace_context_detail_buffer;
+    }
+    return workspace_value_detail_text_for_value(
+        "sender",
+        heap_get_field(context_object, CONTEXT_FIELD_SENDER),
+        workspace_context_detail_buffer,
+        sizeof(workspace_context_detail_buffer)
+    );
+}
+
+static const char *workspace_context_temporaries_detail_text_for_handle(uint16_t context_handle) {
+    const struct recorz_mvp_heap_object *context_object;
+    struct recorz_mvp_scheduled_activation_record *record;
+    uint16_t activation_index;
+    uint16_t value_index;
+    char label[METHOD_SOURCE_LINE_LIMIT];
+    char rendered_value[METHOD_SOURCE_LINE_LIMIT];
+    uint32_t offset = 0U;
+
+    workspace_surface_reset_buffer(
+        workspace_context_detail_buffer,
+        sizeof(workspace_context_detail_buffer)
+    );
+    if (!heap_handle_is_live(context_handle)) {
+        workspace_surface_append_line(
+            workspace_context_detail_buffer,
+            sizeof(workspace_context_detail_buffer),
+            &offset,
+            "UNRESOLVED CONTEXT"
+        );
+        return workspace_context_detail_buffer;
+    }
+    context_object = heap_object(context_handle);
+    if (context_object->kind != RECORZ_MVP_OBJECT_CONTEXT) {
+        workspace_surface_append_line(
+            workspace_context_detail_buffer,
+            sizeof(workspace_context_detail_buffer),
+            &offset,
+            "UNRESOLVED CONTEXT"
+        );
+        return workspace_context_detail_buffer;
+    }
+    workspace_surface_append_label_text(
+        workspace_context_detail_buffer,
+        sizeof(workspace_context_detail_buffer),
+        &offset,
+        "ROLE",
+        "temporaries"
+    );
+    workspace_surface_append_label_text(
+        workspace_context_detail_buffer,
+        sizeof(workspace_context_detail_buffer),
+        &offset,
+        "DETAIL",
+        workspace_text_for_value(
+            heap_get_field(context_object, CONTEXT_FIELD_DETAIL),
+            rendered_value,
+            sizeof(rendered_value)
+        )
+    );
+    activation_index = scheduled_activation_slot_for_context(context_handle);
+    if (activation_index == 0xFFFFU || !scheduled_activation_records[activation_index].in_use) {
+        workspace_surface_append_line(
+            workspace_context_detail_buffer,
+            sizeof(workspace_context_detail_buffer),
+            &offset,
+            "NO LIVE TEMPORARY STATE"
+        );
+        return workspace_context_detail_buffer;
+    }
+    record = &scheduled_activation_records[activation_index];
+    workspace_surface_append_label_integer(
+        workspace_context_detail_buffer,
+        sizeof(workspace_context_detail_buffer),
+        &offset,
+        "ARGUMENTS",
+        record->argument_count
+    );
+    for (value_index = 0U; value_index < record->argument_count; ++value_index) {
+        label[0] = 'a';
+        label[1] = 'r';
+        label[2] = 'g';
+        render_small_integer((int32_t)(value_index + 1U));
+        source_copy_identifier(label + 3U, sizeof(label) - 3U, print_buffer);
+        workspace_surface_append_label_text(
+            workspace_context_detail_buffer,
+            sizeof(workspace_context_detail_buffer),
+            &offset,
+            label,
+            workspace_text_for_value(
+                record->arguments[value_index],
+                rendered_value,
+                sizeof(rendered_value)
+            )
+        );
+    }
+    workspace_surface_append_label_integer(
+        workspace_context_detail_buffer,
+        sizeof(workspace_context_detail_buffer),
+        &offset,
+        "LEXICALS",
+        record->lexical_count
+    );
+    for (value_index = 0U; value_index < record->lexical_count; ++value_index) {
+        label[0] = 'l';
+        label[1] = 'e';
+        label[2] = 'x';
+        render_small_integer((int32_t)(value_index + 1U));
+        source_copy_identifier(label + 3U, sizeof(label) - 3U, print_buffer);
+        workspace_surface_append_label_text(
+            workspace_context_detail_buffer,
+            sizeof(workspace_context_detail_buffer),
+            &offset,
+            label,
+            workspace_text_for_value(
+                record->lexical[value_index],
+                rendered_value,
+                sizeof(rendered_value)
+            )
+        );
+    }
+    workspace_surface_append_label_integer(
+        workspace_context_detail_buffer,
+        sizeof(workspace_context_detail_buffer),
+        &offset,
+        "STACK",
+        record->stack_size
+    );
+    for (value_index = 0U; value_index < record->stack_size; ++value_index) {
+        label[0] = 's';
+        label[1] = 't';
+        label[2] = 'k';
+        render_small_integer((int32_t)(value_index + 1U));
+        source_copy_identifier(label + 3U, sizeof(label) - 3U, print_buffer);
+        workspace_surface_append_label_text(
+            workspace_context_detail_buffer,
+            sizeof(workspace_context_detail_buffer),
+            &offset,
+            label,
+            workspace_text_for_value(
+                record->stack[value_index],
+                rendered_value,
+                sizeof(rendered_value)
+            )
+        );
+    }
+    return workspace_context_detail_buffer;
+}
+
 static const char *workspace_context_frame_summaries_visible_from_count_named_text(
     const char *object_name,
     uint32_t first_index,
@@ -13962,6 +14415,9 @@ static void reset_runtime_state(void) {
     scheduled_yield_requested = 0U;
     scheduled_suspend_requested = 0U;
     scheduled_terminate_requested = 0U;
+    scheduled_debug_mode = RECORZ_MVP_SCHEDULER_DEBUG_NONE;
+    scheduled_debug_target_process_index = -1;
+    scheduled_debug_start_depth = 0U;
     gc_collection_count = 0U;
     gc_last_reclaimed_count = 0U;
     gc_total_reclaimed_count = 0U;
@@ -19614,7 +20070,7 @@ static const char *source_parse_block_header(
 static struct recorz_mvp_source_eval_result source_send_message(
     struct recorz_mvp_source_method_context *context,
     struct recorz_mvp_value receiver,
-    const char *selector_name,
+    const char *selector_text,
     uint16_t argument_count,
     const struct recorz_mvp_value arguments[]
 ) {
@@ -19624,8 +20080,8 @@ static struct recorz_mvp_source_eval_result source_send_message(
 
     if (receiver.kind == RECORZ_MVP_VALUE_OBJECT &&
         primitive_kind_for_heap_object(heap_object_for_value(receiver)) == RECORZ_MVP_OBJECT_BLOCK_CLOSURE &&
-        ((source_names_equal(selector_name, "value") && argument_count == 0U) ||
-         (source_names_equal(selector_name, "value:") && argument_count == 1U))) {
+        ((source_names_equal(selector_text, "value") && argument_count == 0U) ||
+         (source_names_equal(selector_text, "value:") && argument_count == 1U))) {
         return source_execute_block_closure(
             heap_object_for_value(receiver),
             argument_count,
@@ -19633,15 +20089,15 @@ static struct recorz_mvp_source_eval_result source_send_message(
             context->current_context_handle
         );
     }
-    if ((source_names_equal(selector_name, "ifTrue:") && argument_count == 1U) ||
-        (source_names_equal(selector_name, "ifFalse:") && argument_count == 1U) ||
-        (source_names_equal(selector_name, "ifTrue:ifFalse:") && argument_count == 2U)) {
+    if ((source_names_equal(selector_text, "ifTrue:") && argument_count == 1U) ||
+        (source_names_equal(selector_text, "ifFalse:") && argument_count == 1U) ||
+        (source_names_equal(selector_text, "ifTrue:ifFalse:") && argument_count == 2U)) {
         uint8_t condition_is_true = condition_value_is_true(receiver);
         uint16_t chosen_index = 0xFFFFU;
 
-        if (source_names_equal(selector_name, "ifTrue:")) {
+        if (source_names_equal(selector_text, "ifTrue:")) {
             chosen_index = condition_is_true ? 0U : 0xFFFFU;
-        } else if (source_names_equal(selector_name, "ifFalse:")) {
+        } else if (source_names_equal(selector_text, "ifFalse:")) {
             chosen_index = condition_is_true ? 0xFFFFU : 0U;
         } else {
             chosen_index = condition_is_true ? 0U : 1U;
@@ -19663,20 +20119,20 @@ static struct recorz_mvp_source_eval_result source_send_message(
     if (argument_count == 1U &&
         receiver.kind == RECORZ_MVP_VALUE_SMALL_INTEGER &&
         arguments[0].kind == RECORZ_MVP_VALUE_SMALL_INTEGER) {
-        if (source_names_equal(selector_name, "/")) {
+        if (source_names_equal(selector_text, "/")) {
             if (arguments[0].integer == 0) {
                 machine_panic("/ expects a non-zero small integer argument");
             }
             return source_eval_value_result(small_integer_value(receiver.integer / arguments[0].integer));
         }
-        if (source_names_equal(selector_name, "%")) {
+        if (source_names_equal(selector_text, "%")) {
             if (arguments[0].integer == 0) {
                 machine_panic("% expects a non-zero small integer argument");
             }
             return source_eval_value_result(small_integer_value(receiver.integer % arguments[0].integer));
         }
     }
-    selector_id = source_selector_id_for_name(selector_name);
+    selector_id = source_selector_id_for_name(selector_text);
     if (selector_id == 0U) {
         machine_panic("live source send uses an unknown selector");
     }
@@ -19697,6 +20153,47 @@ static struct recorz_mvp_source_eval_result source_send_message(
                 context->current_context_handle
             );
             return source_eval_value_result(pop_value());
+        }
+    }
+    if (context->current_context_handle == 0U) {
+        uint8_t needs_failure_context = 0U;
+
+        if (receiver.kind == RECORZ_MVP_VALUE_OBJECT) {
+            const struct recorz_mvp_heap_object *class_object =
+                class_object_for_heap_object(heap_object_for_value(receiver));
+
+            if (lookup_builtin_method_descriptor(class_object, selector_id, argument_count) == 0) {
+                needs_failure_context = 1U;
+            }
+        } else if (receiver.kind == RECORZ_MVP_VALUE_SMALL_INTEGER) {
+            if (selector_id != RECORZ_MVP_SELECTOR_EQUAL &&
+                selector_id != RECORZ_MVP_SELECTOR_LESS_THAN &&
+                selector_id != RECORZ_MVP_SELECTOR_GREATER_THAN &&
+                selector_id != RECORZ_MVP_SELECTOR_ADD &&
+                selector_id != RECORZ_MVP_SELECTOR_SUBTRACT &&
+                selector_id != RECORZ_MVP_SELECTOR_MULTIPLY &&
+                selector_id != RECORZ_MVP_SELECTOR_PRINT_STRING) {
+                needs_failure_context = 1U;
+            }
+        } else if (receiver.kind == RECORZ_MVP_VALUE_STRING) {
+            if (selector_id != RECORZ_MVP_SELECTOR_PRINT_STRING &&
+                selector_id != RECORZ_MVP_SELECTOR_SIZE &&
+                selector_id != RECORZ_MVP_SELECTOR_AT) {
+                needs_failure_context = 1U;
+            }
+        } else {
+            needs_failure_context = 1U;
+        }
+        if (needs_failure_context) {
+            const char *context_detail_text = context->is_block != 0U
+                ? "<block>"
+                : (context->selector_id == 0U ? "<doIt>" : selector_name(context->selector_id));
+
+            context->current_context_handle = allocate_source_context_object(
+                0U,
+                context->receiver,
+                context_detail_text
+            );
         }
     }
     perform_send_with_sender(
@@ -23098,6 +23595,82 @@ static void execute_entry_workspace_context_frame_detail_at_named(
     push(string_value(workspace_context_stack_frame_detail_text_for_named_object(arguments[1].string, frame_index)));
 }
 
+static void execute_entry_workspace_context_frame_at_named(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint32_t frame_index;
+    uint16_t context_handle;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    frame_index = small_integer_u32(
+        arguments[0],
+        "Workspace contextFrameAt:named: expects a positive small integer frame index"
+    );
+    if (arguments[1].kind != RECORZ_MVP_VALUE_STRING || arguments[1].string == 0) {
+        machine_panic("Workspace contextFrameAt:named: expects an object name string");
+    }
+    if (frame_index == 0U) {
+        push(nil_value());
+        return;
+    }
+    context_handle = workspace_context_frame_handle_for_index_named(arguments[1].string, frame_index);
+    if (context_handle == 0U) {
+        push(nil_value());
+        return;
+    }
+    push(object_value(context_handle));
+}
+
+static void execute_entry_context_receiver_detail(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_CONTEXT) {
+        machine_panic("Context receiverDetail expects a Context receiver");
+    }
+    push(string_value(workspace_context_receiver_detail_text_for_handle(heap_handle_for_object(object))));
+}
+
+static void execute_entry_context_sender_detail(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_CONTEXT) {
+        machine_panic("Context senderDetail expects a Context receiver");
+    }
+    push(string_value(workspace_context_sender_detail_text_for_handle(heap_handle_for_object(object))));
+}
+
+static void execute_entry_context_temporaries_detail(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)receiver;
+    (void)arguments;
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_CONTEXT) {
+        machine_panic("Context temporariesDetail expects a Context receiver");
+    }
+    push(string_value(workspace_context_temporaries_detail_text_for_handle(heap_handle_for_object(object))));
+}
+
 static void execute_entry_workspace_process_count(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -23262,6 +23835,41 @@ static void execute_entry_process_set_label_state_context(
     push(receiver);
 }
 
+static void execute_entry_workspace_debugger_model_set_process_name_frame_index_frame_count_detail_mode(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_WORKSPACE_DEBUGGER_MODEL) {
+        machine_panic(
+            "WorkspaceDebuggerModel setProcessName:frameIndex:frameCount:detailMode: expects a WorkspaceDebuggerModel receiver"
+        );
+    }
+    heap_set_field(
+        heap_handle_for_object(object),
+        RECORZ_MVP_WORKSPACE_DEBUGGER_MODEL_FIELD_PROCESS_NAME,
+        arguments[0]
+    );
+    heap_set_field(
+        heap_handle_for_object(object),
+        RECORZ_MVP_WORKSPACE_DEBUGGER_MODEL_FIELD_FRAME_INDEX,
+        arguments[1]
+    );
+    heap_set_field(
+        heap_handle_for_object(object),
+        RECORZ_MVP_WORKSPACE_DEBUGGER_MODEL_FIELD_FRAME_COUNT,
+        arguments[2]
+    );
+    heap_set_field(
+        heap_handle_for_object(object),
+        RECORZ_MVP_WORKSPACE_DEBUGGER_MODEL_FIELD_DETAIL_MODE,
+        arguments[3]
+    );
+    push(receiver);
+}
+
 static void execute_entry_process_suspend(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -23289,6 +23897,36 @@ static void execute_entry_process_resume(
         machine_panic("Process resume expects a Process receiver");
     }
     scheduled_process_resume_by_handle(heap_handle_for_object(object));
+    push(receiver);
+}
+
+static void execute_entry_process_step_into(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_PROCESS) {
+        machine_panic("Process stepInto expects a Process receiver");
+    }
+    scheduled_process_step_into_by_handle(heap_handle_for_object(object));
+    push(receiver);
+}
+
+static void execute_entry_process_step_over(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_PROCESS) {
+        machine_panic("Process stepOver expects a Process receiver");
+    }
+    scheduled_process_step_over_by_handle(heap_handle_for_object(object));
     push(receiver);
 }
 
@@ -24358,6 +24996,225 @@ static uint16_t scheduled_process_create_named_source(const char *process_name, 
     return 0xFFFFU;
 }
 
+static void scheduled_debug_clear(void) {
+    scheduled_debug_mode = RECORZ_MVP_SCHEDULER_DEBUG_NONE;
+    scheduled_debug_target_process_index = -1;
+    scheduled_debug_start_depth = 0U;
+}
+
+static uint32_t scheduled_process_frame_depth_for_context(uint16_t context_handle) {
+    const struct recorz_mvp_heap_object *context_object;
+
+    if (!heap_handle_is_live(context_handle)) {
+        return 0U;
+    }
+    context_object = heap_object(context_handle);
+    if (context_object->kind != RECORZ_MVP_OBJECT_CONTEXT) {
+        return 0U;
+    }
+    return workspace_context_stack_frame_count_for_context_object(context_object);
+}
+
+static void scheduled_debug_begin_step(uint16_t process_index, uint8_t debug_mode) {
+    if (process_index >= SCHEDULED_PROCESS_LIMIT || !scheduled_processes[process_index].in_use) {
+        scheduled_debug_clear();
+        return;
+    }
+    scheduled_debug_mode = debug_mode;
+    scheduled_debug_target_process_index = (int16_t)process_index;
+    scheduled_debug_start_depth = scheduled_process_frame_depth_for_context(
+        scheduled_processes[process_index].current_context_handle
+    );
+}
+
+static uint8_t scheduled_debug_pause_after_instruction(uint16_t process_index) {
+    uint32_t current_depth;
+
+    if (scheduled_debug_mode == RECORZ_MVP_SCHEDULER_DEBUG_NONE ||
+        scheduled_debug_target_process_index < 0 ||
+        (uint16_t)scheduled_debug_target_process_index != process_index) {
+        return 0U;
+    }
+    if (scheduled_debug_mode == RECORZ_MVP_SCHEDULER_DEBUG_STEP_INTO) {
+        return 1U;
+    }
+    current_depth = scheduled_process_frame_depth_for_context(
+        scheduled_processes[process_index].current_context_handle
+    );
+    if (current_depth <= scheduled_debug_start_depth) {
+        return 1U;
+    }
+    return 0U;
+}
+
+static struct recorz_mvp_scheduler_send_result scheduled_send_failure_result(
+    uint16_t context_handle,
+    const char *status_text,
+    const char *feedback_text
+) {
+    struct recorz_mvp_scheduler_send_result result = {
+        RECORZ_MVP_SCHEDULER_SEND_EVENT,
+        RECORZ_MVP_SCHEDULER_EVENT_FAILED,
+        0U,
+        nil_value()
+    };
+
+    if (scheduled_active_process_index >= 0 &&
+        (uint16_t)scheduled_active_process_index < SCHEDULED_PROCESS_LIMIT &&
+        scheduled_processes[(uint16_t)scheduled_active_process_index].in_use) {
+        struct recorz_mvp_scheduled_process_runtime *process_runtime =
+            &scheduled_processes[(uint16_t)scheduled_active_process_index];
+
+        process_runtime->state = RECORZ_MVP_PROCESS_STATE_FAILED;
+        process_runtime->current_context_handle = context_handle;
+        scheduled_process_sync_object_fields((uint16_t)scheduled_active_process_index);
+    }
+    workspace_tool_set_string_field(
+        WORKSPACE_TOOL_FIELD_STATUS_TEXT,
+        status_text == 0 ? "SEND FAILURE" : status_text
+    );
+    workspace_tool_set_string_field(
+        WORKSPACE_TOOL_FIELD_FEEDBACK_TEXT,
+        feedback_text == 0 ? "FAILED SEND" : feedback_text
+    );
+    workspace_input_monitor_status[0] = '\0';
+    workspace_input_monitor_feedback[0] = '\0';
+    workspace_tool_status_dirty = 0U;
+    workspace_tool_feedback_dirty = 0U;
+    return result;
+}
+
+static struct recorz_mvp_scheduler_send_result scheduled_send_non_object_for_activation(
+    struct recorz_mvp_scheduled_activation_record *record,
+    struct recorz_mvp_value receiver,
+    uint16_t selector,
+    uint16_t argument_count,
+    const struct recorz_mvp_value arguments[]
+) {
+    struct recorz_mvp_scheduler_send_result result = {
+        RECORZ_MVP_SCHEDULER_SEND_VALUE,
+        RECORZ_MVP_SCHEDULER_EVENT_NONE,
+        0U,
+        nil_value()
+    };
+
+    if (selector == RECORZ_MVP_SELECTOR_EQUAL) {
+        if (argument_count != 1U) {
+            return scheduled_send_failure_result(record->context_handle, "= expects one argument", "FAILED SEND");
+        }
+        result.value = boolean_value(value_equals(receiver, arguments[0]));
+        return result;
+    }
+    if (selector == RECORZ_MVP_SELECTOR_LESS_THAN || selector == RECORZ_MVP_SELECTOR_GREATER_THAN) {
+        if (argument_count != 1U) {
+            return scheduled_send_failure_result(
+                record->context_handle,
+                "comparison expects one argument",
+                "FAILED SEND"
+            );
+        }
+        if (receiver.kind != RECORZ_MVP_VALUE_SMALL_INTEGER ||
+            arguments[0].kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+            return scheduled_send_failure_result(
+                record->context_handle,
+                "comparison expects small integer operands",
+                "FAILED SEND"
+            );
+        }
+        result.value = boolean_value(
+            selector == RECORZ_MVP_SELECTOR_LESS_THAN ?
+                (receiver.integer < arguments[0].integer) :
+                (receiver.integer > arguments[0].integer)
+        );
+        return result;
+    }
+    if (receiver.kind == RECORZ_MVP_VALUE_SMALL_INTEGER) {
+        if (selector == RECORZ_MVP_SELECTOR_ADD ||
+            selector == RECORZ_MVP_SELECTOR_SUBTRACT ||
+            selector == RECORZ_MVP_SELECTOR_MULTIPLY) {
+            if (argument_count != 1U || arguments[0].kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+                const char *message = "+ expects a small integer argument";
+
+                if (selector == RECORZ_MVP_SELECTOR_SUBTRACT) {
+                    message = "- expects a small integer argument";
+                } else if (selector == RECORZ_MVP_SELECTOR_MULTIPLY) {
+                    message = "* expects a small integer argument";
+                }
+                return scheduled_send_failure_result(record->context_handle, message, "FAILED SEND");
+            }
+            if (selector == RECORZ_MVP_SELECTOR_ADD) {
+                result.value = small_integer_value(receiver.integer + arguments[0].integer);
+            } else if (selector == RECORZ_MVP_SELECTOR_SUBTRACT) {
+                result.value = small_integer_value(receiver.integer - arguments[0].integer);
+            } else {
+                result.value = small_integer_value(receiver.integer * arguments[0].integer);
+            }
+            return result;
+        }
+        if (selector == RECORZ_MVP_SELECTOR_PRINT_STRING) {
+            render_small_integer(receiver.integer);
+            result.value = string_value(print_buffer);
+            return result;
+        }
+        return scheduled_send_failure_result(
+            record->context_handle,
+            "unsupported SmallInteger selector",
+            "FAILED SEND"
+        );
+    }
+    if (receiver.kind == RECORZ_MVP_VALUE_STRING) {
+        if (selector == RECORZ_MVP_SELECTOR_PRINT_STRING) {
+            result.value = receiver;
+            return result;
+        }
+        if (selector == RECORZ_MVP_SELECTOR_SIZE) {
+            result.value = small_integer_value((int32_t)text_length(receiver.string == 0 ? "" : receiver.string));
+            return result;
+        }
+        if (selector == RECORZ_MVP_SELECTOR_AT) {
+            uint32_t index;
+
+            if (argument_count != 1U || arguments[0].kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+                return scheduled_send_failure_result(
+                    record->context_handle,
+                    "String at: expects a small integer argument",
+                    "FAILED SEND"
+                );
+            }
+            if (receiver.string == 0) {
+                return scheduled_send_failure_result(record->context_handle, "String at: receiver is null", "FAILED SEND");
+            }
+            if (arguments[0].integer <= 0) {
+                return scheduled_send_failure_result(
+                    record->context_handle,
+                    "String at: index must be positive",
+                    "FAILED SEND"
+                );
+            }
+            index = (uint32_t)arguments[0].integer - 1U;
+            if (index >= text_length(receiver.string)) {
+                return scheduled_send_failure_result(
+                    record->context_handle,
+                    "String at: index is out of range",
+                    "FAILED SEND"
+                );
+            }
+            result.value = small_integer_value((int32_t)(uint8_t)receiver.string[index]);
+            return result;
+        }
+        return scheduled_send_failure_result(
+            record->context_handle,
+            "unsupported String selector",
+            "FAILED SEND"
+        );
+    }
+    return scheduled_send_failure_result(
+        record->context_handle,
+        "unsupported receiver in MVP VM",
+        "FAILED SEND"
+    );
+}
+
 static struct recorz_mvp_scheduler_send_result scheduled_send_for_activation(
     struct recorz_mvp_scheduled_activation_record *record,
     struct recorz_mvp_value receiver,
@@ -24373,30 +25230,14 @@ static struct recorz_mvp_scheduler_send_result scheduled_send_for_activation(
     };
     const char *text = 0;
 
-    if (selector == RECORZ_MVP_SELECTOR_SHOW || selector == RECORZ_MVP_SELECTOR_WRITE_STRING) {
-        if (argument_count > 0U && arguments[0].kind == RECORZ_MVP_VALUE_STRING) {
-            text = arguments[0].string;
-        }
+    if ((selector == RECORZ_MVP_SELECTOR_SHOW || selector == RECORZ_MVP_SELECTOR_WRITE_STRING) &&
+        argument_count > 0U &&
+        arguments[0].kind == RECORZ_MVP_VALUE_STRING) {
+        text = arguments[0].string;
     }
-    if (receiver.kind != RECORZ_MVP_VALUE_OBJECT) {
-        uint32_t baseline_stack_size = stack_size;
 
-        perform_send_with_sender(receiver, selector, argument_count, arguments, record->context_handle, text);
-        if (stack_size != baseline_stack_size + 1U) {
-            machine_panic("scheduled direct send did not return exactly one value");
-        }
-        result.value = pop_value();
-        if (scheduled_terminate_requested) {
-            result.kind = RECORZ_MVP_SCHEDULER_SEND_EVENT;
-            result.event = RECORZ_MVP_SCHEDULER_EVENT_TERMINATED;
-        } else if (scheduled_suspend_requested) {
-            result.kind = RECORZ_MVP_SCHEDULER_SEND_EVENT;
-            result.event = RECORZ_MVP_SCHEDULER_EVENT_SUSPENDED;
-        } else if (scheduled_yield_requested) {
-            result.kind = RECORZ_MVP_SCHEDULER_SEND_EVENT;
-            result.event = RECORZ_MVP_SCHEDULER_EVENT_YIELDED;
-        }
-        return result;
+    if (receiver.kind != RECORZ_MVP_VALUE_OBJECT) {
+        return scheduled_send_non_object_for_activation(record, receiver, selector, argument_count, arguments);
     }
     {
         const struct recorz_mvp_heap_object *object = heap_object_for_value(receiver);
@@ -24423,7 +25264,11 @@ static struct recorz_mvp_scheduler_send_result scheduled_send_for_activation(
         if (primitive_kind_for_heap_object(object) == RECORZ_MVP_OBJECT_BLOCK_CLOSURE) {
             if ((selector != RECORZ_MVP_SELECTOR_VALUE || argument_count != 0U) &&
                 (selector != RECORZ_MVP_SELECTOR_VALUE_ARG || argument_count != 1U)) {
-                machine_panic("scheduled BlockClosure send only supports value/value:");
+                return scheduled_send_failure_result(
+                    record->context_handle,
+                    "BlockClosure only understands value/value:",
+                    "FAILED SEND"
+                );
             }
             source_result = source_execute_block_closure(
                 object,
@@ -24432,7 +25277,11 @@ static struct recorz_mvp_scheduler_send_result scheduled_send_for_activation(
                 record->context_handle
             );
             if (source_result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
-                machine_panic("scheduled block non-local return crossed an unsupported boundary");
+                return scheduled_send_failure_result(
+                    record->context_handle,
+                    "scheduled block non-local return crossed an unsupported boundary",
+                    "FAILED SEND"
+                );
             }
             result.value = source_result.value;
             return result;
@@ -24457,7 +25306,11 @@ static struct recorz_mvp_scheduler_send_result scheduled_send_for_activation(
             if (arguments[chosen_index].kind != RECORZ_MVP_VALUE_OBJECT ||
                 primitive_kind_for_heap_object(heap_object_for_value(arguments[chosen_index])) !=
                     RECORZ_MVP_OBJECT_BLOCK_CLOSURE) {
-                machine_panic("scheduled conditional send expects a block closure argument");
+                return scheduled_send_failure_result(
+                    record->context_handle,
+                    "scheduled conditional send expects a block closure argument",
+                    "FAILED SEND"
+                );
             }
             if (source_block_state_for_handle(
                     heap_handle_for_object(heap_object_for_value(arguments[chosen_index])),
@@ -24472,9 +25325,17 @@ static struct recorz_mvp_scheduler_send_result scheduled_send_for_activation(
             );
             if (source_result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
                 if (block_state == 0 || block_state->home_context_index < 0) {
-                    machine_panic("scheduled conditional block crossed an unsupported boundary");
+                    return scheduled_send_failure_result(
+                        record->context_handle,
+                        "scheduled conditional block crossed an unsupported boundary",
+                        "FAILED SEND"
+                    );
                 }
-                machine_panic("scheduled conditional block non-local return is not supported");
+                return scheduled_send_failure_result(
+                    record->context_handle,
+                    "scheduled conditional block non-local return is not supported",
+                    "FAILED SEND"
+                );
             }
             result.value = source_result.value;
             return result;
@@ -24508,7 +25369,11 @@ static struct recorz_mvp_scheduler_send_result scheduled_send_for_activation(
         }
         method_object = lookup_builtin_method_descriptor(class_object, selector, argument_count);
         if (method_object == 0) {
-            machine_panic("scheduled process selector is not understood by receiver class");
+            return scheduled_send_failure_result(
+                record->context_handle,
+                "selector is not understood by receiver class",
+                "FAILED SEND"
+            );
         }
         entry_object = method_descriptor_entry_object(method_object);
         implementation_value = method_entry_implementation_value(entry_object);
@@ -24840,9 +25705,16 @@ resume_next_activation:
                     if (send_result.kind == RECORZ_MVP_SCHEDULER_SEND_CHILD) {
                         process_runtime->current_context_handle = send_result.child_context_handle;
                         scheduled_process_sync_object_fields(process_index);
+                        if (scheduled_debug_pause_after_instruction(process_index)) {
+                            return RECORZ_MVP_SCHEDULER_EVENT_SUSPENDED;
+                        }
                         goto resume_next_activation;
                     }
                     if (send_result.kind == RECORZ_MVP_SCHEDULER_SEND_EVENT) {
+                        if (send_result.event == RECORZ_MVP_SCHEDULER_EVENT_YIELDED &&
+                            scheduled_debug_pause_after_instruction(process_index)) {
+                            send_result.event = RECORZ_MVP_SCHEDULER_EVENT_SUSPENDED;
+                        }
                         if (send_result.event != RECORZ_MVP_SCHEDULER_EVENT_TERMINATED) {
                             activation_push(
                                 record->stack,
@@ -24890,10 +25762,16 @@ resume_next_activation:
                     scheduled_activation_release_slot(activation_index);
                     process_runtime->current_context_handle = sender_context_handle;
                     scheduled_process_sync_object_fields(process_index);
+                    if (scheduled_debug_pause_after_instruction(process_index)) {
+                        return RECORZ_MVP_SCHEDULER_EVENT_SUSPENDED;
+                    }
                     goto resume_next_activation;
                 }
                 default:
                     machine_panic("unknown opcode in scheduled MVP VM");
+            }
+            if (scheduled_debug_pause_after_instruction(process_index)) {
+                return RECORZ_MVP_SCHEDULER_EVENT_SUSPENDED;
             }
         }
         machine_panic("scheduled executable did not return");
@@ -24926,6 +25804,8 @@ static void scheduled_scheduler_run_runnable_queue(void) {
             scheduled_process_append_runnable_queue(process_index);
         } else if (event == RECORZ_MVP_SCHEDULER_EVENT_SUSPENDED) {
             process_runtime->state = RECORZ_MVP_PROCESS_STATE_SUSPENDED;
+        } else if (event == RECORZ_MVP_SCHEDULER_EVENT_FAILED) {
+            process_runtime->state = RECORZ_MVP_PROCESS_STATE_FAILED;
         } else if (event == RECORZ_MVP_SCHEDULER_EVENT_TERMINATED) {
             if (process_runtime->current_context_handle != 0U) {
                 scheduled_process_release_context_chain(process_runtime->current_context_handle);
@@ -24933,6 +25813,11 @@ static void scheduled_scheduler_run_runnable_queue(void) {
             process_runtime->state = RECORZ_MVP_PROCESS_STATE_TERMINATED;
             process_runtime->current_context_handle = 0U;
             scheduled_process_remove_from_runnable_queue(process_index);
+        }
+        if (scheduled_debug_target_process_index >= 0 &&
+            (uint16_t)scheduled_debug_target_process_index == process_index &&
+            event != RECORZ_MVP_SCHEDULER_EVENT_YIELDED) {
+            scheduled_debug_clear();
         }
         scheduled_process_sync_object_fields(process_index);
     }
@@ -24953,6 +25838,9 @@ static void scheduled_process_resume_by_index(uint16_t process_index) {
     process_runtime = &scheduled_processes[process_index];
     if (process_runtime->state == RECORZ_MVP_PROCESS_STATE_TERMINATED) {
         return;
+    }
+    if (process_runtime->state != RECORZ_MVP_PROCESS_STATE_NEW) {
+        process_runtime->state = RECORZ_MVP_PROCESS_STATE_RUNNABLE;
     }
     scheduled_process_append_runnable_queue(process_index);
     scheduled_process_sync_object_fields(process_index);
@@ -24987,6 +25875,48 @@ static void scheduled_process_resume_by_handle(uint16_t process_handle) {
     scheduled_processes[process_index].state = RECORZ_MVP_PROCESS_STATE_RUNNABLE;
     scheduled_process_sync_object_fields(process_index);
     scheduled_process_resume_by_index(process_index);
+}
+
+static void scheduled_process_step_by_index(uint16_t process_index, uint8_t debug_mode) {
+    struct recorz_mvp_scheduled_process_runtime *process_runtime;
+
+    if (process_index >= SCHEDULED_PROCESS_LIMIT || !scheduled_processes[process_index].in_use) {
+        machine_panic("scheduled process step expects a live process slot");
+    }
+    process_runtime = &scheduled_processes[process_index];
+    if (process_runtime->state == RECORZ_MVP_PROCESS_STATE_TERMINATED ||
+        process_runtime->current_context_handle == 0U) {
+        return;
+    }
+    scheduled_debug_begin_step(process_index, debug_mode);
+    if (scheduled_active_process_index >= 0 && (uint16_t)scheduled_active_process_index != process_index) {
+        process_runtime->state = RECORZ_MVP_PROCESS_STATE_RUNNABLE;
+        scheduled_process_append_runnable_queue(process_index);
+        scheduled_process_sync_object_fields(process_index);
+        return;
+    }
+    process_runtime->state = RECORZ_MVP_PROCESS_STATE_RUNNABLE;
+    scheduled_process_append_runnable_queue(process_index);
+    scheduled_process_sync_object_fields(process_index);
+    scheduled_scheduler_run_runnable_queue();
+}
+
+static void scheduled_process_step_into_by_handle(uint16_t process_handle) {
+    uint16_t process_index = scheduled_process_slot_for_handle(process_handle);
+
+    if (process_index == 0xFFFFU) {
+        return;
+    }
+    scheduled_process_step_by_index(process_index, RECORZ_MVP_SCHEDULER_DEBUG_STEP_INTO);
+}
+
+static void scheduled_process_step_over_by_handle(uint16_t process_handle) {
+    uint16_t process_index = scheduled_process_slot_for_handle(process_handle);
+
+    if (process_index == 0xFFFFU) {
+        return;
+    }
+    scheduled_process_step_by_index(process_index, RECORZ_MVP_SCHEDULER_DEBUG_STEP_OVER);
 }
 
 static void scheduled_process_terminate_by_handle(uint16_t process_handle) {

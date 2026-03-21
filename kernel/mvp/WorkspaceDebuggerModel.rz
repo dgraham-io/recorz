@@ -1,0 +1,17 @@
+RecorzKernelClass: #WorkspaceDebuggerModel descriptorOrder: 41 objectKindOrder: 41 sourceBootOrder: 35 instanceVariableNames: 'processName frameIndex frameCount detailMode'
+!
+processName
+    ^processName
+!
+frameIndex
+    ^frameIndex
+!
+frameCount
+    ^frameCount
+!
+detailMode
+    ^detailMode
+!
+setProcessName: aProcessName frameIndex: aFrameIndex frameCount: aFrameCount detailMode: aDetailMode
+    <primitive: #workspaceDebuggerModelSetProcessNameFrameIndexFrameCountDetailMode>
+!

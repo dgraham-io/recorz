@@ -69,6 +69,9 @@ contextFrameSummaryAt: index named: objectName
 contextFrameDetailAt: index named: objectName
     <primitive: #workspaceContextFrameDetailAtNamed>
 !
+contextFrameAt: index named: objectName
+    <primitive: #workspaceContextFrameAtNamed>
+!
 debugFrameCount
     <primitive: #workspaceDebugFrameCount>
 !

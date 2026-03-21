@@ -556,6 +556,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "WorkspaceBrowserModel.rz",
                 "WorkspaceEditorModel.rz",
                 "WorkspaceReturnState.rz",
+                "WorkspaceDebuggerModel.rz",
                 "WorkspaceTool.rz",
             },
         )
@@ -908,24 +909,27 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceSetCurrentViewKind"], 35)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceSetCurrentTargetName"], 36)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceObjectDetailNamed"], 48)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceDebugFrameCount"], 53)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceDebugFrameListFrom"], 54)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceDebugFrameDetailAt"], 55)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceProcessCount"], 56)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceProcessNameAt"], 57)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceProcessLabelsVisibleFromCount"], 58)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceSpawnProcessNamedSource"], 59)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceYield"], 60)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceContextFrameSummariesVisibleFromCountNamed"], 61)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspacePackageCount"], 70)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLinesColumns"], 73)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLeftLinesColumns"], 74)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceBrowseInteractiveViews"], 91)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 110)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processSetLabelStateContext"], 123)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processSuspend"], 124)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processResume"], 125)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processTerminate"], 126)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceContextFrameAtNamed"], 53)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceDebugFrameCount"], 54)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceDebugFrameListFrom"], 55)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceDebugFrameDetailAt"], 56)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceProcessCount"], 57)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceProcessNameAt"], 58)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceProcessLabelsVisibleFromCount"], 59)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceSpawnProcessNamedSource"], 60)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceYield"], 61)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceContextFrameSummariesVisibleFromCountNamed"], 62)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspacePackageCount"], 71)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLinesColumns"], 74)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLeftLinesColumns"], 75)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceBrowseInteractiveViews"], 92)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 114)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processSetLabelStateContext"], 127)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processSuspend"], 128)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processResume"], 129)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processStepInto"], 130)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processStepOver"], 131)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processTerminate"], 132)
         for binding_name in _workspace_tool_primitive_bindings():
             self.assertIn(binding_name, mvp.PRIMITIVE_BINDING_VALUES)
         self.assertEqual(
@@ -1472,6 +1476,23 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_SUSPEND", 397),
                 ("RECORZ_MVP_SELECTOR_RESUME", 398),
                 ("RECORZ_MVP_SELECTOR_TERMINATE", 399),
+                ("RECORZ_MVP_SELECTOR_RECEIVER_DETAIL", 400),
+                ("RECORZ_MVP_SELECTOR_SENDER_DETAIL", 401),
+                ("RECORZ_MVP_SELECTOR_TEMPORARIES_DETAIL", 402),
+                ("RECORZ_MVP_SELECTOR_CONTEXT_FRAME_AT_NAMED", 403),
+                ("RECORZ_MVP_SELECTOR_PROCESS_NAME", 404),
+                ("RECORZ_MVP_SELECTOR_FRAME_INDEX", 405),
+                ("RECORZ_MVP_SELECTOR_FRAME_COUNT", 406),
+                ("RECORZ_MVP_SELECTOR_DETAIL_MODE", 407),
+                ("RECORZ_MVP_SELECTOR_SET_PROCESS_NAME_FRAME_INDEX_FRAME_COUNT_DETAIL_MODE", 408),
+                ("RECORZ_MVP_SELECTOR_CURRENT_DEBUGGER_STATE", 409),
+                ("RECORZ_MVP_SELECTOR_SET_DEBUGGER_DETAIL_MODE", 410),
+                ("RECORZ_MVP_SELECTOR_REFRESH_DEBUGGER_STATE", 411),
+                ("RECORZ_MVP_SELECTOR_DEBUGGER_PROCEED", 412),
+                ("RECORZ_MVP_SELECTOR_DEBUGGER_STEP_INTO", 413),
+                ("RECORZ_MVP_SELECTOR_DEBUGGER_STEP_OVER", 414),
+                ("RECORZ_MVP_SELECTOR_STEP_INTO", 415),
+                ("RECORZ_MVP_SELECTOR_STEP_OVER", 416),
             ],
         )
 
@@ -1487,12 +1508,14 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.SEED_FIELD_KIND_DEFINITIONS[2], ("RECORZ_MVP_SEED_FIELD_OBJECT_INDEX", 2))
         self.assertEqual(mvp.OBJECT_KIND_SPECS[0], ("Transcript", "RECORZ_MVP_OBJECT_TRANSCRIPT"))
         self.assertEqual(
-            mvp.OBJECT_KIND_SPECS[-4:],
+            mvp.OBJECT_KIND_SPECS[-6:],
             [
+                ("WorkspaceVisibleOrigin", "RECORZ_MVP_OBJECT_WORKSPACE_VISIBLE_ORIGIN"),
                 ("Process", "RECORZ_MVP_OBJECT_PROCESS"),
                 ("WorkspaceReturnState", "RECORZ_MVP_OBJECT_WORKSPACE_RETURN_STATE"),
                 ("WorkspaceBrowserModel", "RECORZ_MVP_OBJECT_WORKSPACE_BROWSER_MODEL"),
                 ("WorkspaceEditorModel", "RECORZ_MVP_OBJECT_WORKSPACE_EDITOR_MODEL"),
+                ("WorkspaceDebuggerModel", "RECORZ_MVP_OBJECT_WORKSPACE_DEBUGGER_MODEL"),
             ],
         )
         self.assertEqual(
@@ -1543,11 +1566,12 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "WorkspaceReturnState",
                 "WorkspaceBrowserModel",
                 "WorkspaceEditorModel",
+                "WorkspaceDebuggerModel",
             ],
         )
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_IN_DESCRIPTOR_ORDER[-1],
-            mvp.KernelClassHeader("WorkspaceEditorModel", 40, 40, 34, ("contents", "cursor", "selection", "visibleOrigin")),
+            mvp.KernelClassHeader("WorkspaceDebuggerModel", 41, 41, 35, ("processName", "frameIndex", "frameCount", "detailMode")),
         )
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_BY_NAME["Class"],
@@ -1585,6 +1609,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_BY_NAME["WorkspaceEditorModel"],
             mvp.KernelClassHeader("WorkspaceEditorModel", 40, 40, 34, ("contents", "cursor", "selection", "visibleOrigin")),
+        )
+        self.assertEqual(
+            mvp.KERNEL_CLASS_HEADERS_BY_NAME["WorkspaceDebuggerModel"],
+            mvp.KernelClassHeader("WorkspaceDebuggerModel", 41, 41, 35, ("processName", "frameIndex", "frameCount", "detailMode")),
         )
         self.assertEqual(
             mvp.KERNEL_CLASS_HEADERS_BY_NAME["TestRunner"],
@@ -1637,7 +1665,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["BitBlt"], mvp.SEED_OBJECT_BITBLT)
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["CompiledMethod"], mvp.SEED_OBJECT_COMPILED_METHOD)
         self.assertEqual(mvp.KERNEL_CLASS_NAME_TO_OBJECT_KIND["KernelInstaller"], mvp.SEED_OBJECT_KERNEL_INSTALLER)
-        self.assertEqual(mvp.OBJECT_KIND_DEFINITIONS[-1], ("RECORZ_MVP_OBJECT_WORKSPACE_EDITOR_MODEL", 41))
+        self.assertEqual(mvp.OBJECT_KIND_DEFINITIONS[-1], ("RECORZ_MVP_OBJECT_WORKSPACE_DEBUGGER_MODEL", 42))
         self.assertEqual(mvp.CLASS_FIELD_METHOD_START, mvp.kernel_instance_variable_index("Class", "methodStart"))
         self.assertEqual(mvp.METHOD_FIELD_ENTRY, mvp.kernel_instance_variable_index("MethodDescriptor", "entry"))
         self.assertEqual(
@@ -1770,6 +1798,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "WorkspaceReturnState",
                 "WorkspaceBrowserModel",
                 "WorkspaceEditorModel",
+                "WorkspaceDebuggerModel",
             ],
         )
         self.assertEqual(
@@ -1796,7 +1825,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            mvp.METHOD_ENTRY_ORDER[48:87],
+            mvp.METHOD_ENTRY_ORDER[48:88],
             [
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_FILE_IN",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTENTS",
@@ -1820,6 +1849,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTEXT_FRAME_COUNT_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTEXT_FRAME_SUMMARY_AT_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTEXT_FRAME_DETAIL_AT_NAMED",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTEXT_FRAME_AT_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_DEBUG_FRAME_COUNT",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_DEBUG_FRAME_LIST_FROM",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_DEBUG_FRAME_DETAIL_AT",
@@ -1840,9 +1870,8 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            mvp.METHOD_ENTRY_ORDER[-24:],
+            mvp.METHOD_ENTRY_ORDER[-30:],
             [
-                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_BROWSE_REGENERATED_BOOT_SOURCE",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_BROWSE_REGENERATED_FILE_IN_SOURCE",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_STATUS_TEXT",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_FEEDBACK_TEXT",
@@ -1853,6 +1882,8 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "RECORZ_MVP_METHOD_ENTRY_PROCESS_SET_LABEL_STATE_CONTEXT",
                 "RECORZ_MVP_METHOD_ENTRY_PROCESS_SUSPEND",
                 "RECORZ_MVP_METHOD_ENTRY_PROCESS_RESUME",
+                "RECORZ_MVP_METHOD_ENTRY_PROCESS_STEP_INTO",
+                "RECORZ_MVP_METHOD_ENTRY_PROCESS_STEP_OVER",
                 "RECORZ_MVP_METHOD_ENTRY_PROCESS_TERMINATE",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_RETURN_STATE_CONTENTS",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_RETURN_STATE_CURSOR",
@@ -1866,6 +1897,11 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_EDITOR_MODEL_CURSOR",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_EDITOR_MODEL_SELECTION",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_EDITOR_MODEL_VISIBLE_ORIGIN",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_DEBUGGER_MODEL_PROCESS_NAME",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_DEBUGGER_MODEL_FRAME_INDEX",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_DEBUGGER_MODEL_FRAME_COUNT",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_DEBUGGER_MODEL_DETAIL_MODE",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_DEBUGGER_MODEL_SET_PROCESS_NAME_FRAME_INDEX_FRAME_COUNT_DETAIL_MODE",
             ],
         )
 
@@ -2273,6 +2309,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "WorkspaceReturnState",
                 "WorkspaceBrowserModel",
                 "WorkspaceEditorModel",
+                "WorkspaceDebuggerModel",
             ],
         )
         self.assertEqual(

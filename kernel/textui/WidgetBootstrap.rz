@@ -367,6 +367,7 @@ runCurrentTests
         frameCount := Workspace contextFrameCountNamed: 'BootActiveProcess'.
         frameIndex := frameCount = 0 ifTrue: [0] ifFalse: [1].
         browserModel rememberDebuggerProcess: 'BootActiveProcess' frameIndex: frameIndex frameCount: frameCount.
+        browserModel state setContents: 'BootActiveProcess' cursor: frameIndex selection: frameCount visibleOrigin: 'frame'.
         browserModel setSelectedIndex: 0 listTop: 0.
         self setBrowserReturnViewKind: Workspace currentViewKind targetName: Workspace currentTargetName.
         self setStatusText: TestRunner lastLabel.
@@ -729,9 +730,15 @@ setBrowserReturnViewKind: aViewKind targetName: aTargetName
     ^aViewKind
 !
 rememberDebuggerProcess: processName frameIndex: frameIndex frameCount: frameCount
+    | detailMode debuggerStateClass |
+    debuggerStateClass := KernelInstaller classNamed: 'WorkspaceReturnState'.
     debuggerState = nil ifTrue: [
-        debuggerState := (KernelInstaller classNamed: 'WorkspaceReturnState') new].
-    debuggerState setContents: processName cursor: frameIndex selection: frameCount visibleOrigin: nil.
+        debuggerState := debuggerStateClass new].
+    debuggerState class = debuggerStateClass ifFalse: [
+        debuggerState := debuggerStateClass new].
+    detailMode := debuggerState visibleOrigin.
+    detailMode = nil ifTrue: [detailMode := 'frame'].
+    debuggerState setContents: processName cursor: frameIndex selection: frameCount visibleOrigin: detailMode.
     ^processName
 !
 RecorzKernelClass: #WorkspaceEditorModel instanceVariableNames: 'contents cursor selection visibleOrigin'
@@ -1184,10 +1191,99 @@ selectedProcessName
 !
 currentDebuggerTargetName
     | state |
-    state := browserModel state.
+    state := self currentDebuggerState.
     state = nil ifTrue: [^''].
     state contents = nil ifTrue: [^''].
     ^state contents
+!
+currentDebuggerState
+    ^browserModel state
+!
+setDebuggerDetailMode: aDetailMode
+    | count state |
+    state := self currentDebuggerState.
+    state = nil ifTrue: [^4].
+    count := Workspace contextFrameCountNamed: self currentDebuggerTargetName.
+    state setContents: state contents cursor: self selectedIndex + 1 selection: count visibleOrigin: aDetailMode.
+    ^4
+!
+refreshDebuggerState
+    | count detailMode frameIndex state |
+    state := self currentDebuggerState.
+    state = nil ifTrue: [^4].
+    count := Workspace contextFrameCountNamed: self currentDebuggerTargetName.
+    detailMode := state visibleOrigin.
+    detailMode = nil ifTrue: [detailMode := 'frame'].
+    frameIndex := self selectedIndex + 1.
+    count = 0 ifTrue: [frameIndex := 0].
+    count > 0 ifTrue: [
+        frameIndex < 1 ifTrue: [frameIndex := 1].
+        frameIndex > count ifTrue: [frameIndex := count]].
+    state setContents: state contents cursor: frameIndex selection: count visibleOrigin: detailMode.
+    count = 0 ifTrue: [
+        browserModel setSelectedIndex: 0 listTop: 0.
+        ^4].
+    browserModel setSelectedIndex: frameIndex - 1 listTop: self listTopLine.
+    self prepareListSelectionForCount: count.
+    ^4
+!
+debuggerProceed
+    | frameCount process tool |
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    tool browserReturnTargetName = 'PROCESS BROWSER' ifFalse: [
+        tool setFeedbackText: 'READ ONLY DEBUGGER'.
+        ^4].
+    process := KernelInstaller objectNamed: self currentDebuggerTargetName.
+    process = nil ifTrue: [^4].
+    tool setStatusText: ''.
+    tool setFeedbackText: ''.
+    process resume.
+    self refreshDebuggerState.
+    frameCount := Workspace contextFrameCountNamed: self currentDebuggerTargetName.
+    frameCount = 0 ifTrue: [
+        ^self returnFromDebuggerBrowser].
+    process state = 'failed' ifTrue: [^4].
+    ^self returnFromDebuggerBrowser
+!
+debuggerStepInto
+    | frameCount process tool |
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    tool browserReturnTargetName = 'PROCESS BROWSER' ifFalse: [
+        tool setFeedbackText: 'READ ONLY DEBUGGER'.
+        ^4].
+    self selectedIndex = 0 ifFalse: [
+        tool setFeedbackText: 'STEP FROM FRAME 1'.
+        ^4].
+    process := KernelInstaller objectNamed: self currentDebuggerTargetName.
+    process = nil ifTrue: [^4].
+    tool setStatusText: ''.
+    tool setFeedbackText: ''.
+    process stepInto.
+    self refreshDebuggerState.
+    frameCount := Workspace contextFrameCountNamed: self currentDebuggerTargetName.
+    frameCount = 0 ifTrue: [
+        ^self returnFromDebuggerBrowser].
+    ^4
+!
+debuggerStepOver
+    | frameCount process tool |
+    tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+    tool browserReturnTargetName = 'PROCESS BROWSER' ifFalse: [
+        tool setFeedbackText: 'READ ONLY DEBUGGER'.
+        ^4].
+    self selectedIndex = 0 ifFalse: [
+        tool setFeedbackText: 'STEP FROM FRAME 1'.
+        ^4].
+    process := KernelInstaller objectNamed: self currentDebuggerTargetName.
+    process = nil ifTrue: [^4].
+    tool setStatusText: ''.
+    tool setFeedbackText: ''.
+    process stepOver.
+    self refreshDebuggerState.
+    frameCount := Workspace contextFrameCountNamed: self currentDebuggerTargetName.
+    frameCount = 0 ifTrue: [
+        ^self returnFromDebuggerBrowser].
+    ^4
 !
 currentListCount
     | count frameIndex state viewKind |
@@ -1196,14 +1292,18 @@ currentListCount
     viewKind = 21 ifTrue: [
         workspace currentTargetName = 'DEBUGGER' ifTrue: [
             count := Workspace contextFrameCountNamed: self currentDebuggerTargetName.
-            state := browserModel state.
+            state := self currentDebuggerState.
             frameIndex := 0.
             count > 0 ifTrue: [frameIndex := 1].
             state = nil ifFalse: [
                 state cursor = nil ifFalse: [frameIndex := state cursor]].
             count = 0 ifTrue: [
+                state = nil ifFalse: [
+                    state setContents: self currentDebuggerTargetName cursor: 0 selection: 0 visibleOrigin: state visibleOrigin].
                 browserModel setSelectedIndex: 0 listTop: 0.
                 ^0].
+            state = nil ifFalse: [
+                state setContents: self currentDebuggerTargetName cursor: frameIndex selection: count visibleOrigin: state visibleOrigin].
             browserModel setSelectedIndex: frameIndex - 1 listTop: self listTopLine.
             browserModel prepareListSelectionForCount: count.
             ^count].
@@ -1282,7 +1382,19 @@ currentBrowserSourceText
     workspace currentViewKind = 20 ifTrue: [
         ^'Choose a starting view. Enter or Ctrl-X opens the selected item.'].
     workspace currentTargetName = 'DEBUGGER' ifTrue: [
+        | context detailMode state |
         self currentListCount = 0 ifTrue: [^'NO DEBUG FRAMES'].
+        state := self currentDebuggerState.
+        detailMode := 'frame'.
+        state = nil ifFalse: [
+            state visibleOrigin = nil ifFalse: [detailMode := state visibleOrigin]].
+        detailMode = 'frame' ifTrue: [
+            ^Workspace contextFrameDetailAt: self selectedIndex + 1 named: self currentDebuggerTargetName].
+        context := Workspace contextFrameAt: self selectedIndex + 1 named: self currentDebuggerTargetName.
+        context = nil ifTrue: [^'NO DEBUG FRAMES'].
+        detailMode = 'receiver' ifTrue: [^context receiverDetail].
+        detailMode = 'sender' ifTrue: [^context senderDetail].
+        detailMode = 'temporaries' ifTrue: [^context temporariesDetail].
         ^Workspace contextFrameDetailAt: self selectedIndex + 1 named: self currentDebuggerTargetName].
     workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [
         | processName |
@@ -1302,7 +1414,7 @@ listTopLine
     ^browserModel listTopLine
 !
 moveListSelectionBy: delta
-    | count nextIndex nextListTop visibleLines |
+    | count nextIndex nextListTop state visibleLines |
     count := self currentListCount.
     count = 0 ifTrue: [^5].
     nextIndex := self selectedIndex + delta.
@@ -1317,6 +1429,9 @@ moveListSelectionBy: delta
     nextListTop < 0 ifTrue: [nextListTop := 0].
     browserModel setSelectedIndex: nextIndex listTop: nextListTop.
     workspace currentTargetName = 'DEBUGGER' ifTrue: [
+        state := self currentDebuggerState.
+        state = nil ifFalse: [
+            state setContents: state contents cursor: nextIndex + 1 selection: count visibleOrigin: state visibleOrigin].
         browserModel prepareListSelectionForCount: count].
     ^5
 !
@@ -1394,7 +1509,7 @@ currentFeedbackText
     tool feedbackText size > 0 ifTrue: [^tool feedbackText].
     viewKind := workspace currentViewKind.
     viewKind = 20 ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  X SELECT  O CLOSE'].
-    workspace currentTargetName = 'DEBUGGER' ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  O RETURN'].
+    workspace currentTargetName = 'DEBUGGER' ifTrue: [^'N/P MOVE  R RECV  S SEND  T TEMPS  F FRAME  P GO  I INTO  V OVER  O RETURN'].
     workspace currentTargetName = 'PROCESS BROWSER' ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  X DEBUG  O CLOSE'].
     self isObjectInspectorBrowser ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  X DETAIL  O CLOSE'].
     viewKind = 14 ifTrue: [^'N/P MOVE  H/F EDGE  B/V PAGE  X OPEN  O CLOSE'].
@@ -1571,6 +1686,21 @@ handleBrowserByte: aByte
     aByte = 16 ifTrue: [^self moveListSelectionBy: -1].
     aByte = 2 ifTrue: [^self moveListSelectionPageBy: -1].
     aByte = 22 ifTrue: [^self moveListSelectionPageBy: 1].
+    workspace currentTargetName = 'DEBUGGER' ifTrue: [
+        aByte = 70 ifTrue: [^self setDebuggerDetailMode: 'frame'].
+        aByte = 102 ifTrue: [^self setDebuggerDetailMode: 'frame'].
+        aByte = 82 ifTrue: [^self setDebuggerDetailMode: 'receiver'].
+        aByte = 114 ifTrue: [^self setDebuggerDetailMode: 'receiver'].
+        aByte = 83 ifTrue: [^self setDebuggerDetailMode: 'sender'].
+        aByte = 115 ifTrue: [^self setDebuggerDetailMode: 'sender'].
+        aByte = 84 ifTrue: [^self setDebuggerDetailMode: 'temporaries'].
+        aByte = 116 ifTrue: [^self setDebuggerDetailMode: 'temporaries'].
+        aByte = 80 ifTrue: [^self debuggerProceed].
+        aByte = 112 ifTrue: [^self debuggerProceed].
+        aByte = 73 ifTrue: [^self debuggerStepInto].
+        aByte = 105 ifTrue: [^self debuggerStepInto].
+        aByte = 86 ifTrue: [^self debuggerStepOver].
+        aByte = 118 ifTrue: [^self debuggerStepOver]].
     aByte = 13 ifTrue: [
         workspace currentViewKind = 20 ifTrue: [^self openSelectedOpeningMenuItem].
         workspace currentViewKind = 21 ifTrue: [^self openSelectedClassSource].
@@ -1698,6 +1828,7 @@ openSelectedContextDebugger
         browserState := (KernelInstaller classNamed: 'WorkspaceBrowserModel') new.
         KernelInstaller rememberObject: browserState named: 'BootWorkspaceBrowserModel'].
     browserState rememberDebuggerProcess: processName frameIndex: frameIndex frameCount: frameCount.
+    browserState state setContents: processName cursor: frameIndex selection: frameCount visibleOrigin: 'frame'.
     tool setStatusText: ''.
     tool setFeedbackText: ''.
     browserState setBrowserReturnViewKind: 21 targetName: 'PROCESS BROWSER'.

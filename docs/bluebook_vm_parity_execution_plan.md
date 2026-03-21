@@ -19,7 +19,7 @@ It is the working plan for day-to-day progress. The roadmap remains the high-lev
 
 ## Current Position
 
-As of `2026-03-20`, the project appears to be here:
+As of `2026-03-21`, the project appears to be here:
 
 - Stage 0: mostly established; keep as a regression lane.
 - Stage 1: mostly established; primitive-boundary discipline exists, and the first debugger-visible primitive-failure path is now in place.
@@ -27,7 +27,8 @@ As of `2026-03-20`, the project appears to be here:
 - Stage 3: complete.
 - Stage 4: complete.
 - Stage 5: complete.
-- Stages 6 through 8: still open, with Stage 6 now at the head of execution.
+- Stage 6: complete.
+- Stages 7 and 8: still open, with Stage 7 now at the head of execution.
 
 Stage 3 status note as of `2026-03-21`:
 
@@ -55,6 +56,13 @@ Stage 5 status note as of `2026-03-21`:
 - the process browser now reflects scheduler-backed process objects, and the debugger remains associated with the selected scheduled process under that runtime
 - scheduler state survives snapshot save and restore through the current RV32 `v9` snapshot format, including runnable-queue continuity and resumed process completion
 - Stage 5 serial, render, snapshot, lowering, and full RV32 build gates are green without widening the standard `32M` target
+
+Stage 6 status note as of `2026-03-21`:
+
+- selected-frame navigation, sender traversal, receiver inspection, temporaries inspection, proceed, and step controls now run through the scheduler-backed RV32 debugger instead of placeholder-only browser state
+- intended development-path failures now enter the debugger with a materialized `Context` instead of falling straight into panic-only behavior, while corruption and unsupported runtime states remain hard failures
+- debugger state is carried through image-owned browser return state, so process-browser and debugger handoff/return are coherent across active-process and scheduled-process flows
+- the Stage 6 serial, render, lowering, and RV32 build gates are green, and the current debugger/process-browser framebuffer assertions no longer rely on the older skip-gated expectations
 
 ## Global Completion Rules
 
@@ -434,7 +442,7 @@ This stage should only begin once Stage 5 yields a stable multi-process runtime.
 
 ### Open Tasks
 
-- [ ] `BP6.1` Selected-frame navigation and sender traversal
+- [x] `BP6.1` Selected-frame navigation and sender traversal
   Files:
   - `/Users/david/repos/recorz/kernel/textui/WidgetBootstrap.rz`
   - `/Users/david/repos/recorz/kernel/mvp/Context.rz`
@@ -443,7 +451,7 @@ This stage should only begin once Stage 5 yields a stable multi-process runtime.
   Verify:
   - debugger tests
 
-- [ ] `BP6.2` Frame-local object inspection
+- [x] `BP6.2` Frame-local object inspection
   Files:
   - `/Users/david/repos/recorz/kernel/textui/WidgetBootstrap.rz`
   - new debugger/inspector model files under `/Users/david/repos/recorz/kernel/mvp/`
@@ -452,7 +460,7 @@ This stage should only begin once Stage 5 yields a stable multi-process runtime.
   Verify:
   - debugger/object-inspector integration tests
 
-- [ ] `BP6.3` Resume/proceed control
+- [x] `BP6.3` Resume/proceed control
   Files:
   - `/Users/david/repos/recorz/platform/qemu-riscv32/vm.c`
   - `/Users/david/repos/recorz/platform/qemu-riscv64/vm.c`
@@ -462,7 +470,7 @@ This stage should only begin once Stage 5 yields a stable multi-process runtime.
   Verify:
   - failure and continue tests
 
-- [ ] `BP6.4` Honest stepping support
+- [x] `BP6.4` Honest stepping support
   Files:
   - `/Users/david/repos/recorz/platform/qemu-riscv32/vm.c`
   - `/Users/david/repos/recorz/platform/qemu-riscv64/vm.c`
@@ -472,7 +480,7 @@ This stage should only begin once Stage 5 yields a stable multi-process runtime.
   Verify:
   - debugger stepping tests
 
-- [ ] `BP6.5` Replace intended panic-only failure paths
+- [x] `BP6.5` Replace intended panic-only failure paths
   Files:
   - `/Users/david/repos/recorz/platform/qemu-riscv32/vm.c`
   - `/Users/david/repos/recorz/platform/qemu-riscv64/vm.c`
@@ -593,9 +601,9 @@ This stage only begins once the earlier stages are functionally complete.
 
 Unless a regression in Stage 0 becomes urgent, the next tasks should be tackled in this order:
 
-1. `BP6.1` Selected-frame navigation and sender traversal.
-2. `BP6.2` Frame-local object inspection.
-3. `BP6.3` Resume/proceed control.
+1. `BP7.1` File-out/file-in cleanliness for tool classes.
+2. `BP7.2` Regeneration-safe runtime metadata.
+3. `BP7.3` In-image inspection of regenerated source and runtime state.
 
 ## Program Complete When
 

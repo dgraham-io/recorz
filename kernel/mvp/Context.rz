@@ -12,3 +12,12 @@ detail
 alive
     ^alive
 !
+receiverDetail
+    <primitive: #contextReceiverDetail>
+!
+senderDetail
+    <primitive: #contextSenderDetail>
+!
+temporariesDetail
+    <primitive: #contextTemporariesDetail>
+!

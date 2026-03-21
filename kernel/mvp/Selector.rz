@@ -798,3 +798,37 @@ RecorzKernelSelector: #resume order: 397
 !
 RecorzKernelSelector: #terminate order: 398
 !
+RecorzKernelSelector: #receiverDetail order: 399
+!
+RecorzKernelSelector: #senderDetail order: 400
+!
+RecorzKernelSelector: #temporariesDetail order: 401
+!
+RecorzKernelSelector: #contextFrameAt:named: order: 402
+!
+RecorzKernelSelector: #processName order: 403
+!
+RecorzKernelSelector: #frameIndex order: 404
+!
+RecorzKernelSelector: #frameCount order: 405
+!
+RecorzKernelSelector: #detailMode order: 406
+!
+RecorzKernelSelector: #setProcessName:frameIndex:frameCount:detailMode: order: 407
+!
+RecorzKernelSelector: #currentDebuggerState order: 408
+!
+RecorzKernelSelector: #setDebuggerDetailMode: order: 409
+!
+RecorzKernelSelector: #refreshDebuggerState order: 410
+!
+RecorzKernelSelector: #debuggerProceed order: 411
+!
+RecorzKernelSelector: #debuggerStepInto order: 412
+!
+RecorzKernelSelector: #debuggerStepOver order: 413
+!
+RecorzKernelSelector: #stepInto order: 414
+!
+RecorzKernelSelector: #stepOver order: 415
+!
