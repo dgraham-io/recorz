@@ -19,15 +19,19 @@ import build_qemu_riscv_mvp_image as mvp  # noqa: E402
 
 
 SNAPSHOT_MAGIC = b"RCZT"
-SNAPSHOT_VERSION = 8
-SUPPORTED_SNAPSHOT_VERSIONS = {8}
+SNAPSHOT_VERSION = 9
+SUPPORTED_SNAPSHOT_VERSIONS = {9}
 SNAPSHOT_COMPATIBILITY_PROFILE = "RV32MVP1"
 SNAPSHOT_COMPATIBILITY_LABEL = f"{SNAPSHOT_COMPATIBILITY_PROFILE} snapshot format v{SNAPSHOT_VERSION}"
-SNAPSHOT_HEADER_SIZE = 54
+SNAPSHOT_HEADER_SIZE = 64
 SNAPSHOT_VALUE_SIZE = 8
 OBJECT_FIELD_LIMIT = 4
 METHOD_SOURCE_NAME_LIMIT = 96
 CLASS_COMMENT_LIMIT = 128
+MAX_SEND_ARGS = 10
+STACK_LIMIT = 64
+LEXICAL_LIMIT = 32
+SCHEDULED_PROCESS_SOURCE_TEXT_LIMIT = 2048
 SNAPSHOT_OBJECT_SIZE = 4 + (OBJECT_FIELD_LIMIT * SNAPSHOT_VALUE_SIZE)
 SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE = (
     8
@@ -39,6 +43,15 @@ SNAPSHOT_PACKAGE_RECORD_SIZE = METHOD_SOURCE_NAME_LIMIT + CLASS_COMMENT_LIMIT
 SNAPSHOT_NAMED_OBJECT_RECORD_SIZE = 2 + METHOD_SOURCE_NAME_LIMIT
 SNAPSHOT_LIVE_METHOD_SOURCE_RECORD_SIZE = 13 + METHOD_SOURCE_NAME_LIMIT
 SNAPSHOT_LIVE_STRING_LITERAL_RECORD_SIZE = 9
+SNAPSHOT_SCHEDULED_PROCESS_SOURCE_RECORD_SIZE = 4 + SCHEDULED_PROCESS_SOURCE_TEXT_LIMIT
+SNAPSHOT_SCHEDULED_ACTIVATION_RECORD_SIZE = (
+    26
+    + SNAPSHOT_VALUE_SIZE
+    + (MAX_SEND_ARGS * SNAPSHOT_VALUE_SIZE)
+    + (STACK_LIMIT * SNAPSHOT_VALUE_SIZE)
+    + (LEXICAL_LIMIT * SNAPSHOT_VALUE_SIZE)
+)
+SNAPSHOT_SCHEDULED_PROCESS_RECORD_SIZE = 12
 MONO_BITMAP_MAX_HEIGHT = 64
 GLYPH_BITMAP_COUNT = 128
 
@@ -121,6 +134,10 @@ class SnapshotHeader:
     active_cursor_visible: int
     active_cursor_x: int
     active_cursor_y: int
+    scheduled_process_source_count: int
+    scheduled_activation_count: int
+    scheduled_process_count: int
+    scheduled_runnable_head: int
     total_size: int
 
 
@@ -190,7 +207,11 @@ def parse_snapshot(blob: bytes) -> ParsedSnapshot:
         active_cursor_visible=_read_u16_le(blob, 44),
         active_cursor_x=_read_u16_le(blob, 46),
         active_cursor_y=_read_u16_le(blob, 48),
-        total_size=_read_u32_le(blob, 50),
+        scheduled_process_source_count=_read_u16_le(blob, 50),
+        scheduled_activation_count=_read_u16_le(blob, 52),
+        scheduled_process_count=_read_u16_le(blob, 54),
+        scheduled_runnable_head=_read_u16_le(blob, 56),
+        total_size=_read_u32_le(blob, 60),
     )
     if header.version not in SUPPORTED_SNAPSHOT_VERSIONS:
         raise SnapshotInspectionError(
@@ -215,6 +236,9 @@ def parse_snapshot(blob: bytes) -> ParsedSnapshot:
         + (header.live_string_literal_count * SNAPSHOT_LIVE_STRING_LITERAL_RECORD_SIZE)
         + header.live_string_literal_byte_count
         + (header.mono_bitmap_count * MONO_BITMAP_MAX_HEIGHT * 4)
+        + (header.scheduled_process_source_count * SNAPSHOT_SCHEDULED_PROCESS_SOURCE_RECORD_SIZE)
+        + (header.scheduled_activation_count * SNAPSHOT_SCHEDULED_ACTIVATION_RECORD_SIZE)
+        + (header.scheduled_process_count * SNAPSHOT_SCHEDULED_PROCESS_RECORD_SIZE)
     )
     if string_section_offset + header.string_byte_count != len(blob):
         raise SnapshotInspectionError("snapshot string section size mismatch")
@@ -520,6 +544,10 @@ def inspect_snapshot(blob: bytes) -> dict[str, object]:
             "active_cursor_visible": snapshot.header.active_cursor_visible,
             "active_cursor_x": snapshot.header.active_cursor_x,
             "active_cursor_y": snapshot.header.active_cursor_y,
+            "scheduled_process_source_count": snapshot.header.scheduled_process_source_count,
+            "scheduled_activation_count": snapshot.header.scheduled_activation_count,
+            "scheduled_process_count": snapshot.header.scheduled_process_count,
+            "scheduled_runnable_head": snapshot.header.scheduled_runnable_head,
             "total_size": snapshot.header.total_size,
         },
         "workspace": _workspace_summary(snapshot),

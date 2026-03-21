@@ -12,3 +12,12 @@ context
 setLabel: aLabel state: aState context: aContext
     <primitive: #processSetLabelStateContext>
 !
+suspend
+    <primitive: #processSuspend>
+!
+resume
+    <primitive: #processResume>
+!
+terminate
+    <primitive: #processTerminate>
+!

@@ -219,22 +219,34 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             "RECORZ_MVP_SELECTOR_PROCESS_LABELS_VISIBLE_FROM_COUNT",
         )
 
+    def test_lowers_workspace_process_spawn_and_yield_queries(self) -> None:
+        spawn_program = mvp.build_program(
+            "Workspace spawnProcessNamed: 'AlphaProcess' source: 'Workspace yield'"
+        )
+        yield_program = mvp.build_program("Workspace yield")
+
         self.assertEqual(
-            [instruction.opcode for instruction in summaries_program.instructions],
+            [instruction.opcode for instruction in spawn_program.instructions],
             [
                 mvp.OP_PUSH_GLOBAL,
-                mvp.OP_PUSH_LITERAL,
                 mvp.OP_PUSH_LITERAL,
                 mvp.OP_PUSH_LITERAL,
                 mvp.OP_SEND,
                 mvp.OP_RETURN,
             ],
         )
-        self.assertEqual(summaries_program.instructions[0].operand_a, "RECORZ_MVP_GLOBAL_WORKSPACE")
+        self.assertEqual(spawn_program.instructions[0].operand_a, "RECORZ_MVP_GLOBAL_WORKSPACE")
         self.assertEqual(
-            summaries_program.instructions[4].operand_a,
-            "RECORZ_MVP_SELECTOR_CONTEXT_FRAME_SUMMARIES_VISIBLE_FROM_COUNT_NAMED",
+            spawn_program.instructions[3].operand_a,
+            "RECORZ_MVP_SELECTOR_SPAWN_PROCESS_NAMED_SOURCE",
         )
+
+        self.assertEqual(
+            [instruction.opcode for instruction in yield_program.instructions],
+            [mvp.OP_PUSH_GLOBAL, mvp.OP_SEND, mvp.OP_RETURN],
+        )
+        self.assertEqual(yield_program.instructions[0].operand_a, "RECORZ_MVP_GLOBAL_WORKSPACE")
+        self.assertEqual(yield_program.instructions[1].operand_a, "RECORZ_MVP_SELECTOR_YIELD")
 
     def test_lowers_top_level_block_literals_and_boolean_globals(self) -> None:
         program = mvp.build_program("true ifTrue: [ :x | x + 4 ] ifFalse: [ :x | x + 5 ]")
@@ -498,12 +510,17 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         form_be_display = sources["RECORZ_MVP_METHOD_ENTRY_FORM_BE_DISPLAY"]
         font_point_size = sources["RECORZ_MVP_METHOD_ENTRY_FONT_POINT_SIZE"]
         process_setter = sources["RECORZ_MVP_METHOD_ENTRY_PROCESS_SET_LABEL_STATE_CONTEXT"]
+        process_suspend = sources["RECORZ_MVP_METHOD_ENTRY_PROCESS_SUSPEND"]
+        process_resume = sources["RECORZ_MVP_METHOD_ENTRY_PROCESS_RESUME"]
+        process_terminate = sources["RECORZ_MVP_METHOD_ENTRY_PROCESS_TERMINATE"]
         frame_count = sources["RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTEXT_FRAME_COUNT_NAMED"]
         frame_summary = sources["RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTEXT_FRAME_SUMMARY_AT_NAMED"]
         frame_detail = sources["RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTEXT_FRAME_DETAIL_AT_NAMED"]
         debugger_frame_count = sources["RECORZ_MVP_METHOD_ENTRY_WORKSPACE_DEBUG_FRAME_COUNT"]
         debugger_frame_summaries = sources["RECORZ_MVP_METHOD_ENTRY_WORKSPACE_DEBUG_FRAME_LIST_FROM"]
         debugger_frame_detail = sources["RECORZ_MVP_METHOD_ENTRY_WORKSPACE_DEBUG_FRAME_DETAIL_AT"]
+        workspace_spawn_process = sources["RECORZ_MVP_METHOD_ENTRY_WORKSPACE_SPAWN_PROCESS_NAMED_SOURCE"]
+        workspace_yield = sources["RECORZ_MVP_METHOD_ENTRY_WORKSPACE_YIELD"]
 
         self.assertEqual(len(sources), len(mvp.METHOD_ENTRY_DEFINITIONS))
         self.assertEqual(
@@ -619,6 +636,21 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             process_setter.source_text,
             "setLabel: aLabel state: aState context: aContext\n    <primitive: #processSetLabelStateContext>",
         )
+        self.assertEqual(process_suspend.class_name, "Process")
+        self.assertEqual(process_suspend.selector, "suspend")
+        self.assertEqual(process_suspend.argument_count, 0)
+        self.assertEqual(process_suspend.implementation_kind, mvp.KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE)
+        self.assertEqual(process_suspend.primitive_binding, "processSuspend")
+        self.assertEqual(process_resume.class_name, "Process")
+        self.assertEqual(process_resume.selector, "resume")
+        self.assertEqual(process_resume.argument_count, 0)
+        self.assertEqual(process_resume.implementation_kind, mvp.KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE)
+        self.assertEqual(process_resume.primitive_binding, "processResume")
+        self.assertEqual(process_terminate.class_name, "Process")
+        self.assertEqual(process_terminate.selector, "terminate")
+        self.assertEqual(process_terminate.argument_count, 0)
+        self.assertEqual(process_terminate.implementation_kind, mvp.KERNEL_METHOD_IMPLEMENTATION_PRIMITIVE)
+        self.assertEqual(process_terminate.primitive_binding, "processTerminate")
         self.assertEqual(frame_count.class_name, "Workspace")
         self.assertEqual(frame_count.selector, "contextFrameCountNamed:")
         self.assertEqual(frame_count.argument_count, 1)
@@ -646,6 +678,17 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             debugger_frame_detail.primitive_binding,
             "workspaceDebugFrameDetailAt",
         )
+        self.assertEqual(workspace_spawn_process.class_name, "Workspace")
+        self.assertEqual(workspace_spawn_process.selector, "spawnProcessNamed:source:")
+        self.assertEqual(workspace_spawn_process.argument_count, 2)
+        self.assertEqual(
+            workspace_spawn_process.primitive_binding,
+            "workspaceSpawnProcessNamedSource",
+        )
+        self.assertEqual(workspace_yield.class_name, "Workspace")
+        self.assertEqual(workspace_yield.selector, "yield")
+        self.assertEqual(workspace_yield.argument_count, 0)
+        self.assertEqual(workspace_yield.primitive_binding, "workspaceYield")
 
     def test_splits_class_file_chunks_on_bang_lines(self) -> None:
         self.assertEqual(
@@ -871,13 +914,18 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceProcessCount"], 56)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceProcessNameAt"], 57)
         self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceProcessLabelsVisibleFromCount"], 58)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceContextFrameSummariesVisibleFromCountNamed"], 59)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspacePackageCount"], 68)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLinesColumns"], 71)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLeftLinesColumns"], 72)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceBrowseInteractiveViews"], 89)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 108)
-        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processSetLabelStateContext"], 121)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceSpawnProcessNamedSource"], 59)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceYield"], 60)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceContextFrameSummariesVisibleFromCountNamed"], 61)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspacePackageCount"], 70)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLinesColumns"], 73)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceVisibleContentsTopLeftLinesColumns"], 74)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["workspaceBrowseInteractiveViews"], 91)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["textStyleWithText"], 110)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processSetLabelStateContext"], 123)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processSuspend"], 124)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processResume"], 125)
+        self.assertEqual(mvp.PRIMITIVE_BINDING_VALUES["processTerminate"], 126)
         for binding_name in _workspace_tool_primitive_bindings():
             self.assertIn(binding_name, mvp.PRIMITIVE_BINDING_VALUES)
         self.assertEqual(
@@ -1419,6 +1467,11 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 ("RECORZ_MVP_SELECTOR_SET_SELECTED_INDEX_LIST_TOP", 392),
                 ("RECORZ_MVP_SELECTOR_RETURN_STATE", 393),
                 ("RECORZ_MVP_SELECTOR_REMEMBER_DEBUGGER_PROCESS_FRAME_INDEX_FRAME_COUNT", 394),
+                ("RECORZ_MVP_SELECTOR_SPAWN_PROCESS_NAMED_SOURCE", 395),
+                ("RECORZ_MVP_SELECTOR_YIELD", 396),
+                ("RECORZ_MVP_SELECTOR_SUSPEND", 397),
+                ("RECORZ_MVP_SELECTOR_RESUME", 398),
+                ("RECORZ_MVP_SELECTOR_TERMINATE", 399),
             ],
         )
 
@@ -1743,7 +1796,7 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            mvp.METHOD_ENTRY_ORDER[48:85],
+            mvp.METHOD_ENTRY_ORDER[48:87],
             [
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_FILE_IN",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTENTS",
@@ -1773,6 +1826,8 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_PROCESS_COUNT",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_PROCESS_NAME_AT",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_PROCESS_LABELS_VISIBLE_FROM_COUNT",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_SPAWN_PROCESS_NAMED_SOURCE",
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_YIELD",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_CONTEXT_FRAME_SUMMARIES_VISIBLE_FROM_COUNT_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_CLASS_NAMED",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_BROWSE_METHOD_OF_CLASS_NAMED",
@@ -1785,8 +1840,9 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            mvp.METHOD_ENTRY_ORDER[-20:],
+            mvp.METHOD_ENTRY_ORDER[-24:],
             [
+                "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_BROWSE_REGENERATED_BOOT_SOURCE",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_BROWSE_REGENERATED_FILE_IN_SOURCE",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_STATUS_TEXT",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_TOOL_FEEDBACK_TEXT",
@@ -1795,6 +1851,9 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
                 "RECORZ_MVP_METHOD_ENTRY_PROCESS_STATE",
                 "RECORZ_MVP_METHOD_ENTRY_PROCESS_CONTEXT",
                 "RECORZ_MVP_METHOD_ENTRY_PROCESS_SET_LABEL_STATE_CONTEXT",
+                "RECORZ_MVP_METHOD_ENTRY_PROCESS_SUSPEND",
+                "RECORZ_MVP_METHOD_ENTRY_PROCESS_RESUME",
+                "RECORZ_MVP_METHOD_ENTRY_PROCESS_TERMINATE",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_RETURN_STATE_CONTENTS",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_RETURN_STATE_CURSOR",
                 "RECORZ_MVP_METHOD_ENTRY_WORKSPACE_RETURN_STATE_SELECTION",

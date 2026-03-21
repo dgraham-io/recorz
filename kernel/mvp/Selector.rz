@@ -788,3 +788,13 @@ RecorzKernelSelector: #returnState order: 392
 !
 RecorzKernelSelector: #rememberDebuggerProcess:frameIndex:frameCount: order: 393
 !
+RecorzKernelSelector: #spawnProcessNamed:source: order: 394
+!
+RecorzKernelSelector: #yield order: 395
+!
+RecorzKernelSelector: #suspend order: 396
+!
+RecorzKernelSelector: #resume order: 397
+!
+RecorzKernelSelector: #terminate order: 398
+!

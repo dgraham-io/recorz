@@ -841,7 +841,7 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         self.assertIsInstance(header, dict)
         assert isinstance(header, dict)
         self.assertEqual(header["compatibility_profile"], "RV32MVP1")
-        self.assertEqual(header["compatibility_label"], "RV32MVP1 snapshot format v8")
+        self.assertEqual(header["compatibility_label"], "RV32MVP1 snapshot format v9")
         self.assertEqual(header["active_cursor_visible"], 1)
         self.assertEqual(header["active_cursor_x"], 12)
         self.assertEqual(header["active_cursor_y"], 34)
@@ -886,9 +886,109 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(
-                "snapshot version mismatch: expected RV32MVP1 snapshot format v8, found v6",
+                "snapshot version mismatch: expected RV32MVP1 snapshot format v9, found v6",
                 result.stderr,
             )
+
+    def test_snapshot_preserves_scheduler_state_and_can_resume_a_saved_process(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-scheduler-snapshot-") as temp_dir:
+            temp_path = Path(temp_dir)
+            save_build_dir = temp_path / "save-build"
+            reload_build_dir = temp_path / "reload-build"
+            snapshot_path = temp_path / "scheduler-live-image.bin"
+            save_example_path = temp_path / "scheduler_save_demo.rz"
+            reload_example_path = temp_path / "scheduler_reload_demo.rz"
+
+            save_example_path.write_text(
+                "\n".join(
+                    [
+                        "| process |",
+                        "process := Workspace spawnProcessNamed: 'SnapshotProcess' source: 'Workspace yield. Transcript show: ''SNAP DONE''. Transcript cr.'.",
+                        "process setLabel: 'Snapshot Process' state: 'runnable' context: process context.",
+                        "KernelInstaller saveSnapshot.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            reload_example_path.write_text(
+                "\n".join(
+                    [
+                        "| process |",
+                        "Transcript show: 'COUNT:'; show: (Workspace processCount) printString; cr.",
+                        "Transcript show: 'DETAIL0'; cr.",
+                        "Transcript show: (Workspace objectDetailNamed: 'SnapshotProcess'); cr.",
+                        "process := KernelInstaller objectNamed: 'SnapshotProcess'.",
+                        "process resume.",
+                        "Transcript show: 'DETAIL1'; cr.",
+                        "Transcript show: (Workspace objectDetailNamed: 'SnapshotProcess'); cr.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            save_log = self.save_snapshot(
+                build_dir=save_build_dir,
+                example_path=save_example_path,
+                snapshot_output=snapshot_path,
+            )
+            self.assertIn("recorz-snapshot-begin", save_log)
+            self.assertTrue(snapshot_path.exists())
+
+            snapshot_summary = self.inspect_snapshot_summary(snapshot_path=snapshot_path)
+            header = snapshot_summary.get("header")
+            self.assertIsInstance(header, dict)
+            assert isinstance(header, dict)
+            self.assertEqual(header["scheduled_process_source_count"], 1)
+            self.assertEqual(header["scheduled_activation_count"], 1)
+            self.assertEqual(header["scheduled_process_count"], 1)
+            self.assertNotEqual(header["scheduled_runnable_head"], 0xFFFF)
+
+            elf_path = self.build_elf(build_dir=reload_build_dir, example_path=reload_example_path)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-fw_cfg",
+                    f"name=opt/recorz-snapshot,file={snapshot_path}",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=SNAPSHOT_SERIAL_TIMEOUT)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("COUNT:1", output.replace("\n", ""))
+            self.assertIn("DETAIL0", output)
+            self.assertIn("DETAIL1", output)
+            self.assertIn("state: runnable", output.lower())
+            self.assertIn("state: terminated", output.lower())
+            self.assertIn("SNAP DONE", output)
+            self.assertNotIn("panic:", output)
 
     def test_external_file_in_payload_can_evolve_a_saved_snapshot(self) -> None:
         save_log = self.save_snapshot(

@@ -6083,6 +6083,70 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             "the direct serial example path still trips a separate top-level selector-manifest limit."
         )
 
+    def test_workspace_can_spawn_resume_and_terminate_a_named_process_from_source(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-process-spawn-") as temp_dir:
+            build_dir = Path(temp_dir) / "build"
+            example_path = Path(temp_dir) / "workspace_process_spawn_demo.rz"
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "| process |",
+                        "process := Workspace spawnProcessNamed: 'AlphaProcess' source: 'Workspace yield. Transcript show: ''ALPHA DONE''. Transcript cr.'.",
+                        "Transcript show: 'COUNT:'; show: (Workspace processCount) printString; cr.",
+                        "Transcript show: 'NAME:'; show: (Workspace processNameAt: 1); cr.",
+                        "Transcript show: 'DETAIL0'; cr.",
+                        "Transcript show: (Workspace objectDetailNamed: 'AlphaProcess'); cr.",
+                        "process resume.",
+                        "Transcript show: 'DETAIL1'; cr.",
+                        "Transcript show: (Workspace objectDetailNamed: 'AlphaProcess'); cr.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            elf_path = _build_elf(build_dir, example_path)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("COUNT:1", output.replace("\n", ""))
+            self.assertIn("NAME:AlphaProcess", output.replace("\n", ""))
+            self.assertIn("DETAIL0", output)
+            self.assertIn("DETAIL1", output)
+            self.assertIn("state: runnable", output.lower())
+            self.assertIn("state: terminated", output.lower())
+            self.assertIn("ALPHA DONE", output)
+            self.assertNotIn("panic:", output)
+
     def test_package_comment_round_trips_through_file_out_source(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-package-comment-") as temp_dir:
             build_dir = Path(temp_dir)

@@ -61,16 +61,20 @@
 #define RUNTIME_STRING_POOL_LIMIT RECORZ_MVP_RUNTIME_STRING_POOL_LIMIT
 #define SNAPSHOT_STRING_LIMIT RECORZ_MVP_SNAPSHOT_STRING_LIMIT
 #define SNAPSHOT_BUFFER_LIMIT RECORZ_MVP_SNAPSHOT_BUFFER_LIMIT
+#define SCHEDULED_PROCESS_LIMIT 16U
+#define SCHEDULED_PROCESS_SOURCE_LIMIT 16U
+#define SCHEDULED_PROCESS_SOURCE_TEXT_LIMIT 2048U
+#define SCHEDULED_ACTIVATION_LIMIT 96U
 
 #define SNAPSHOT_MAGIC_0 'R'
 #define SNAPSHOT_MAGIC_1 'C'
 #define SNAPSHOT_MAGIC_2 'Z'
 #define SNAPSHOT_MAGIC_3 'T'
-#define SNAPSHOT_VERSION 8U
+#define SNAPSHOT_VERSION 9U
 #define SNAPSHOT_COMPATIBILITY_PROFILE "RV32MVP1"
 #define DEBUG_DUMP_RENDER_COUNTERS_BYTE 0x1fU
 #define GC_TEMP_ROOT_LIMIT 8U
-#define SNAPSHOT_HEADER_SIZE 54U
+#define SNAPSHOT_HEADER_SIZE 64U
 #define SNAPSHOT_VALUE_SIZE 8U
 #define SNAPSHOT_OBJECT_SIZE (4U + (OBJECT_FIELD_LIMIT * SNAPSHOT_VALUE_SIZE))
 #define SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE \
@@ -79,6 +83,13 @@
 #define SNAPSHOT_NAMED_OBJECT_RECORD_SIZE (2U + METHOD_SOURCE_NAME_LIMIT)
 #define SNAPSHOT_LIVE_METHOD_SOURCE_RECORD_SIZE (13U + METHOD_SOURCE_NAME_LIMIT)
 #define SNAPSHOT_LIVE_STRING_LITERAL_RECORD_SIZE 9U
+#define SNAPSHOT_SCHEDULED_PROCESS_SOURCE_RECORD_SIZE (4U + SCHEDULED_PROCESS_SOURCE_TEXT_LIMIT)
+#define SNAPSHOT_SCHEDULED_ACTIVATION_RECORD_SIZE \
+    (26U + SNAPSHOT_VALUE_SIZE + \
+     (MAX_SEND_ARGS * SNAPSHOT_VALUE_SIZE) + \
+     (STACK_LIMIT * SNAPSHOT_VALUE_SIZE) + \
+     (LEXICAL_LIMIT * SNAPSHOT_VALUE_SIZE))
+#define SNAPSHOT_SCHEDULED_PROCESS_RECORD_SIZE 12U
 
 #define FORM_FIELD_BITS RECORZ_MVP_FORM_FIELD_BITS
 #define BITMAP_FIELD_WIDTH RECORZ_MVP_BITMAP_FIELD_WIDTH
@@ -195,7 +206,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_EDITOR_MODEL
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_REMEMBER_DEBUGGER_PROCESS_FRAME_INDEX_FRAME_COUNT
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_TERMINATE
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 #define SOURCE_EVAL_BINDING_LIMIT (MAX_SEND_ARGS + LEXICAL_LIMIT)
 #if defined(RECORZ_MVP_PROFILE_DEV)
@@ -366,6 +377,74 @@ struct recorz_mvp_runtime_block_state {
     const struct recorz_mvp_heap_object *defining_class;
 };
 
+enum recorz_mvp_scheduled_process_state {
+    RECORZ_MVP_PROCESS_STATE_NONE = 0,
+    RECORZ_MVP_PROCESS_STATE_NEW = 1,
+    RECORZ_MVP_PROCESS_STATE_RUNNABLE = 2,
+    RECORZ_MVP_PROCESS_STATE_RUNNING = 3,
+    RECORZ_MVP_PROCESS_STATE_SUSPENDED = 4,
+    RECORZ_MVP_PROCESS_STATE_TERMINATED = 5,
+};
+
+enum recorz_mvp_scheduled_activation_kind {
+    RECORZ_MVP_SCHEDULED_ACTIVATION_NONE = 0,
+    RECORZ_MVP_SCHEDULED_ACTIVATION_WORKSPACE_SOURCE = 1,
+    RECORZ_MVP_SCHEDULED_ACTIVATION_COMPILED_METHOD = 2,
+};
+
+enum recorz_mvp_scheduler_run_event {
+    RECORZ_MVP_SCHEDULER_EVENT_NONE = 0,
+    RECORZ_MVP_SCHEDULER_EVENT_YIELDED = 1,
+    RECORZ_MVP_SCHEDULER_EVENT_SUSPENDED = 2,
+    RECORZ_MVP_SCHEDULER_EVENT_TERMINATED = 3,
+};
+
+enum recorz_mvp_scheduler_send_result_kind {
+    RECORZ_MVP_SCHEDULER_SEND_VALUE = 1,
+    RECORZ_MVP_SCHEDULER_SEND_CHILD = 2,
+    RECORZ_MVP_SCHEDULER_SEND_EVENT = 3,
+};
+
+struct recorz_mvp_scheduled_process_source {
+    uint8_t in_use;
+    char source[SCHEDULED_PROCESS_SOURCE_TEXT_LIMIT];
+};
+
+struct recorz_mvp_scheduled_activation_record {
+    uint8_t in_use;
+    uint8_t kind;
+    uint8_t argument_count;
+    uint8_t lexical_count;
+    uint16_t context_handle;
+    uint16_t sender_context_handle;
+    uint16_t compiled_method_handle;
+    uint16_t selector_id;
+    uint16_t source_slot;
+    int16_t shared_lexical_environment_index;
+    uint32_t pc;
+    uint32_t stack_size;
+    struct recorz_mvp_value receiver;
+    struct recorz_mvp_value arguments[MAX_SEND_ARGS];
+    struct recorz_mvp_value stack[STACK_LIMIT];
+    struct recorz_mvp_value lexical[LEXICAL_LIMIT];
+};
+
+struct recorz_mvp_scheduled_process_runtime {
+    uint8_t in_use;
+    uint8_t state;
+    uint16_t process_handle;
+    uint16_t current_context_handle;
+    uint16_t source_slot;
+    uint16_t next_runnable_index;
+};
+
+struct recorz_mvp_scheduler_send_result {
+    uint8_t kind;
+    uint8_t event;
+    uint16_t child_context_handle;
+    struct recorz_mvp_value value;
+};
+
 static struct recorz_mvp_value stack[STACK_LIMIT];
 static struct recorz_mvp_heap_object heap[HEAP_LIMIT];
 static uint32_t stack_size = 0U;
@@ -462,6 +541,15 @@ static uint8_t gc_bootstrap_file_in_active = 0U;
 static char snapshot_string_pool[SNAPSHOT_STRING_LIMIT];
 static uint8_t snapshot_buffer[SNAPSHOT_BUFFER_LIMIT];
 static uint8_t booted_from_snapshot = 0U;
+static struct recorz_mvp_scheduled_process_source scheduled_process_sources[SCHEDULED_PROCESS_SOURCE_LIMIT];
+static struct recorz_mvp_scheduled_activation_record scheduled_activation_records[SCHEDULED_ACTIVATION_LIMIT];
+static struct recorz_mvp_scheduled_process_runtime scheduled_processes[SCHEDULED_PROCESS_LIMIT];
+static uint16_t scheduled_runnable_head = 0xFFFFU;
+static uint16_t scheduled_runnable_tail = 0xFFFFU;
+static int16_t scheduled_active_process_index = -1;
+static uint8_t scheduled_yield_requested = 0U;
+static uint8_t scheduled_suspend_requested = 0U;
+static uint8_t scheduled_terminate_requested = 0U;
 
 static uint16_t seeded_handles[HEAP_LIMIT];
 static const char *panic_phase = "idle";
@@ -554,6 +642,29 @@ static const struct recorz_mvp_heap_object *class_side_lookup_target(
 );
 static void initialize_runtime_caches(void);
 static void reset_runtime_state(void);
+static const char *scheduled_process_state_text(uint8_t state);
+static uint16_t scheduled_process_slot_for_handle(uint16_t process_handle);
+static uint16_t scheduled_process_source_slot_for_text(const char *source_text);
+static uint16_t scheduled_activation_slot_for_context(uint16_t context_handle);
+static void mark_context_dead(uint16_t context_handle);
+static void scheduled_process_sync_object_fields(uint16_t process_index);
+static void scheduled_process_clear_runtime(uint16_t process_index);
+static void scheduled_process_remove_from_runnable_queue(uint16_t process_index);
+static void scheduled_process_append_runnable_queue(uint16_t process_index);
+static uint16_t scheduled_process_create_named_source(const char *process_name, const char *source_text);
+static void scheduled_process_resume_by_index(uint16_t process_index);
+static enum recorz_mvp_scheduler_run_event scheduled_process_run_by_index(uint16_t process_index);
+static struct recorz_mvp_scheduler_send_result scheduled_send_for_activation(
+    struct recorz_mvp_scheduled_activation_record *record,
+    struct recorz_mvp_value receiver,
+    uint16_t selector,
+    uint16_t argument_count,
+    const struct recorz_mvp_value arguments[]
+);
+static uint16_t scheduled_spawn_workspace_source_process(const char *process_name, const char *source_text);
+static void scheduled_process_suspend_by_handle(uint16_t process_handle);
+static void scheduled_process_resume_by_handle(uint16_t process_handle);
+static void scheduled_process_terminate_by_handle(uint16_t process_handle);
 static void load_snapshot_state(const uint8_t *blob, uint32_t size);
 static void emit_live_snapshot(void);
 static void file_in_class_chunks_source(const char *source);
@@ -1769,6 +1880,16 @@ static const char *selector_name(uint16_t selector) {
             return "context";
         case RECORZ_MVP_SELECTOR_SET_LABEL_STATE_CONTEXT:
             return "setLabel:state:context:";
+        case RECORZ_MVP_SELECTOR_SPAWN_PROCESS_NAMED_SOURCE:
+            return "spawnProcessNamed:source:";
+        case RECORZ_MVP_SELECTOR_YIELD:
+            return "yield";
+        case RECORZ_MVP_SELECTOR_SUSPEND:
+            return "suspend";
+        case RECORZ_MVP_SELECTOR_RESUME:
+            return "resume";
+        case RECORZ_MVP_SELECTOR_TERMINATE:
+            return "terminate";
     }
     return "unknown";
 }
@@ -4075,6 +4196,159 @@ static struct recorz_mvp_value top_level_receiver_value(void) {
     return global_value(RECORZ_MVP_GLOBAL_WORKSPACE);
 }
 
+static const char *scheduled_process_state_text(uint8_t state) {
+    switch (state) {
+        case RECORZ_MVP_PROCESS_STATE_NEW:
+            return "new";
+        case RECORZ_MVP_PROCESS_STATE_RUNNABLE:
+            return "runnable";
+        case RECORZ_MVP_PROCESS_STATE_RUNNING:
+            return "running";
+        case RECORZ_MVP_PROCESS_STATE_SUSPENDED:
+            return "suspended";
+        case RECORZ_MVP_PROCESS_STATE_TERMINATED:
+            return "terminated";
+        default:
+            return "idle";
+    }
+}
+
+static uint16_t scheduled_process_slot_for_handle(uint16_t process_handle) {
+    uint16_t process_index;
+
+    if (process_handle == 0U) {
+        return 0xFFFFU;
+    }
+    for (process_index = 0U; process_index < SCHEDULED_PROCESS_LIMIT; ++process_index) {
+        if (scheduled_processes[process_index].in_use &&
+            scheduled_processes[process_index].process_handle == process_handle) {
+            return process_index;
+        }
+    }
+    return 0xFFFFU;
+}
+
+static uint16_t scheduled_process_source_slot_for_text(const char *source_text) {
+    uint16_t source_index;
+    uint32_t source_length_value;
+
+    if (source_text == 0 || source_text[0] == '\0') {
+        machine_panic("scheduled process source is empty");
+    }
+    source_length_value = text_length(source_text);
+    if (source_length_value + 1U > SCHEDULED_PROCESS_SOURCE_TEXT_LIMIT) {
+        machine_panic("scheduled process source exceeds capacity");
+    }
+    for (source_index = 0U; source_index < SCHEDULED_PROCESS_SOURCE_LIMIT; ++source_index) {
+        if (!scheduled_process_sources[source_index].in_use) {
+            uint32_t source_offset;
+
+            scheduled_process_sources[source_index].in_use = 1U;
+            for (source_offset = 0U; source_offset <= source_length_value; ++source_offset) {
+                scheduled_process_sources[source_index].source[source_offset] = source_text[source_offset];
+            }
+            return source_index;
+        }
+    }
+    machine_panic("scheduled process source capacity exceeded");
+    return 0xFFFFU;
+}
+
+static uint16_t scheduled_activation_slot_for_context(uint16_t context_handle) {
+    uint16_t activation_index;
+
+    if (context_handle == 0U) {
+        return 0xFFFFU;
+    }
+    for (activation_index = 0U; activation_index < SCHEDULED_ACTIVATION_LIMIT; ++activation_index) {
+        if (scheduled_activation_records[activation_index].in_use &&
+            scheduled_activation_records[activation_index].context_handle == context_handle) {
+            return activation_index;
+        }
+    }
+    return 0xFFFFU;
+}
+
+static void scheduled_process_sync_object_fields(uint16_t process_index) {
+    struct recorz_mvp_scheduled_process_runtime *process_runtime;
+
+    if (process_index >= SCHEDULED_PROCESS_LIMIT) {
+        machine_panic("scheduled process slot is out of range");
+    }
+    process_runtime = &scheduled_processes[process_index];
+    if (!process_runtime->in_use) {
+        return;
+    }
+    heap_set_field(
+        process_runtime->process_handle,
+        PROCESS_FIELD_STATE,
+        string_value(scheduled_process_state_text(process_runtime->state))
+    );
+    heap_set_field(
+        process_runtime->process_handle,
+        PROCESS_FIELD_CONTEXT,
+        process_runtime->current_context_handle == 0U ?
+            nil_value() :
+            object_value(process_runtime->current_context_handle)
+    );
+}
+
+static void scheduled_process_remove_from_runnable_queue(uint16_t process_index) {
+    uint16_t current_index = scheduled_runnable_head;
+    uint16_t previous_index = 0xFFFFU;
+
+    while (current_index != 0xFFFFU) {
+        if (current_index == process_index) {
+            uint16_t next_index = scheduled_processes[current_index].next_runnable_index;
+
+            if (previous_index == 0xFFFFU) {
+                scheduled_runnable_head = next_index;
+            } else {
+                scheduled_processes[previous_index].next_runnable_index = next_index;
+            }
+            if (scheduled_runnable_tail == current_index) {
+                scheduled_runnable_tail = previous_index;
+            }
+            scheduled_processes[current_index].next_runnable_index = 0xFFFFU;
+            return;
+        }
+        previous_index = current_index;
+        current_index = scheduled_processes[current_index].next_runnable_index;
+    }
+}
+
+static void scheduled_process_append_runnable_queue(uint16_t process_index) {
+    if (process_index >= SCHEDULED_PROCESS_LIMIT || !scheduled_processes[process_index].in_use) {
+        machine_panic("scheduled process queue append expects a live process slot");
+    }
+    if (scheduled_processes[process_index].next_runnable_index != 0xFFFFU ||
+        scheduled_runnable_head == process_index ||
+        scheduled_runnable_tail == process_index) {
+        scheduled_process_remove_from_runnable_queue(process_index);
+    }
+    scheduled_processes[process_index].next_runnable_index = 0xFFFFU;
+    if (scheduled_runnable_tail == 0xFFFFU) {
+        scheduled_runnable_head = process_index;
+        scheduled_runnable_tail = process_index;
+        return;
+    }
+    scheduled_processes[scheduled_runnable_tail].next_runnable_index = process_index;
+    scheduled_runnable_tail = process_index;
+}
+
+static void scheduled_process_clear_runtime(uint16_t process_index) {
+    if (process_index >= SCHEDULED_PROCESS_LIMIT) {
+        machine_panic("scheduled process slot is out of range");
+    }
+    scheduled_process_remove_from_runnable_queue(process_index);
+    scheduled_processes[process_index].in_use = 0U;
+    scheduled_processes[process_index].state = RECORZ_MVP_PROCESS_STATE_NONE;
+    scheduled_processes[process_index].process_handle = 0U;
+    scheduled_processes[process_index].current_context_handle = 0U;
+    scheduled_processes[process_index].source_slot = 0U;
+    scheduled_processes[process_index].next_runnable_index = 0xFFFFU;
+}
+
 static struct recorz_mvp_value boolean_value(uint8_t condition) {
     return global_value(condition ? RECORZ_MVP_GLOBAL_TRUE : RECORZ_MVP_GLOBAL_FALSE);
 }
@@ -4443,6 +4717,41 @@ static void gc_mark_roots(void) {
     }
     for (index = 0U; index < gc_temp_root_count; ++index) {
         gc_mark_handle_if_live(gc_temp_roots[index]);
+    }
+    for (index = 0U; index < SCHEDULED_PROCESS_LIMIT; ++index) {
+        if (!scheduled_processes[index].in_use) {
+            continue;
+        }
+        gc_mark_handle_if_live(scheduled_processes[index].process_handle);
+        gc_mark_handle_if_live(scheduled_processes[index].current_context_handle);
+    }
+    for (index = 0U; index < SCHEDULED_ACTIVATION_LIMIT; ++index) {
+        uint16_t argument_index;
+        uint16_t lexical_index;
+        uint32_t stack_value_index;
+
+        if (!scheduled_activation_records[index].in_use) {
+            continue;
+        }
+        gc_mark_handle_if_live(scheduled_activation_records[index].context_handle);
+        gc_mark_handle_if_live(scheduled_activation_records[index].sender_context_handle);
+        gc_mark_handle_if_live(scheduled_activation_records[index].compiled_method_handle);
+        gc_mark_value_if_live(scheduled_activation_records[index].receiver);
+        for (argument_index = 0U;
+             argument_index < scheduled_activation_records[index].argument_count;
+             ++argument_index) {
+            gc_mark_value_if_live(scheduled_activation_records[index].arguments[argument_index]);
+        }
+        for (lexical_index = 0U;
+             lexical_index < scheduled_activation_records[index].lexical_count;
+             ++lexical_index) {
+            gc_mark_value_if_live(scheduled_activation_records[index].lexical[lexical_index]);
+        }
+        for (stack_value_index = 0U;
+             stack_value_index < scheduled_activation_records[index].stack_size;
+             ++stack_value_index) {
+            gc_mark_value_if_live(scheduled_activation_records[index].stack[stack_value_index]);
+        }
     }
     gc_mark_conservative_stack_roots();
 }
@@ -13609,6 +13918,8 @@ static void reset_runtime_state(void) {
     uint16_t named_index;
     uint16_t code_index;
     uint16_t handle_index;
+    uint16_t process_index;
+    uint16_t activation_index;
 
     heap_size = 0U;
     heap_live_count = 0U;
@@ -13645,6 +13956,12 @@ static void reset_runtime_state(void) {
     runtime_string_pool[0] = '\0';
     snapshot_string_pool[0] = '\0';
     booted_from_snapshot = 0U;
+    scheduled_runnable_head = 0xFFFFU;
+    scheduled_runnable_tail = 0xFFFFU;
+    scheduled_active_process_index = -1;
+    scheduled_yield_requested = 0U;
+    scheduled_suspend_requested = 0U;
+    scheduled_terminate_requested = 0U;
     gc_collection_count = 0U;
     gc_last_reclaimed_count = 0U;
     gc_total_reclaimed_count = 0U;
@@ -13704,6 +14021,33 @@ static void reset_runtime_state(void) {
         live_package_do_it_sources[named_index].package_name[0] = '\0';
         live_package_do_it_sources[named_index].source_offset = 0U;
         live_package_do_it_sources[named_index].source_length = 0U;
+    }
+    for (process_index = 0U; process_index < SCHEDULED_PROCESS_SOURCE_LIMIT; ++process_index) {
+        scheduled_process_sources[process_index].in_use = 0U;
+        scheduled_process_sources[process_index].source[0] = '\0';
+    }
+    for (activation_index = 0U; activation_index < SCHEDULED_ACTIVATION_LIMIT; ++activation_index) {
+        scheduled_activation_records[activation_index].in_use = 0U;
+        scheduled_activation_records[activation_index].kind = RECORZ_MVP_SCHEDULED_ACTIVATION_NONE;
+        scheduled_activation_records[activation_index].argument_count = 0U;
+        scheduled_activation_records[activation_index].lexical_count = 0U;
+        scheduled_activation_records[activation_index].stack_size = 0U;
+        scheduled_activation_records[activation_index].context_handle = 0U;
+        scheduled_activation_records[activation_index].sender_context_handle = 0U;
+        scheduled_activation_records[activation_index].compiled_method_handle = 0U;
+        scheduled_activation_records[activation_index].selector_id = 0U;
+        scheduled_activation_records[activation_index].source_slot = 0U;
+        scheduled_activation_records[activation_index].shared_lexical_environment_index = -1;
+        scheduled_activation_records[activation_index].pc = 0U;
+        scheduled_activation_records[activation_index].receiver = nil_value();
+    }
+    for (process_index = 0U; process_index < SCHEDULED_PROCESS_LIMIT; ++process_index) {
+        scheduled_processes[process_index].in_use = 0U;
+        scheduled_processes[process_index].state = RECORZ_MVP_PROCESS_STATE_NONE;
+        scheduled_processes[process_index].process_handle = 0U;
+        scheduled_processes[process_index].current_context_handle = 0U;
+        scheduled_processes[process_index].source_slot = 0U;
+        scheduled_processes[process_index].next_runnable_index = 0xFFFFU;
     }
     for (code_index = 0U; code_index < 128U; ++code_index) {
         glyph_bitmap_handles[code_index] = 0U;
@@ -16068,9 +16412,46 @@ static uint32_t snapshot_string_storage_size(struct recorz_mvp_value value) {
     return text_length(value.string) + 1U;
 }
 
+static uint16_t current_scheduled_process_source_count(void) {
+    uint16_t source_index;
+    uint16_t count = 0U;
+
+    for (source_index = 0U; source_index < SCHEDULED_PROCESS_SOURCE_LIMIT; ++source_index) {
+        if (scheduled_process_sources[source_index].in_use) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+static uint16_t current_scheduled_activation_count(void) {
+    uint16_t activation_index;
+    uint16_t count = 0U;
+
+    for (activation_index = 0U; activation_index < SCHEDULED_ACTIVATION_LIMIT; ++activation_index) {
+        if (scheduled_activation_records[activation_index].in_use) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+static uint16_t current_scheduled_process_count(void) {
+    uint16_t process_index;
+    uint16_t count = 0U;
+
+    for (process_index = 0U; process_index < SCHEDULED_PROCESS_LIMIT; ++process_index) {
+        if (scheduled_processes[process_index].in_use) {
+            ++count;
+        }
+    }
+    return count;
+}
+
 static uint32_t current_snapshot_string_byte_count(void) {
     uint32_t string_byte_count = 0U;
     uint16_t handle;
+    uint16_t activation_index;
 
     for (handle = 1U; handle <= heap_size; ++handle) {
         const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(handle);
@@ -16078,6 +16459,24 @@ static uint32_t current_snapshot_string_byte_count(void) {
 
         for (field_index = 0U; field_index < object->field_count; ++field_index) {
             string_byte_count += snapshot_string_storage_size(object->fields[field_index]);
+        }
+    }
+    for (activation_index = 0U; activation_index < SCHEDULED_ACTIVATION_LIMIT; ++activation_index) {
+        const struct recorz_mvp_scheduled_activation_record *record = &scheduled_activation_records[activation_index];
+        uint16_t value_index;
+
+        if (!record->in_use) {
+            continue;
+        }
+        string_byte_count += snapshot_string_storage_size(record->receiver);
+        for (value_index = 0U; value_index < MAX_SEND_ARGS; ++value_index) {
+            string_byte_count += snapshot_string_storage_size(record->arguments[value_index]);
+        }
+        for (value_index = 0U; value_index < STACK_LIMIT; ++value_index) {
+            string_byte_count += snapshot_string_storage_size(record->stack[value_index]);
+        }
+        for (value_index = 0U; value_index < LEXICAL_LIMIT; ++value_index) {
+            string_byte_count += snapshot_string_storage_size(record->lexical[value_index]);
         }
     }
     return string_byte_count;
@@ -16091,7 +16490,10 @@ static uint32_t snapshot_total_size(
     uint32_t string_byte_count,
     uint32_t live_method_source_byte_count,
     uint32_t live_string_literal_byte_count,
-    uint16_t live_string_literal_count
+    uint16_t live_string_literal_count,
+    uint16_t scheduled_process_source_count,
+    uint16_t scheduled_activation_count,
+    uint16_t scheduled_process_count
 ) {
     return SNAPSHOT_HEADER_SIZE +
            (heap_size * SNAPSHOT_OBJECT_SIZE) +
@@ -16105,6 +16507,9 @@ static uint32_t snapshot_total_size(
            live_method_source_byte_count +
            ((uint32_t)live_string_literal_count * SNAPSHOT_LIVE_STRING_LITERAL_RECORD_SIZE) +
            live_string_literal_byte_count +
+           ((uint32_t)scheduled_process_source_count * SNAPSHOT_SCHEDULED_PROCESS_SOURCE_RECORD_SIZE) +
+           ((uint32_t)scheduled_activation_count * SNAPSHOT_SCHEDULED_ACTIVATION_RECORD_SIZE) +
+           ((uint32_t)scheduled_process_count * SNAPSHOT_SCHEDULED_PROCESS_RECORD_SIZE) +
            ((uint32_t)mono_bitmap_count * MONO_BITMAP_MAX_HEIGHT * 4U) +
            string_byte_count;
 }
@@ -16116,11 +16521,17 @@ static const char *kernel_memory_report_text(void) {
     uint32_t live_method_source_bytes = current_snapshot_live_method_source_byte_count();
     uint32_t live_string_literal_bytes = current_live_string_literal_byte_count();
     uint16_t live_string_literal_count = current_live_string_literal_count();
+    uint16_t scheduled_process_source_count = current_scheduled_process_source_count();
+    uint16_t scheduled_activation_count = current_scheduled_activation_count();
+    uint16_t scheduled_process_count = current_scheduled_process_count();
     uint32_t snapshot_size = snapshot_total_size(
         snapshot_string_bytes,
         live_method_source_bytes,
         live_string_literal_bytes,
-        live_string_literal_count
+        live_string_literal_count,
+        scheduled_process_source_count,
+        scheduled_activation_count,
+        scheduled_process_count
     );
 
     buffer[0] = '\0';
@@ -16248,12 +16659,19 @@ static void emit_live_snapshot(void) {
     uint32_t live_method_source_byte_count;
     uint32_t live_string_literal_byte_count;
     uint16_t live_string_literal_count;
+    uint16_t scheduled_process_source_count;
+    uint16_t scheduled_activation_count;
+    uint16_t scheduled_process_count;
     uint16_t handle;
     uint16_t dynamic_index;
     uint16_t package_index;
     uint16_t named_index;
     uint16_t live_method_index;
     uint16_t literal_index;
+    uint16_t source_index;
+    uint16_t activation_index;
+    uint16_t process_index;
+    uint16_t value_index;
     uint32_t row;
     uint32_t total_size;
     uint32_t offset;
@@ -16265,11 +16683,20 @@ static void emit_live_snapshot(void) {
     live_method_source_byte_count = current_snapshot_live_method_source_byte_count();
     live_string_literal_byte_count = current_live_string_literal_byte_count();
     live_string_literal_count = current_live_string_literal_count();
+    scheduled_process_source_count = current_scheduled_process_source_count();
+    scheduled_activation_count = current_scheduled_activation_count();
+    scheduled_process_count = current_scheduled_process_count();
+    if (scheduled_active_process_index >= 0) {
+        machine_panic("snapshot cannot capture an active scheduled process");
+    }
     total_size = snapshot_total_size(
         string_byte_count,
         live_method_source_byte_count,
         live_string_literal_byte_count,
-        live_string_literal_count
+        live_string_literal_count,
+        scheduled_process_source_count,
+        scheduled_activation_count,
+        scheduled_process_count
     );
     if (total_size > SNAPSHOT_BUFFER_LIMIT) {
         machine_panic("snapshot exceeds buffer capacity");
@@ -16320,6 +16747,16 @@ static void emit_live_snapshot(void) {
     write_u16_le(snapshot_buffer + offset, (uint16_t)active_cursor_screen_x);
     offset += 2U;
     write_u16_le(snapshot_buffer + offset, (uint16_t)active_cursor_screen_y);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, scheduled_process_source_count);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, scheduled_activation_count);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, scheduled_process_count);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, scheduled_runnable_head);
+    offset += 2U;
+    write_u16_le(snapshot_buffer + offset, 0U);
     offset += 2U;
     write_u32_le(snapshot_buffer + offset, total_size);
     offset += 4U;
@@ -16462,6 +16899,115 @@ static void emit_live_snapshot(void) {
             offset += 4U;
         }
     }
+    for (source_index = 0U; source_index < SCHEDULED_PROCESS_SOURCE_LIMIT; ++source_index) {
+        uint32_t source_length_value;
+        uint32_t source_offset;
+
+        if (!scheduled_process_sources[source_index].in_use) {
+            continue;
+        }
+        source_length_value = text_length(scheduled_process_sources[source_index].source);
+        if (source_length_value + 1U > SCHEDULED_PROCESS_SOURCE_TEXT_LIMIT) {
+            machine_panic("scheduled process source exceeds snapshot capacity");
+        }
+        write_u16_le(snapshot_buffer + offset, source_index);
+        offset += 2U;
+        write_u16_le(snapshot_buffer + offset, (uint16_t)source_length_value);
+        offset += 2U;
+        for (source_offset = 0U; source_offset < SCHEDULED_PROCESS_SOURCE_TEXT_LIMIT; ++source_offset) {
+            snapshot_buffer[offset++] =
+                (uint8_t)scheduled_process_sources[source_index].source[source_offset];
+        }
+    }
+    for (activation_index = 0U; activation_index < SCHEDULED_ACTIVATION_LIMIT; ++activation_index) {
+        const struct recorz_mvp_scheduled_activation_record *record = &scheduled_activation_records[activation_index];
+
+        if (!record->in_use) {
+            continue;
+        }
+        if (record->shared_lexical_environment_index >= 0) {
+            machine_panic("snapshot cannot capture a scheduled activation with shared lexical state");
+        }
+        write_u16_le(snapshot_buffer + offset, activation_index);
+        offset += 2U;
+        snapshot_buffer[offset++] = record->kind;
+        snapshot_buffer[offset++] = record->argument_count;
+        snapshot_buffer[offset++] = record->lexical_count;
+        snapshot_buffer[offset++] = 0U;
+        write_u16_le(snapshot_buffer + offset, record->context_handle);
+        offset += 2U;
+        write_u16_le(snapshot_buffer + offset, record->sender_context_handle);
+        offset += 2U;
+        write_u16_le(snapshot_buffer + offset, record->compiled_method_handle);
+        offset += 2U;
+        write_u16_le(snapshot_buffer + offset, record->selector_id);
+        offset += 2U;
+        write_u16_le(snapshot_buffer + offset, record->source_slot);
+        offset += 2U;
+        write_u16_le(snapshot_buffer + offset, (uint16_t)record->shared_lexical_environment_index);
+        offset += 2U;
+        write_u32_le(snapshot_buffer + offset, record->pc);
+        offset += 4U;
+        write_u32_le(snapshot_buffer + offset, record->stack_size);
+        offset += 4U;
+        snapshot_encode_value(
+            snapshot_buffer + offset,
+            record->receiver,
+            string_section,
+            string_byte_count,
+            &string_offset
+        );
+        offset += SNAPSHOT_VALUE_SIZE;
+        for (value_index = 0U; value_index < MAX_SEND_ARGS; ++value_index) {
+            snapshot_encode_value(
+                snapshot_buffer + offset,
+                record->arguments[value_index],
+                string_section,
+                string_byte_count,
+                &string_offset
+            );
+            offset += SNAPSHOT_VALUE_SIZE;
+        }
+        for (value_index = 0U; value_index < STACK_LIMIT; ++value_index) {
+            snapshot_encode_value(
+                snapshot_buffer + offset,
+                record->stack[value_index],
+                string_section,
+                string_byte_count,
+                &string_offset
+            );
+            offset += SNAPSHOT_VALUE_SIZE;
+        }
+        for (value_index = 0U; value_index < LEXICAL_LIMIT; ++value_index) {
+            snapshot_encode_value(
+                snapshot_buffer + offset,
+                record->lexical[value_index],
+                string_section,
+                string_byte_count,
+                &string_offset
+            );
+            offset += SNAPSHOT_VALUE_SIZE;
+        }
+    }
+    for (process_index = 0U; process_index < SCHEDULED_PROCESS_LIMIT; ++process_index) {
+        const struct recorz_mvp_scheduled_process_runtime *process_runtime = &scheduled_processes[process_index];
+
+        if (!process_runtime->in_use) {
+            continue;
+        }
+        write_u16_le(snapshot_buffer + offset, process_index);
+        offset += 2U;
+        snapshot_buffer[offset++] = process_runtime->state;
+        snapshot_buffer[offset++] = 0U;
+        write_u16_le(snapshot_buffer + offset, process_runtime->process_handle);
+        offset += 2U;
+        write_u16_le(snapshot_buffer + offset, process_runtime->current_context_handle);
+        offset += 2U;
+        write_u16_le(snapshot_buffer + offset, process_runtime->source_slot);
+        offset += 2U;
+        write_u16_le(snapshot_buffer + offset, process_runtime->next_runnable_index);
+        offset += 2U;
+    }
     if (string_offset != string_byte_count || offset != total_size - string_byte_count) {
         machine_panic("snapshot encoding size mismatch");
     }
@@ -16512,11 +17058,19 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     uint16_t saved_active_cursor_visible;
     uint16_t saved_active_cursor_x;
     uint16_t saved_active_cursor_y;
+    uint16_t saved_scheduled_process_source_count;
+    uint16_t saved_scheduled_activation_count;
+    uint16_t saved_scheduled_process_count;
+    uint16_t saved_scheduled_runnable_head;
     uint32_t string_section_offset;
     uint32_t offset;
     uint16_t handle;
     uint16_t dynamic_index;
     uint16_t named_index;
+    uint16_t source_index;
+    uint16_t activation_index;
+    uint16_t process_index;
+    uint16_t value_index;
     uint32_t row;
 
     if (size < SNAPSHOT_HEADER_SIZE) {
@@ -16527,7 +17081,7 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
         machine_panic("snapshot magic mismatch");
     }
     if (read_u16_le(blob + 4U) != SNAPSHOT_VERSION) {
-        machine_panic("snapshot version mismatch: expected RV32MVP1 snapshot v8");
+        machine_panic("snapshot version mismatch: expected RV32MVP1 snapshot v9");
     }
     object_count = read_u16_le(blob + 6U);
     dynamic_count = read_u16_le(blob + 8U);
@@ -16549,7 +17103,11 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     saved_active_cursor_visible = read_u16_le(blob + 44U);
     saved_active_cursor_x = read_u16_le(blob + 46U);
     saved_active_cursor_y = read_u16_le(blob + 48U);
-    expected_size = read_u32_le(blob + 50U);
+    saved_scheduled_process_source_count = read_u16_le(blob + 50U);
+    saved_scheduled_activation_count = read_u16_le(blob + 52U);
+    saved_scheduled_process_count = read_u16_le(blob + 54U);
+    saved_scheduled_runnable_head = read_u16_le(blob + 56U);
+    expected_size = read_u32_le(blob + 60U);
     if (object_count == 0U || object_count > HEAP_LIMIT) {
         machine_panic("snapshot object count exceeds heap capacity");
     }
@@ -16574,6 +17132,18 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     if (saved_mono_bitmap_count > MONO_BITMAP_LIMIT) {
         machine_panic("snapshot mono bitmap count exceeds capacity");
     }
+    if (saved_scheduled_process_source_count > SCHEDULED_PROCESS_SOURCE_LIMIT) {
+        machine_panic("snapshot scheduled process source count exceeds capacity");
+    }
+    if (saved_scheduled_activation_count > SCHEDULED_ACTIVATION_LIMIT) {
+        machine_panic("snapshot scheduled activation count exceeds capacity");
+    }
+    if (saved_scheduled_process_count > SCHEDULED_PROCESS_LIMIT) {
+        machine_panic("snapshot scheduled process count exceeds capacity");
+    }
+    if (saved_scheduled_runnable_head != 0xFFFFU && saved_scheduled_runnable_head >= SCHEDULED_PROCESS_LIMIT) {
+        machine_panic("snapshot scheduled runnable head is out of range");
+    }
     if (string_byte_count > SNAPSHOT_STRING_LIMIT) {
         machine_panic("snapshot string section exceeds capacity");
     }
@@ -16592,7 +17162,10 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
                             saved_live_method_source_byte_count +
                             ((uint32_t)saved_live_string_literal_count * SNAPSHOT_LIVE_STRING_LITERAL_RECORD_SIZE) +
                             saved_live_string_literal_byte_count +
-                            ((uint32_t)saved_mono_bitmap_count * MONO_BITMAP_MAX_HEIGHT * 4U);
+                            ((uint32_t)saved_mono_bitmap_count * MONO_BITMAP_MAX_HEIGHT * 4U) +
+                            ((uint32_t)saved_scheduled_process_source_count * SNAPSHOT_SCHEDULED_PROCESS_SOURCE_RECORD_SIZE) +
+                            ((uint32_t)saved_scheduled_activation_count * SNAPSHOT_SCHEDULED_ACTIVATION_RECORD_SIZE) +
+                            ((uint32_t)saved_scheduled_process_count * SNAPSHOT_SCHEDULED_PROCESS_RECORD_SIZE);
     if (string_section_offset + string_byte_count != size) {
         machine_panic("snapshot string section size mismatch");
     }
@@ -16837,8 +17410,149 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
             offset += 4U;
         }
     }
+    for (source_index = 0U; source_index < saved_scheduled_process_source_count; ++source_index) {
+        uint16_t slot_id = read_u16_le(blob + offset);
+        uint16_t source_length_value = read_u16_le(blob + offset + 2U);
+        uint32_t source_offset;
+
+        if (slot_id >= SCHEDULED_PROCESS_SOURCE_LIMIT) {
+            machine_panic("snapshot scheduled process source slot is out of range");
+        }
+        if (source_length_value + 1U > SCHEDULED_PROCESS_SOURCE_TEXT_LIMIT) {
+            machine_panic("snapshot scheduled process source length exceeds capacity");
+        }
+        if (blob[offset + 4U + source_length_value] != 0U) {
+            machine_panic("snapshot scheduled process source is not terminated");
+        }
+        scheduled_process_sources[slot_id].in_use = 1U;
+        for (source_offset = 0U; source_offset < SCHEDULED_PROCESS_SOURCE_TEXT_LIMIT; ++source_offset) {
+            scheduled_process_sources[slot_id].source[source_offset] = (char)blob[offset + 4U + source_offset];
+        }
+        offset += SNAPSHOT_SCHEDULED_PROCESS_SOURCE_RECORD_SIZE;
+    }
+    for (activation_index = 0U; activation_index < saved_scheduled_activation_count; ++activation_index) {
+        struct recorz_mvp_scheduled_activation_record *record;
+        uint16_t slot_id = read_u16_le(blob + offset);
+
+        if (slot_id >= SCHEDULED_ACTIVATION_LIMIT) {
+            machine_panic("snapshot scheduled activation slot is out of range");
+        }
+        record = &scheduled_activation_records[slot_id];
+        record->in_use = 1U;
+        record->kind = blob[offset + 2U];
+        record->argument_count = blob[offset + 3U];
+        record->lexical_count = blob[offset + 4U];
+        record->context_handle = read_u16_le(blob + offset + 6U);
+        record->sender_context_handle = read_u16_le(blob + offset + 8U);
+        record->compiled_method_handle = read_u16_le(blob + offset + 10U);
+        record->selector_id = read_u16_le(blob + offset + 12U);
+        record->source_slot = read_u16_le(blob + offset + 14U);
+        record->shared_lexical_environment_index = (int16_t)read_u16_le(blob + offset + 16U);
+        record->pc = read_u32_le(blob + offset + 18U);
+        record->stack_size = read_u32_le(blob + offset + 22U);
+        if (record->kind != RECORZ_MVP_SCHEDULED_ACTIVATION_WORKSPACE_SOURCE &&
+            record->kind != RECORZ_MVP_SCHEDULED_ACTIVATION_COMPILED_METHOD) {
+            machine_panic("snapshot scheduled activation kind is invalid");
+        }
+        if (record->argument_count > MAX_SEND_ARGS) {
+            machine_panic("snapshot scheduled activation argument count exceeds capacity");
+        }
+        if (record->lexical_count > LEXICAL_LIMIT) {
+            machine_panic("snapshot scheduled activation lexical count exceeds capacity");
+        }
+        if (record->stack_size > STACK_LIMIT) {
+            machine_panic("snapshot scheduled activation stack size exceeds capacity");
+        }
+        if (!heap_handle_is_live(record->context_handle)) {
+            machine_panic("snapshot scheduled activation context handle is out of range");
+        }
+        if (record->sender_context_handle != 0U && !heap_handle_is_live(record->sender_context_handle)) {
+            machine_panic("snapshot scheduled activation sender handle is out of range");
+        }
+        if (record->kind == RECORZ_MVP_SCHEDULED_ACTIVATION_COMPILED_METHOD &&
+            !heap_handle_is_live(record->compiled_method_handle)) {
+            machine_panic("snapshot scheduled activation compiled method handle is out of range");
+        }
+        if (record->kind == RECORZ_MVP_SCHEDULED_ACTIVATION_WORKSPACE_SOURCE &&
+            (record->source_slot >= SCHEDULED_PROCESS_SOURCE_LIMIT ||
+             !scheduled_process_sources[record->source_slot].in_use)) {
+            machine_panic("snapshot scheduled activation source slot is out of range");
+        }
+        if (record->shared_lexical_environment_index >= 0) {
+            machine_panic("snapshot scheduled activation shared lexical state is not supported");
+        }
+        offset += 26U;
+        record->receiver = snapshot_decode_value(blob + offset, string_byte_count);
+        offset += SNAPSHOT_VALUE_SIZE;
+        for (value_index = 0U; value_index < MAX_SEND_ARGS; ++value_index) {
+            record->arguments[value_index] = snapshot_decode_value(blob + offset, string_byte_count);
+            offset += SNAPSHOT_VALUE_SIZE;
+        }
+        for (value_index = 0U; value_index < STACK_LIMIT; ++value_index) {
+            record->stack[value_index] = snapshot_decode_value(blob + offset, string_byte_count);
+            offset += SNAPSHOT_VALUE_SIZE;
+        }
+        for (value_index = 0U; value_index < LEXICAL_LIMIT; ++value_index) {
+            record->lexical[value_index] = snapshot_decode_value(blob + offset, string_byte_count);
+            offset += SNAPSHOT_VALUE_SIZE;
+        }
+    }
+    for (process_index = 0U; process_index < saved_scheduled_process_count; ++process_index) {
+        struct recorz_mvp_scheduled_process_runtime *process_runtime;
+        uint16_t slot_id = read_u16_le(blob + offset);
+
+        if (slot_id >= SCHEDULED_PROCESS_LIMIT) {
+            machine_panic("snapshot scheduled process slot is out of range");
+        }
+        process_runtime = &scheduled_processes[slot_id];
+        process_runtime->in_use = 1U;
+        process_runtime->state = blob[offset + 2U];
+        process_runtime->process_handle = read_u16_le(blob + offset + 4U);
+        process_runtime->current_context_handle = read_u16_le(blob + offset + 6U);
+        process_runtime->source_slot = read_u16_le(blob + offset + 8U);
+        process_runtime->next_runnable_index = read_u16_le(blob + offset + 10U);
+        if (!heap_handle_is_live(process_runtime->process_handle)) {
+            machine_panic("snapshot scheduled process handle is out of range");
+        }
+        if (process_runtime->current_context_handle != 0U &&
+            !heap_handle_is_live(process_runtime->current_context_handle)) {
+            machine_panic("snapshot scheduled process context handle is out of range");
+        }
+        if (process_runtime->source_slot >= SCHEDULED_PROCESS_SOURCE_LIMIT ||
+            !scheduled_process_sources[process_runtime->source_slot].in_use) {
+            machine_panic("snapshot scheduled process source slot is out of range");
+        }
+        if (process_runtime->next_runnable_index != 0xFFFFU &&
+            process_runtime->next_runnable_index >= SCHEDULED_PROCESS_LIMIT) {
+            machine_panic("snapshot scheduled process next runnable slot is out of range");
+        }
+        offset += SNAPSHOT_SCHEDULED_PROCESS_RECORD_SIZE;
+    }
     if (offset != string_section_offset) {
         machine_panic("snapshot fixed section size mismatch");
+    }
+    scheduled_runnable_head = saved_scheduled_runnable_head;
+    scheduled_runnable_tail = 0xFFFFU;
+    scheduled_active_process_index = -1;
+    if (scheduled_runnable_head != 0xFFFFU) {
+        uint16_t current_index = scheduled_runnable_head;
+        uint16_t traversed = 0U;
+
+        while (current_index != 0xFFFFU) {
+            if (current_index >= SCHEDULED_PROCESS_LIMIT || !scheduled_processes[current_index].in_use) {
+                machine_panic("snapshot runnable queue contains an invalid process slot");
+            }
+            scheduled_runnable_tail = current_index;
+            current_index = scheduled_processes[current_index].next_runnable_index;
+            if (++traversed > SCHEDULED_PROCESS_LIMIT) {
+                machine_panic("snapshot runnable queue contains a cycle");
+            }
+        }
+    }
+    for (process_index = 0U; process_index < SCHEDULED_PROCESS_LIMIT; ++process_index) {
+        if (scheduled_processes[process_index].in_use) {
+            scheduled_process_sync_object_fields(process_index);
+        }
     }
     next_dynamic_method_entry_execution_id = saved_next_dynamic_method_entry_execution_id;
     cursor_x = saved_cursor_x;
@@ -22548,6 +23262,87 @@ static void execute_entry_process_set_label_state_context(
     push(receiver);
 }
 
+static void execute_entry_process_suspend(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_PROCESS) {
+        machine_panic("Process suspend expects a Process receiver");
+    }
+    scheduled_process_suspend_by_handle(heap_handle_for_object(object));
+    push(receiver);
+}
+
+static void execute_entry_process_resume(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_PROCESS) {
+        machine_panic("Process resume expects a Process receiver");
+    }
+    scheduled_process_resume_by_handle(heap_handle_for_object(object));
+    push(receiver);
+}
+
+static void execute_entry_process_terminate(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)arguments;
+    (void)text;
+    if (object->kind != RECORZ_MVP_OBJECT_PROCESS) {
+        machine_panic("Process terminate expects a Process receiver");
+    }
+    scheduled_process_terminate_by_handle(heap_handle_for_object(object));
+    push(receiver);
+}
+
+static void execute_entry_workspace_spawn_process_named_source(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    uint16_t process_handle;
+
+    (void)object;
+    (void)receiver;
+    (void)text;
+    if (arguments[0].kind != RECORZ_MVP_VALUE_STRING || arguments[0].string == 0) {
+        machine_panic("Workspace spawnProcessNamed:source: expects a process name string");
+    }
+    if (arguments[1].kind != RECORZ_MVP_VALUE_STRING || arguments[1].string == 0) {
+        machine_panic("Workspace spawnProcessNamed:source: expects a source string");
+    }
+    process_handle = scheduled_spawn_workspace_source_process(arguments[0].string, arguments[1].string);
+    push(object_value(process_handle));
+}
+
+static void execute_entry_workspace_yield(
+    const struct recorz_mvp_heap_object *object,
+    struct recorz_mvp_value receiver,
+    const struct recorz_mvp_value arguments[],
+    const char *text
+) {
+    (void)object;
+    (void)arguments;
+    (void)text;
+    if (scheduled_active_process_index >= 0) {
+        scheduled_yield_requested = 1U;
+    }
+    push(receiver);
+}
+
 static void execute_entry_workspace_browse_method_of_class_named(
     const struct recorz_mvp_heap_object *object,
     struct recorz_mvp_value receiver,
@@ -23356,6 +24151,868 @@ static int16_t ensure_executable_lexical_environment(
         );
     }
     return lexical_environment_index;
+}
+
+static uint16_t scheduled_activation_allocate_slot(uint16_t context_handle) {
+    uint16_t activation_index;
+
+    for (activation_index = 0U; activation_index < SCHEDULED_ACTIVATION_LIMIT; ++activation_index) {
+        if (!scheduled_activation_records[activation_index].in_use) {
+            struct recorz_mvp_scheduled_activation_record *record =
+                &scheduled_activation_records[activation_index];
+            uint16_t value_index;
+
+            record->in_use = 1U;
+            record->kind = RECORZ_MVP_SCHEDULED_ACTIVATION_NONE;
+            record->argument_count = 0U;
+            record->lexical_count = 0U;
+            record->stack_size = 0U;
+            record->context_handle = context_handle;
+            record->sender_context_handle = 0U;
+            record->compiled_method_handle = 0U;
+            record->selector_id = 0U;
+            record->source_slot = 0U;
+            record->shared_lexical_environment_index = -1;
+            record->pc = 0U;
+            record->receiver = nil_value();
+            for (value_index = 0U; value_index < MAX_SEND_ARGS; ++value_index) {
+                record->arguments[value_index] = nil_value();
+            }
+            for (value_index = 0U; value_index < STACK_LIMIT; ++value_index) {
+                record->stack[value_index] = nil_value();
+            }
+            for (value_index = 0U; value_index < LEXICAL_LIMIT; ++value_index) {
+                record->lexical[value_index] = nil_value();
+            }
+            return activation_index;
+        }
+    }
+    machine_panic("scheduled activation capacity exceeded");
+    return 0xFFFFU;
+}
+
+static void scheduled_activation_release_slot(uint16_t activation_index) {
+    struct recorz_mvp_scheduled_activation_record *record;
+    uint16_t value_index;
+
+    if (activation_index >= SCHEDULED_ACTIVATION_LIMIT) {
+        machine_panic("scheduled activation slot is out of range");
+    }
+    record = &scheduled_activation_records[activation_index];
+    if (!record->in_use) {
+        return;
+    }
+    if (record->shared_lexical_environment_index >= 0) {
+        source_release_lexical_environment_chain_if_unused(record->shared_lexical_environment_index);
+    }
+    record->in_use = 0U;
+    record->kind = RECORZ_MVP_SCHEDULED_ACTIVATION_NONE;
+    record->argument_count = 0U;
+    record->lexical_count = 0U;
+    record->stack_size = 0U;
+    record->context_handle = 0U;
+    record->sender_context_handle = 0U;
+    record->compiled_method_handle = 0U;
+    record->selector_id = 0U;
+    record->source_slot = 0U;
+    record->shared_lexical_environment_index = -1;
+    record->pc = 0U;
+    record->receiver = nil_value();
+    for (value_index = 0U; value_index < MAX_SEND_ARGS; ++value_index) {
+        record->arguments[value_index] = nil_value();
+    }
+    for (value_index = 0U; value_index < STACK_LIMIT; ++value_index) {
+        record->stack[value_index] = nil_value();
+    }
+    for (value_index = 0U; value_index < LEXICAL_LIMIT; ++value_index) {
+        record->lexical[value_index] = nil_value();
+    }
+}
+
+static void scheduled_process_release_context_chain(uint16_t context_handle) {
+    while (context_handle != 0U) {
+        uint16_t activation_index = scheduled_activation_slot_for_context(context_handle);
+        uint16_t next_context_handle = 0U;
+
+        if (activation_index != 0xFFFFU) {
+            next_context_handle = scheduled_activation_records[activation_index].sender_context_handle;
+            scheduled_activation_release_slot(activation_index);
+        } else if (heap_handle_is_live(context_handle)) {
+            const struct recorz_mvp_heap_object *context_object = heap_object(context_handle);
+            struct recorz_mvp_value sender_value;
+
+            if (context_object->kind != RECORZ_MVP_OBJECT_CONTEXT) {
+                break;
+            }
+            sender_value = heap_get_field(context_object, CONTEXT_FIELD_SENDER);
+            if (sender_value.kind == RECORZ_MVP_VALUE_OBJECT) {
+                next_context_handle = (uint16_t)sender_value.integer;
+            }
+        }
+        mark_context_dead(context_handle);
+        context_handle = next_context_handle;
+    }
+}
+
+static void scheduled_activation_initialize_workspace_source(
+    struct recorz_mvp_scheduled_activation_record *record,
+    uint16_t context_handle,
+    uint16_t source_slot
+) {
+    struct recorz_mvp_workspace_source_program program;
+
+    build_workspace_source_program(scheduled_process_sources[source_slot].source, &program);
+    if (program.lexical_count > LEXICAL_LIMIT) {
+        machine_panic("scheduled process lexical count exceeds capacity");
+    }
+    record->kind = RECORZ_MVP_SCHEDULED_ACTIVATION_WORKSPACE_SOURCE;
+    record->context_handle = context_handle;
+    record->sender_context_handle = 0U;
+    record->compiled_method_handle = 0U;
+    record->selector_id = 0U;
+    record->source_slot = source_slot;
+    record->argument_count = 0U;
+    record->lexical_count = (uint8_t)program.lexical_count;
+    record->stack_size = 0U;
+    record->pc = 0U;
+    record->receiver = top_level_receiver_value();
+    record->shared_lexical_environment_index = -1;
+}
+
+static void scheduled_activation_initialize_compiled_method(
+    struct recorz_mvp_scheduled_activation_record *record,
+    uint16_t context_handle,
+    uint16_t sender_context_handle,
+    uint16_t compiled_method_handle,
+    uint16_t selector_id,
+    struct recorz_mvp_value receiver,
+    uint16_t argument_count,
+    const struct recorz_mvp_value arguments[]
+) {
+    const struct recorz_mvp_heap_object *compiled_method = heap_object(compiled_method_handle);
+    uint16_t argument_index;
+
+    if (compiled_method->kind != RECORZ_MVP_OBJECT_COMPILED_METHOD) {
+        machine_panic("scheduled activation expects a compiled method");
+    }
+    record->kind = RECORZ_MVP_SCHEDULED_ACTIVATION_COMPILED_METHOD;
+    record->context_handle = context_handle;
+    record->sender_context_handle = sender_context_handle;
+    record->compiled_method_handle = compiled_method_handle;
+    record->selector_id = selector_id;
+    record->source_slot = 0U;
+    record->argument_count = (uint8_t)argument_count;
+    record->lexical_count = (uint8_t)compiled_method_lexical_count(compiled_method);
+    record->stack_size = 0U;
+    record->pc = 0U;
+    record->receiver = receiver;
+    record->shared_lexical_environment_index = -1;
+    for (argument_index = 0U; argument_index < argument_count; ++argument_index) {
+        record->arguments[argument_index] = arguments[argument_index];
+    }
+}
+
+static uint16_t scheduled_process_create_named_source(const char *process_name, const char *source_text) {
+    uint16_t process_index;
+    uint16_t process_handle;
+    uint16_t context_handle;
+    uint16_t activation_index;
+    uint16_t source_slot;
+
+    if (process_name == 0 || process_name[0] == '\0') {
+        machine_panic("Workspace spawnProcessNamed:source: requires a process name");
+    }
+    if (named_object_handle_for_name(process_name) != 0U) {
+        machine_panic("Workspace spawnProcessNamed:source: process name is already in use");
+    }
+    for (process_index = 0U; process_index < SCHEDULED_PROCESS_LIMIT; ++process_index) {
+        if (!scheduled_processes[process_index].in_use) {
+            source_slot = scheduled_process_source_slot_for_text(source_text);
+            process_handle = heap_allocate_seeded_class(RECORZ_MVP_OBJECT_PROCESS);
+            remember_named_object_handle(process_handle, process_name);
+            heap_set_field(
+                process_handle,
+                PROCESS_FIELD_LABEL,
+                string_value(runtime_string_allocate_copy(process_name))
+            );
+            heap_set_field(process_handle, PROCESS_FIELD_STATE, string_value("new"));
+            heap_set_field(process_handle, PROCESS_FIELD_CONTEXT, nil_value());
+            context_handle = allocate_source_context_object(0U, top_level_receiver_value(), process_name);
+            activation_index = scheduled_activation_allocate_slot(context_handle);
+            scheduled_activation_initialize_workspace_source(
+                &scheduled_activation_records[activation_index],
+                context_handle,
+                source_slot
+            );
+            scheduled_processes[process_index].in_use = 1U;
+            scheduled_processes[process_index].state = RECORZ_MVP_PROCESS_STATE_NEW;
+            scheduled_processes[process_index].process_handle = process_handle;
+            scheduled_processes[process_index].current_context_handle = context_handle;
+            scheduled_processes[process_index].source_slot = source_slot;
+            scheduled_processes[process_index].next_runnable_index = 0xFFFFU;
+            scheduled_process_sync_object_fields(process_index);
+            return process_index;
+        }
+    }
+    machine_panic("scheduled process capacity exceeded");
+    return 0xFFFFU;
+}
+
+static struct recorz_mvp_scheduler_send_result scheduled_send_for_activation(
+    struct recorz_mvp_scheduled_activation_record *record,
+    struct recorz_mvp_value receiver,
+    uint16_t selector,
+    uint16_t argument_count,
+    const struct recorz_mvp_value arguments[]
+) {
+    struct recorz_mvp_scheduler_send_result result = {
+        RECORZ_MVP_SCHEDULER_SEND_VALUE,
+        RECORZ_MVP_SCHEDULER_EVENT_NONE,
+        0U,
+        nil_value()
+    };
+    const char *text = 0;
+
+    if (selector == RECORZ_MVP_SELECTOR_SHOW || selector == RECORZ_MVP_SELECTOR_WRITE_STRING) {
+        if (argument_count > 0U && arguments[0].kind == RECORZ_MVP_VALUE_STRING) {
+            text = arguments[0].string;
+        }
+    }
+    if (receiver.kind != RECORZ_MVP_VALUE_OBJECT) {
+        uint32_t baseline_stack_size = stack_size;
+
+        perform_send_with_sender(receiver, selector, argument_count, arguments, record->context_handle, text);
+        if (stack_size != baseline_stack_size + 1U) {
+            machine_panic("scheduled direct send did not return exactly one value");
+        }
+        result.value = pop_value();
+        if (scheduled_terminate_requested) {
+            result.kind = RECORZ_MVP_SCHEDULER_SEND_EVENT;
+            result.event = RECORZ_MVP_SCHEDULER_EVENT_TERMINATED;
+        } else if (scheduled_suspend_requested) {
+            result.kind = RECORZ_MVP_SCHEDULER_SEND_EVENT;
+            result.event = RECORZ_MVP_SCHEDULER_EVENT_SUSPENDED;
+        } else if (scheduled_yield_requested) {
+            result.kind = RECORZ_MVP_SCHEDULER_SEND_EVENT;
+            result.event = RECORZ_MVP_SCHEDULER_EVENT_YIELDED;
+        }
+        return result;
+    }
+    {
+        const struct recorz_mvp_heap_object *object = heap_object_for_value(receiver);
+        const struct recorz_mvp_heap_object *class_object;
+        const struct recorz_mvp_heap_object *method_object;
+        const struct recorz_mvp_heap_object *entry_object;
+        const struct recorz_mvp_heap_object *implementation_object;
+        const struct recorz_mvp_heap_object *source_owner_class = 0;
+        const struct recorz_mvp_live_method_source *source_record;
+        struct recorz_mvp_value implementation_value;
+        struct recorz_mvp_source_eval_result source_result;
+        struct recorz_mvp_runtime_block_state block_state_storage;
+        const struct recorz_mvp_runtime_block_state *block_state = 0;
+        uint16_t child_context_handle;
+        uint16_t child_activation_index;
+        uint32_t baseline_stack_size;
+        uint32_t primitive_binding_id;
+        recorz_mvp_method_entry_handler handler;
+
+        if (selector == RECORZ_MVP_SELECTOR_CLASS) {
+            result.value = object_value(object->class_handle);
+            return result;
+        }
+        if (primitive_kind_for_heap_object(object) == RECORZ_MVP_OBJECT_BLOCK_CLOSURE) {
+            if ((selector != RECORZ_MVP_SELECTOR_VALUE || argument_count != 0U) &&
+                (selector != RECORZ_MVP_SELECTOR_VALUE_ARG || argument_count != 1U)) {
+                machine_panic("scheduled BlockClosure send only supports value/value:");
+            }
+            source_result = source_execute_block_closure(
+                object,
+                argument_count,
+                arguments,
+                record->context_handle
+            );
+            if (source_result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
+                machine_panic("scheduled block non-local return crossed an unsupported boundary");
+            }
+            result.value = source_result.value;
+            return result;
+        }
+        if ((selector == RECORZ_MVP_SELECTOR_IF_TRUE && argument_count == 1U) ||
+            (selector == RECORZ_MVP_SELECTOR_IF_FALSE && argument_count == 1U) ||
+            (selector == RECORZ_MVP_SELECTOR_IF_TRUE_IF_FALSE && argument_count == 2U)) {
+            uint8_t condition_is_true = condition_value_is_true(receiver);
+            uint16_t chosen_index = 0xFFFFU;
+
+            if (selector == RECORZ_MVP_SELECTOR_IF_TRUE) {
+                chosen_index = condition_is_true ? 0U : 0xFFFFU;
+            } else if (selector == RECORZ_MVP_SELECTOR_IF_FALSE) {
+                chosen_index = condition_is_true ? 0xFFFFU : 0U;
+            } else {
+                chosen_index = condition_is_true ? 0U : 1U;
+            }
+            if (chosen_index == 0xFFFFU) {
+                result.value = nil_value();
+                return result;
+            }
+            if (arguments[chosen_index].kind != RECORZ_MVP_VALUE_OBJECT ||
+                primitive_kind_for_heap_object(heap_object_for_value(arguments[chosen_index])) !=
+                    RECORZ_MVP_OBJECT_BLOCK_CLOSURE) {
+                machine_panic("scheduled conditional send expects a block closure argument");
+            }
+            if (source_block_state_for_handle(
+                    heap_handle_for_object(heap_object_for_value(arguments[chosen_index])),
+                    &block_state_storage)) {
+                block_state = &block_state_storage;
+            }
+            source_result = source_execute_block_closure(
+                heap_object_for_value(arguments[chosen_index]),
+                0U,
+                0,
+                record->context_handle
+            );
+            if (source_result.kind == RECORZ_MVP_SOURCE_EVAL_RETURN) {
+                if (block_state == 0 || block_state->home_context_index < 0) {
+                    machine_panic("scheduled conditional block crossed an unsupported boundary");
+                }
+                machine_panic("scheduled conditional block non-local return is not supported");
+            }
+            result.value = source_result.value;
+            return result;
+        }
+        class_object = class_object_for_heap_object(object);
+        source_record = live_method_source_for_class_chain(
+            class_object,
+            selector,
+            (uint8_t)argument_count,
+            &source_owner_class
+        );
+        if (source_record != 0 &&
+            source_text_requires_live_evaluator(live_method_source_text(source_record))) {
+            baseline_stack_size = stack_size;
+            execute_live_source_method_with_sender(
+                source_owner_class,
+                receiver,
+                argument_count,
+                arguments,
+                live_method_source_text(source_record),
+                record->context_handle
+            );
+            if (stack_size != baseline_stack_size + 1U) {
+                machine_panic("scheduled live source send did not return exactly one value");
+            }
+            result.value = pop_value();
+            if (scheduled_terminate_requested || scheduled_suspend_requested || scheduled_yield_requested) {
+                machine_panic("scheduled live source method attempted unsupported process control");
+            }
+            return result;
+        }
+        method_object = lookup_builtin_method_descriptor(class_object, selector, argument_count);
+        if (method_object == 0) {
+            machine_panic("scheduled process selector is not understood by receiver class");
+        }
+        entry_object = method_descriptor_entry_object(method_object);
+        implementation_value = method_entry_implementation_value(entry_object);
+        if (implementation_value.kind == RECORZ_MVP_VALUE_OBJECT) {
+            implementation_object = heap_object_for_value(implementation_value);
+            child_context_handle = allocate_source_context_object(
+                record->context_handle,
+                receiver,
+                selector_name(selector)
+            );
+            child_activation_index = scheduled_activation_allocate_slot(child_context_handle);
+            scheduled_activation_initialize_compiled_method(
+                &scheduled_activation_records[child_activation_index],
+                child_context_handle,
+                record->context_handle,
+                heap_handle_for_object(implementation_object),
+                selector,
+                receiver,
+                argument_count,
+                arguments
+            );
+            result.kind = RECORZ_MVP_SCHEDULER_SEND_CHILD;
+            result.child_context_handle = child_context_handle;
+            return result;
+        }
+        if (implementation_value.kind != RECORZ_MVP_VALUE_SMALL_INTEGER) {
+            machine_panic("scheduled process method entry implementation kind is unknown");
+        }
+        primitive_binding_id = (uint32_t)implementation_value.integer;
+        if (primitive_binding_id == 0U || primitive_binding_id >= RECORZ_MVP_PRIMITIVE_COUNT) {
+            machine_panic("scheduled process primitive binding id is out of range");
+        }
+        handler = primitive_binding_handlers[primitive_binding_id];
+        if (handler == 0) {
+            machine_panic("scheduled process primitive handler is not installed");
+        }
+        baseline_stack_size = stack_size;
+        handler(object, receiver, arguments, text);
+        if (stack_size != baseline_stack_size + 1U) {
+            machine_panic("scheduled primitive send did not return exactly one value");
+        }
+        result.value = pop_value();
+        if (scheduled_terminate_requested) {
+            result.kind = RECORZ_MVP_SCHEDULER_SEND_EVENT;
+            result.event = RECORZ_MVP_SCHEDULER_EVENT_TERMINATED;
+        } else if (scheduled_suspend_requested) {
+            result.kind = RECORZ_MVP_SCHEDULER_SEND_EVENT;
+            result.event = RECORZ_MVP_SCHEDULER_EVENT_SUSPENDED;
+        } else if (scheduled_yield_requested) {
+            result.kind = RECORZ_MVP_SCHEDULER_SEND_EVENT;
+            result.event = RECORZ_MVP_SCHEDULER_EVENT_YIELDED;
+        }
+        return result;
+    }
+}
+
+static enum recorz_mvp_scheduler_run_event scheduled_process_run_by_index(uint16_t process_index) {
+    struct recorz_mvp_scheduled_process_runtime *process_runtime = &scheduled_processes[process_index];
+
+resume_next_activation:
+    while (1) {
+        uint16_t activation_index;
+        struct recorz_mvp_scheduled_activation_record *record;
+        struct recorz_mvp_workspace_source_program program;
+        struct recorz_mvp_executable executable = {0};
+        const struct recorz_mvp_heap_object *receiver_object;
+
+        if (process_runtime->current_context_handle == 0U) {
+            process_runtime->state = RECORZ_MVP_PROCESS_STATE_TERMINATED;
+            scheduled_process_sync_object_fields(process_index);
+            return RECORZ_MVP_SCHEDULER_EVENT_TERMINATED;
+        }
+        activation_index = scheduled_activation_slot_for_context(process_runtime->current_context_handle);
+        if (activation_index == 0xFFFFU) {
+            machine_panic("scheduled process is missing its current activation");
+        }
+        record = &scheduled_activation_records[activation_index];
+        if (record->kind == RECORZ_MVP_SCHEDULED_ACTIVATION_WORKSPACE_SOURCE) {
+            const char *source_text = scheduled_process_sources[record->source_slot].source;
+
+            build_workspace_source_program(source_text, &program);
+            executable.instruction_source = program.instructions;
+            executable.read_instruction = read_program_instruction;
+            executable.instruction_count = program.instruction_count;
+            executable.literals = program.literals;
+            executable.literal_count = program.literal_count;
+            executable.lexical_count = program.lexical_count;
+            executable.lexical_names = program.temporary_names;
+            executable.block_defining_class = class_object_for_heap_object(
+                heap_object_for_value(record->receiver)
+            );
+            executable.home_context_index = -1;
+        } else if (record->kind == RECORZ_MVP_SCHEDULED_ACTIVATION_COMPILED_METHOD) {
+            const struct recorz_mvp_heap_object *compiled_method =
+                heap_object(record->compiled_method_handle);
+
+            executable.instruction_source = compiled_method;
+            executable.read_instruction = read_compiled_method_instruction;
+            executable.instruction_count = compiled_method->field_count;
+            executable.literals = 0;
+            executable.literal_count = 0U;
+            executable.lexical_count = compiled_method_lexical_count(compiled_method);
+            executable.lexical_names = 0;
+            executable.block_defining_class = class_object_for_heap_object(
+                heap_object_for_value(record->receiver)
+            );
+            executable.home_context_index = -1;
+        } else {
+            machine_panic("scheduled activation kind is invalid");
+        }
+        receiver_object = heap_object_for_value(record->receiver);
+        process_runtime->state = RECORZ_MVP_PROCESS_STATE_RUNNING;
+        scheduled_process_sync_object_fields(process_index);
+        while (record->pc < executable.instruction_count) {
+            struct recorz_mvp_instruction instruction =
+                executable.read_instruction(executable.instruction_source, record->pc++);
+
+            panic_phase = "execute";
+            panic_pc = record->pc - 1U;
+            panic_instruction = instruction;
+            panic_have_instruction = 1U;
+            panic_have_send = 0U;
+
+            switch (instruction.opcode) {
+                case RECORZ_MVP_OP_PUSH_GLOBAL:
+                    activation_push(record->stack, (uint32_t *)&record->stack_size, global_value(instruction.operand_a));
+                    break;
+                case RECORZ_MVP_OP_PUSH_LITERAL:
+                    if ((uint32_t)instruction.operand_b >= executable.literal_count) {
+                        machine_panic("scheduled literal is out of range");
+                    }
+                    activation_push(
+                        record->stack,
+                        (uint32_t *)&record->stack_size,
+                        literal_value(&executable.literals[instruction.operand_b])
+                    );
+                    break;
+                case RECORZ_MVP_OP_PUSH_NIL:
+                    activation_push(record->stack, (uint32_t *)&record->stack_size, nil_value());
+                    break;
+                case RECORZ_MVP_OP_PUSH_LEXICAL:
+                    if ((uint32_t)instruction.operand_b >= executable.lexical_count) {
+                        machine_panic("scheduled lexical read is out of range");
+                    }
+                    if (record->shared_lexical_environment_index >= 0) {
+                        activation_push(
+                            record->stack,
+                            (uint32_t *)&record->stack_size,
+                            source_lexical_environment_at(record->shared_lexical_environment_index)
+                                ->bindings[instruction.operand_b]
+                                .value
+                        );
+                    } else {
+                        activation_push(
+                            record->stack,
+                            (uint32_t *)&record->stack_size,
+                            record->lexical[instruction.operand_b]
+                        );
+                    }
+                    break;
+                case RECORZ_MVP_OP_STORE_LEXICAL:
+                    if ((uint32_t)instruction.operand_b >= executable.lexical_count) {
+                        machine_panic("scheduled lexical write is out of range");
+                    }
+                    if (record->shared_lexical_environment_index >= 0) {
+                        source_lexical_environment_at(record->shared_lexical_environment_index)
+                            ->bindings[instruction.operand_b]
+                            .value =
+                            activation_pop(record->stack, (uint32_t *)&record->stack_size);
+                    } else {
+                        record->lexical[instruction.operand_b] =
+                            activation_pop(record->stack, (uint32_t *)&record->stack_size);
+                    }
+                    break;
+                case RECORZ_MVP_OP_DUP:
+                    activation_push(
+                        record->stack,
+                        (uint32_t *)&record->stack_size,
+                        activation_peek(record->stack, record->stack_size)
+                    );
+                    break;
+                case RECORZ_MVP_OP_POP:
+                    (void)activation_pop(record->stack, (uint32_t *)&record->stack_size);
+                    break;
+                case RECORZ_MVP_OP_PUSH_ROOT:
+                    activation_push(
+                        record->stack,
+                        (uint32_t *)&record->stack_size,
+                        seed_root_value((uint32_t)instruction.operand_a)
+                    );
+                    break;
+                case RECORZ_MVP_OP_PUSH_ARGUMENT:
+                    if (instruction.operand_a >= record->argument_count) {
+                        machine_panic("scheduled argument read is out of range");
+                    }
+                    activation_push(
+                        record->stack,
+                        (uint32_t *)&record->stack_size,
+                        record->arguments[instruction.operand_a]
+                    );
+                    break;
+                case RECORZ_MVP_OP_PUSH_FIELD:
+                    activation_push(
+                        record->stack,
+                        (uint32_t *)&record->stack_size,
+                        heap_get_field(receiver_object, instruction.operand_a)
+                    );
+                    break;
+                case RECORZ_MVP_OP_PUSH_SELF:
+                    activation_push(record->stack, (uint32_t *)&record->stack_size, record->receiver);
+                    break;
+                case RECORZ_MVP_OP_PUSH_THIS_CONTEXT:
+                    activation_push(
+                        record->stack,
+                        (uint32_t *)&record->stack_size,
+                        object_value(record->context_handle)
+                    );
+                    break;
+                case RECORZ_MVP_OP_PUSH_SMALL_INTEGER:
+                    activation_push(
+                        record->stack,
+                        (uint32_t *)&record->stack_size,
+                        small_integer_value((int16_t)instruction.operand_b)
+                    );
+                    break;
+                case RECORZ_MVP_OP_PUSH_STRING_LITERAL:
+                    if (instruction.operand_b == 0U ||
+                        instruction.operand_b > LIVE_STRING_LITERAL_LIMIT ||
+                        live_string_literals[instruction.operand_b - 1U].text == 0) {
+                        machine_panic("scheduled string literal slot is out of range");
+                    }
+                    activation_push(
+                        record->stack,
+                        (uint32_t *)&record->stack_size,
+                        string_value(live_string_literals[instruction.operand_b - 1U].text)
+                    );
+                    break;
+                case RECORZ_MVP_OP_PUSH_BLOCK_LITERAL: {
+                    uint16_t block_handle;
+                    const struct recorz_mvp_heap_object *block_defining_class = executable.block_defining_class;
+
+                    if ((uint32_t)instruction.operand_b >= executable.literal_count) {
+                        machine_panic("scheduled block literal is out of range");
+                    }
+                    if (executable.literals[instruction.operand_b].kind != RECORZ_MVP_LITERAL_STRING ||
+                        executable.literals[instruction.operand_b].string == 0) {
+                        machine_panic("scheduled block literal source must be a string");
+                    }
+                    block_handle = allocate_block_closure_from_source(
+                        executable.literals[instruction.operand_b].string,
+                        record->receiver
+                    );
+                    if (block_defining_class == 0) {
+                        block_defining_class = class_object_for_heap_object(receiver_object);
+                    }
+                    record->shared_lexical_environment_index = ensure_executable_lexical_environment(
+                        &executable,
+                        record->lexical,
+                        record->shared_lexical_environment_index
+                    );
+                    source_register_block_state(
+                        block_handle,
+                        block_defining_class,
+                        record->shared_lexical_environment_index,
+                        -1
+                    );
+                    activation_push(
+                        record->stack,
+                        (uint32_t *)&record->stack_size,
+                        object_value(block_handle)
+                    );
+                    break;
+                }
+                case RECORZ_MVP_OP_JUMP:
+                    if (instruction.operand_b >= executable.instruction_count) {
+                        machine_panic("scheduled jump target is out of range");
+                    }
+                    record->pc = instruction.operand_b;
+                    break;
+                case RECORZ_MVP_OP_JUMP_IF_TRUE:
+                case RECORZ_MVP_OP_JUMP_IF_FALSE: {
+                    uint8_t condition_is_true;
+
+                    if (instruction.operand_b >= executable.instruction_count) {
+                        machine_panic("scheduled conditional jump target is out of range");
+                    }
+                    condition_is_true = condition_value_is_true(
+                        activation_pop(record->stack, (uint32_t *)&record->stack_size)
+                    );
+                    if ((instruction.opcode == RECORZ_MVP_OP_JUMP_IF_TRUE && condition_is_true) ||
+                        (instruction.opcode == RECORZ_MVP_OP_JUMP_IF_FALSE && !condition_is_true)) {
+                        record->pc = instruction.operand_b;
+                    }
+                    break;
+                }
+                case RECORZ_MVP_OP_STORE_FIELD:
+                    heap_set_field(
+                        heap_handle_for_object(receiver_object),
+                        instruction.operand_a,
+                        activation_pop(record->stack, (uint32_t *)&record->stack_size)
+                    );
+                    break;
+                case RECORZ_MVP_OP_SEND: {
+                    struct recorz_mvp_value send_arguments[MAX_SEND_ARGS];
+                    struct recorz_mvp_value send_receiver;
+                    struct recorz_mvp_scheduler_send_result send_result;
+                    uint16_t send_index;
+
+                    if (instruction.operand_b > MAX_SEND_ARGS) {
+                        machine_panic("scheduled send argument count exceeds capacity");
+                    }
+                    if (record->stack_size < (uint8_t)(instruction.operand_b + 1U)) {
+                        machine_panic("scheduled send stack underflow");
+                    }
+                    for (send_index = instruction.operand_b; send_index > 0U; --send_index) {
+                        send_arguments[send_index - 1U] =
+                            activation_pop(record->stack, (uint32_t *)&record->stack_size);
+                    }
+                    send_receiver = activation_pop(record->stack, (uint32_t *)&record->stack_size);
+                    panic_phase = "send";
+                    remember_send_context(instruction.operand_a, instruction.operand_b, send_receiver, send_arguments);
+                    send_result = scheduled_send_for_activation(
+                        record,
+                        send_receiver,
+                        instruction.operand_a,
+                        instruction.operand_b,
+                        send_arguments
+                    );
+                    if (send_result.kind == RECORZ_MVP_SCHEDULER_SEND_CHILD) {
+                        process_runtime->current_context_handle = send_result.child_context_handle;
+                        scheduled_process_sync_object_fields(process_index);
+                        goto resume_next_activation;
+                    }
+                    if (send_result.kind == RECORZ_MVP_SCHEDULER_SEND_EVENT) {
+                        if (send_result.event != RECORZ_MVP_SCHEDULER_EVENT_TERMINATED) {
+                            activation_push(
+                                record->stack,
+                                (uint32_t *)&record->stack_size,
+                                send_result.value
+                            );
+                        }
+                        return (enum recorz_mvp_scheduler_run_event)send_result.event;
+                    }
+                    activation_push(
+                        record->stack,
+                        (uint32_t *)&record->stack_size,
+                        send_result.value
+                    );
+                    break;
+                }
+                case RECORZ_MVP_OP_RETURN:
+                case RECORZ_MVP_OP_RETURN_RECEIVER: {
+                    struct recorz_mvp_value return_value =
+                        instruction.opcode == RECORZ_MVP_OP_RETURN_RECEIVER ?
+                            record->receiver :
+                            activation_peek(record->stack, record->stack_size);
+                    uint16_t sender_context_handle = record->sender_context_handle;
+
+                    mark_context_dead(record->context_handle);
+                    if (sender_context_handle == 0U) {
+                        scheduled_activation_release_slot(activation_index);
+                        process_runtime->current_context_handle = 0U;
+                        process_runtime->state = RECORZ_MVP_PROCESS_STATE_TERMINATED;
+                        scheduled_process_sync_object_fields(process_index);
+                        return RECORZ_MVP_SCHEDULER_EVENT_TERMINATED;
+                    }
+                    {
+                        uint16_t sender_activation_index =
+                            scheduled_activation_slot_for_context(sender_context_handle);
+                        if (sender_activation_index == 0xFFFFU) {
+                            machine_panic("scheduled sender activation is missing");
+                        }
+                        activation_push(
+                            scheduled_activation_records[sender_activation_index].stack,
+                            (uint32_t *)&scheduled_activation_records[sender_activation_index].stack_size,
+                            return_value
+                        );
+                    }
+                    scheduled_activation_release_slot(activation_index);
+                    process_runtime->current_context_handle = sender_context_handle;
+                    scheduled_process_sync_object_fields(process_index);
+                    goto resume_next_activation;
+                }
+                default:
+                    machine_panic("unknown opcode in scheduled MVP VM");
+            }
+        }
+        machine_panic("scheduled executable did not return");
+    }
+}
+
+static void scheduled_scheduler_run_runnable_queue(void) {
+    while (scheduled_runnable_head != 0xFFFFU) {
+        uint16_t process_index = scheduled_runnable_head;
+        struct recorz_mvp_scheduled_process_runtime *process_runtime;
+        enum recorz_mvp_scheduler_run_event event;
+
+        scheduled_process_remove_from_runnable_queue(process_index);
+        if (process_index >= SCHEDULED_PROCESS_LIMIT || !scheduled_processes[process_index].in_use) {
+            continue;
+        }
+        process_runtime = &scheduled_processes[process_index];
+        if (process_runtime->state != RECORZ_MVP_PROCESS_STATE_RUNNABLE &&
+            process_runtime->state != RECORZ_MVP_PROCESS_STATE_NEW) {
+            continue;
+        }
+        scheduled_active_process_index = (int16_t)process_index;
+        scheduled_yield_requested = 0U;
+        scheduled_suspend_requested = 0U;
+        scheduled_terminate_requested = 0U;
+        event = scheduled_process_run_by_index(process_index);
+        scheduled_active_process_index = -1;
+        if (event == RECORZ_MVP_SCHEDULER_EVENT_YIELDED) {
+            process_runtime->state = RECORZ_MVP_PROCESS_STATE_RUNNABLE;
+            scheduled_process_append_runnable_queue(process_index);
+        } else if (event == RECORZ_MVP_SCHEDULER_EVENT_SUSPENDED) {
+            process_runtime->state = RECORZ_MVP_PROCESS_STATE_SUSPENDED;
+        } else if (event == RECORZ_MVP_SCHEDULER_EVENT_TERMINATED) {
+            if (process_runtime->current_context_handle != 0U) {
+                scheduled_process_release_context_chain(process_runtime->current_context_handle);
+            }
+            process_runtime->state = RECORZ_MVP_PROCESS_STATE_TERMINATED;
+            process_runtime->current_context_handle = 0U;
+            scheduled_process_remove_from_runnable_queue(process_index);
+        }
+        scheduled_process_sync_object_fields(process_index);
+    }
+}
+
+static void scheduled_process_resume_by_index(uint16_t process_index) {
+    struct recorz_mvp_scheduled_process_runtime *process_runtime;
+
+    if (process_index >= SCHEDULED_PROCESS_LIMIT || !scheduled_processes[process_index].in_use) {
+        machine_panic("scheduled process resume expects a live process slot");
+    }
+    if (scheduled_active_process_index >= 0 && (uint16_t)scheduled_active_process_index != process_index) {
+        scheduled_processes[process_index].state = RECORZ_MVP_PROCESS_STATE_RUNNABLE;
+        scheduled_process_append_runnable_queue(process_index);
+        scheduled_process_sync_object_fields(process_index);
+        return;
+    }
+    process_runtime = &scheduled_processes[process_index];
+    if (process_runtime->state == RECORZ_MVP_PROCESS_STATE_TERMINATED) {
+        return;
+    }
+    scheduled_process_append_runnable_queue(process_index);
+    scheduled_process_sync_object_fields(process_index);
+    scheduled_scheduler_run_runnable_queue();
+}
+
+static void scheduled_process_suspend_by_handle(uint16_t process_handle) {
+    uint16_t process_index = scheduled_process_slot_for_handle(process_handle);
+
+    if (process_index == 0xFFFFU) {
+        return;
+    }
+    if (scheduled_active_process_index >= 0 &&
+        (uint16_t)scheduled_active_process_index == process_index) {
+        scheduled_suspend_requested = 1U;
+        return;
+    }
+    scheduled_processes[process_index].state = RECORZ_MVP_PROCESS_STATE_SUSPENDED;
+    scheduled_process_remove_from_runnable_queue(process_index);
+    scheduled_process_sync_object_fields(process_index);
+}
+
+static void scheduled_process_resume_by_handle(uint16_t process_handle) {
+    uint16_t process_index = scheduled_process_slot_for_handle(process_handle);
+
+    if (process_index == 0xFFFFU) {
+        return;
+    }
+    if (scheduled_processes[process_index].state == RECORZ_MVP_PROCESS_STATE_TERMINATED) {
+        return;
+    }
+    scheduled_processes[process_index].state = RECORZ_MVP_PROCESS_STATE_RUNNABLE;
+    scheduled_process_sync_object_fields(process_index);
+    scheduled_process_resume_by_index(process_index);
+}
+
+static void scheduled_process_terminate_by_handle(uint16_t process_handle) {
+    uint16_t process_index = scheduled_process_slot_for_handle(process_handle);
+
+    if (process_index == 0xFFFFU) {
+        return;
+    }
+    if (scheduled_active_process_index >= 0 &&
+        (uint16_t)scheduled_active_process_index == process_index) {
+        scheduled_terminate_requested = 1U;
+        return;
+    }
+    scheduled_process_release_context_chain(scheduled_processes[process_index].current_context_handle);
+    scheduled_processes[process_index].current_context_handle = 0U;
+    scheduled_processes[process_index].state = RECORZ_MVP_PROCESS_STATE_TERMINATED;
+    scheduled_process_sync_object_fields(process_index);
+}
+
+static uint16_t scheduled_spawn_workspace_source_process(const char *process_name, const char *source_text) {
+    uint16_t process_index = scheduled_process_create_named_source(process_name, source_text);
+
+    scheduled_processes[process_index].state = RECORZ_MVP_PROCESS_STATE_RUNNABLE;
+    scheduled_process_append_runnable_queue(process_index);
+    scheduled_process_sync_object_fields(process_index);
+    return scheduled_processes[process_index].process_handle;
 }
 
 static void mark_context_dead(uint16_t context_handle) {

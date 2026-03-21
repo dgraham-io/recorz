@@ -16,6 +16,7 @@ BUILD_DIR = ROOT / "misc" / "qemu-riscv32-dev-mvp"
 PPM_PATH = BUILD_DIR / "recorz-qemu-riscv32-mvp.ppm"
 QEMU_LOG_PATH = BUILD_DIR / "qemu.log"
 FILE_IN_FW_CFG_NAME = "opt/recorz-file-in"
+SNAPSHOT_FW_CFG_NAME = "opt/recorz-snapshot"
 GLYPH_EXAMPLE = ROOT / "examples" / "qemu_riscv_source_glyph_demo.rz"
 IMAGE_SIDE_TEXT_RENDERER_EXAMPLE = ROOT / "examples" / "qemu_riscv_image_side_text_renderer_demo.rz"
 IMAGE_SIDE_FORM_WRITER_EXAMPLE = ROOT / "examples" / "qemu_riscv_image_side_form_writer_demo.rz"
@@ -182,15 +183,52 @@ def _write_multi_process_browser_payload(temp_path: Path) -> Path:
         "\n".join(
             [
                 "RecorzKernelDoIt:",
-                "KernelInstaller rememberObject: thisContext named: 'BootIdleContext'.",
-                "KernelInstaller rememberObject: ((KernelInstaller classNamed: 'Process') new) named: 'BootIdleProcess'.",
-                "(KernelInstaller objectNamed: 'BootIdleProcess') setLabel: 'Idle Process' state: 'waiting' context: (KernelInstaller objectNamed: 'BootIdleContext').",
+                "Workspace spawnProcessNamed: 'BootIdleProcess' source: 'Workspace yield. Transcript show: ''IDLE''.'.",
                 "!",
             ]
         ),
         encoding="utf-8",
     )
     return file_in_payload
+
+
+def _build_scheduler_process_snapshot(temp_path: Path) -> Path:
+    build_dir = temp_path / "snapshot-build"
+    snapshot_path = temp_path / "scheduler-process-snapshot.bin"
+    example_path = temp_path / "scheduler_process_snapshot_save.rz"
+    example_path.write_text(
+        "\n".join(
+            [
+                "| process |",
+                "process := Workspace spawnProcessNamed: 'BootIdleProcess' source: 'Workspace yield. Transcript show: ''IDLE''.'.",
+                "process setLabel: 'Idle Process' state: 'runnable' context: process context.",
+                "KernelInstaller saveSnapshot.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [
+            "make",
+            "-C",
+            str(ROOT / "platform" / "qemu-riscv32"),
+            f"BUILD_DIR={build_dir}",
+            f"EXAMPLE={example_path}",
+            f"SNAPSHOT_OUTPUT={snapshot_path}",
+            "clean",
+            "save-snapshot",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise AssertionError(
+            "QEMU RV32 scheduler snapshot build failed\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+    return snapshot_path
 
 
 @unittest.skipUnless(
@@ -252,6 +290,7 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         input_chunks: tuple[bytes, ...],
         *,
         file_in_payload: Optional[Path] = None,
+        snapshot_payload: Optional[Path] = None,
         post_input_chunks: tuple[bytes, ...] = (),
         monitor_commands: tuple[str, ...] = (),
         monitor_command_delay: float = 0.8,
@@ -259,7 +298,7 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         initial_settle_delay: float = 0.0,
     ) -> tuple[str, int, int, bytes]:
         digest_key = (
-            f"{example_path.stem}|interactive|{file_in_payload!r}|{input_chunks!r}|{post_input_chunks!r}|{monitor_commands!r}|"
+            f"{example_path.stem}|interactive|{file_in_payload!r}|{snapshot_payload!r}|{input_chunks!r}|{post_input_chunks!r}|{monitor_commands!r}|"
             f"{monitor_command_delay}|{final_monitor_delay}"
         )
         digest = hashlib.sha1(digest_key.encode("utf-8")).hexdigest()[:10]
@@ -321,6 +360,13 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
                 [
                     "-fw_cfg",
                     f"name={FILE_IN_FW_CFG_NAME},file={file_in_payload}",
+                ]
+            )
+        if snapshot_payload is not None:
+            qemu_command.extend(
+                [
+                    "-fw_cfg",
+                    f"name={SNAPSHOT_FW_CFG_NAME},file={snapshot_payload}",
                 ]
             )
         with qemu_log_path.open("w", encoding="utf-8") as log_file:
@@ -716,16 +762,16 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
     def test_development_home_process_browser_can_render_multiple_processes_and_select_a_non_default_process(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-multi-process-browser-", dir="/tmp") as temp_dir:
             temp_path = Path(temp_dir)
-            file_in_payload = _write_multi_process_browser_payload(temp_path)
+            snapshot_payload = _build_scheduler_process_snapshot(temp_path)
             browser_log, browser_width, browser_height, browser_data = self.render_interactive_example(
                 WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
                 (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18"),
-                file_in_payload=file_in_payload,
+                snapshot_payload=snapshot_payload,
             )
             debugger_log, debugger_width, debugger_height, debugger_data = self.render_interactive_example(
                 WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
                 (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18", b"\x0e", b"\x18"),
-                file_in_payload=file_in_payload,
+                snapshot_payload=snapshot_payload,
             )
 
         normalized_browser_log = browser_log.replace("\r", "")
@@ -751,21 +797,21 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
     def test_development_home_process_browser_debugger_return_restores_the_selected_process(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-process-browser-return-", dir="/tmp") as temp_dir:
             temp_path = Path(temp_dir)
-            file_in_payload = _write_multi_process_browser_payload(temp_path)
+            snapshot_payload = _build_scheduler_process_snapshot(temp_path)
             default_log, default_width, default_height, default_data = self.render_interactive_example(
                 WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
                 (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18"),
-                file_in_payload=file_in_payload,
+                snapshot_payload=snapshot_payload,
             )
             selected_log, selected_width, selected_height, selected_data = self.render_interactive_example(
                 WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
                 (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18", b"\x0e"),
-                file_in_payload=file_in_payload,
+                snapshot_payload=snapshot_payload,
             )
             returned_log, returned_width, returned_height, returned_data = self.render_interactive_example(
                 WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
                 (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18", b"\x0e", b"\x18", b"\x0f"),
-                file_in_payload=file_in_payload,
+                snapshot_payload=snapshot_payload,
             )
 
         normalized_default_log = default_log.replace("\r", "")
@@ -782,18 +828,18 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertIn("Idle Process", normalized_selected_log)
         self.assertIn("BootIdleProcess", normalized_returned_log)
         self.assertIn("OBJECT: BootIdleProcess", normalized_returned_log)
-        self.assertIn("state: waiting", normalized_returned_log)
+        self.assertIn("state: runnable", normalized_returned_log)
         self.assertGreater(_region_diff_pixels(default_data, selected_data, default_width, 40, 136, 960, 592), 500)
         self.assertGreater(_region_diff_pixels(default_data, returned_data, default_width, 40, 136, 960, 592), 500)
 
     def test_development_home_debugger_state_can_surface_explicit_process_association(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-debugger-state-", dir="/tmp") as temp_dir:
             temp_path = Path(temp_dir)
-            file_in_payload = _write_multi_process_browser_payload(temp_path)
+            snapshot_payload = _build_scheduler_process_snapshot(temp_path)
             debugger_log, debugger_width, debugger_height, debugger_data = self.render_interactive_example(
                 WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
                 (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18", b"\x0e", b"\x18"),
-                file_in_payload=file_in_payload,
+                snapshot_payload=snapshot_payload,
             )
 
         normalized_debugger_log = debugger_log.replace("\r", "")

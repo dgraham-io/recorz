@@ -163,7 +163,7 @@
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
 #define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_EDITOR_MODEL
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_REMEMBER_DEBUGGER_PROCESS_FRAME_INDEX_FRAME_COUNT
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_TERMINATE
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -1434,6 +1434,16 @@ static const char *selector_name(uint16_t selector) {
             return "context";
         case RECORZ_MVP_SELECTOR_SET_LABEL_STATE_CONTEXT:
             return "setLabel:state:context:";
+        case RECORZ_MVP_SELECTOR_SPAWN_PROCESS_NAMED_SOURCE:
+            return "spawnProcessNamed:source:";
+        case RECORZ_MVP_SELECTOR_YIELD:
+            return "yield";
+        case RECORZ_MVP_SELECTOR_SUSPEND:
+            return "suspend";
+        case RECORZ_MVP_SELECTOR_RESUME:
+            return "resume";
+        case RECORZ_MVP_SELECTOR_TERMINATE:
+            return "terminate";
     }
     return "unknown";
 }

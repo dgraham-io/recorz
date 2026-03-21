@@ -23,10 +23,11 @@ As of `2026-03-20`, the project appears to be here:
 
 - Stage 0: mostly established; keep as a regression lane.
 - Stage 1: mostly established; primitive-boundary discipline exists, and the first debugger-visible primitive-failure path is now in place.
-- Stage 2: mostly established; `Context`/`Process` visibility exists, but true scheduler semantics do not.
+- Stage 2: substantially established; `Context` and `Process` are now visible runtime objects and support the current scheduler-backed process model.
 - Stage 3: complete.
 - Stage 4: complete.
-- Stages 5 through 8: still open, with Stage 5 now at the head of execution.
+- Stage 5: complete.
+- Stages 6 through 8: still open, with Stage 6 now at the head of execution.
 
 Stage 3 status note as of `2026-03-21`:
 
@@ -46,6 +47,14 @@ Stage 4 status note as of `2026-03-21`:
 - RV32 snapshot/live-source bookkeeping was widened enough to carry the extracted model layer without changing the `32M` machine target
 - the opening-menu memory-report return path and the package-browser failing-test debugger return path are both stable again
 - Stage 4 render, snapshot, lowering, snapshot-inspector, and full RV32 build gates are now green
+
+Stage 5 status note as of `2026-03-21`:
+
+- the RV32 runtime now has scheduler-owned runnable process state instead of placeholder-only process inspection, with resumable activation records tied to real `Context` handles
+- the first cooperative process lifecycle is in place: spawn, yield, suspend, resume, and terminate all run through scheduler state instead of hidden debugger aliases
+- the process browser now reflects scheduler-backed process objects, and the debugger remains associated with the selected scheduled process under that runtime
+- scheduler state survives snapshot save and restore through the current RV32 `v9` snapshot format, including runnable-queue continuity and resumed process completion
+- Stage 5 serial, render, snapshot, lowering, and full RV32 build gates are green without widening the standard `32M` target
 
 ## Global Completion Rules
 
@@ -366,7 +375,7 @@ This stage turns the inspectable process scaffolding into a real early Smalltalk
 
 ### Open Tasks
 
-- [ ] `BP5.1` Add cooperative runnable/waiting queues
+- [x] `BP5.1` Add cooperative runnable/waiting queues
   Files:
   - `/Users/david/repos/recorz/platform/qemu-riscv32/vm.c`
   - `/Users/david/repos/recorz/platform/qemu-riscv64/vm.c`
@@ -377,7 +386,7 @@ This stage turns the inspectable process scaffolding into a real early Smalltalk
   - runtime tests
   - process-browser tests
 
-- [ ] `BP5.2` Add process creation protocol
+- [x] `BP5.2` Add process creation protocol
   Files:
   - `/Users/david/repos/recorz/kernel/mvp/Process.rz`
   - `/Users/david/repos/recorz/kernel/mvp/Workspace.rz`
@@ -388,7 +397,7 @@ This stage turns the inspectable process scaffolding into a real early Smalltalk
   Verify:
   - process creation tests
 
-- [ ] `BP5.3` Add process control protocol
+- [x] `BP5.3` Add process control protocol
   Files:
   - `/Users/david/repos/recorz/kernel/mvp/Process.rz`
   - `/Users/david/repos/recorz/kernel/mvp/Selector.rz`
@@ -399,7 +408,7 @@ This stage turns the inspectable process scaffolding into a real early Smalltalk
   Verify:
   - process-control tests
 
-- [ ] `BP5.4` Process browser and debugger coherence under real scheduling
+- [x] `BP5.4` Process browser and debugger coherence under real scheduling
   Files:
   - `/Users/david/repos/recorz/kernel/textui/WidgetBootstrap.rz`
   - `/Users/david/repos/recorz/tests/`
@@ -409,7 +418,7 @@ This stage turns the inspectable process scaffolding into a real early Smalltalk
   Verify:
   - render, serial, and snapshot tests
 
-- [ ] `BP5.5` Snapshot-safe scheduler state
+- [x] `BP5.5` Snapshot-safe scheduler state
   Files:
   - `/Users/david/repos/recorz/platform/qemu-riscv32/vm.c`
   - `/Users/david/repos/recorz/platform/qemu-riscv64/vm.c`
@@ -584,9 +593,9 @@ This stage only begins once the earlier stages are functionally complete.
 
 Unless a regression in Stage 0 becomes urgent, the next tasks should be tackled in this order:
 
-1. `BP5.1` Add cooperative runnable/waiting queues.
-2. `BP5.2` Add process creation protocol.
-3. `BP5.3` Add process control protocol.
+1. `BP6.1` Selected-frame navigation and sender traversal.
+2. `BP6.2` Frame-local object inspection.
+3. `BP6.3` Resume/proceed control.
 
 ## Program Complete When
 

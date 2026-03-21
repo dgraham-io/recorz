@@ -87,6 +87,12 @@ processNameAt: index
 processLabelsVisibleFrom: firstIndex count: lineCount
     <primitive: #workspaceProcessLabelsVisibleFromCount>
 !
+spawnProcessNamed: processName source: source
+    <primitive: #workspaceSpawnProcessNamedSource>
+!
+yield
+    <primitive: #workspaceYield>
+!
 contextFrameSummariesVisibleFrom: firstIndex count: lineCount named: objectName
     <primitive: #workspaceContextFrameSummariesVisibleFromCountNamed>
 !
