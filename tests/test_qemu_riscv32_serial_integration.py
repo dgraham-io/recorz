@@ -298,6 +298,41 @@ def _write_development_home_tests_package_file_in(temp_path: Path) -> Path:
     return payload_path
 
 
+def _write_development_home_stage6_process_file_in(temp_path: Path) -> Path:
+    payload_path = temp_path / "development_home_stage6_process_file_in.rz"
+    payload_path.write_text(
+        "\n".join(
+            [
+                "RecorzKernelDoIt:",
+                "| process |",
+                "process := Workspace spawnProcessNamed: 'BootStepProcess' source: 'Workspace yield. 1 at: 1.'.",
+                "process resume.",
+                "process resume.",
+                "!",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return payload_path
+
+
+def _write_development_home_stage6_yielding_process_file_in(temp_path: Path) -> Path:
+    payload_path = temp_path / "development_home_stage6_yielding_process_file_in.rz"
+    payload_path.write_text(
+        "\n".join(
+            [
+                "RecorzKernelDoIt:",
+                "| process |",
+                "process := Workspace spawnProcessNamed: 'BootStepProcess' source: '| block | block := [ Workspace yield. 1 + 2 ]. block value.'.",
+                "process resume.",
+                "!",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return payload_path
+
+
 def _read_file_until(path: Path, marker: str, *, timeout: float) -> str:
     deadline = time.monotonic() + timeout
     output = ""
@@ -2488,7 +2523,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                 process.stdin.flush()
                 output += _read_until_any(
                     process,
-                    ("BootActiveProcess", "panic:"),
+                    ("STATUS: SOURCE EDITOR :: MODIFIED", "panic:"),
                     timeout=8.0,
                 )
                 if process.poll() is None:
@@ -2505,8 +2540,7 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
                     process.stdin.close()
 
             output = output.replace("\r", "")
-            self.assertIn("BootActiveProcess", output)
-            self.assertIn("BROWSERBootActiveProcess", output.replace("\n", ""))
+            self.assertIn("STATUS: SOURCE EDITOR :: MODIFIED", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_interactive_input_monitor_can_accept_current_buffer(self) -> None:
@@ -3196,6 +3230,76 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("TinySpec>>testFail", output)
             self.assertNotIn("panic:", output)
 
+    def test_workspace_scheduled_process_frame_detail_can_render_receiver_sender_and_temporaries(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-scheduled-process-frame-detail-") as temp_dir:
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "build"
+            example_path = temp_path / "workspace_scheduled_process_frame_detail_demo.rz"
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "| process frame |",
+                        "process := Workspace spawnProcessNamed: 'Stage6Process' source: '| block | block := [ | local | local := 41. Workspace yield. local + 1 ]. block value.'.",
+                        "frame := Workspace contextFrameAt: 1 named: 'Stage6Process'.",
+                        "Transcript show: 'FRAME COUNT:'; show: (Workspace contextFrameCountNamed: 'Stage6Process') printString; cr.",
+                        "Transcript show: 'FRAME:'; cr.",
+                        "Transcript show: (Workspace objectDetailNamed: 'Stage6Process'); cr.",
+                        "Transcript show: 'FRAME DETAIL:'; cr.",
+                        "Transcript show: (Workspace contextFrameDetailAt: 1 named: 'Stage6Process'); cr.",
+                        "Transcript show: 'TEMPORARIES DETAIL:'; cr.",
+                        "Transcript show: frame temporariesDetail; cr.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            elf_path = _build_elf(build_dir, example_path)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("FRAME COUNT:", output)
+            self.assertIn("FRAME:", output)
+            self.assertIn("FRAME DETAIL:", output)
+            self.assertIn("TEMPORARIES DETAIL:", output)
+            self.assertIn("OBJECT: Stage6Process", output)
+            self.assertIn("state:", output.lower())
+            self.assertIn("receiver", output)
+            self.assertIn("sender", output)
+            self.assertIn("ARGUMENTS", output)
+            self.assertIn("LEXICALS", output)
+            self.assertIn("STACK", output)
+            self.assertNotIn("panic:", output)
+
     def test_workspace_development_home_menu_can_open_the_class_browser(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-class-") as temp_dir:
             build_dir = Path(temp_dir)
@@ -3436,6 +3540,158 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("BootWorkspaceTool", output)
             self.assertIn("statusText", output)
             self.assertIn("feedbackText", output)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_development_home_failed_scheduled_process_can_proceed_from_the_debugger(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-stage6-proceed-", dir="/tmp") as temp_dir:
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "build"
+            example_path = temp_path / "workspace_failed_scheduled_process_proceed_demo.rz"
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "| process |",
+                        "process := Workspace spawnProcessNamed: 'BootStepProcess' source: 'Workspace yield. 1 at: 1.'.",
+                        "process resume.",
+                        "Transcript show: 'BEFORE:'; cr.",
+                        "Transcript show: (Workspace objectDetailNamed: 'BootStepProcess'); cr.",
+                        "process resume.",
+                        "Transcript show: 'AFTER:'; cr.",
+                        "Transcript show: (Workspace objectDetailNamed: 'BootStepProcess'); cr.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            elf_path = _build_elf(build_dir, example_path)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=8.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("BEFORE:", output)
+            self.assertIn("AFTER:", output)
+            self.assertIn("BootStepProcess", output)
+            self.assertIn("state: failed", output.lower())
+            self.assertTrue("state: runnable" in output.lower() or "state: terminated" in output.lower())
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_development_home_debugger_step_into_and_step_over_keep_the_process_detail_visible(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-stage6-step-", dir="/tmp") as temp_dir:
+            temp_path = Path(temp_dir)
+            build_dir = temp_path / "build"
+            example_path = temp_path / "workspace_step_into_over_demo.rz"
+            example_path.write_text(
+                "\n".join(
+                    [
+                        "| process before into over |",
+                        "process := Workspace spawnProcessNamed: 'BootStepProcess' source: '| block | block := [ | local | local := 1. Workspace yield. local + 2 ]. block value.'.",
+                        "before := Workspace contextFrameCountNamed: 'BootStepProcess'.",
+                        "Transcript show: 'BEFORE COUNT:'; show: before printString; cr.",
+                        "Transcript show: 'BEFORE DETAIL:'; cr.",
+                        "Transcript show: (Workspace contextFrameDetailAt: 1 named: 'BootStepProcess'); cr.",
+                        "Transcript show: 'TEMPORARIES BEFORE:'; cr.",
+                        "Transcript show: (Workspace contextFrameAt: 1 named: 'BootStepProcess') temporariesDetail; cr.",
+                        "process stepInto.",
+                        "into := Workspace contextFrameCountNamed: 'BootStepProcess'.",
+                        "Transcript show: 'INTO COUNT:'; show: into printString; cr.",
+                        "Transcript show: 'INTO DETAIL:'; cr.",
+                        "Transcript show: (Workspace contextFrameDetailAt: 1 named: 'BootStepProcess'); cr.",
+                        "Transcript show: 'TEMPORARIES INTO:'; cr.",
+                        "Transcript show: (Workspace contextFrameAt: 1 named: 'BootStepProcess') temporariesDetail; cr.",
+                        "process stepOver.",
+                        "over := Workspace contextFrameCountNamed: 'BootStepProcess'.",
+                        "Transcript show: 'OVER COUNT:'; show: over printString; cr.",
+                        "Transcript show: 'OVER DETAIL:'; cr.",
+                        "Transcript show: (Workspace contextFrameDetailAt: 1 named: 'BootStepProcess'); cr.",
+                        "Transcript show: 'TEMPORARIES OVER:'; cr.",
+                        "Transcript show: (Workspace contextFrameAt: 1 named: 'BootStepProcess') temporariesDetail; cr.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            elf_path = _build_elf(build_dir, example_path)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                try:
+                    output, _ = process.communicate(timeout=8.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    output, _ = process.communicate(timeout=5.0)
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("BEFORE COUNT:", output)
+            self.assertIn("INTO COUNT:", output)
+            self.assertIn("OVER COUNT:", output)
+            self.assertIn("BootStepProcess", output)
+            self.assertIn("DETAIL:", output)
+            self.assertIn("receiver", output)
+            self.assertIn("sender", output)
+            self.assertIn("TEMPORARIES BEFORE:", output)
+            self.assertIn("TEMPORARIES INTO:", output)
+            self.assertIn("TEMPORARIES OVER:", output)
+            self.assertIn("ARGUMENTS", output)
+            self.assertIn("LEXICALS", output)
+            self.assertIn("STACK", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_debug_frame_queries_can_render_active_process_stack_detail(self) -> None:
