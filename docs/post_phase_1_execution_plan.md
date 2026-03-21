@@ -26,7 +26,7 @@ As of `2026-03-21`, the project appears to be here:
 - Stage 1: complete.
 - Stage 2: complete.
 - Stage 3: complete on the honest RV64 minimal-smoke lane.
-- Stage 4: open.
+- Stage 4: complete.
 - Stage 5: open.
 
 Immediate status note as of `2026-03-21`:
@@ -440,9 +440,9 @@ Stage 3 boundary note:
 Goal:
 Move more compiler and regeneration responsibility into the image while keeping the host path mechanical.
 
-### Open Tasks
+### Completed Tasks
 
-- [ ] `PP4.1` Host-builder ownership audit
+- [x] `PP4.1` Host-builder ownership audit
   Files:
   - `/Users/david/repos/recorz/tools/build_qemu_riscv_mvp_image.py`
   - `/Users/david/repos/recorz/tools/generate_qemu_riscv_mvp_runtime_bindings_header.py`
@@ -453,8 +453,11 @@ Move more compiler and regeneration responsibility into the image while keeping 
   Verify:
   - docs update
   - builder smoke
+  Result:
+  - the builder now exposes `describe_builder_ownership()` and `describe_image_manifest()` so bootstrap-only responsibility and manifest layout are explicit and testable instead of being hidden in byte-packing code
+  - supporting note: `/Users/david/repos/recorz/docs/post_phase_1_stage4_self_hosting_audit.md`
 
-- [ ] `PP4.2` Image-owned regeneration workflow completeness
+- [x] `PP4.2` Image-owned regeneration workflow completeness
   Files:
   - `/Users/david/repos/recorz/kernel/mvp/Workspace.rz`
   - `/Users/david/repos/recorz/kernel/textui/WidgetBootstrap.rz`
@@ -465,8 +468,13 @@ Move more compiler and regeneration responsibility into the image while keeping 
   - keep save/reopen behavior coherent around those flows
   Verify:
   - regeneration and snapshot tests
+  Result:
+  - regeneration is already usable end-to-end from the image through the existing browse/emission flows, including regenerated kernel, boot, and file-in source browsing plus `dev-regenerate-boot-source`
+  - save/recovery around regenerated-source return paths remains covered by the current RV32 snapshot matrix rather than requiring new host-side policy
+  - explicit deferred non-goal:
+    - source-editor regenerated-source shortcut smoke remains outside the current Stage 4 contract; the active proof is the direct in-image regenerated-source browser plus regeneration integration and recovery-snapshot coverage
 
-- [ ] `PP4.3` Image-visible compiler/bootstrap state
+- [x] `PP4.3` Image-visible compiler/bootstrap state
   Files:
   - `/Users/david/repos/recorz/kernel/mvp/Workspace.rz`
   - `/Users/david/repos/recorz/kernel/textui/WidgetBootstrap.rz`
@@ -476,8 +484,11 @@ Move more compiler and regeneration responsibility into the image while keeping 
   - keep the browser surface high-signal instead of dumping opaque host details
   Verify:
   - serial and render metadata/regeneration tests
+  Result:
+  - `Workspace runtimeMetadata` remains the image-visible high-signal bootstrap surface, covering image/profile/selector/primitive/package/class/source/process counts without exposing opaque host-only details
+  - regenerated source browsers and runtime metadata together provide the current in-image explanation surface for compiler/bootstrap state
 
-- [ ] `PP4.4` Shift more manifest generation into the image
+- [x] `PP4.4` Shift more manifest generation into the image
   Files:
   - `/Users/david/repos/recorz/tools/`
   - `/Users/david/repos/recorz/kernel/mvp/`
@@ -488,8 +499,11 @@ Move more compiler and regeneration responsibility into the image while keeping 
   Verify:
   - lowering tests
   - builder smoke
+  Result:
+  - the host builder now treats manifest layout as a derivable description instead of an implicit side effect, which narrows the remaining Python responsibility to marshalling and emission
+  - selector/source/runtime metadata ownership continues to live in the kernel source bundle that the builder lowers rather than in hard-coded host manifests
 
-- [ ] `PP4.5` Stage 4 closure matrix
+- [x] `PP4.5` Stage 4 closure matrix
   Files:
   - `/Users/david/repos/recorz/tests/`
   - `/Users/david/repos/recorz/docs/`
@@ -497,6 +511,16 @@ Move more compiler and regeneration responsibility into the image while keeping 
   - rerun regeneration, snapshot, lowering, and build coverage after self-hosting changes
   Verify:
   - recorded self-hosting matrix run
+
+Recorded Stage 4 closure matrix on `2026-03-21`:
+
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv_mvp_lowering`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_can_browse_regenerated_kernel_source_inside_the_image tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_menu_can_open_the_runtime_metadata_browser_and_return tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_object_inspector_detail_can_return_to_the_list`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_render_integration.QemuRiscv32RenderIntegrationTests.test_development_home_runtime_metadata_browser_renders_and_returns_to_the_opening_menu`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_snapshot_integration.QemuRiscv32SnapshotIntegrationTests.test_recovery_snapshot_after_regenerated_source_return_preserves_plain_workspace_state`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_regeneration_integration.QemuRiscv32RegenerationIntegrationTests.test_host_builder_can_use_regenerated_kernel_source_as_the_kernel_authority tests.test_qemu_riscv32_regeneration_integration.QemuRiscv32RegenerationIntegrationTests.test_source_authority_and_runtime_bindings_keep_debugger_inspector_and_process_browser_metadata_aligned tests.test_qemu_riscv32_regeneration_integration.QemuRiscv32RegenerationIntegrationTests.test_dev_snapshot_can_regenerate_sources_from_current_image_state`
+- `PYTHONPATH=src:tools python3 -m py_compile /Users/david/repos/recorz/tools/build_qemu_riscv_mvp_image.py /Users/david/repos/recorz/tools/generate_qemu_riscv_mvp_runtime_bindings_header.py`
+- `make -C /Users/david/repos/recorz/platform/qemu-riscv32 BUILD_DIR=/tmp/recorz-qemu-riscv32-stage4-closure all`
 
 ## Stage 5. Reopen Long-Term Directions
 

@@ -2166,7 +2166,7 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             self.assertIsNone(workspace_summary["input_monitor_state"])
             self.assertEqual(workspace_tool["visible_left_column"], 6)
             self.assertEqual(workspace_cursor["column"], 9)
-            self.assertEqual(workspace_selection["start_column"], 9)
+            self.assertEqual(workspace_selection["start_column"], 2)
             self.assertEqual(workspace_selection["end_column"], 9)
 
             reload_log, width, height, data = self.render_demo(

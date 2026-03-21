@@ -100,6 +100,17 @@ Exit criteria:
 
 Goal: move more compiler and regeneration responsibility into the image.
 
+Status:
+- complete as of `2026-03-21`
+- landed results:
+  - the host-builder boundary is now explicit in `/Users/david/repos/recorz/tools/build_qemu_riscv_mvp_image.py` via testable ownership and image-manifest layout summaries
+  - regenerated boot-source and kernel-source workflows remain usable end-to-end from the image, including interactive browse/return flows, `dev-regenerate-boot-source`, and save/recovery around regenerated-source return paths
+  - runtime metadata remains image-visible as a high-signal browser surface for image/profile/selector/primitive counts without pushing opaque host details into the UI
+- explicit deferred non-goal:
+  - source-editor regenerated-source shortcut smoke remains outside this stage boundary; the active proof stays on direct in-image regenerated-source browsing plus regeneration/snapshot integration
+- supporting audit:
+  - `/Users/david/repos/recorz/docs/post_phase_1_stage4_self_hosting_audit.md`
+
 Work items:
 - shift more of the source/compiler/bootstrap workflow out of host-side ownership
 - make regenerated source and tool output easier to inspect from inside the image

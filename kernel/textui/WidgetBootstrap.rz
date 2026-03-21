@@ -517,26 +517,28 @@ sourceEditorViewKind: aViewKind
     ^false
 !
 dispatchWorkspaceCommandOnForm: aByte
-    | plainState |
-    aByte = self returnToBrowserCommandByte ifTrue: [
-        self browserReturnViewKind = nil ifFalse: [^self returnFromSourceEditor].
+    | plainContents plainState returnViewKind |
+    aByte = 15 ifTrue: [
+        returnViewKind := self browserReturnViewKind.
+        returnViewKind = nil ifFalse: [^self returnFromSourceEditor].
         plainState := self namedObjectOrNil: 'BootWorkspacePlainState'.
         plainState = nil ifFalse: [
-            plainState contents = nil ifFalse: [^self restorePlainWorkspaceState]].
+            plainContents := plainState contents.
+            plainContents = nil ifFalse: [^self restorePlainWorkspaceState]].
         ^0].
     self isReadOnlyDetailTarget ifTrue: [^0].
-    aByte = self acceptCommandByte ifTrue: [self acceptCurrent. ^1].
-    aByte = self revertCommandByte ifTrue: [self revertCurrent. ^1].
-    aByte = self runTestsCommandByte ifTrue: [self runCurrentTests. ^1].
-    aByte = self printCommandByte ifTrue: [self printCurrent. ^1].
-    aByte = self doItCommandByte ifTrue: [self evaluateCurrent. ^1].
-    aByte = self alternateDoItCommandByte ifTrue: [self evaluateCurrent. ^1].
-    aByte = self saveAndReopenCommandByte ifTrue: [self saveAndReopen. ^9].
-    aByte = self saveRecoverySnapshotCommandByte ifTrue: [self saveRecoverySnapshot. ^9].
+    aByte = 24 ifTrue: [self acceptCurrent. ^1].
+    aByte = 25 ifTrue: [self revertCurrent. ^1].
+    aByte = 20 ifTrue: [self runCurrentTests. ^1].
+    aByte = 16 ifTrue: [self printCurrent. ^1].
+    aByte = 4 ifTrue: [self evaluateCurrent. ^1].
+    aByte = 18 ifTrue: [self evaluateCurrent. ^1].
+    aByte = 23 ifTrue: [self saveAndReopen. ^9].
+    aByte = 11 ifTrue: [self saveRecoverySnapshot. ^9].
     ^0
 !
 returnFromSourceEditor
-    | browserModel plainState redrawCode |
+    | browserModel plainContents plainState redrawCode |
     browserModel := self namedObjectOrNil: 'BootWorkspaceBrowserModel'.
     redrawCode := nil.
     browserModel = nil ifFalse: [
@@ -544,7 +546,8 @@ returnFromSourceEditor
     redrawCode = nil ifFalse: [^redrawCode].
     plainState := self namedObjectOrNil: 'BootWorkspacePlainState'.
     plainState = nil ifFalse: [
-        plainState contents = nil ifFalse: [
+        plainContents := plainState contents.
+        plainContents = nil ifFalse: [
             ^self restorePlainWorkspaceState]].
     ^self sourceEditorFallbackReturn
 !
@@ -561,7 +564,7 @@ sourceEditorFallbackReturn
     ^9
 !
 dispatchSourceEditorCommandOnForm: aByte
-    aByte = self returnToBrowserCommandByte ifTrue: [^self returnFromSourceEditor].
+    aByte = 15 ifTrue: [^self returnFromSourceEditor].
     ^self dispatchWorkspaceCommandOnForm: aByte
 !
 dispatchCommandOnForm: aByte
@@ -1184,10 +1187,13 @@ openingMenuOptionCount
     ^7
 !
 isReadOnlyDetailTarget
-    workspace currentTargetName = 'OBJECT INSPECTOR DETAIL' ifTrue: [^true].
-    workspace currentTargetName = 'DEBUGGER' ifTrue: [^true].
-    workspace currentTargetName = 'Memory Report' ifTrue: [^true].
-    workspace currentTargetName = 'Runtime Metadata' ifTrue: [^true].
+    | targetName |
+    targetName := workspace currentTargetName.
+    targetName = nil ifTrue: [^false].
+    targetName = 'OBJECT INSPECTOR DETAIL' ifTrue: [^true].
+    targetName = 'DEBUGGER' ifTrue: [^true].
+    targetName = 'Memory Report' ifTrue: [^true].
+    targetName = 'Runtime Metadata' ifTrue: [^true].
     ^false
 !
 isObjectInspectorBrowser
@@ -1662,13 +1668,14 @@ handleEscapeByte: aByte
     ^workspace handleEditorArrowByte: aByte visibleLines: self visibleEditorLines visibleColumns: self visibleEditorColumns
 !
 returnFromDebuggerBrowser
-    | plainState redrawCode tool |
+    | plainContents plainState redrawCode tool |
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
     redrawCode := browserModel restoreOn: workspace tool: tool.
     redrawCode = nil ifTrue: [
         plainState := tool namedObjectOrNil: 'BootWorkspacePlainState'.
         plainState = nil ifFalse: [
-            plainState contents = nil ifFalse: [^tool restorePlainWorkspaceState]].
+            plainContents := plainState contents.
+            plainContents = nil ifFalse: [^tool restorePlainWorkspaceState]].
         tool setStatusText: ''.
         tool setFeedbackText: ''.
         ^9].
@@ -1854,6 +1861,7 @@ rememberCurrentPlainWorkspaceStateOnTool: tool
     plainContents := workspace contents.
     plainContents = nil ifTrue: [plainContents := ''].
     tool rememberPlainWorkspaceStateContents: plainContents.
+    tool setBrowserReturnViewKind: nil targetName: nil.
     ^self
 !
 rememberPlainWorkspaceStateIfNeeded
@@ -1862,6 +1870,7 @@ rememberPlainWorkspaceStateIfNeeded
     plainState := tool namedObjectOrNil: 'BootWorkspacePlainState'.
     plainState = nil ifTrue: [^self rememberCurrentPlainWorkspaceStateOnTool: tool].
     plainState contents = nil ifTrue: [^self rememberCurrentPlainWorkspaceStateOnTool: tool].
+    tool setBrowserReturnViewKind: nil targetName: nil.
     ^self
 !
 packageSourceToOpenFor: packageName priorTarget: priorTarget
@@ -1882,9 +1891,12 @@ handleEditorByte: aByte tool: tool
     | commandResult |
     aByte = 2 ifTrue: [^self scrollEditorPageBy: -1].
     aByte = 22 ifTrue: [^self scrollEditorPageBy: 1].
-    aByte = tool runTestsCommandByte ifTrue: [tool runCurrentTests. ^1].
-    aByte = tool saveAndReopenCommandByte ifTrue: [tool saveAndReopen. ^9].
-    aByte = tool saveRecoverySnapshotCommandByte ifTrue: [tool saveRecoverySnapshot. ^9].
+    aByte = 7 ifTrue: [tool browseRegeneratedKernelSource. ^4].
+    aByte = 12 ifTrue: [tool browseRegeneratedBootSource. ^4].
+    aByte = 17 ifTrue: [tool browseRegeneratedFileInSource. ^4].
+    aByte = 20 ifTrue: [tool runCurrentTests. ^1].
+    aByte = 23 ifTrue: [tool saveAndReopen. ^9].
+    aByte = 11 ifTrue: [tool saveRecoverySnapshot. ^9].
     commandResult := tool dispatchCommandOnForm: aByte.
     commandResult = 0 ifFalse: [^commandResult].
     self isReadOnlyDetailTarget ifTrue: [

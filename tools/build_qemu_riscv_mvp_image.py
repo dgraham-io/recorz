@@ -269,6 +269,27 @@ class KernelPrimitiveBindingOwner:
 
 
 @dataclass(frozen=True)
+class BuilderOwnershipSummary:
+    runtime_spec_path: str
+    source_root: str
+    generated_text_outputs: tuple[str, ...]
+    generated_binary_outputs: tuple[str, ...]
+    derived_metadata_surfaces: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ImageManifestLayout:
+    section_count: int
+    feature_flags: int
+    entry_offset: int
+    program_offset: int
+    seed_offset: int
+    entry_length: int
+    program_length: int
+    seed_length: int
+
+
+@dataclass(frozen=True)
 class KernelRootDeclaration:
     root_name: str
     object_name: str
@@ -3146,6 +3167,50 @@ def build_entry_manifest() -> bytes:
     )
 
 
+def describe_builder_ownership() -> BuilderOwnershipSummary:
+    return BuilderOwnershipSummary(
+        runtime_spec_path=str(RUNTIME_SPEC_PATH),
+        source_root=str(KERNEL_MVP_ROOT),
+        generated_text_outputs=(
+            "generated runtime bindings header",
+        ),
+        generated_binary_outputs=(
+            "image manifest",
+            "demo image",
+        ),
+        derived_metadata_surfaces=(
+            "class headers",
+            "selector declarations",
+            "root declarations",
+            "object kinds",
+            "method entries",
+            "primitive bindings",
+            "seed layout",
+        ),
+    )
+
+
+def describe_image_manifest(program: Program) -> ImageManifestLayout:
+    entry_length = len(build_entry_manifest())
+    program_length = len(build_program_manifest(program))
+    seed_length = len(build_seed_manifest())
+    section_count = 3
+    header_size = struct.calcsize(IMAGE_HEADER_FORMAT) + (section_count * struct.calcsize(IMAGE_SECTION_FORMAT))
+    entry_offset = header_size
+    program_offset = entry_offset + entry_length
+    seed_offset = program_offset + program_length
+    return ImageManifestLayout(
+        section_count=section_count,
+        feature_flags=IMAGE_FEATURE_FNV1A32,
+        entry_offset=entry_offset,
+        program_offset=program_offset,
+        seed_offset=seed_offset,
+        entry_length=entry_length,
+        program_length=program_length,
+        seed_length=seed_length,
+    )
+
+
 def fnv1a32(data: bytes, *, seed: int = 0x811C9DC5) -> int:
     value = seed
     for byte in data:
@@ -3158,20 +3223,15 @@ def build_image_manifest(program: Program) -> bytes:
     entry_manifest = build_entry_manifest()
     program_manifest = build_program_manifest(program)
     seed_manifest = build_seed_manifest()
-    section_count = 3
-    header_size = struct.calcsize(IMAGE_HEADER_FORMAT) + (section_count * struct.calcsize(IMAGE_SECTION_FORMAT))
-    entry_offset = header_size
-    program_offset = entry_offset + len(entry_manifest)
-    seed_offset = program_offset + len(program_manifest)
-    feature_flags = IMAGE_FEATURE_FNV1A32
+    manifest_layout = describe_image_manifest(program)
 
     manifest = bytearray(
         struct.pack(
             IMAGE_HEADER_FORMAT,
             IMAGE_MAGIC,
             IMAGE_VERSION,
-            section_count,
-            feature_flags,
+            manifest_layout.section_count,
+            manifest_layout.feature_flags,
             0,
             IMAGE_PROFILE,
         )
@@ -3181,8 +3241,8 @@ def build_image_manifest(program: Program) -> bytes:
             IMAGE_SECTION_FORMAT,
             IMAGE_SECTION_ENTRY,
             0,
-            entry_offset,
-            len(entry_manifest),
+            manifest_layout.entry_offset,
+            manifest_layout.entry_length,
         )
     )
     manifest.extend(
@@ -3190,8 +3250,8 @@ def build_image_manifest(program: Program) -> bytes:
             IMAGE_SECTION_FORMAT,
             IMAGE_SECTION_PROGRAM,
             0,
-            program_offset,
-            len(program_manifest),
+            manifest_layout.program_offset,
+            manifest_layout.program_length,
         )
     )
     manifest.extend(
@@ -3199,8 +3259,8 @@ def build_image_manifest(program: Program) -> bytes:
             IMAGE_SECTION_FORMAT,
             IMAGE_SECTION_SEED,
             0,
-            seed_offset,
-            len(seed_manifest),
+            manifest_layout.seed_offset,
+            manifest_layout.seed_length,
         )
     )
     manifest.extend(entry_manifest)
@@ -3211,8 +3271,8 @@ def build_image_manifest(program: Program) -> bytes:
         IMAGE_HEADER_FORMAT,
         IMAGE_MAGIC,
         IMAGE_VERSION,
-        section_count,
-        feature_flags,
+        manifest_layout.section_count,
+        manifest_layout.feature_flags,
         checksum,
         IMAGE_PROFILE,
     )
