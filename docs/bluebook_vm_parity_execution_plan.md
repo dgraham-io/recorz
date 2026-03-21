@@ -347,7 +347,7 @@ This is the first large structural cleanup stage. Do not start it until Stage 3 
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_render_integration.py::QemuRiscv32RenderIntegrationTests::test_interactive_editor_line_edit_uses_pane_redraw_path_without_pool_overflow`
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_render_integration.py::QemuRiscv32RenderIntegrationTests::test_interactive_editor_print_uses_status_only_redraw_path`
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_render_integration.py::QemuRiscv32RenderIntegrationTests::test_interactive_package_browser_scrolling_uses_incremental_list_redraw_path`
-  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_render_integration.py::QemuRiscv32RenderIntegrationTests::test_development_home_menu_and_browser_frames_are_distinct`
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_snapshot_integration.py::QemuRiscv32SnapshotIntegrationTests::test_development_home_menu_and_browser_frames_are_distinct`
 
 - [x] `BP4.5` Re-run memory budget after model extraction
   Files:
@@ -584,9 +584,9 @@ This stage only begins once the earlier stages are functionally complete.
 
 Unless a regression in Stage 0 becomes urgent, the next tasks should be tackled in this order:
 
-1. `BP4.1` Extract browser state model.
-2. `BP4.2` Extract editor/source-holder model.
-3. `BP4.3` Move opening-menu and return routing into model APIs.
+1. `BP5.1` Add cooperative runnable/waiting queues.
+2. `BP5.2` Add process creation protocol.
+3. `BP5.3` Add process control protocol.
 
 ## Program Complete When
 

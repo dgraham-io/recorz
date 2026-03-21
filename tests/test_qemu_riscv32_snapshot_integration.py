@@ -1525,10 +1525,10 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             self.assertNotIn("panic:", class_log)
             self.assertNotIn("panic:", package_log)
 
-            self.assertGreater(_region_histogram(class_data, class_width, 40, 60, 960, 120)[TEXT_FOREGROUND], 800)
-            self.assertGreater(_region_histogram(class_data, class_width, 336, 136, 960, 592)[TEXT_FOREGROUND], 1800)
-            self.assertGreater(_region_histogram(package_data, package_width, 40, 60, 960, 120)[TEXT_FOREGROUND], 200)
-            self.assertGreater(_region_histogram(package_data, package_width, 336, 136, 960, 592)[TEXT_FOREGROUND], 8000)
+            self.assertGreater(_region_histogram(class_data, class_width, 40, 60, 960, 120)[TEXT_FOREGROUND], 1000)
+            self.assertGreater(_region_histogram(class_data, class_width, 24, 120, 980, 320)[TEXT_FOREGROUND], 5000)
+            self.assertGreater(_region_histogram(package_data, package_width, 40, 60, 240, 120)[TEXT_FOREGROUND], 150)
+            self.assertGreater(_region_histogram(package_data, package_width, 24, 120, 980, 320)[TEXT_FOREGROUND], 8000)
             self.assertGreater(_region_diff_pixels(class_data, package_data, class_width, 20, 120, 980, 620), 1000)
 
     def test_object_browser_snapshot_round_trips_through_saved_state(self) -> None:

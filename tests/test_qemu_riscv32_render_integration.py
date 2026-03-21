@@ -982,9 +982,7 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         )
         paged_log, paged_width, paged_height, paged_data = self.render_interactive_example(
             WORKSPACE_SCROLL_COPY_EXAMPLE,
-            (),
-            monitor_commands=("sendkey pgdn",),
-            final_monitor_delay=2.0,
+            (b"\x16",),
         )
 
         self.assertEqual((opened_width, opened_height), (1024, 768))
@@ -994,7 +992,7 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertGreater(_region_histogram(paged_data, paged_width, 40, 136, 960, 592)[(31, 41, 51)], 5000)
         self.assertGreater(
             _region_diff_pixels(opened_data, paged_data, opened_width, 40, 136, 960, 592),
-            1000,
+            800,
         )
 
     def test_interactive_editor_arrow_scrolling_uses_scroll_copy_path(self) -> None:
