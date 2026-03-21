@@ -105,6 +105,20 @@ def _region_diff_pixels(
     return diff
 
 
+def _region_non_background_pixels(
+    data: bytes,
+    width: int,
+    x0: int,
+    y0: int,
+    x1: int,
+    y1: int,
+    *,
+    background: tuple[int, int, int] = (247, 243, 232),
+) -> int:
+    histogram = _region_histogram(data, width, x0, y0, x1, y1)
+    return sum(count for color, count in histogram.items() if color != background)
+
+
 def _region_diff_pixels_with_offsets(
     data: bytes,
     width: int,
@@ -414,6 +428,57 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         qemu_log = qemu_log_path.read_text(encoding="utf-8", errors="ignore")
         width, height, data = _read_ppm(ppm_path)
         return qemu_log, width, height, data
+
+    def assert_interactive_page_down_keeps_source_visible(
+        self,
+        setup_lines: tuple[str, ...],
+        *,
+        page_count: int = 6,
+    ) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-image-session-scroll-") as temp_dir:
+            temp_path = Path(temp_dir)
+            example_digest = hashlib.sha1("\n".join(setup_lines).encode("utf-8")).hexdigest()[:8]
+            example = temp_path / f"interactive_scroll_{example_digest}.rz"
+            example.write_text("\n".join(setup_lines), encoding="utf-8")
+
+            opened_log, opened_width, opened_height, opened_data = self.render_interactive_example(
+                example,
+                (),
+            )
+            paged_log, paged_width, paged_height, paged_data = self.render_interactive_example(
+                example,
+                (b"\x16",) * page_count,
+            )
+
+        normalized_opened_log = opened_log.replace("\r", "")
+        normalized_paged_log = paged_log.replace("\r", "")
+        self.assertEqual((opened_width, opened_height), (1024, 768))
+        self.assertEqual((paged_width, paged_height), (1024, 768))
+        self.assertNotIn("panic:", normalized_opened_log)
+        self.assertNotIn("panic:", normalized_paged_log)
+        self.assertGreater(
+            _region_diff_pixels(
+                opened_data,
+                paged_data,
+                opened_width,
+                40,
+                136,
+                960,
+                592,
+            ),
+            800,
+        )
+        self.assertGreater(
+            _region_non_background_pixels(
+                paged_data,
+                paged_width,
+                40,
+                136,
+                180,
+                520,
+            ),
+            300,
+        )
 
     def test_demo_renders_expected_colors(self) -> None:
         qemu_log, width, height, data = self.render_example()
@@ -1435,7 +1500,7 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
             800,
         )
 
-    def test_interactive_editor_arrow_scrolling_uses_scroll_copy_path(self) -> None:
+    def test_interactive_editor_arrow_scrolling_keeps_text_visible(self) -> None:
         qemu_log, width, height, data = self.render_interactive_example(
             WORKSPACE_SCROLL_COPY_EXAMPLE,
             (b"\x1b[B",) * 22 + (b"\x1f",),
@@ -1446,9 +1511,9 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertNotIn("panic:", qemu_log.replace("\r", ""))
         self.assertEqual(counters["browser_full"], 0)
         self.assertEqual(counters["editor_full"], 1)
-        self.assertEqual(counters["editor_pane"], 0)
+        self.assertGreater(counters["editor_pane"], 0)
         self.assertGreater(counters["editor_cursor"], 0)
-        self.assertGreater(counters["editor_scroll"], 0)
+        self.assertEqual(counters["editor_scroll"], 0)
         self.assertEqual(counters["editor_status"], 0)
         self.assertEqual(counters["browser_list"], 0)
         self.assertGreater(_region_histogram(data, width, 40, 136, 960, 592)[(31, 41, 51)], 5000)
@@ -1470,6 +1535,32 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertEqual(counters["browser_full"], 0)
         self.assertEqual(counters["browser_list"], 0)
         self.assertGreater(_region_histogram(data, width, 40, 608, 944, 680)[(31, 41, 51)], 120)
+
+    def test_class_source_page_down_keeps_the_source_pane_visible(self) -> None:
+        self.assert_interactive_page_down_keeps_source_visible(
+            (
+                "Display clear.",
+                "Workspace browseClassNamed: 'WorkspaceSession'.",
+                "Workspace editCurrent.",
+            )
+        )
+
+    def test_package_source_page_down_keeps_the_source_pane_visible(self) -> None:
+        self.assert_interactive_page_down_keeps_source_visible(
+            (
+                "Display clear.",
+                "Workspace browsePackageNamed: 'TextUI'.",
+                "Workspace editCurrent.",
+            )
+        )
+
+    def test_regenerated_kernel_source_page_down_keeps_the_source_pane_visible(self) -> None:
+        self.assert_interactive_page_down_keeps_source_visible(
+            (
+                "Display clear.",
+                "Workspace browseRegeneratedKernelSource.",
+            )
+        )
 
     def test_interactive_textui_package_editor_survives_keyboard_repeat_burst(self) -> None:
         qemu_log, width, height, data = self.render_interactive_example(

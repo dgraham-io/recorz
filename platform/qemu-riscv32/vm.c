@@ -8195,6 +8195,10 @@ static uint8_t workspace_redraw_image_session_status_only(void) {
     return 1U;
 }
 
+static uint8_t workspace_redraw_image_session_source_editor(
+    const struct recorz_mvp_heap_object *workspace_object
+);
+
 static uint8_t workspace_scroll_copy_image_session_editor_viewport(
     const struct recorz_mvp_heap_object *workspace_object,
     uint32_t old_cursor_line,
@@ -8202,143 +8206,14 @@ static uint8_t workspace_scroll_copy_image_session_editor_viewport(
     uint32_t old_top_line,
     uint32_t old_left_column
 ) {
-    const struct recorz_mvp_heap_object *form = default_form_object();
-    struct recorz_mvp_value source_value = workspace_current_source_value(workspace_object);
-    const char *source =
-        (source_value.kind == RECORZ_MVP_VALUE_STRING && source_value.string != 0)
-            ? source_value.string
-            : "";
-    uint32_t top_line = workspace_visible_origin_top_line_value();
-    uint32_t left_column = workspace_visible_origin_left_column_value();
-    uint32_t cursor_line = workspace_cursor_line_value();
-    uint32_t cursor_column = workspace_cursor_column_value();
-    uint32_t visible_lines = workspace_surface_visible_line_capacity_for_view_height(WORKSPACE_SOURCE_VIEW_HEIGHT);
-    uint32_t visible_columns = workspace_surface_visible_column_capacity_for_view_width(WORKSPACE_SOURCE_VIEW_WIDTH);
-    uint32_t line_height = text_line_height();
-    uint32_t column_width = char_width();
-    int32_t top_delta = (int32_t)top_line - (int32_t)old_top_line;
-    int32_t left_delta = (int32_t)left_column - (int32_t)old_left_column;
-    uint32_t content_left;
-    uint32_t content_top;
-    uint32_t content_width;
-    uint32_t content_height;
-    uint32_t vertical_pixels;
-    uint32_t horizontal_pixels;
-    const char *status;
-    const char *feedback;
-
-    if ((top_delta == 0 && left_delta == 0) ||
-        visible_lines == 0U ||
-        visible_columns == 0U ||
-        line_height == 0U ||
-        column_width == 0U) {
-        return 0U;
-    }
-    if ((top_delta > 0 && (uint32_t)top_delta >= visible_lines) ||
-        (top_delta < 0 && (uint32_t)(-top_delta) >= visible_lines) ||
-        (left_delta > 0 && (uint32_t)left_delta >= visible_columns) ||
-        (left_delta < 0 && (uint32_t)(-left_delta) >= visible_columns)) {
-        return 0U;
-    }
-    if (old_cursor_line >= old_top_line &&
-        old_cursor_line < old_top_line + visible_lines &&
-        old_cursor_column >= old_left_column &&
-        old_cursor_column < old_left_column + visible_columns) {
-        workspace_redraw_editor_source_absolute_cell(
-            form,
-            source,
-            old_top_line,
-            old_left_column,
-            old_cursor_line,
-            old_cursor_column
-        );
-    }
-    content_left = WORKSPACE_SOURCE_VIEW_LEFT + VIEW_CONTENT_INSET;
-    content_top = WORKSPACE_SOURCE_VIEW_TOP + VIEW_CONTENT_INSET + text_line_height();
-    content_width = visible_columns * column_width;
-    content_height = visible_lines * line_height;
-    vertical_pixels = (uint32_t)(top_delta < 0 ? -top_delta : top_delta) * line_height;
-    horizontal_pixels = (uint32_t)(left_delta < 0 ? -left_delta : left_delta) * column_width;
-    if (horizontal_pixels < content_width && vertical_pixels < content_height) {
-        form_copy_rect(
-            form,
-            content_left + (left_delta > 0 ? horizontal_pixels : 0U),
-            content_top + (top_delta > 0 ? vertical_pixels : 0U),
-            content_width - horizontal_pixels,
-            content_height - vertical_pixels,
-            content_left + (left_delta < 0 ? horizontal_pixels : 0U),
-            content_top + (top_delta < 0 ? vertical_pixels : 0U)
-        );
-    }
-    workspace_surface_copy_source_viewport(
-        workspace_surface_editor_buffer,
-        sizeof(workspace_surface_editor_buffer),
-        source,
-        top_line,
-        left_column,
-        visible_lines,
-        visible_columns
-    );
-    if (top_delta > 0) {
-        workspace_redraw_editor_source_viewport_lines(
-            form,
-            workspace_surface_editor_buffer,
-            visible_lines - (uint32_t)top_delta,
-            (uint32_t)top_delta
-        );
-    } else if (top_delta < 0) {
-        workspace_redraw_editor_source_viewport_lines(
-            form,
-            workspace_surface_editor_buffer,
-            0U,
-            (uint32_t)(-top_delta)
-        );
-    }
-    if (left_delta > 0) {
-        workspace_redraw_editor_source_viewport_columns(
-            form,
-            workspace_surface_editor_buffer,
-            visible_columns - (uint32_t)left_delta,
-            (uint32_t)left_delta
-        );
-    } else if (left_delta < 0) {
-        workspace_redraw_editor_source_viewport_columns(
-            form,
-            workspace_surface_editor_buffer,
-            0U,
-            (uint32_t)(-left_delta)
-        );
-    }
-    status = workspace_session_current_text_for_selector(RECORZ_MVP_SELECTOR_CURRENT_STATUS_TEXT);
-    feedback = workspace_session_current_text_for_selector(RECORZ_MVP_SELECTOR_CURRENT_FEEDBACK_TEXT);
-    workspace_clear_view_content_area(
-        form,
-        STATUS_VIEW_LEFT,
-        STATUS_VIEW_TOP,
-        STATUS_VIEW_WIDTH,
-        STATUS_VIEW_HEIGHT
-    );
-    if (!workspace_redraw_named_status_widget(
-            form,
-            "BootWorkspaceStatusWidget",
-            "BootWorkspaceStatusView",
-            status,
-            feedback)) {
-        return 0U;
-    }
-    if (cursor_line < top_line ||
-        cursor_line >= top_line + visible_lines ||
-        cursor_column < left_column ||
-        cursor_column >= left_column + visible_columns) {
-        return 0U;
-    }
-    workspace_draw_editor_cursor_overlay(
-        form,
-        cursor_line - top_line,
-        cursor_column - left_column
-    );
-    ++render_counter_editor_scroll_redraws;
-    return 1U;
+    (void)workspace_object;
+    (void)old_cursor_line;
+    (void)old_cursor_column;
+    (void)old_top_line;
+    (void)old_left_column;
+    /* Force viewport changes back through the normal image-session redraw
+       pipeline so the prepared session source/status state stays authoritative. */
+    return 0U;
 }
 
 static uint8_t workspace_redraw_named_label_widget(

@@ -1574,8 +1574,9 @@ scrollEditorDownRemaining: remaining
     ^self scrollEditorDownRemaining: remaining - 1
 !
 scrollEditorPageBy: delta
-    | step cursor oldTop oldRow newTop |
-    step := self visibleEditorLines.
+    | step cursor oldTop oldRow newTop visibleLines maxTop |
+    visibleLines := self visibleEditorLines.
+    step := visibleLines.
     step = 0 ifTrue: [step := 1].
     step = 1 ifFalse: [step := step - 1].
     cursor := Workspace cursor.
@@ -1587,6 +1588,10 @@ scrollEditorPageBy: delta
     newTop := oldTop + (delta * step).
     newTop < 0 ifTrue: [newTop := 0].
     cursor line < (newTop + oldRow) ifTrue: [newTop := cursor line - oldRow].
+    visibleLines > 0 ifTrue: [
+        maxTop := cursor line - visibleLines + 1.
+        maxTop < 0 ifTrue: [maxTop := 0].
+        newTop > maxTop ifTrue: [newTop := maxTop]].
     newTop < 0 ifTrue: [newTop := 0].
     Workspace setVisibleOriginTop: newTop left: Workspace visibleLeftColumn.
     Workspace collapseSelectionToCursor.
