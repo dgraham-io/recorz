@@ -129,6 +129,16 @@ Exit criteria:
 
 Goal: revisit the broader spec items only after the runtime and toolchain are steady.
 
+Status:
+- complete as of `2026-03-21` on the planning/docs lane
+- default next program:
+  - deeper self-hosting
+- supporting docs:
+  - `/Users/david/repos/recorz/docs/post_phase_1_stage_5_readiness_audit.md`
+  - `/Users/david/repos/recorz/docs/post_phase_1_stage_5_default_priority_note.md`
+  - `/Users/david/repos/recorz/docs/post_phase_1_stage_5_design_gates.md`
+  - `/Users/david/repos/recorz/docs/deeper_self_hosting_execution_plan.md`
+
 Note:
 the Bluebook-parity program already delivered the current inspector/debugger/process-browser foundations on the RV32 primary path, so the next planning layer starts after that work rather than before it.
 

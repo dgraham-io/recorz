@@ -27,7 +27,7 @@ As of `2026-03-21`, the project appears to be here:
 - Stage 2: complete.
 - Stage 3: complete on the honest RV64 minimal-smoke lane.
 - Stage 4: complete.
-- Stage 5: open.
+- Stage 5: complete.
 
 Immediate status note as of `2026-03-21`:
 
@@ -527,9 +527,9 @@ Recorded Stage 4 closure matrix on `2026-03-21`:
 Goal:
 Reopen broader Recorz directions from a stable base without letting them collapse back into one undifferentiated backlog.
 
-### Open Tasks
+### Completed Tasks
 
-- [ ] `PP5.1` Readiness audit for deferred topics
+- [x] `PP5.1` Readiness audit for deferred topics
   Files:
   - `/Users/david/repos/recorz/docs/`
   Work:
@@ -541,8 +541,11 @@ Reopen broader Recorz directions from a stable base without letting them collaps
   - use the completion of Stages 1 through 4 as the gate, not ambition alone
   Verify:
   - docs review
+  Result:
+  - readiness is now recorded in `/Users/david/repos/recorz/docs/post_phase_1_stage_5_readiness_audit.md`
+  - deeper self-hosting is the only direction marked ready to become the default next program
 
-- [ ] `PP5.2` Default priority selection rule
+- [x] `PP5.2` Default priority selection rule
   Files:
   - `/Users/david/repos/recorz/docs/`
   Work:
@@ -550,8 +553,10 @@ Reopen broader Recorz directions from a stable base without letting them collaps
   - record why that choice is the least disruptive continuation of the current architecture
   Verify:
   - docs review
+  Result:
+  - the default rule is now recorded in `/Users/david/repos/recorz/docs/post_phase_1_stage_5_default_priority_note.md`
 
-- [ ] `PP5.3` Design-gate note for each deferred direction
+- [x] `PP5.3` Design-gate note for each deferred direction
   Files:
   - `/Users/david/repos/recorz/docs/`
   Work:
@@ -562,8 +567,10 @@ Reopen broader Recorz directions from a stable base without letting them collaps
     - broader multiprocessing
   Verify:
   - docs review
+  Result:
+  - design gates now live in `/Users/david/repos/recorz/docs/post_phase_1_stage_5_design_gates.md`
 
-- [ ] `PP5.4` Seed the next execution plan
+- [x] `PP5.4` Seed the next execution plan
   Files:
   - `/Users/david/repos/recorz/docs/`
   Work:
@@ -571,17 +578,17 @@ Reopen broader Recorz directions from a stable base without letting them collaps
   - keep the same task-ID, dependency, and verification style used here
   Verify:
   - new execution-plan document
+  Result:
+  - the selected follow-on plan now lives at `/Users/david/repos/recorz/docs/deeper_self_hosting_execution_plan.md`
+  - it uses the same task-ID, dependency, lane, and verification structure as this plan
 
-## Immediate Next Queue
+## Next Program
 
-Unless a blocking regression appears elsewhere, the next tasks should be tackled in this order:
+With Stage 5 complete, the default next execution lane is:
 
-1. `PP3.1` Lock the current honest RV64 contract.
-2. `PP3.2` RV64 default-payload boot to opening menu.
-3. `PP3.3` RV64 runtime-metadata and browser smoke.
-4. `PP4.1` Host-builder ownership audit.
+- `/Users/david/repos/recorz/docs/deeper_self_hosting_execution_plan.md`
 
-That sequence is intentional. Stage 2 is now closed, so the next program head is the RV64 validation lane. The self-hosting audit stays next in line, but only after the honest RV64 contract is explicit again.
+Unless a human explicitly overrides that choice, deeper self-hosting is now the selected continuation of the current architecture.
 
 ## Program Complete When
 
