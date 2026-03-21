@@ -4,6 +4,7 @@ Recorz has already crossed the current Phase 1 contract. This roadmap defines th
 
 The detailed Bluebook-parity execution plan is tracked in [docs/bluebook_vm_parity_roadmap.md](/Users/david/repos/recorz/docs/bluebook_vm_parity_roadmap.md) and [docs/bluebook_vm_parity_execution_plan.md](/Users/david/repos/recorz/docs/bluebook_vm_parity_execution_plan.md).
 That program is now complete on the RV32 primary path, so this document should be read as the next planning layer beyond the finished Bluebook-parity tranche.
+The task-level breakdown for the next program is tracked in [docs/post_phase_1_execution_plan.md](/Users/david/repos/recorz/docs/post_phase_1_execution_plan.md).
 
 ## Guiding Rules
 
@@ -90,28 +91,16 @@ Exit criteria:
 - more of the toolchain can be exercised from inside the live image
 - the host build becomes thinner and more mechanical
 
-## Stage 5 - Add Inspector / Debugger Foundations
-
-Goal: make live state easier to inspect before adding bigger semantic features.
-
-Work items:
-- expose core runtime state in an inspectable way
-- add minimal debugger or inspector entry points for contexts and objects
-- make process or execution-state visibility practical enough for development use
-
-Boundary:
-- do not attempt capability enforcement yet
-- do not expand into a full debugger suite before the basic inspection path exists
-
-Exit criteria:
-- core runtime objects and execution state can be examined from the image
-- debugger-oriented workflows become a normal part of development instead of a future promise
-
-## Stage 6 - Reopen Long-Term Directions
+## Stage 5 - Reopen Long-Term Directions
 
 Goal: revisit the broader spec items only after the runtime and toolchain are steady.
 
+Note:
+the Bluebook-parity program already delivered the current inspector/debugger/process-browser foundations on the RV32 primary path, so the next planning layer starts after that work rather than before it.
+
 Candidate topics:
+- deeper self-hosting
+- richer process semantics
 - gradual typing and richer type analysis
 - capability-oriented isolation and sandboxing
 - systems-subset and HDL-subset lowering
