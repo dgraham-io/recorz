@@ -1,0 +1,14 @@
+RecorzKernelClass: #WorkspaceReturnState descriptorOrder: 38 objectKindOrder: 38 sourceBootOrder: 32 instanceVariableNames: 'contents cursor selection visibleOrigin'
+!
+contents
+    ^contents
+!
+cursor
+    ^cursor
+!
+selection
+    ^selection
+!
+visibleOrigin
+    ^visibleOrigin
+!

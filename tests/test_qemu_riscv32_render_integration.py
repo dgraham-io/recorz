@@ -256,6 +256,7 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         monitor_commands: tuple[str, ...] = (),
         monitor_command_delay: float = 0.8,
         final_monitor_delay: float = 4.0,
+        initial_settle_delay: float = 0.0,
     ) -> tuple[str, int, int, bytes]:
         digest_key = (
             f"{example_path.stem}|interactive|{file_in_payload!r}|{input_chunks!r}|{post_input_chunks!r}|{monitor_commands!r}|"
@@ -340,6 +341,8 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
                     time.sleep(0.35)
                 if input_chunks:
                     time.sleep(4.0)
+                if initial_settle_delay > 0.0:
+                    time.sleep(initial_settle_delay)
                 try:
                     for _ in range(100):
                         if monitor_sock.exists():
@@ -678,6 +681,7 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         menu_log, menu_width, menu_height, menu_data = self.render_interactive_example(
             WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
             (),
+            initial_settle_delay=3.0,
         )
         process_log, process_width, process_height, process_data = self.render_interactive_example(
             WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,

@@ -841,7 +841,7 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         self.assertIsInstance(header, dict)
         assert isinstance(header, dict)
         self.assertEqual(header["compatibility_profile"], "RV32MVP1")
-        self.assertEqual(header["compatibility_label"], "RV32MVP1 snapshot format v7")
+        self.assertEqual(header["compatibility_label"], "RV32MVP1 snapshot format v8")
         self.assertEqual(header["active_cursor_visible"], 1)
         self.assertEqual(header["active_cursor_x"], 12)
         self.assertEqual(header["active_cursor_y"], 34)
@@ -886,7 +886,7 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(
-                "snapshot version mismatch: expected RV32MVP1 snapshot format v7, found v6",
+                "snapshot version mismatch: expected RV32MVP1 snapshot format v8, found v6",
                 result.stderr,
             )
 
@@ -1508,26 +1508,28 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             class_log, class_width, class_height, class_data = self.render_development_home_frame(
                 build_dir=temp_path / "class",
                 serial_input="\x0e\x18\x18",
-                ready_marker="STATUS: SOURCE EDITOR :: MODIFIED",
+                ready_marker="RecorzKernelClass: #Transcript",
                 elf_path=PREBUILT_DEVELOPMENT_HOME_ELF_PATH,
             )
             package_log, package_width, package_height, package_data = self.render_development_home_frame(
                 build_dir=temp_path / "package",
                 serial_input="\x0e\x0e\x18\x18",
-                ready_marker="STATUS: SOURCE EDITOR :: MODIFIED",
+                ready_marker="RecorzKernelPackage:",
                 elf_path=PREBUILT_DEVELOPMENT_HOME_ELF_PATH,
             )
 
             self.assertEqual((class_width, class_height), (1024, 768))
             self.assertEqual((package_width, package_height), (1024, 768))
-            self.assertIn("STATUS: SOURCE EDITOR :: MODIFIED", class_log)
-            self.assertIn("STATUS: SOURCE EDITOR :: MODIFIED", package_log)
+            self.assertIn("RecorzKernelClass: #Transcript", class_log)
+            self.assertIn("RecorzKernelPackage:", package_log)
             self.assertNotIn("panic:", class_log)
             self.assertNotIn("panic:", package_log)
 
-            self.assertGreater(_region_histogram(class_data, class_width, 24, 640, 980, 744)[TEXT_FOREGROUND], 300)
-            self.assertGreater(_region_histogram(package_data, package_width, 24, 640, 980, 744)[TEXT_FOREGROUND], 300)
-            self.assertGreater(_region_diff_pixels(class_data, package_data, class_width, 20, 120, 980, 744), 1000)
+            self.assertGreater(_region_histogram(class_data, class_width, 40, 60, 960, 120)[TEXT_FOREGROUND], 800)
+            self.assertGreater(_region_histogram(class_data, class_width, 336, 136, 960, 592)[TEXT_FOREGROUND], 1800)
+            self.assertGreater(_region_histogram(package_data, package_width, 40, 60, 960, 120)[TEXT_FOREGROUND], 200)
+            self.assertGreater(_region_histogram(package_data, package_width, 336, 136, 960, 592)[TEXT_FOREGROUND], 8000)
+            self.assertGreater(_region_diff_pixels(class_data, package_data, class_width, 20, 120, 980, 620), 1000)
 
     def test_object_browser_snapshot_round_trips_through_saved_state(self) -> None:
         if not _workspace_object_detail_is_implemented():
@@ -2085,15 +2087,15 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
         self.assertIn("recorz qemu-riscv32 mvp: rendered", reload_log)
         self.assertNotIn("panic:", reload_log)
 
-        line_1 = _region_histogram(data, width, 24, 24, 520, 56)
-        line_2 = _region_histogram(data, width, 24, 58, 520, 90)
-        line_3 = _region_histogram(data, width, 24, 92, 520, 124)
-        line_4 = _region_histogram(data, width, 24, 126, 520, 158)
+        header_region = _region_histogram(data, width, 40, 55, 360, 120)
+        list_region = _region_histogram(data, width, 40, 135, 300, 260)
+        source_region = _region_histogram(data, width, 340, 135, 760, 240)
+        status_region = _region_histogram(data, width, 40, 610, 620, 678)
 
-        self.assertGreater(line_1[TEXT_FOREGROUND], 700)
-        self.assertGreater(line_2[TEXT_FOREGROUND], 500)
-        self.assertGreater(line_3[TEXT_FOREGROUND], 300)
-        self.assertGreater(line_4[TEXT_FOREGROUND], 300)
+        self.assertGreater(header_region[TEXT_FOREGROUND], 800)
+        self.assertGreater(list_region[TEXT_FOREGROUND], 1500)
+        self.assertGreater(source_region[TEXT_FOREGROUND], 2000)
+        self.assertGreater(status_region[TEXT_FOREGROUND], 1500)
 
     def test_snapshot_can_reopen_workspace_protocol_browser_state_without_demo_specific_program(self) -> None:
         save_log = self.save_snapshot(

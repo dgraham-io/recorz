@@ -25,7 +25,8 @@ As of `2026-03-20`, the project appears to be here:
 - Stage 1: mostly established; primitive-boundary discipline exists, and the first debugger-visible primitive-failure path is now in place.
 - Stage 2: mostly established; `Context`/`Process` visibility exists, but true scheduler semantics do not.
 - Stage 3: complete.
-- Stages 4 through 8: still open, with Stage 4 now at the head of execution.
+- Stage 4: complete.
+- Stages 5 through 8: still open, with Stage 5 now at the head of execution.
 
 Stage 3 status note as of `2026-03-21`:
 
@@ -36,6 +37,15 @@ Stage 3 status note as of `2026-03-21`:
 - the main debugger/process-browser tests now assert instead of skipping
 
 That closes Stage 3 and moves the main execution path to Stage 4 model extraction, while continuing to keep Stage 0 regression gates healthy.
+
+Stage 4 status note as of `2026-03-21`:
+
+- browser selection, browser return state, debugger state, and plain-workspace editor state now live in explicit image-side model objects (`WorkspaceBrowserModel`, `WorkspaceEditorModel`, and `WorkspaceReturnState`) instead of being spread across ad hoc tool/session globals
+- `WidgetBootstrap` now routes source-editor return, debugger return, opening-menu state, and plain-workspace restore through those model objects
+- the lightweight seed-side cursor/selection/origin records remain in `kernel/mvp`, while the larger mutator logic stays in image-side `TextUI` code to respect the current seed compiled-method limit
+- RV32 snapshot/live-source bookkeeping was widened enough to carry the extracted model layer without changing the `32M` machine target
+- the opening-menu memory-report return path and the package-browser failing-test debugger return path are both stable again
+- Stage 4 render, snapshot, lowering, snapshot-inspector, and full RV32 build gates are now green
 
 ## Global Completion Rules
 
@@ -281,7 +291,7 @@ This is the first large structural cleanup stage. Do not start it until Stage 3 
 
 ### Open Tasks
 
-- [ ] `BP4.1` Extract browser state model
+- [x] `BP4.1` Extract browser state model
   Files:
   - `/Users/david/repos/recorz/kernel/textui/WidgetBootstrap.rz`
   - new browser model files under `/Users/david/repos/recorz/kernel/mvp/`
@@ -289,9 +299,12 @@ This is the first large structural cleanup stage. Do not start it until Stage 3 
   - move browser selection, list top, target, and return state into explicit image-side model objects
   - reduce `WidgetBootstrap` ownership of browser policy
   Verify:
-  - browser open/return tests
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_serial_integration.py::QemuRiscv32SerialIntegrationTests::test_workspace_tool_dispatch_command_returns_source_editor_to_browser_context`
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_serial_integration.py::QemuRiscv32SerialIntegrationTests::test_workspace_source_editor_return_restores_plain_workspace_state`
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_snapshot_integration.py::QemuRiscv32SnapshotIntegrationTests::test_snapshot_resume_can_return_from_a_source_editor_to_the_same_plain_workspace`
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_snapshot_integration.py::QemuRiscv32SnapshotIntegrationTests::test_object_browser_snapshot_round_trips_through_saved_state`
 
-- [ ] `BP4.2` Extract editor/source-holder model
+- [x] `BP4.2` Extract editor/source-holder model
   Files:
   - `/Users/david/repos/recorz/kernel/textui/WidgetBootstrap.rz`
   - `/Users/david/repos/recorz/kernel/mvp/WorkspaceVisibleOrigin.rz`
@@ -301,9 +314,14 @@ This is the first large structural cleanup stage. Do not start it until Stage 3 
   Work:
   - split source holder, cursor, selection, and visible-origin coordination into reusable model objects
   Verify:
-  - source-editor redraw and return tests
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_serial_integration.py::QemuRiscv32SerialIntegrationTests::test_live_workspace_session_redraw_routes_through_image_side_source_widget`
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_render_integration.py::QemuRiscv32RenderIntegrationTests::test_interactive_editor_cursor_move_uses_cursor_only_redraw_path`
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_render_integration.py::QemuRiscv32RenderIntegrationTests::test_interactive_editor_line_edit_uses_pane_redraw_path_without_pool_overflow`
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_render_integration.py::QemuRiscv32RenderIntegrationTests::test_interactive_editor_print_uses_status_only_redraw_path`
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_render_integration.py::QemuRiscv32RenderIntegrationTests::test_interactive_editor_page_down_keeps_text_visible`
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_serial_integration.py::QemuRiscv32SerialIntegrationTests::test_workspace_source_editor_return_restores_plain_workspace_state`
 
-- [ ] `BP4.3` Move opening-menu and return routing into model APIs
+- [x] `BP4.3` Move opening-menu and return routing into model APIs
   Files:
   - `/Users/david/repos/recorz/kernel/textui/WidgetBootstrap.rz`
   - new browser/editor model files under `/Users/david/repos/recorz/kernel/mvp/`
@@ -311,9 +329,13 @@ This is the first large structural cleanup stage. Do not start it until Stage 3 
   - reduce direct menu and return branching in `WidgetBootstrap`
   - keep navigation state image-owned and smaller in surface area
   Verify:
-  - opening-menu serial/render tests
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_serial_integration.py::QemuRiscv32SerialIntegrationTests::test_workspace_development_home_boot_opens_the_opening_menu_and_workspace_editor`
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_serial_integration.py::QemuRiscv32SerialIntegrationTests::test_workspace_development_home_opening_menu_lists_object_inspector_and_context_debugger_entries`
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_serial_integration.py::QemuRiscv32SerialIntegrationTests::test_workspace_development_home_menu_can_open_the_memory_report_and_return`
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_snapshot_integration.py::QemuRiscv32SnapshotIntegrationTests::test_development_home_menu_and_browser_frames_are_distinct`
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_snapshot_integration.py::QemuRiscv32SnapshotIntegrationTests::test_development_home_menu_paths_render_class_and_package_sources`
 
-- [ ] `BP4.4` Thin `ViewBootstrap` and renderer responsibilities
+- [x] `BP4.4` Thin `ViewBootstrap` and renderer responsibilities
   Files:
   - `/Users/david/repos/recorz/kernel/textui/ViewBootstrap.rz`
   - `/Users/david/repos/recorz/kernel/textui/TextRendererBootstrap.rz`
@@ -321,16 +343,22 @@ This is the first large structural cleanup stage. Do not start it until Stage 3 
   - keep these files focused on composition, focus, and drawing
   - remove policy that belongs in model objects
   Verify:
-  - framebuffer redraw tests
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_render_integration.py::QemuRiscv32RenderIntegrationTests::test_interactive_editor_cursor_move_uses_cursor_only_redraw_path`
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_render_integration.py::QemuRiscv32RenderIntegrationTests::test_interactive_editor_line_edit_uses_pane_redraw_path_without_pool_overflow`
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_render_integration.py::QemuRiscv32RenderIntegrationTests::test_interactive_editor_print_uses_status_only_redraw_path`
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_render_integration.py::QemuRiscv32RenderIntegrationTests::test_interactive_package_browser_scrolling_uses_incremental_list_redraw_path`
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_render_integration.py::QemuRiscv32RenderIntegrationTests::test_development_home_menu_and_browser_frames_are_distinct`
 
-- [ ] `BP4.5` Re-run memory budget after model extraction
+- [x] `BP4.5` Re-run memory budget after model extraction
   Files:
   - `/Users/david/repos/recorz/tests/`
   - `/Users/david/repos/recorz/docs/`
   Work:
   - verify the extracted model layer still fits the RV32 `32M` target
   Verify:
-  - RV32 build/tests and memory report inspection
+  - `make -C /Users/david/repos/recorz/platform/qemu-riscv32 BUILD_DIR=/tmp/recorz-qemu-riscv32-stage4 all`
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_serial_integration.py::QemuRiscv32SerialIntegrationTests::test_workspace_development_home_menu_can_open_the_memory_report_and_return`
+  - `/Users/david/repos/recorz/tests/test_qemu_riscv32_snapshot_integration.py::QemuRiscv32SnapshotIntegrationTests::test_snapshot_can_reopen_workspace_package_browser_state_without_demo_specific_program`
 
 ## Stage 5. Add Real Scheduler And Process Control Semantics
 

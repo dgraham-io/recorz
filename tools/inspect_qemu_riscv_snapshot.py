@@ -19,11 +19,11 @@ import build_qemu_riscv_mvp_image as mvp  # noqa: E402
 
 
 SNAPSHOT_MAGIC = b"RCZT"
-SNAPSHOT_VERSION = 7
-SUPPORTED_SNAPSHOT_VERSIONS = {7}
+SNAPSHOT_VERSION = 8
+SUPPORTED_SNAPSHOT_VERSIONS = {8}
 SNAPSHOT_COMPATIBILITY_PROFILE = "RV32MVP1"
 SNAPSHOT_COMPATIBILITY_LABEL = f"{SNAPSHOT_COMPATIBILITY_PROFILE} snapshot format v{SNAPSHOT_VERSION}"
-SNAPSHOT_HEADER_SIZE = 52
+SNAPSHOT_HEADER_SIZE = 54
 SNAPSHOT_VALUE_SIZE = 8
 OBJECT_FIELD_LIMIT = 4
 METHOD_SOURCE_NAME_LIMIT = 96
@@ -37,7 +37,7 @@ SNAPSHOT_DYNAMIC_CLASS_RECORD_SIZE = (
 )
 SNAPSHOT_PACKAGE_RECORD_SIZE = METHOD_SOURCE_NAME_LIMIT + CLASS_COMMENT_LIMIT
 SNAPSHOT_NAMED_OBJECT_RECORD_SIZE = 2 + METHOD_SOURCE_NAME_LIMIT
-SNAPSHOT_LIVE_METHOD_SOURCE_RECORD_SIZE = 9 + METHOD_SOURCE_NAME_LIMIT
+SNAPSHOT_LIVE_METHOD_SOURCE_RECORD_SIZE = 13 + METHOD_SOURCE_NAME_LIMIT
 SNAPSHOT_LIVE_STRING_LITERAL_RECORD_SIZE = 9
 MONO_BITMAP_MAX_HEIGHT = 64
 GLYPH_BITMAP_COUNT = 128
@@ -60,9 +60,10 @@ WORKSPACE_TOOL_FIELD_VISIBLE_ORIGIN = 3
 WORKSPACE_VISIBLE_ORIGIN_FIELD_TOP_LINE = 0
 WORKSPACE_VISIBLE_ORIGIN_FIELD_LEFT_COLUMN = 1
 WORKSPACE_SESSION_FIELD_WORKSPACE = 0
-WORKSPACE_SESSION_FIELD_SELECTED = 1
-WORKSPACE_SESSION_FIELD_LIST_TOP = 2
-WORKSPACE_SESSION_FIELD_ESCAPE = 3
+WORKSPACE_SESSION_FIELD_BROWSER_MODEL = 1
+WORKSPACE_SESSION_FIELD_ESCAPE = 2
+WORKSPACE_BROWSER_MODEL_FIELD_SELECTED_INDEX = 0
+WORKSPACE_BROWSER_MODEL_FIELD_LIST_TOP_LINE = 1
 TEXT_CURSOR_FIELD_INDEX = 0
 TEXT_CURSOR_FIELD_LINE = 1
 TEXT_CURSOR_FIELD_COLUMN = 2
@@ -181,15 +182,15 @@ def parse_snapshot(blob: bytes) -> ParsedSnapshot:
         startup_hook_receiver_handle=_read_u16_le(blob, 26),
         startup_hook_selector_id=_read_u16_le(blob, 28),
         live_method_source_count=_read_u16_le(blob, 30),
-        live_method_source_byte_count=_read_u16_le(blob, 32),
-        live_string_literal_count=_read_u16_le(blob, 34),
-        live_string_literal_byte_count=_read_u16_le(blob, 36),
-        active_display_form_handle=_read_u16_le(blob, 38),
-        active_cursor_handle=_read_u16_le(blob, 40),
-        active_cursor_visible=_read_u16_le(blob, 42),
-        active_cursor_x=_read_u16_le(blob, 44),
-        active_cursor_y=_read_u16_le(blob, 46),
-        total_size=_read_u32_le(blob, 48),
+        live_method_source_byte_count=_read_u32_le(blob, 32),
+        live_string_literal_count=_read_u16_le(blob, 36),
+        live_string_literal_byte_count=_read_u16_le(blob, 38),
+        active_display_form_handle=_read_u16_le(blob, 40),
+        active_cursor_handle=_read_u16_le(blob, 42),
+        active_cursor_visible=_read_u16_le(blob, 44),
+        active_cursor_x=_read_u16_le(blob, 46),
+        active_cursor_y=_read_u16_le(blob, 48),
+        total_size=_read_u32_le(blob, 50),
     )
     if header.version not in SUPPORTED_SNAPSHOT_VERSIONS:
         raise SnapshotInspectionError(
@@ -469,6 +470,15 @@ def _workspace_session_summary(snapshot: ParsedSnapshot) -> dict[str, object] | 
     handle, session_object = session
     fields = session_object.fields
     workspace_handle = fields[WORKSPACE_SESSION_FIELD_WORKSPACE].value
+    browser_model_handle = fields[WORKSPACE_SESSION_FIELD_BROWSER_MODEL].value
+    selected: int | str | None = None
+    list_top: int | str | None = None
+
+    if isinstance(browser_model_handle, int) and 1 <= browser_model_handle <= len(snapshot.objects):
+        browser_model = snapshot.objects[browser_model_handle - 1]
+        if browser_model.field_count >= 2:
+            selected = browser_model.fields[WORKSPACE_BROWSER_MODEL_FIELD_SELECTED_INDEX].value
+            list_top = browser_model.fields[WORKSPACE_BROWSER_MODEL_FIELD_LIST_TOP_LINE].value
     return {
         "handle": handle,
         "kind": session_object.kind,
@@ -476,8 +486,9 @@ def _workspace_session_summary(snapshot: ParsedSnapshot) -> dict[str, object] | 
         "class_handle": session_object.class_handle,
         "workspace_handle": workspace_handle,
         "workspace_matches_global": workspace is not None and workspace_handle == workspace["handle"],
-        "selected": fields[WORKSPACE_SESSION_FIELD_SELECTED].value,
-        "list_top": fields[WORKSPACE_SESSION_FIELD_LIST_TOP].value,
+        "browser_model_handle": browser_model_handle,
+        "selected": selected,
+        "list_top": list_top,
         "escape": fields[WORKSPACE_SESSION_FIELD_ESCAPE].value,
     }
 

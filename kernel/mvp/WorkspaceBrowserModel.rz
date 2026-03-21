@@ -1,0 +1,14 @@
+RecorzKernelClass: #WorkspaceBrowserModel descriptorOrder: 39 objectKindOrder: 39 sourceBootOrder: 33 instanceVariableNames: 'selectedIndex listTopLine returnState debuggerState'
+!
+selectedIndex
+    ^selectedIndex
+!
+listTopLine
+    ^listTopLine
+!
+contents
+    ^returnState
+!
+state
+    ^debuggerState
+!

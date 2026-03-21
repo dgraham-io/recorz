@@ -1,0 +1,14 @@
+RecorzKernelClass: #WorkspaceEditorModel descriptorOrder: 40 objectKindOrder: 40 sourceBootOrder: 34 instanceVariableNames: 'contents cursor selection visibleOrigin'
+!
+contents
+    ^contents
+!
+cursor
+    ^cursor
+!
+selection
+    ^selection
+!
+visibleOrigin
+    ^visibleOrigin
+!

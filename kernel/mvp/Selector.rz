@@ -782,3 +782,9 @@ RecorzKernelSelector: #ensureProcessNamed:label:state:context: order: 389
 !
 RecorzKernelSelector: #returnFromDebuggerBrowser order: 390
 !
+RecorzKernelSelector: #setSelectedIndex:listTop: order: 391
+!
+RecorzKernelSelector: #returnState order: 392
+!
+RecorzKernelSelector: #rememberDebuggerProcess:frameIndex:frameCount: order: 393
+!

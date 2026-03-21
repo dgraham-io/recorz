@@ -249,40 +249,6 @@ useComfortTextMode
     Display layout margins left: 24 top: 24 right: 24 bottom: 24.
     ^self
 !
-RecorzKernelClass: #TextCursor descriptorOrder: 30 objectKindOrder: 30 sourceBootOrder: 24 instanceVariableNames: 'index line column topLine'
-!
-moveToIndex: anIndex line: aLine column: aColumn topLine: aTopLine
-    index := anIndex.
-    line := aLine.
-    column := aColumn.
-    topLine := aTopLine.
-    ^self
-!
-RecorzKernelClass: #TextSelection descriptorOrder: 31 objectKindOrder: 31 sourceBootOrder: 25 instanceVariableNames: 'startLine startColumn endLine endColumn'
-!
-collapseToLine: aLine column: aColumn
-    startLine := aLine.
-    startColumn := aColumn.
-    endLine := aLine.
-    endColumn := aColumn.
-    ^self
-!
-setStartLine: aStartLine startColumn: aStartColumn endLine: anEndLine endColumn: anEndColumn
-    startLine := aStartLine.
-    startColumn := aStartColumn.
-    endLine := anEndLine.
-    endColumn := anEndColumn.
-    ^self
-!
-containsLine: aLine column: aColumn
-    aLine < startLine ifTrue: [^false].
-    aLine > endLine ifTrue: [^false].
-    aLine = startLine ifTrue: [aColumn < startColumn ifTrue: [^false]].
-    aLine = endLine ifTrue: [
-        aColumn = endColumn ifTrue: [^false].
-        aColumn > endColumn ifTrue: [^false]].
-    ^true
-!
 RecorzKernelClass: #Form descriptorOrder: 10 objectKindOrder: 2 sourceBootOrder: 7 instanceVariableNames: 'bits'
 !
 writeStyledText: styledText

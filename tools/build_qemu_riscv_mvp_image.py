@@ -595,11 +595,10 @@ COMPILED_METHOD_OP_PUSH_THIS_CONTEXT = constant_value(
 
 
 def encode_compiled_method_instruction(opcode_name: str, operand_a: int = 0, operand_b: int = 0) -> int:
-    return (
-        constant_value(COMPILED_METHOD_OPCODE_IDS, COMPILED_METHOD_OPCODE_VALUES, opcode_name)
-        | ((operand_a & 0xFF) << 8)
-        | ((operand_b & 0xFFFF) << 16)
-    )
+    opcode = constant_value(COMPILED_METHOD_OPCODE_IDS, COMPILED_METHOD_OPCODE_VALUES, opcode_name)
+    if opcode_name == "send":
+        return opcode | ((operand_a & 0xFFFF) << 8) | ((operand_b & 0xFF) << 24)
+    return opcode | ((operand_a & 0xFF) << 8) | ((operand_b & 0xFFFF) << 16)
 
 
 def split_kernel_method_chunks(source_text: str) -> list[str]:

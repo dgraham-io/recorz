@@ -106,7 +106,7 @@ def _build_snapshot(
     struct.pack_into("<H", header, 6, len(objects))
     struct.pack_into("<H", header, 12, len(named_objects))
     struct.pack_into("<I", header, 18, len(string_section))
-    struct.pack_into("<I", header, 48, total_size)
+    struct.pack_into("<I", header, 50, total_size)
 
     return bytes(
         header
@@ -191,10 +191,11 @@ class QemuRiscvSnapshotInspectorTests(unittest.TestCase):
                         "first\nsecond\nthird",
                     ),
                 ),
-                (35, 1, ("WORKSPACE READY", "OUT> READY", "Workspace", ("object", 6))),
-                (36, 1, (("object", 1), 0, 0, 0)),
+                (35, 1, ("WORKSPACE READY", "OUT> READY", "Workspace", ("object", 7))),
+                (36, 1, (("object", 1), ("object", 6), 0)),
                 (30, 1, (123, 23, 88, 7)),
                 (31, 1, (23, 88, 23, 88)),
+                (39, 1, (0, 0, None, None)),
                 (37, 1, (7, 17)),
             ],
             global_handles={

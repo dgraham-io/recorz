@@ -162,8 +162,8 @@
 #define CHARACTER_SCANNER_STOP_CONTROL 4U
 #define CHARACTER_SCANNER_STOP_SELECTION 5U
 #define CHARACTER_SCANNER_STOP_CURSOR 6U
-#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_PROCESS
-#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_RETURN_FROM_DEBUGGER_BROWSER
+#define MAX_OBJECT_KIND RECORZ_MVP_OBJECT_WORKSPACE_EDITOR_MODEL
+#define MAX_SELECTOR_ID RECORZ_MVP_SELECTOR_REMEMBER_DEBUGGER_PROCESS_FRAME_INDEX_FRAME_COUNT
 #define MAX_GLOBAL_ID RECORZ_MVP_GLOBAL_WORKSPACE_SELECTION
 
 #define WORKSPACE_VIEW_NONE 0U
@@ -1420,6 +1420,12 @@ static const char *selector_name(uint16_t selector) {
             return "ensureProcessNamed:label:state:context:";
         case RECORZ_MVP_SELECTOR_RETURN_FROM_DEBUGGER_BROWSER:
             return "returnFromDebuggerBrowser";
+        case RECORZ_MVP_SELECTOR_SET_SELECTED_INDEX_LIST_TOP:
+            return "setSelectedIndex:listTop:";
+        case RECORZ_MVP_SELECTOR_RETURN_STATE:
+            return "returnState";
+        case RECORZ_MVP_SELECTOR_REMEMBER_DEBUGGER_PROCESS_FRAME_INDEX_FRAME_COUNT:
+            return "rememberDebuggerProcess:frameIndex:frameCount:";
         case RECORZ_MVP_SELECTOR_LABEL:
             return "label";
         case RECORZ_MVP_SELECTOR_STATE:
@@ -1508,6 +1514,14 @@ static const char *object_kind_name(uint8_t kind) {
             return "Process";
         case RECORZ_MVP_OBJECT_WORKSPACE_TOOL:
             return "WorkspaceTool";
+        case RECORZ_MVP_OBJECT_WORKSPACE_VISIBLE_ORIGIN:
+            return "WorkspaceVisibleOrigin";
+        case RECORZ_MVP_OBJECT_WORKSPACE_RETURN_STATE:
+            return "WorkspaceReturnState";
+        case RECORZ_MVP_OBJECT_WORKSPACE_BROWSER_MODEL:
+            return "WorkspaceBrowserModel";
+        case RECORZ_MVP_OBJECT_WORKSPACE_EDITOR_MODEL:
+            return "WorkspaceEditorModel";
     }
     return "UnknownObject";
 }
