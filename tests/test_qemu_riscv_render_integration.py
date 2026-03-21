@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-BUILD_DIR = ROOT / "misc" / "qemu-riscv64-mvp"
+BUILD_DIR = ROOT / "misc" / "qemu-riscv64-base-render-test"
 PPM_PATH = BUILD_DIR / "recorz-qemu-riscv64-mvp.ppm"
 QEMU_LOG_PATH = BUILD_DIR / "qemu.log"
 
@@ -49,7 +49,9 @@ class QemuRiscvRenderIntegrationTests(unittest.TestCase):
                 "make",
                 "-C",
                 str(ROOT / "platform" / "qemu-riscv64"),
+                f"BUILD_DIR={BUILD_DIR}",
                 "DEFAULT_FILE_IN_PAYLOADS=",
+                "clean",
                 "screenshot",
             ],
             cwd=ROOT,

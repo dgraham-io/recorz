@@ -73,9 +73,13 @@ Exit criteria:
 Goal: keep RV64 honest so RV32 does not become the only maintained target.
 
 Status:
-- active
-- current target is still an honest smoke-validation lane, not full default-TextUI parity
-- the next required proof points are default-payload boot to the opening menu, one read-only browser-return flow, and snapshot save/reload on that same payload
+- complete as of `2026-03-21` on the honest minimal smoke-validation lane
+- RV64 now has:
+  - full `all` build coverage
+  - fresh minimal render smoke without the default TextUI file-in payload
+  - minimal snapshot save/reload smoke on that same payload
+- explicit deferred non-goal:
+  - full default-TextUI file-in, opening-menu, browser-return, and dev-loop coverage remain outside this stage until RV64 gains live-source evaluator parity
 
 Work items:
 - keep RV64 building against the current selector and snapshot surface
@@ -89,7 +93,7 @@ Boundary:
 - fix validation gaps, not speculative optimization
 
 Exit criteria:
-- RV64 can still build the current image and run the core validation suite
+- RV64 can still build the current image and run the current minimal validation suite
 - RV64 failures are documented as explicit gaps rather than silent drift
 
 ## Stage 4 - Expand Self-Hosting

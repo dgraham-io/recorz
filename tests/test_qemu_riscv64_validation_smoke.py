@@ -44,6 +44,8 @@ def _region_histogram(data: bytes, width: int, x0: int, y0: int, x1: int, y1: in
     "QEMU RISC-V validation smoke requires qemu-system-riscv64 and riscv64-unknown-elf-gcc",
 )
 class QemuRiscv64ValidationSmokeTests(unittest.TestCase):
+    """Minimal RV64 validation contract without the default TextUI file-in payload."""
+
     def save_snapshot(
         self,
         *,

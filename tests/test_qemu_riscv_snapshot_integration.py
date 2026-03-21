@@ -123,7 +123,7 @@ SNAPSHOT_PACKAGE_FILE_OUT_RELOAD_DEMO_PATH = ROOT / "examples" / "qemu_riscv_pac
 
 
 @unittest.skip(
-    "RV64 validation target currently uses minimal base smoke without the default TextUI file-in payload"
+    "RV64 default-TextUI snapshot coverage is deferred until live-source evaluator parity exists; the current RV64 contract uses minimal smoke only"
 )
 @unittest.skipUnless(
     shutil.which("qemu-system-riscv64") and shutil.which("riscv64-unknown-elf-gcc"),

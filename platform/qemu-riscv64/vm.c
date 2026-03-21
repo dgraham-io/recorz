@@ -1634,9 +1634,14 @@ static void write_u32_le(uint8_t *bytes, uint32_t value) {
     bytes[3] = (uint8_t)((value >> 24U) & 0xFFU);
 }
 
-static uint32_t encode_compiled_method_word(uint8_t opcode, uint8_t operand_a, uint16_t operand_b) {
+static uint32_t encode_compiled_method_word(uint8_t opcode, uint16_t operand_a, uint16_t operand_b) {
+    if (opcode == COMPILED_METHOD_OP_SEND) {
+        return (uint32_t)opcode |
+               ((uint32_t)operand_a << 8U) |
+               (((uint32_t)operand_b & 0xFFU) << 24U);
+    }
     return (uint32_t)opcode |
-           ((uint32_t)operand_a << 8U) |
+           (((uint32_t)operand_a & 0xFFU) << 8U) |
            ((uint32_t)operand_b << 16U);
 }
 
@@ -13742,7 +13747,7 @@ static void compile_source_append_instruction(
     uint32_t instruction_words[],
     uint8_t *instruction_count,
     uint8_t opcode,
-    uint8_t operand_a,
+    uint16_t operand_a,
     uint16_t operand_b
 ) {
     if (*instruction_count >= COMPILED_METHOD_MAX_INSTRUCTIONS) {
@@ -13756,7 +13761,7 @@ static void compile_source_patch_instruction(
     uint8_t instruction_count,
     uint8_t instruction_index,
     uint8_t opcode,
-    uint8_t operand_a,
+    uint16_t operand_a,
     uint16_t operand_b
 ) {
     if (instruction_index >= instruction_count) {

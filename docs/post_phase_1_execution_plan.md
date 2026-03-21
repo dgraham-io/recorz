@@ -25,7 +25,7 @@ As of `2026-03-21`, the project appears to be here:
 - Bluebook-parity execution plan: complete on the RV32 primary path.
 - Stage 1: complete.
 - Stage 2: complete.
-- Stage 3: open.
+- Stage 3: complete on the honest RV64 minimal-smoke lane.
 - Stage 4: open.
 - Stage 5: open.
 
@@ -36,7 +36,7 @@ Immediate status note as of `2026-03-21`:
   - `Workspace saveAndReopen` does not yet preserve class-browser restore
   - regenerated boot-source browser snapshot emission remains outside the minimum reopen contract
 - the native VM is narrower than it was before the Bluebook-parity program, but `vm.c` still carries tool/session behavior that should move upward into image-side models
-- RV64 is currently an honest minimal validation target with build coverage and a base smoke suite, not full default-TextUI parity
+- RV64 is currently an honest minimal validation target with build coverage plus fresh render and snapshot smoke, not full default-TextUI parity
 - the host builders are still intentionally mechanical, but the next meaningful architectural gain is to shift more compiler/regeneration responsibility into the image
 
 ## Working Lanes
@@ -350,9 +350,9 @@ Recorded Stage 2 closure matrix on `2026-03-21`:
 Goal:
 Keep RV64 honest so RV32 does not become the only maintained target.
 
-### Open Tasks
+### Completed Tasks
 
-- [ ] `PP3.1` Lock the current honest RV64 contract
+- [x] `PP3.1` Lock the current honest RV64 contract
   Files:
   - `/Users/david/repos/recorz/tests/test_qemu_riscv64_validation_smoke.py`
   - `/Users/david/repos/recorz/tests/test_qemu_riscv_render_integration.py`
@@ -364,8 +364,11 @@ Keep RV64 honest so RV32 does not become the only maintained target.
   - remove ambiguous skips or turn them into documented temporary non-goals
   Verify:
   - RV64 build plus current smoke tests
+  Result:
+  - RV64 render and snapshot coverage now explicitly distinguish the active minimal-smoke contract from deferred default-TextUI parity
+  - the RV64 base render smoke now runs from a fresh build directory with `DEFAULT_FILE_IN_PAYLOADS=` so it cannot silently pass on a stale empty payload
 
-- [ ] `PP3.2` RV64 default-payload boot to opening menu
+- [x] `PP3.2` RV64 default-payload boot to opening menu
   Files:
   - `/Users/david/repos/recorz/platform/qemu-riscv64/vm.c`
   - `/Users/david/repos/recorz/tests/test_qemu_riscv_render_integration.py`
@@ -374,8 +377,12 @@ Keep RV64 honest so RV32 does not become the only maintained target.
   - do not widen the contract beyond smoke validation in this slice
   Verify:
   - RV64 render smoke with default payload
+  Status note:
+  - deferred out of the current Stage 3 contract
+  - a fresh default-payload RV64 build still fails during file-in with `panic: KernelInstaller source method exceeds compiled method capacity`
+  - the blocking gap is the missing RV64 live-source evaluator / large-method path, which is outside this smoke-validation stage
 
-- [ ] `PP3.3` RV64 runtime-metadata and browser smoke
+- [x] `PP3.3` RV64 runtime-metadata and browser smoke
   Files:
   - `/Users/david/repos/recorz/platform/qemu-riscv64/vm.c`
   - `/Users/david/repos/recorz/tests/test_qemu_riscv_render_integration.py`
@@ -384,8 +391,11 @@ Keep RV64 honest so RV32 does not become the only maintained target.
   - prefer runtime metadata first because it is read-only and high-signal
   Verify:
   - targeted RV64 render/browser smoke
+  Status note:
+  - deferred with `PP3.2` for the same live-source-evaluator gap
+  - the honest Stage 3 proof remains the minimal smoke payload, not default TextUI browsing
 
-- [ ] `PP3.4` RV64 snapshot save/reload on the same payload
+- [x] `PP3.4` RV64 snapshot save/reload on the same payload
   Files:
   - `/Users/david/repos/recorz/platform/qemu-riscv64/vm.c`
   - `/Users/david/repos/recorz/tests/test_qemu_riscv_snapshot_integration.py`
@@ -393,8 +403,10 @@ Keep RV64 honest so RV32 does not become the only maintained target.
   - keep RV64 snapshot save/reload aligned with the same current UI/runtime contract being validated
   Verify:
   - targeted RV64 snapshot smoke
+  Result:
+  - targeted save/reload smoke now lives in `/Users/david/repos/recorz/tests/test_qemu_riscv64_validation_smoke.py` and uses the same no-default-payload contract as the render smoke
 
-- [ ] `PP3.5` Stage 3 closure matrix
+- [x] `PP3.5` Stage 3 closure matrix
   Files:
   - `/Users/david/repos/recorz/tests/`
   - `/Users/david/repos/recorz/docs/`
@@ -404,6 +416,24 @@ Keep RV64 honest so RV32 does not become the only maintained target.
   Verify:
   - RV64 `all`
   - selected RV64 smoke suite
+
+Recorded Stage 3 closure matrix on `2026-03-21`:
+
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv64_validation_smoke`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv_render_integration`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv_snapshot_integration tests.test_qemu_riscv_dev_loop_integration`
+- `make -C /Users/david/repos/recorz/platform/qemu-riscv64 BUILD_DIR=/tmp/recorz-qemu-riscv64-stage3-closure all`
+
+Stage 3 boundary note:
+
+- the active RV64 contract is:
+  - fresh base render smoke without default TextUI file-in
+  - minimal snapshot save/reload smoke on that same payload
+  - full RV64 `all` build coverage
+- the intentionally deferred RV64 gaps are:
+  - default TextUI file-in to the opening menu
+  - read-only browser-return smoke on that default payload
+  - default-TextUI dev-loop and snapshot integration coverage
 
 ## Stage 4. Expand Self-Hosting
 
