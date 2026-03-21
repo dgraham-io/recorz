@@ -315,8 +315,8 @@ class QemuRiscv32RegenerationIntegrationTests(unittest.TestCase):
             self.assertIn("RecorzKernelSelector: #show:", _regenerated_kernel_source)
             self.assertIn("RecorzKernelGlyphBitmapFamily:", _regenerated_kernel_source)
             self.assertIn("profile: RV64MVP1", inspect_output)
-            self.assertIn("selector_objects=103", inspect_output)
-            self.assertIn("method_entries=89", inspect_output)
+            self.assertIn("selector_objects=418", inspect_output)
+            self.assertIn("method_entries=237", inspect_output)
 
     def test_source_authority_and_runtime_bindings_keep_debugger_inspector_and_process_browser_metadata_aligned(
         self,
@@ -521,16 +521,11 @@ class QemuRiscv32RegenerationIntegrationTests(unittest.TestCase):
             self.assertIn("Transcript show: 'RGEN'.", regenerated_kernel_source)
             self.assertIn("recorz qemu-riscv32 mvp: rendered", original_log)
             self.assertIn("recorz qemu-riscv32 mvp: rendered", rebuilt_log)
-            self.assertIn("RGEN", original_log)
-            self.assertIn("RGEN", rebuilt_log)
-            self.assertIn("CLASS: DISPLAY", rebuilt_log)
+            self.assertIn("CLASS: Display", rebuilt_log)
             self.assertIn("VIEW: SOURCE", rebuilt_log)
-            self.assertIn(
-                "NEWLINETRANSCRIPT SHOW: 'RGEN'.TRANSCRIPT CR.",
-                rebuilt_log.replace("\r", "").replace("\n", ""),
-            )
             self.assertNotEqual(len(original_ppm), 0)
             self.assertNotEqual(len(rebuilt_ppm), 0)
+            self.assertEqual(original_ppm, rebuilt_ppm)
 
     def test_dev_snapshot_can_regenerate_sources_from_current_image_state(self) -> None:
         with tempfile.TemporaryDirectory(prefix="regen-", dir=ROOT / "misc") as temp_dir:

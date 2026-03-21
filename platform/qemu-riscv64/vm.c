@@ -1547,6 +1547,8 @@ static const char *object_kind_name(uint8_t kind) {
             return "WorkspaceBrowserModel";
         case RECORZ_MVP_OBJECT_WORKSPACE_EDITOR_MODEL:
             return "WorkspaceEditorModel";
+        case RECORZ_MVP_OBJECT_WORKSPACE_DEBUGGER_MODEL:
+            return "WorkspaceDebuggerModel";
     }
     return "UnknownObject";
 }
@@ -15144,6 +15146,7 @@ static void install_method_source_on_class(
 }
 
 static const struct recorz_mvp_heap_object *lookup_class_by_name(const char *class_name) {
+    uint16_t handle;
     uint8_t kind;
     const struct recorz_mvp_dynamic_class_definition *dynamic_definition;
 
@@ -15157,6 +15160,27 @@ static const struct recorz_mvp_heap_object *lookup_class_by_name(const char *cla
         if (source_names_equal(class_name, object_kind_name(kind))) {
             return (const struct recorz_mvp_heap_object *)heap_object(class_descriptor_handles_by_kind[kind]);
         }
+    }
+    for (handle = 1U; handle <= heap_size; ++handle) {
+        const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(handle);
+
+        if (object->kind != RECORZ_MVP_OBJECT_CLASS) {
+            continue;
+        }
+        kind = class_instance_kind(object);
+        if (kind == 0U || kind > MAX_OBJECT_KIND) {
+            continue;
+        }
+        if (!source_names_equal(class_name, object_kind_name(kind))) {
+            continue;
+        }
+        if (class_descriptor_handles_by_kind[kind] == 0U) {
+            class_descriptor_handles_by_kind[kind] = handle;
+        }
+        if (class_handles_by_kind[kind] == 0U) {
+            class_handles_by_kind[kind] = handle;
+        }
+        return object;
     }
     dynamic_definition = dynamic_class_definition_for_name(class_name);
     if (dynamic_definition != 0) {

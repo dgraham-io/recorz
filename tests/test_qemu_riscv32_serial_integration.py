@@ -178,6 +178,68 @@ def _normalize_serial_output(output: str) -> str:
     return re.sub(r"\s+", "", output.replace("\r", "").replace("\n", ""))
 
 
+def _run_development_home_boot_session(
+    build_dir: Path,
+    *,
+    input_steps: tuple[tuple[str, str | tuple[str, ...]], ...],
+    file_in_payload: Path | None = None,
+) -> str:
+    elf_path = _build_elf(build_dir, WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE, file_in_payload=file_in_payload)
+    process = subprocess.Popen(
+        [
+            "qemu-system-riscv32",
+            "-machine",
+            "virt",
+            "-m",
+            "32M",
+            "-smp",
+            "1",
+            "-kernel",
+            str(elf_path),
+            "-serial",
+            "stdio",
+            "-monitor",
+            "none",
+            "-display",
+            "none",
+            "-device",
+            "ramfb",
+        ],
+        cwd=ROOT,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    try:
+        output = _read_until_any(process, ("OPENING MENU", "panic:"), timeout=8.0)
+        if "panic:" in output:
+            return output.replace("\r", "")
+        for chunk, marker in input_steps:
+            if process.stdin is None:
+                raise AssertionError("QEMU process stdin is not available")
+            process.stdin.write(chunk)
+            process.stdin.flush()
+            markers = marker if isinstance(marker, tuple) else (marker,)
+            output += _read_until_any(process, markers + ("panic:",), timeout=8.0)
+            if "panic:" in output:
+                break
+        if process.poll() is None:
+            process.kill()
+        process.wait(timeout=5.0)
+        if process.stdout is not None:
+            output += process.stdout.read() or ""
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5.0)
+        if process.stdout is not None:
+            process.stdout.close()
+        if process.stdin is not None:
+            process.stdin.close()
+    return output.replace("\r", "")
+
+
 def _write_workspace_session_probe_example(
     temp_path: Path,
     name: str,
@@ -3137,6 +3199,52 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("opens source.", output)
             self.assertNotIn("panic:", output)
 
+    def test_workspace_development_home_menu_workspace_can_return_to_the_opening_menu(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-workspace-return-") as temp_dir:
+            output = _run_development_home_boot_session(
+                Path(temp_dir),
+                input_steps=(
+                    ("\x18", ("VIEW: INPUT", "STATUS:")),
+                    ("\x0f", "OPENING MENU"),
+                ),
+            )
+
+            self.assertIn("OPENING MENU", output)
+            self.assertTrue("VIEW: INPUT" in output or "STATUS:" in output)
+            self.assertGreaterEqual(output.count("OPENING MENU"), 2)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_development_home_menu_project_browser_can_return_to_the_opening_menu(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-project-return-") as temp_dir:
+            output = _run_development_home_boot_session(
+                Path(temp_dir),
+                input_steps=(
+                    ("\x0e\x0e\x18", "INTERACTIVE PACKAGE LIST"),
+                    ("\x0f", "OPENING MENU"),
+                ),
+            )
+
+            self.assertIn("OPENING MENU", output)
+            self.assertIn("INTERACTIVE PACKAGE LIST", output)
+            self.assertGreaterEqual(output.count("OPENING MENU"), 2)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_development_home_package_source_can_return_to_the_project_browser(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-package-source-return-") as temp_dir:
+            output = _run_development_home_boot_session(
+                Path(temp_dir),
+                input_steps=(
+                    ("\x0e\x0e\x18", "INTERACTIVE PACKAGE LIST"),
+                    ("\x18", ("SOURCE EDITOR", "RecorzKernelPackage:")),
+                    ("\x0f", "INTERACTIVE PACKAGE LIST"),
+                ),
+            )
+
+            self.assertIn("INTERACTIVE PACKAGE LIST", output)
+            self.assertIn("RecorzKernelPackage:", output)
+            self.assertIn("STATUS: SOURCE EDITOR", output)
+            self.assertNotIn("panic:", output)
+
     def test_workspace_development_home_project_browser_can_open_package_source_and_enter_debugger_on_test_failure(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-project-tests-") as temp_dir:
             temp_path = Path(temp_dir)
@@ -3356,6 +3464,37 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("Workspace", output)
             self.assertNotIn("panic:", output)
 
+    def test_workspace_development_home_menu_class_browser_can_return_to_the_opening_menu(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-class-return-") as temp_dir:
+            output = _run_development_home_boot_session(
+                Path(temp_dir),
+                input_steps=(
+                    ("\x0e\x18", "INTERACTIVE CLASS LIST"),
+                    ("\x0f", "OPENING MENU"),
+                ),
+            )
+
+            self.assertIn("OPENING MENU", output)
+            self.assertIn("INTERACTIVE CLASS LIST", output)
+            self.assertGreaterEqual(output.count("OPENING MENU"), 2)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_development_home_class_source_can_return_to_the_class_browser(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-class-source-return-") as temp_dir:
+            output = _run_development_home_boot_session(
+                Path(temp_dir),
+                input_steps=(
+                    ("\x0e\x18", "INTERACTIVE CLASS LIST"),
+                    ("\x18", ("SOURCE EDITOR", "RecorzKernelClass:")),
+                    ("\x0f", "INTERACTIVE CLASS LIST"),
+                ),
+            )
+
+            self.assertIn("INTERACTIVE CLASS LIST", output)
+            self.assertIn("RecorzKernelClass:", output)
+            self.assertIn("STATUS: SOURCE EDITOR", output)
+            self.assertNotIn("panic:", output)
+
     def test_workspace_development_home_menu_can_open_the_memory_report_and_return(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-report-") as temp_dir:
             build_dir = Path(temp_dir)
@@ -3542,6 +3681,20 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("Runtime Metadata", output)
             self.assertNotIn("panic:", output)
 
+    def test_workspace_development_home_menu_object_inspector_can_return_to_the_opening_menu(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-object-inspector-return-to-menu-") as temp_dir:
+            output = _run_development_home_boot_session(
+                Path(temp_dir),
+                input_steps=(
+                    ("\x0e\x0e\x0e\x0e\x18", "OBJECT INSPECTOR"),
+                    ("\x0f", "OPENING MENU"),
+                ),
+            )
+
+            self.assertIn("OBJECT INSPECTOR", output)
+            self.assertGreaterEqual(output.count("OPENING MENU"), 2)
+            self.assertNotIn("panic:", output)
+
     def test_workspace_development_home_menu_can_open_the_object_inspector(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-object-inspector-") as temp_dir:
             build_dir = Path(temp_dir)
@@ -3663,6 +3816,37 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("visibleOrigin", output)
             self.assertIn("Select an object. Enter or Ctrl-X opens detail.", output)
             self.assertIn("BootWorkspaceTool", output)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_development_home_menu_process_browser_can_return_to_the_opening_menu(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-process-browser-return-to-menu-") as temp_dir:
+            output = _run_development_home_boot_session(
+                Path(temp_dir),
+                input_steps=(
+                    ("\x0e\x0e\x0e\x0e\x0e\x18", "PROCESS BROWSER"),
+                    ("\x0f", "OPENING MENU"),
+                ),
+            )
+
+            self.assertIn("PROCESS BROWSER", output)
+            self.assertGreaterEqual(output.count("OPENING MENU"), 2)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_development_home_process_browser_debugger_can_return_to_the_process_browser(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-process-debugger-return-") as temp_dir:
+            output = _run_development_home_boot_session(
+                Path(temp_dir),
+                input_steps=(
+                    ("\x0e\x0e\x0e\x0e\x0e\x18", "PROCESS BROWSER"),
+                    ("\x18", ("frame: 1", "BootActiveProcess")),
+                    ("\x0f", "PROCESS BROWSER"),
+                ),
+            )
+
+            self.assertIn("PROCESS BROWSER", output)
+            self.assertIn("BootActiveProcess", output)
+            self.assertIn("frame: 1", output)
+            self.assertIn("OBJECT: BootActiveProcess", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_development_home_failed_scheduled_process_can_proceed_from_the_debugger(self) -> None:

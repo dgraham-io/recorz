@@ -215,7 +215,9 @@ def parse_snapshot(blob: bytes) -> ParsedSnapshot:
     )
     if header.version not in SUPPORTED_SNAPSHOT_VERSIONS:
         raise SnapshotInspectionError(
-            f"snapshot version mismatch: expected {SNAPSHOT_COMPATIBILITY_LABEL}, found v{header.version}"
+            "snapshot version mismatch: expected "
+            f"{SNAPSHOT_COMPATIBILITY_LABEL}, found v{header.version}. "
+            "stale dev snapshots can usually be recovered with dev-restore or replaced with dev-reset"
         )
     if header.object_count == 0:
         raise SnapshotInspectionError("snapshot object count is zero")

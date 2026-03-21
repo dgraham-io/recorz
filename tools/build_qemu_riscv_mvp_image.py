@@ -1372,8 +1372,13 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
     discovered_method_sources_by_class: dict[str, list[KernelMethodSource]] = {}
     seen_class_names: set[str] = set()
     discovered_entry_names: set[str] = set()
+    method_source_units = (
+        load_kernel_source_units_from_directory()
+        if os.environ.get(KERNEL_SOURCE_BUNDLE_ENV)
+        else KERNEL_SOURCE_UNITS
+    )
 
-    for source_unit in KERNEL_SOURCE_UNITS:
+    for source_unit in method_source_units:
         relative_path = source_unit.relative_path
         class_header = parse_kernel_class_header(source_unit.chunk_sources[0], relative_path)
         class_name = class_header.class_name
@@ -1426,7 +1431,10 @@ def load_kernel_method_sources() -> dict[str, KernelMethodSource]:
                     source_text=chunk_source,
                 )
             )
-    expected_class_names = set(KERNEL_CLASS_HEADERS_BY_NAME)
+    expected_class_names = {
+        parse_kernel_class_header(source_unit.chunk_sources[0], source_unit.relative_path).class_name
+        for source_unit in method_source_units
+    }
     if seen_class_names != expected_class_names:
         missing_classes = sorted(expected_class_names - seen_class_names)
         extra_classes = sorted(seen_class_names - expected_class_names)
@@ -1508,8 +1516,6 @@ def compile_kernel_method_program(class_name: str, instance_variables: list[str]
     return_receiver = False
     lowered: list[int] = []
 
-    if compiled.literals:
-        raise LoweringError(f"Kernel method {class_name}>>{compiled.selector} uses unsupported literals")
     if compiled.temp_names:
         raise LoweringError(f"Kernel method {class_name}>>{compiled.selector} uses unsupported temporaries")
     if len(instructions) >= 3 and instructions[-3].opcode == "pop" and instructions[-2].opcode == "push_self" and instructions[-1].opcode == "return_local":
@@ -1526,6 +1532,26 @@ def compile_kernel_method_program(class_name: str, instance_variables: list[str]
     while instruction_index < len(instructions):
         instruction = instructions[instruction_index]
 
+        if instruction.opcode == "push_literal":
+            literal_index = instruction.operand
+            if not isinstance(literal_index, int) or literal_index < 0 or literal_index >= len(compiled.literals):
+                raise LoweringError(
+                    f"Kernel method {class_name}>>{compiled.selector} uses an invalid literal index {literal_index!r}"
+                )
+            literal = compiled.literals[literal_index]
+            if isinstance(literal, int):
+                if literal < -32768 or literal > 32767:
+                    raise LoweringError(
+                        f"Kernel method {class_name}>>{compiled.selector} uses an out-of-range small integer literal {literal}"
+                    )
+                lowered.append(
+                    encode_compiled_method_instruction("push_small_integer", 0, literal & 0xFFFF)
+                )
+                instruction_index += 1
+                continue
+            raise LoweringError(
+                f"Kernel method {class_name}>>{compiled.selector} uses unsupported literal {literal!r}"
+            )
         if instruction.opcode == "push_binding":
             binding = instruction.operand
             if not isinstance(binding, BindingRef):

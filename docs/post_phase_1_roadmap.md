@@ -18,6 +18,12 @@ The task-level breakdown for the next program is tracked in [docs/post_phase_1_e
 
 Goal: make the current native development loop boring and reliable.
 
+Status:
+- complete on the RV32 primary path as of `2026-03-21`
+- explicit deferred non-goals from the closure matrix:
+  - `Workspace saveAndReopen` does not yet preserve class-browser restore
+  - regenerated boot-source browser snapshot emission remains outside the minimum reopen contract
+
 Work items:
 - stabilize the opening menu, class browser, project browser, and `editCurrent` flows
 - make snapshot compatibility failures explicit and easy to diagnose

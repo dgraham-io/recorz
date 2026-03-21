@@ -23,7 +23,7 @@ It is the working plan for the next development program. The roadmap remains the
 As of `2026-03-21`, the project appears to be here:
 
 - Bluebook-parity execution plan: complete on the RV32 primary path.
-- Stage 1: open and at the head of execution.
+- Stage 1: complete.
 - Stage 2: open.
 - Stage 3: open.
 - Stage 4: open.
@@ -31,7 +31,10 @@ As of `2026-03-21`, the project appears to be here:
 
 Immediate status note as of `2026-03-21`:
 
-- the RV32 tool surface is broad enough now that reliability is the first priority, especially around `dev-loop`, stale snapshots, opening-menu exit paths, read-only detail views, and redraw correctness
+- Stage 1 is now closed on the RV32 primary path with targeted coverage for fresh `dev-loop` reset/restore, stale snapshot diagnostics, opening-menu exit flows, detail/source/editor returns, repeated save/reopen, regeneration alignment, and the RV32 build gate
+- two explicit Stage 1 non-goals remain deferred rather than hidden:
+  - `Workspace saveAndReopen` does not yet preserve class-browser restore
+  - regenerated boot-source browser snapshot emission remains outside the minimum reopen contract
 - the native VM is narrower than it was before the Bluebook-parity program, but `vm.c` still carries tool/session behavior that should move upward into image-side models
 - RV64 is currently an honest minimal validation target with build coverage and a base smoke suite, not full default-TextUI parity
 - the host builders are still intentionally mechanical, but the next meaningful architectural gain is to shift more compiler/regeneration responsibility into the image
@@ -133,9 +136,9 @@ These apply to every task below:
 Goal:
 Make the current native development loop boring and reliable.
 
-### Open Tasks
+### Completed Tasks
 
-- [ ] `PP1.1` Fresh `dev-loop` cold-start and reset coverage
+- [x] `PP1.1` Fresh `dev-loop` cold-start and reset coverage
   Files:
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_serial_integration.py`
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_snapshot_integration.py`
@@ -147,7 +150,7 @@ Make the current native development loop boring and reliable.
   Verify:
   - targeted RV32 serial and snapshot tests
 
-- [ ] `PP1.2` Snapshot mismatch and stale-state diagnostics
+- [x] `PP1.2` Snapshot mismatch and stale-state diagnostics
   Files:
   - `/Users/david/repos/recorz/platform/qemu-riscv32/vm.c`
   - `/Users/david/repos/recorz/tools/inspect_qemu_riscv_snapshot.py`
@@ -159,7 +162,7 @@ Make the current native development loop boring and reliable.
   Verify:
   - snapshot mismatch and recovery tests
 
-- [ ] `PP1.3` Opening-menu exit matrix
+- [x] `PP1.3` Opening-menu exit matrix
   Files:
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_serial_integration.py`
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_render_integration.py`
@@ -177,7 +180,7 @@ Make the current native development loop boring and reliable.
   Verify:
   - serial and framebuffer opening-menu tests
 
-- [ ] `PP1.4` Detail/source/editor return matrix
+- [x] `PP1.4` Detail/source/editor return matrix
   Files:
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_serial_integration.py`
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_render_integration.py`
@@ -196,7 +199,7 @@ Make the current native development loop boring and reliable.
   Verify:
   - serial, render, and snapshot return-path tests
 
-- [ ] `PP1.5` Repeated save/reopen reproducibility
+- [x] `PP1.5` Repeated save/reopen reproducibility
   Files:
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_snapshot_integration.py`
   - `/Users/david/repos/recorz/platform/qemu-riscv32/Makefile`
@@ -210,7 +213,7 @@ Make the current native development loop boring and reliable.
   Verify:
   - targeted snapshot reopen tests
 
-- [ ] `PP1.6` Stage 1 closure matrix
+- [x] `PP1.6` Stage 1 closure matrix
   Files:
   - `/Users/david/repos/recorz/tests/`
   - `/Users/david/repos/recorz/docs/post_phase_1_roadmap.md`
@@ -219,6 +222,25 @@ Make the current native development loop boring and reliable.
   - record any intentionally deferred non-goals before moving to Stage 2
   Verify:
   - recorded RV32 matrix run
+
+Recorded Stage 1 closure matrix on `2026-03-21`:
+
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_dev_loop_integration`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_snapshot_integration.QemuRiscv32SnapshotIntegrationTests.test_snapshot_version_mismatch_reports_the_expected_rv32_profile`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_snapshot_integration.QemuRiscv32SnapshotIntegrationTests.test_snapshot_can_reopen_workspace_browser_state_without_demo_specific_program`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_snapshot_integration.QemuRiscv32SnapshotIntegrationTests.test_snapshot_can_reopen_workspace_class_source_browser_state_without_demo_specific_program tests.test_qemu_riscv32_snapshot_integration.QemuRiscv32SnapshotIntegrationTests.test_snapshot_can_reopen_workspace_package_source_browser_state_without_demo_specific_program`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_snapshot_integration.QemuRiscv32SnapshotIntegrationTests.test_snapshot_can_reopen_workspace_object_inspector_state_across_repeated_cycles tests.test_qemu_riscv32_snapshot_integration.QemuRiscv32SnapshotIntegrationTests.test_snapshot_can_reopen_workspace_debugger_state_across_repeated_cycles tests.test_qemu_riscv32_snapshot_integration.QemuRiscv32SnapshotIntegrationTests.test_snapshot_can_reopen_workspace_browser_state_via_workspace_save_and_reopen tests.test_qemu_riscv32_snapshot_integration.QemuRiscv32SnapshotIntegrationTests.test_snapshot_can_reopen_workspace_regenerated_boot_source_browser_state_without_demo_specific_program`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_menu_workspace_can_return_to_the_opening_menu tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_menu_project_browser_can_return_to_the_opening_menu tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_package_source_can_return_to_the_project_browser tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_menu_class_browser_can_return_to_the_opening_menu tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_class_source_can_return_to_the_class_browser tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_menu_can_open_the_memory_report_and_return tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_menu_can_open_the_runtime_metadata_browser_and_return tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_menu_object_inspector_can_return_to_the_opening_menu tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_object_inspector_detail_can_return_to_the_list tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_menu_process_browser_can_return_to_the_opening_menu tests.test_qemu_riscv32_serial_integration.QemuRiscv32SerialIntegrationTests.test_workspace_development_home_process_browser_debugger_can_return_to_the_process_browser`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_render_integration.QemuRiscv32RenderIntegrationTests.test_development_home_runtime_metadata_browser_renders_and_returns_to_the_opening_menu`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_render_integration.QemuRiscv32RenderIntegrationTests.test_development_home_class_browser_renders_and_returns_to_the_opening_menu`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_render_integration.QemuRiscv32RenderIntegrationTests.test_development_home_memory_report_renders_and_returns_to_the_opening_menu`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_render_integration.QemuRiscv32RenderIntegrationTests.test_development_home_class_source_renders_and_returns_to_the_class_browser`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_render_integration.QemuRiscv32RenderIntegrationTests.test_development_home_package_source_renders_and_returns_to_the_project_browser`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_render_integration.QemuRiscv32RenderIntegrationTests.test_development_home_object_inspector_detail_renders_and_returns_to_the_list`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_render_integration.QemuRiscv32RenderIntegrationTests.test_development_home_process_browser_debugger_return_restores_the_selected_process`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv32_regeneration_integration.QemuRiscv32RegenerationIntegrationTests.test_host_builder_can_use_regenerated_kernel_source_as_the_kernel_authority tests.test_qemu_riscv32_regeneration_integration.QemuRiscv32RegenerationIntegrationTests.test_regenerated_boot_source_recreates_seeded_class_edit_state_after_cold_boot tests.test_qemu_riscv32_regeneration_integration.QemuRiscv32RegenerationIntegrationTests.test_image_can_emit_regenerated_boot_source_that_recreates_the_same_framebuffer_state tests.test_qemu_riscv32_regeneration_integration.QemuRiscv32RegenerationIntegrationTests.test_source_authority_and_runtime_bindings_keep_debugger_inspector_and_process_browser_metadata_aligned tests.test_qemu_riscv32_regeneration_integration.QemuRiscv32RegenerationIntegrationTests.test_dev_snapshot_can_regenerate_sources_from_current_image_state`
+- `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv_mvp_lowering`
+- `make -C /Users/david/repos/recorz/platform/qemu-riscv32 BUILD_DIR=/tmp/recorz-qemu-riscv32-stage1-closure all`
 
 ## Stage 2. Reduce Native VM Policy
 
@@ -465,12 +487,12 @@ Reopen broader Recorz directions from a stable base without letting them collaps
 
 Unless a blocking regression appears elsewhere, the next tasks should be tackled in this order:
 
-1. `PP1.1` Fresh `dev-loop` cold-start and reset coverage.
-2. `PP1.2` Snapshot mismatch and stale-state diagnostics.
-3. `PP1.3` Opening-menu exit matrix.
-4. `PP1.4` Detail/source/editor return matrix.
+1. `PP2.1` Runtime policy inventory.
+2. `PP2.2` Move remaining return/detail routing into image-side models.
+3. `PP2.3` Thin the native session redraw contract.
+4. `PP2.4` Shared RV32/RV64 helper extraction.
 
-That sequence is intentional. The project should first make the current RV32 surface boring, then make it smaller, then lift RV64 validation, then deepen self-hosting.
+That sequence is intentional. Stage 1 is now closed, so the project should keep shrinking the VM before broadening RV64 validation or self-hosting scope.
 
 ## Program Complete When
 

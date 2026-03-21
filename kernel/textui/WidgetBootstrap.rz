@@ -566,7 +566,7 @@ returnFromSourceEditor
         Workspace setCurrentTargetName: returnTargetName.
         Workspace setCurrentViewKind: returnViewKind.
         count := nil.
-        returnViewKind = 20 ifTrue: [count := 6].
+        returnViewKind = 20 ifTrue: [count := 7].
         returnViewKind = 14 ifTrue: [count := Workspace packageCount].
         returnViewKind = 21 ifTrue: [
             count := Workspace classCount.
@@ -1729,9 +1729,11 @@ handleBrowserByte: aByte
         ^self openSelectedPackageSource].
     aByte = 15 ifTrue: [
         workspace currentTargetName = 'DEBUGGER' ifTrue: [^self returnFromDebuggerBrowser].
+        browserModel contents = nil ifFalse: [^self returnFromDebuggerBrowser].
         ^9].
     aByte = 4 ifTrue: [
         workspace currentTargetName = 'DEBUGGER' ifTrue: [^self returnFromDebuggerBrowser].
+        browserModel contents = nil ifFalse: [^self returnFromDebuggerBrowser].
         ^9].
     ^0
 !
@@ -1739,18 +1741,20 @@ openSelectedOpeningMenuItem
     | tool |
     self selectedIndex = 0 ifTrue: [
         tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
-        tool setBrowserReturnViewKind: nil targetName: nil.
+        tool setBrowserReturnViewKind: 20 targetName: nil.
         workspace setCurrentViewKind: 18.
         workspace setCurrentTargetName: nil.
         self ensureEditorCursorVisible.
         ^1].
     self selectedIndex = 1 ifTrue: [
+        browserModel setBrowserReturnViewKind: 20 targetName: nil.
         workspace setCurrentViewKind: 21.
         workspace setCurrentTargetName: nil.
         browserModel prepareBrowserStateForMode: 3.
         self prepareListSelectionForCount: workspace classCount.
         ^4].
     self selectedIndex = 2 ifTrue: [
+        browserModel setBrowserReturnViewKind: 20 targetName: nil.
         workspace setCurrentViewKind: 14.
         workspace setCurrentTargetName: nil.
         browserModel prepareBrowserStateForMode: 2.
@@ -1768,12 +1772,14 @@ openSelectedOpeningMenuItem
         self ensureEditorCursorVisible.
         ^1].
     self selectedIndex = 4 ifTrue: [
+        browserModel setBrowserReturnViewKind: 20 targetName: nil.
         workspace setCurrentViewKind: 21.
         workspace setCurrentTargetName: 'OBJECT INSPECTOR'.
         browserModel setSelectedIndex: 0 listTop: 0.
         self prepareListSelectionForCount: self currentListCount.
         ^4].
     self selectedIndex = 5 ifTrue: [
+        browserModel setBrowserReturnViewKind: 20 targetName: nil.
         workspace setCurrentViewKind: 21.
         workspace setCurrentTargetName: 'PROCESS BROWSER'.
         browserModel setSelectedIndex: 0 listTop: 0.

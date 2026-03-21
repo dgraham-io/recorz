@@ -736,6 +736,131 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertGreater(_region_diff_pixels(menu_data, metadata_data, menu_width, 40, 136, 960, 592), 3500)
         self.assertGreater(_region_diff_pixels(metadata_data, returned_data, metadata_width, 40, 136, 960, 592), 3500)
 
+    def test_development_home_workspace_renders_and_returns_to_the_opening_menu(self) -> None:
+        menu_log, menu_width, menu_height, menu_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (),
+            initial_settle_delay=3.0,
+        )
+        workspace_log, workspace_width, workspace_height, workspace_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x18",),
+        )
+        returned_log, returned_width, returned_height, returned_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x18",),
+            post_input_chunks=(b"\x0f",),
+        )
+
+        normalized_menu_log = menu_log.replace("\r", "")
+        normalized_workspace_log = workspace_log.replace("\r", "")
+        normalized_returned_log = returned_log.replace("\r", "")
+        self.assertEqual((menu_width, menu_height), (1024, 768))
+        self.assertEqual((workspace_width, workspace_height), (1024, 768))
+        self.assertEqual((returned_width, returned_height), (1024, 768))
+        self.assertNotIn("panic:", normalized_menu_log)
+        self.assertNotIn("panic:", normalized_workspace_log)
+        self.assertNotIn("panic:", normalized_returned_log)
+        self.assertIn("OPENING MENU", normalized_menu_log)
+        self.assertTrue("VIEW: INPUT" in normalized_workspace_log or "STATUS:" in normalized_workspace_log)
+        self.assertIn("OPENING MENU", normalized_returned_log)
+        self.assertGreater(_region_diff_pixels(menu_data, workspace_data, menu_width, 40, 136, 960, 592), 3500)
+        self.assertGreater(_region_diff_pixels(workspace_data, returned_data, workspace_width, 40, 136, 960, 592), 3500)
+
+    def test_development_home_class_browser_renders_and_returns_to_the_opening_menu(self) -> None:
+        menu_log, menu_width, menu_height, menu_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (),
+            initial_settle_delay=3.0,
+        )
+        class_log, class_width, class_height, class_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x18"),
+        )
+        returned_log, returned_width, returned_height, returned_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x18"),
+            post_input_chunks=(b"\x0f",),
+        )
+
+        normalized_menu_log = menu_log.replace("\r", "")
+        normalized_class_log = class_log.replace("\r", "")
+        normalized_returned_log = returned_log.replace("\r", "")
+        self.assertEqual((menu_width, menu_height), (1024, 768))
+        self.assertEqual((class_width, class_height), (1024, 768))
+        self.assertEqual((returned_width, returned_height), (1024, 768))
+        self.assertNotIn("panic:", normalized_menu_log)
+        self.assertNotIn("panic:", normalized_class_log)
+        self.assertNotIn("panic:", normalized_returned_log)
+        self.assertIn("OPENING MENU", normalized_menu_log)
+        self.assertIn("INTERACTIVE CLASS LIST", normalized_class_log)
+        self.assertIn("OPENING MENU", normalized_returned_log)
+        self.assertGreater(_region_diff_pixels(menu_data, class_data, menu_width, 40, 136, 960, 592), 3500)
+        self.assertGreater(_region_diff_pixels(class_data, returned_data, class_width, 40, 136, 960, 592), 3500)
+
+    def test_development_home_project_browser_renders_and_returns_to_the_opening_menu(self) -> None:
+        menu_log, menu_width, menu_height, menu_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (),
+            initial_settle_delay=3.0,
+        )
+        project_log, project_width, project_height, project_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x0e", b"\x18"),
+        )
+        returned_log, returned_width, returned_height, returned_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x0e", b"\x18"),
+            post_input_chunks=(b"\x0f",),
+        )
+
+        normalized_menu_log = menu_log.replace("\r", "")
+        normalized_project_log = project_log.replace("\r", "")
+        normalized_returned_log = returned_log.replace("\r", "")
+        self.assertEqual((menu_width, menu_height), (1024, 768))
+        self.assertEqual((project_width, project_height), (1024, 768))
+        self.assertEqual((returned_width, returned_height), (1024, 768))
+        self.assertNotIn("panic:", normalized_menu_log)
+        self.assertNotIn("panic:", normalized_project_log)
+        self.assertNotIn("panic:", normalized_returned_log)
+        self.assertIn("OPENING MENU", normalized_menu_log)
+        self.assertIn("INTERACTIVE PACKAGE LIST", normalized_project_log)
+        self.assertIn("OPENING MENU", normalized_returned_log)
+        self.assertGreater(_region_diff_pixels(menu_data, project_data, menu_width, 40, 136, 960, 592), 3500)
+        self.assertGreater(_region_diff_pixels(project_data, returned_data, project_width, 40, 136, 960, 592), 3500)
+
+    def test_development_home_memory_report_renders_and_returns_to_the_opening_menu(self) -> None:
+        menu_log, menu_width, menu_height, menu_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (),
+            initial_settle_delay=3.0,
+        )
+        memory_log, memory_width, memory_height, memory_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x0e", b"\x0e", b"\x18"),
+        )
+        returned_log, returned_width, returned_height, returned_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x0e", b"\x0e", b"\x18"),
+            post_input_chunks=(b"\x0f",),
+        )
+
+        normalized_menu_log = menu_log.replace("\r", "")
+        normalized_memory_log = memory_log.replace("\r", "")
+        normalized_returned_log = returned_log.replace("\r", "")
+        self.assertEqual((menu_width, menu_height), (1024, 768))
+        self.assertEqual((memory_width, memory_height), (1024, 768))
+        self.assertEqual((returned_width, returned_height), (1024, 768))
+        self.assertNotIn("panic:", normalized_menu_log)
+        self.assertNotIn("panic:", normalized_memory_log)
+        self.assertNotIn("panic:", normalized_returned_log)
+        self.assertIn("OPENING MENU", normalized_menu_log)
+        self.assertIn("PROFILE DEV", normalized_memory_log)
+        self.assertIn("HEAP", normalized_memory_log)
+        self.assertIn("OPENING MENU", normalized_returned_log)
+        self.assertGreater(_region_diff_pixels(menu_data, memory_data, menu_width, 40, 136, 960, 592), 3500)
+        self.assertGreater(_region_diff_pixels(memory_data, returned_data, memory_width, 40, 136, 960, 592), 3500)
+
     def test_development_home_object_inspector_detail_renders_and_returns_to_the_list(self) -> None:
         inspector_log, inspector_width, inspector_height, inspector_data = self.render_interactive_example(
             WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
@@ -765,6 +890,100 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertGreater(_region_diff_pixels(inspector_data, detail_data, inspector_width, 40, 136, 960, 592), 3500)
         self.assertGreater(_region_diff_pixels(detail_data, returned_data, detail_width, 40, 136, 320, 592), 500)
         self.assertGreater(_region_diff_pixels(detail_data, returned_data, detail_width, 336, 136, 960, 592), 500)
+
+    def test_development_home_object_inspector_renders_and_returns_to_the_opening_menu(self) -> None:
+        menu_log, menu_width, menu_height, menu_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (),
+            initial_settle_delay=3.0,
+        )
+        inspector_log, inspector_width, inspector_height, inspector_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18"),
+        )
+        returned_log, returned_width, returned_height, returned_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18"),
+            post_input_chunks=(b"\x0f",),
+        )
+
+        normalized_menu_log = menu_log.replace("\r", "")
+        normalized_inspector_log = inspector_log.replace("\r", "")
+        normalized_returned_log = returned_log.replace("\r", "")
+        self.assertEqual((menu_width, menu_height), (1024, 768))
+        self.assertEqual((inspector_width, inspector_height), (1024, 768))
+        self.assertEqual((returned_width, returned_height), (1024, 768))
+        self.assertNotIn("panic:", normalized_menu_log)
+        self.assertNotIn("panic:", normalized_inspector_log)
+        self.assertNotIn("panic:", normalized_returned_log)
+        self.assertIn("OPENING MENU", normalized_menu_log)
+        self.assertIn("OBJECT INSPECTOR", normalized_inspector_log)
+        self.assertIn("OPENING MENU", normalized_returned_log)
+        self.assertGreater(_region_diff_pixels(menu_data, inspector_data, menu_width, 40, 136, 960, 592), 3500)
+        self.assertGreater(_region_diff_pixels(inspector_data, returned_data, inspector_width, 40, 136, 960, 592), 3500)
+
+    def test_development_home_class_source_renders_and_returns_to_the_class_browser(self) -> None:
+        browser_log, browser_width, browser_height, browser_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x18"),
+        )
+        source_log, source_width, source_height, source_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x18", b"\x18"),
+        )
+        returned_log, returned_width, returned_height, returned_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x18", b"\x18"),
+            post_input_chunks=(b"\x0f",),
+        )
+
+        normalized_browser_log = browser_log.replace("\r", "")
+        normalized_source_log = source_log.replace("\r", "")
+        normalized_returned_log = returned_log.replace("\r", "")
+        self.assertEqual((browser_width, browser_height), (1024, 768))
+        self.assertEqual((source_width, source_height), (1024, 768))
+        self.assertEqual((returned_width, returned_height), (1024, 768))
+        self.assertNotIn("panic:", normalized_browser_log)
+        self.assertNotIn("panic:", normalized_source_log)
+        self.assertNotIn("panic:", normalized_returned_log)
+        self.assertIn("BROWSERCLASSESLIST", normalized_browser_log)
+        self.assertIn("Transcript", normalized_browser_log)
+        self.assertIn("WORKSPACERECORZ WORKSPACE EDITOR", normalized_source_log)
+        self.assertIn("BROWSERCLASSESLIST", normalized_returned_log)
+        self.assertIn("Transcript", normalized_returned_log)
+        self.assertGreater(_region_diff_pixels(browser_data, source_data, browser_width, 40, 136, 960, 592), 3500)
+        self.assertGreater(_region_diff_pixels(source_data, returned_data, source_width, 40, 136, 320, 592), 500)
+
+    def test_development_home_package_source_renders_and_returns_to_the_project_browser(self) -> None:
+        browser_log, browser_width, browser_height, browser_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x0e", b"\x18"),
+        )
+        source_log, source_width, source_height, source_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x0e", b"\x18", b"\x18"),
+        )
+        returned_log, returned_width, returned_height, returned_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x0e", b"\x18", b"\x18"),
+            post_input_chunks=(b"\x0f",),
+        )
+
+        normalized_browser_log = browser_log.replace("\r", "")
+        normalized_source_log = source_log.replace("\r", "")
+        normalized_returned_log = returned_log.replace("\r", "")
+        self.assertEqual((browser_width, browser_height), (1024, 768))
+        self.assertEqual((source_width, source_height), (1024, 768))
+        self.assertEqual((returned_width, returned_height), (1024, 768))
+        self.assertNotIn("panic:", normalized_browser_log)
+        self.assertNotIn("panic:", normalized_source_log)
+        self.assertNotIn("panic:", normalized_returned_log)
+        self.assertIn("INTERACTIVE PACKAGE LIST", normalized_browser_log)
+        self.assertIn("RecorzKernelPackage:", normalized_source_log)
+        self.assertIn("INTERACTIVE PACKAGE LIST", normalized_returned_log)
+        self.assertGreater(_region_diff_pixels(browser_data, source_data, browser_width, 40, 136, 960, 592), 3500)
+        self.assertGreater(_region_diff_pixels(source_data, returned_data, source_width, 40, 136, 320, 592), 500)
+        self.assertGreater(_region_diff_pixels(source_data, returned_data, source_width, 336, 136, 960, 592), 500)
 
     def test_development_home_process_browser_and_debugger_render_distinct_frames(self) -> None:
         menu_log, menu_width, menu_height, menu_data = self.render_interactive_example(
@@ -799,6 +1018,37 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertGreater(_region_diff_pixels(menu_data, process_data, menu_width, 336, 136, 960, 592), 4500)
         self.assertGreater(_region_diff_pixels(process_data, debugger_data, process_width, 40, 136, 320, 592), 500)
         self.assertGreater(_region_diff_pixels(process_data, debugger_data, process_width, 336, 136, 960, 592), 4500)
+
+    def test_development_home_process_browser_renders_and_returns_to_the_opening_menu(self) -> None:
+        menu_log, menu_width, menu_height, menu_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (),
+            initial_settle_delay=3.0,
+        )
+        process_log, process_width, process_height, process_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18"),
+        )
+        returned_log, returned_width, returned_height, returned_data = self.render_interactive_example(
+            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+            (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18"),
+            post_input_chunks=(b"\x0f",),
+        )
+
+        normalized_menu_log = menu_log.replace("\r", "")
+        normalized_process_log = process_log.replace("\r", "")
+        normalized_returned_log = returned_log.replace("\r", "")
+        self.assertEqual((menu_width, menu_height), (1024, 768))
+        self.assertEqual((process_width, process_height), (1024, 768))
+        self.assertEqual((returned_width, returned_height), (1024, 768))
+        self.assertNotIn("panic:", normalized_menu_log)
+        self.assertNotIn("panic:", normalized_process_log)
+        self.assertNotIn("panic:", normalized_returned_log)
+        self.assertIn("OPENING MENU", normalized_menu_log)
+        self.assertIn("PROCESS BROWSER", normalized_process_log)
+        self.assertIn("OPENING MENU", normalized_returned_log)
+        self.assertGreater(_region_diff_pixels(menu_data, process_data, menu_width, 40, 136, 960, 592), 3500)
+        self.assertGreater(_region_diff_pixels(process_data, returned_data, process_width, 40, 136, 960, 592), 3500)
 
     def test_development_home_process_browser_can_render_multiple_processes_and_select_a_non_default_process(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-multi-process-browser-", dir="/tmp") as temp_dir:

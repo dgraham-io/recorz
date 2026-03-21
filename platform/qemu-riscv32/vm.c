@@ -2041,6 +2041,8 @@ static const char *object_kind_name(uint8_t kind) {
             return "WorkspaceBrowserModel";
         case RECORZ_MVP_OBJECT_WORKSPACE_EDITOR_MODEL:
             return "WorkspaceEditorModel";
+        case RECORZ_MVP_OBJECT_WORKSPACE_DEBUGGER_MODEL:
+            return "WorkspaceDebuggerModel";
     }
     return "UnknownObject";
 }
@@ -11815,26 +11817,16 @@ static void workspace_accept_input_monitor_buffer(
 static void workspace_save_and_reopen_in_place(
     const struct recorz_mvp_heap_object *workspace_object
 ) {
-    uint32_t view_kind = workspace_current_view_kind_value(workspace_object);
-
     startup_hook_receiver_handle = heap_handle_for_object(workspace_object);
-    startup_hook_selector_id =
-        view_kind == WORKSPACE_VIEW_PACKAGES
-            ? RECORZ_MVP_SELECTOR_BROWSE_PACKAGES_INTERACTIVE
-            : RECORZ_MVP_SELECTOR_INTERACTIVE_INPUT_MONITOR;
+    startup_hook_selector_id = RECORZ_MVP_SELECTOR_REOPEN;
     emit_live_snapshot();
 }
 
 static void workspace_save_recovery_snapshot_in_place(
     const struct recorz_mvp_heap_object *workspace_object
 ) {
-    uint32_t view_kind = workspace_current_view_kind_value(workspace_object);
-
     startup_hook_receiver_handle = heap_handle_for_object(workspace_object);
-    startup_hook_selector_id =
-        view_kind == WORKSPACE_VIEW_PACKAGES
-            ? RECORZ_MVP_SELECTOR_BROWSE_PACKAGES_INTERACTIVE
-            : RECORZ_MVP_SELECTOR_INTERACTIVE_INPUT_MONITOR;
+    startup_hook_selector_id = RECORZ_MVP_SELECTOR_REOPEN;
     emit_live_snapshot();
 }
 
@@ -17581,7 +17573,10 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
         machine_panic("snapshot magic mismatch");
     }
     if (read_u16_le(blob + 4U) != SNAPSHOT_VERSION) {
-        machine_panic("snapshot version mismatch: expected RV32MVP1 snapshot v9");
+        machine_panic(
+            "snapshot version mismatch: expected RV32MVP1 snapshot v9; "
+            "stale dev snapshot, use dev-reset or dev-restore"
+        );
     }
     object_count = read_u16_le(blob + 6U);
     dynamic_count = read_u16_le(blob + 8U);
@@ -20844,6 +20839,13 @@ static uint8_t remember_seeded_primitive_method_source(
     }
     method_object = lookup_builtin_method_descriptor(class_object, selector_id, argument_count);
     if (method_object == 0) {
+        machine_puts("recorz qemu-riscv32 mvp: primitive chunk mismatch class=");
+        machine_puts(class_name_for_object(class_object));
+        machine_puts(" selector=");
+        machine_puts(selector_name);
+        machine_puts(" argc=");
+        panic_put_u32(argument_count);
+        machine_putc('\n');
         machine_panic("KernelInstaller primitive method chunk does not match an installed method");
     }
     entry_object = method_descriptor_entry_object(method_object);
@@ -21021,6 +21023,7 @@ static void file_in_class_source_on_existing_class(
 }
 
 static const struct recorz_mvp_heap_object *lookup_class_by_name(const char *class_name) {
+    uint16_t handle;
     uint8_t kind;
     const struct recorz_mvp_dynamic_class_definition *dynamic_definition;
 
@@ -21034,6 +21037,27 @@ static const struct recorz_mvp_heap_object *lookup_class_by_name(const char *cla
         if (source_names_equal(class_name, object_kind_name(kind))) {
             return (const struct recorz_mvp_heap_object *)heap_object(class_descriptor_handles_by_kind[kind]);
         }
+    }
+    for (handle = 1U; handle <= heap_size; ++handle) {
+        const struct recorz_mvp_heap_object *object = (const struct recorz_mvp_heap_object *)heap_object(handle);
+
+        if (object->kind != RECORZ_MVP_OBJECT_CLASS) {
+            continue;
+        }
+        kind = class_instance_kind(object);
+        if (kind == 0U || kind > MAX_OBJECT_KIND) {
+            continue;
+        }
+        if (!source_names_equal(class_name, object_kind_name(kind))) {
+            continue;
+        }
+        if (class_descriptor_handles_by_kind[kind] == 0U) {
+            class_descriptor_handles_by_kind[kind] = handle;
+        }
+        if (class_handles_by_kind[kind] == 0U) {
+            class_handles_by_kind[kind] = handle;
+        }
+        return object;
     }
     dynamic_definition = dynamic_class_definition_for_name(class_name);
     if (dynamic_definition != 0) {
