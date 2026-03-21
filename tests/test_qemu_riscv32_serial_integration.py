@@ -3602,6 +3602,69 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("feedbackText", output)
             self.assertNotIn("panic:", output)
 
+    def test_workspace_development_home_object_inspector_detail_can_return_to_the_list(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-object-inspector-return-", dir="/tmp") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "OPENING MENU", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("\x0e\x0e\x0e\x0e\x18")
+                process.stdin.flush()
+                output += _read_until(process, "OBJECT INSPECTOR", timeout=8.0)
+                process.stdin.write("\x18")
+                process.stdin.flush()
+                output += _read_until(process, "visibleOrigin", timeout=8.0)
+                process.stdin.write("\x0f")
+                process.stdin.flush()
+                output += _read_until(process, "Select an object. Enter or Ctrl-X opens detail.", timeout=8.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("OBJECT INSPECTOR DETAIL", output)
+            self.assertIn("visibleOrigin", output)
+            self.assertIn("Select an object. Enter or Ctrl-X opens detail.", output)
+            self.assertIn("BootWorkspaceTool", output)
+            self.assertNotIn("panic:", output)
+
     def test_workspace_development_home_failed_scheduled_process_can_proceed_from_the_debugger(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-stage6-proceed-", dir="/tmp") as temp_dir:
             temp_path = Path(temp_dir)
