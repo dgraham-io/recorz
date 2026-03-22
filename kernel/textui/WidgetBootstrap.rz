@@ -552,12 +552,53 @@ returnFromSourceEditor
     ^self sourceEditorFallbackReturn
 !
 sourceEditorFallbackReturn
-    | viewKind |
+    | browserModel targetName viewKind |
+    targetName := Workspace currentTargetName.
+    browserModel := self namedObjectOrNil: 'BootWorkspaceBrowserModel'.
+    targetName = 'OBJECT INSPECTOR DETAIL' ifTrue: [
+        browserModel = nil ifFalse: [
+            browserModel setSelectedIndex: 0 listTop: 0.
+            browserModel prepareListSelectionForCount: 6].
+        Workspace setCurrentTargetName: 'OBJECT INSPECTOR'.
+        Workspace setCurrentViewKind: 21.
+        self setStatusText: ''.
+        self setFeedbackText: ''.
+        ^4].
+    targetName = 'Memory Report' ifTrue: [
+        browserModel = nil ifFalse: [browserModel setSelectedIndex: 0 listTop: 0].
+        Workspace setCurrentTargetName: nil.
+        Workspace setCurrentViewKind: 20.
+        self setStatusText: ''.
+        self setFeedbackText: ''.
+        ^4].
+    targetName = 'Runtime Metadata' ifTrue: [
+        browserModel = nil ifFalse: [browserModel setSelectedIndex: 0 listTop: 0].
+        Workspace setCurrentTargetName: nil.
+        Workspace setCurrentViewKind: 20.
+        self setStatusText: ''.
+        self setFeedbackText: ''.
+        ^4].
     viewKind := Workspace currentViewKind.
     viewKind = 5 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
     viewKind = 7 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
-    viewKind = 8 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
-    viewKind = 13 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
+    viewKind = 8 ifTrue: [
+        browserModel = nil ifFalse: [
+            browserModel prepareBrowserStateForMode: 3.
+            browserModel prepareListSelectionForCount: Workspace classCount].
+        Workspace setCurrentTargetName: nil.
+        Workspace setCurrentViewKind: 21.
+        self setStatusText: ''.
+        self setFeedbackText: ''.
+        ^4].
+    viewKind = 13 ifTrue: [
+        browserModel = nil ifFalse: [
+            browserModel prepareBrowserStateForMode: 2.
+            browserModel prepareListSelectionForCount: Workspace packageCount].
+        Workspace setCurrentTargetName: nil.
+        Workspace setCurrentViewKind: 14.
+        self setStatusText: ''.
+        self setFeedbackText: ''.
+        ^4].
     viewKind = 16 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
     viewKind = 17 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
     viewKind = 19 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
@@ -1681,12 +1722,35 @@ returnFromDebuggerBrowser
         plainState = nil ifFalse: [
             plainContents := plainState contents.
             plainContents = nil ifFalse: [^tool restorePlainWorkspaceState]].
+        workspace currentTargetName = 'DEBUGGER' ifTrue: [
+            workspace setCurrentTargetName: 'PROCESS BROWSER'.
+            workspace setCurrentViewKind: 21.
+            browserModel setSelectedIndex: 0 listTop: 0.
+            self prepareListSelectionForCount: Workspace processCount.
+            tool setStatusText: ''.
+            tool setFeedbackText: ''.
+            ^4].
+        workspace currentViewKind = 14 ifTrue: [
+            workspace setCurrentTargetName: nil.
+            workspace setCurrentViewKind: 20.
+            browserModel setSelectedIndex: 0 listTop: 0.
+            tool setStatusText: ''.
+            tool setFeedbackText: ''.
+            ^4].
+        workspace currentViewKind = 21 ifTrue: [
+            workspace setCurrentTargetName: nil.
+            workspace setCurrentViewKind: 20.
+            browserModel setSelectedIndex: 0 listTop: 0.
+            tool setStatusText: ''.
+            tool setFeedbackText: ''.
+            ^4].
         tool setStatusText: ''.
         tool setFeedbackText: ''.
         ^9].
     ^redrawCode
 !
 handleBrowserByte: aByte
+    | tool |
     aByte = 14 ifTrue: [^self moveListSelectionBy: 1].
     aByte = 16 ifTrue: [^self moveListSelectionBy: -1].
     aByte = 2 ifTrue: [^self moveListSelectionPageBy: -1].
@@ -1717,10 +1781,42 @@ handleBrowserByte: aByte
     aByte = 15 ifTrue: [
         workspace currentTargetName = 'DEBUGGER' ifTrue: [^self returnFromDebuggerBrowser].
         browserModel contents = nil ifFalse: [^self returnFromDebuggerBrowser].
+        workspace currentViewKind = 20 ifTrue: [^9].
+        tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+        workspace currentViewKind = 14 ifTrue: [
+            workspace setCurrentTargetName: nil.
+            workspace setCurrentViewKind: 20.
+            browserModel setSelectedIndex: 0 listTop: 0.
+            tool setStatusText: ''.
+            tool setFeedbackText: ''.
+            ^4].
+        workspace currentViewKind = 21 ifTrue: [
+            workspace setCurrentTargetName: nil.
+            workspace setCurrentViewKind: 20.
+            browserModel setSelectedIndex: 0 listTop: 0.
+            tool setStatusText: ''.
+            tool setFeedbackText: ''.
+            ^4].
         ^9].
     aByte = 4 ifTrue: [
         workspace currentTargetName = 'DEBUGGER' ifTrue: [^self returnFromDebuggerBrowser].
         browserModel contents = nil ifFalse: [^self returnFromDebuggerBrowser].
+        workspace currentViewKind = 20 ifTrue: [^9].
+        tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
+        workspace currentViewKind = 14 ifTrue: [
+            workspace setCurrentTargetName: nil.
+            workspace setCurrentViewKind: 20.
+            browserModel setSelectedIndex: 0 listTop: 0.
+            tool setStatusText: ''.
+            tool setFeedbackText: ''.
+            ^4].
+        workspace currentViewKind = 21 ifTrue: [
+            workspace setCurrentTargetName: nil.
+            workspace setCurrentViewKind: 20.
+            browserModel setSelectedIndex: 0 listTop: 0.
+            tool setStatusText: ''.
+            tool setFeedbackText: ''.
+            ^4].
         ^9].
     ^0
 !

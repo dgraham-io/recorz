@@ -182,9 +182,12 @@ def _run_development_home_boot_session(
     build_dir: Path,
     *,
     input_steps: tuple[tuple[str, str | tuple[str, ...]], ...],
+    example_path: Path = WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
+    initial_markers: tuple[str, ...] = ("OPENING MENU", "panic:"),
+    initial_timeout: float = 8.0,
     file_in_payload: Path | None = None,
 ) -> str:
-    elf_path = _build_elf(build_dir, WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE, file_in_payload=file_in_payload)
+    elf_path = _build_elf(build_dir, example_path, file_in_payload=file_in_payload)
     process = subprocess.Popen(
         [
             "qemu-system-riscv32",
@@ -212,7 +215,7 @@ def _run_development_home_boot_session(
         text=True,
     )
     try:
-        output = _read_until_any(process, ("OPENING MENU", "panic:"), timeout=8.0)
+        output = _read_until_any(process, initial_markers, timeout=initial_timeout)
         if "panic:" in output:
             return output.replace("\r", "")
         for chunk, marker in input_steps:
@@ -292,6 +295,23 @@ def _write_context_inspector_example(
     ]
     if save_snapshot:
         lines.append("KernelInstaller saveSnapshot.")
+    example_path.write_text("\n".join(lines), encoding="utf-8")
+    return example_path
+
+
+def _write_development_home_exit_fallback_example(
+    temp_path: Path,
+    name: str,
+    *,
+    body_lines: tuple[str, ...],
+) -> Path:
+    example_path = temp_path / name
+    lines = [
+        "Display clear.",
+        "Workspace developmentHome.",
+    ]
+    lines.extend(body_lines)
+    lines.append("Workspace interactiveInputMonitor.")
     example_path.write_text("\n".join(lines), encoding="utf-8")
     return example_path
 
@@ -3495,6 +3515,32 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertGreaterEqual(output.count("OPENING MENU"), 2)
             self.assertNotIn("panic:", output)
 
+    def test_workspace_development_home_class_browser_without_return_state_can_fallback_to_the_opening_menu(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-class-fallback-") as temp_dir:
+            temp_path = Path(temp_dir)
+            example_path = _write_development_home_exit_fallback_example(
+                temp_path,
+                "development_home_class_browser_fallback_demo.rz",
+                body_lines=(
+                    "(KernelInstaller objectNamed: 'BootWorkspaceBrowserModel') setBrowserReturnViewKind: nil targetName: nil.",
+                    "(KernelInstaller objectNamed: 'BootWorkspaceBrowserModel') prepareBrowserStateForMode: 3.",
+                    "(KernelInstaller objectNamed: 'BootWorkspaceBrowserModel') prepareListSelectionForCount: Workspace classCount.",
+                    "Workspace setCurrentViewKind: 21.",
+                    "Workspace setCurrentTargetName: nil.",
+                    "(KernelInstaller objectNamed: 'BootWorkspaceBrowserModel') setSelectedIndex: 0 listTop: 0.",
+                ),
+            )
+            output = _run_development_home_boot_session(
+                temp_path / "build",
+                example_path=example_path,
+                initial_markers=("INTERACTIVE CLASS LIST", "panic:"),
+                input_steps=(("\x0f", "OPENING MENU"),),
+            )
+
+            self.assertIn("INTERACTIVE CLASS LIST", output)
+            self.assertIn("OPENING MENU", output)
+            self.assertNotIn("panic:", output)
+
     def test_workspace_development_home_class_source_can_return_to_the_class_browser(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-class-source-return-") as temp_dir:
             output = _run_development_home_boot_session(
@@ -3509,6 +3555,34 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("INTERACTIVE CLASS LIST", output)
             self.assertIn("RecorzKernelClass:", output)
             self.assertIn("STATUS: SOURCE EDITOR", output)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_development_home_class_source_without_return_state_can_fallback_to_the_class_browser(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-class-source-fallback-") as temp_dir:
+            temp_path = Path(temp_dir)
+            example_path = _write_development_home_exit_fallback_example(
+                temp_path,
+                "development_home_class_source_fallback_demo.rz",
+                body_lines=(
+                    "(KernelInstaller objectNamed: 'BootWorkspaceTool') setBrowserReturnViewKind: nil targetName: nil.",
+                    "Workspace setCurrentViewKind: 8.",
+                    "Workspace setCurrentTargetName: 'Transcript'.",
+                    "Workspace setContents: (KernelInstaller fileOutClassNamed: 'Transcript').",
+                    "Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: 0.",
+                    "Workspace collapseSelectionToCursor.",
+                    "Workspace setVisibleOriginTop: 0 left: 0.",
+                ),
+            )
+            output = _run_development_home_boot_session(
+                temp_path / "build",
+                example_path=example_path,
+                initial_markers=("STATUS: SOURCE EDITOR", "RecorzKernelClass:", "panic:"),
+                initial_timeout=12.0,
+                input_steps=(("\x0f", "INTERACTIVE CLASS LIST"),),
+            )
+
+            self.assertIn("RecorzKernelClass:", output)
+            self.assertIn("INTERACTIVE CLASS LIST", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_development_home_menu_can_open_the_memory_report_and_return(self) -> None:
@@ -3838,6 +3912,33 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("BootWorkspaceTool", output)
             self.assertNotIn("panic:", output)
 
+    def test_workspace_development_home_object_inspector_detail_without_return_state_can_fallback_to_the_list(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-object-detail-fallback-") as temp_dir:
+            temp_path = Path(temp_dir)
+            example_path = _write_development_home_exit_fallback_example(
+                temp_path,
+                "development_home_object_detail_fallback_demo.rz",
+                body_lines=(
+                    "(KernelInstaller objectNamed: 'BootWorkspaceTool') setBrowserReturnViewKind: nil targetName: nil.",
+                    "Workspace setCurrentViewKind: 18.",
+                    "Workspace setCurrentTargetName: 'OBJECT INSPECTOR DETAIL'.",
+                    "Workspace setContents: (Workspace objectDetailNamed: 'BootWorkspaceTool').",
+                    "Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: 0.",
+                    "Workspace collapseSelectionToCursor.",
+                    "Workspace setVisibleOriginTop: 0 left: 0.",
+                ),
+            )
+            output = _run_development_home_boot_session(
+                temp_path / "build",
+                example_path=example_path,
+                initial_markers=("OBJECT INSPECTOR DETAIL", "panic:"),
+                input_steps=(("\x0f", "OBJECT INSPECTOR"),),
+            )
+
+            self.assertIn("OBJECT INSPECTOR DETAIL", output)
+            self.assertIn("OBJECT INSPECTOR", output)
+            self.assertNotIn("panic:", output)
+
     def test_workspace_development_home_menu_process_browser_can_return_to_the_opening_menu(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-process-browser-return-to-menu-") as temp_dir:
             output = _run_development_home_boot_session(
@@ -3850,6 +3951,34 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
 
             self.assertIn("PROCESS BROWSER", output)
             self.assertGreaterEqual(output.count("OPENING MENU"), 2)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_development_home_debugger_without_return_state_can_fallback_to_the_process_browser(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-debugger-fallback-") as temp_dir:
+            temp_path = Path(temp_dir)
+            example_path = _write_development_home_exit_fallback_example(
+                temp_path,
+                "development_home_debugger_fallback_demo.rz",
+                body_lines=(
+                    "Workspace captureDebugContext.",
+                    "(KernelInstaller objectNamed: 'BootWorkspaceBrowserModel') rememberDebuggerProcess: 'BootActiveProcess' frameIndex: 1 frameCount: (Workspace contextFrameCountNamed: 'BootActiveProcess').",
+                    "((KernelInstaller objectNamed: 'BootWorkspaceBrowserModel') state) setContents: 'BootActiveProcess' cursor: 1 selection: (Workspace contextFrameCountNamed: 'BootActiveProcess') visibleOrigin: 'frame'.",
+                    "(KernelInstaller objectNamed: 'BootWorkspaceBrowserModel') setBrowserReturnViewKind: nil targetName: nil.",
+                    "Workspace setCurrentViewKind: 21.",
+                    "Workspace setCurrentTargetName: 'DEBUGGER'.",
+                    "(KernelInstaller objectNamed: 'BootWorkspaceBrowserModel') setSelectedIndex: 0 listTop: 0.",
+                ),
+            )
+            output = _run_development_home_boot_session(
+                temp_path / "build",
+                example_path=example_path,
+                initial_markers=("frame: 1", "BootActiveProcess", "panic:"),
+                initial_timeout=12.0,
+                input_steps=(("\x0f", "PROCESS BROWSER"),),
+            )
+
+            self.assertIn("frame: 1", output)
+            self.assertIn("PROCESS BROWSER", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_development_home_process_browser_debugger_can_return_to_the_process_browser(self) -> None:
