@@ -1992,6 +1992,15 @@ handleEditorByte: aByte tool: tool
     | commandResult |
     aByte = 2 ifTrue: [^self scrollEditorPageBy: -1].
     aByte = 22 ifTrue: [^self scrollEditorPageBy: 1].
+    self isReadOnlyDetailTarget ifTrue: [
+        aByte = 15 ifTrue: [^tool dispatchCommandOnForm: aByte].
+        aByte = 1 ifTrue: [
+            workspace moveCursorToLineStart.
+            ^workspace finishEditorInteractionForLines: self visibleEditorLines visibleColumns: self visibleEditorColumns redrawCode: 6].
+        aByte = 5 ifTrue: [
+            workspace moveCursorToLineEnd.
+            ^workspace finishEditorInteractionForLines: self visibleEditorLines visibleColumns: self visibleEditorColumns redrawCode: 6].
+        ^0].
     aByte = 7 ifTrue: [tool browseRegeneratedKernelSource. ^4].
     aByte = 12 ifTrue: [tool browseRegeneratedBootSource. ^4].
     aByte = 17 ifTrue: [tool browseRegeneratedFileInSource. ^4].
@@ -2000,14 +2009,6 @@ handleEditorByte: aByte tool: tool
     aByte = 11 ifTrue: [tool saveRecoverySnapshot. ^9].
     commandResult := tool dispatchCommandOnForm: aByte.
     commandResult = 0 ifFalse: [^commandResult].
-    self isReadOnlyDetailTarget ifTrue: [
-        aByte = 1 ifTrue: [
-            workspace moveCursorToLineStart.
-            ^workspace finishEditorInteractionForLines: self visibleEditorLines visibleColumns: self visibleEditorColumns redrawCode: 6].
-        aByte = 5 ifTrue: [
-            workspace moveCursorToLineEnd.
-            ^workspace finishEditorInteractionForLines: self visibleEditorLines visibleColumns: self visibleEditorColumns redrawCode: 6].
-        ^0].
     ^workspace handleEditorInputByte: aByte visibleLines: self visibleEditorLines visibleColumns: self visibleEditorColumns
 !
 ensureEditorCursorVisible

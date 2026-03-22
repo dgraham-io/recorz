@@ -1159,6 +1159,85 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             self.assertGreaterEqual(output.count("OPENING MENU"), 3)
             self.assertNotIn("panic:", output)
 
+    def test_fresh_development_home_snapshot_runtime_metadata_absorbs_enter_and_can_return(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-development-home-runtime-enter-", dir="/tmp") as temp_dir:
+            temp_path = Path(temp_dir)
+            snapshot_output = temp_path / "development-home-runtime-enter-live-image.bin"
+
+            save_log = self.save_snapshot(
+                build_dir=temp_path / "save-build",
+                example_path=ROOT / "examples" / "qemu_riscv_image_development_home_save.rz",
+                snapshot_output=snapshot_output,
+            )
+            self.assertIn("recorz-snapshot-profile RV32MVP1", save_log)
+            self.assertTrue(snapshot_output.exists())
+
+            elf_path = self.build_elf(
+                build_dir=temp_path / "reload-build",
+                example_path=SNAPSHOT_DEVELOPMENT_HOME_BOOT_DEMO_PATH,
+            )
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                    "-fw_cfg",
+                    f"name=opt/recorz-snapshot,file={snapshot_output}",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "OPENING MENU", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+
+                process.stdin.write("\x0e\x0e\x0e\x0e\x0e\x0e\x18")
+                process.stdin.flush()
+                output += _read_until(process, "PROC 0ACTS 0", timeout=12.0)
+
+                process.stdin.write("\r\x0f")
+                process.stdin.flush()
+                output += _read_until(process, "OPENING MENU", timeout=8.0)
+
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("recorz qemu-riscv32 mvp: loaded snapshot", output)
+            self.assertIn("RUNTIME METADATA", output)
+            self.assertIn("PROC 0ACTS 0", output)
+            self.assertIn("OPENING MENU", output)
+            self.assertNotIn("panic:", output)
+
     def test_snapshot_preserves_scheduler_state_and_can_resume_a_saved_process(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-scheduler-snapshot-") as temp_dir:
             temp_path = Path(temp_dir)

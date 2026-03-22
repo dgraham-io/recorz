@@ -3663,6 +3663,20 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertGreaterEqual(output.count("OPENING MENU"), 2)
             self.assertNotIn("panic:", output)
 
+    def test_workspace_development_home_memory_report_absorbs_enter_and_can_return(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-report-enter-") as temp_dir:
+            output = _run_development_home_boot_session(
+                Path(temp_dir),
+                input_steps=(
+                    ("\x0e\x0e\x0e\x18", "PROFILE DEV"),
+                    ("\r\x0f", "OPENING MENU"),
+                ),
+            )
+
+            self.assertIn("PROFILE DEV", output)
+            self.assertIn("OPENING MENU", output)
+            self.assertNotIn("panic:", output)
+
     def test_workspace_development_home_menu_can_open_the_runtime_metadata_browser_and_return(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-runtime-metadata-") as temp_dir:
             build_dir = Path(temp_dir)
@@ -3746,6 +3760,20 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("RECORZ WORKSPACE EDITOR", output)
             self.assertIn("RUNTIME METADATA", output)
             self.assertGreaterEqual(output.count("OPENING MENU"), 2)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_development_home_runtime_metadata_absorbs_enter_and_can_return(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-runtime-enter-") as temp_dir:
+            output = _run_development_home_boot_session(
+                Path(temp_dir),
+                input_steps=(
+                    ("\x0e\x0e\x0e\x0e\x0e\x0e\x18", ("RUNTIME METADATA", "Runtime MetadataR")),
+                    ("\r\x0f", "OPENING MENU"),
+                ),
+            )
+
+            self.assertIn("RUNTIME METADATA", output)
+            self.assertIn("OPENING MENU", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_development_home_opening_menu_lists_object_inspector_and_context_debugger_entries(self) -> None:
@@ -3944,6 +3972,67 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("visibleOrigin", output)
             self.assertIn("Select an object. Enter or Ctrl-X opens detail.", output)
             self.assertIn("BootWorkspaceTool", output)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_development_home_object_inspector_detail_absorbs_enter_and_can_return(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-object-inspector-enter-", dir="/tmp") as temp_dir:
+            build_dir = Path(temp_dir)
+            elf_path = _build_elf(build_dir, WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE)
+            process = subprocess.Popen(
+                [
+                    "qemu-system-riscv32",
+                    "-machine",
+                    "virt",
+                    "-m",
+                    "32M",
+                    "-smp",
+                    "1",
+                    "-kernel",
+                    str(elf_path),
+                    "-serial",
+                    "stdio",
+                    "-monitor",
+                    "none",
+                    "-display",
+                    "none",
+                    "-device",
+                    "ramfb",
+                ],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                output = _read_until(process, "OPENING MENU", timeout=8.0)
+                if process.stdin is None:
+                    self.fail("QEMU process stdin is not available")
+                process.stdin.write("\x0e\x0e\x0e\x0e\x18")
+                process.stdin.flush()
+                output += _read_until(process, "OBJECT INSPECTOR", timeout=8.0)
+                process.stdin.write("\x18")
+                process.stdin.flush()
+                output += _read_until(process, "OBJECT INSPECTOR DETAIL", timeout=8.0)
+                process.stdin.write("\r\x0f")
+                process.stdin.flush()
+                output += _read_until(process, "Select an object. Enter or Ctrl-X opens detail.", timeout=8.0)
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5.0)
+                output += process.stdout.read() or ""
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5.0)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+
+            output = output.replace("\r", "")
+            self.assertIn("OBJECT INSPECTOR DETAIL", output)
+            self.assertIn("Select an object. Enter or Ctrl-X opens detail.", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_development_home_object_inspector_detail_without_return_state_can_fallback_to_the_list(self) -> None:
