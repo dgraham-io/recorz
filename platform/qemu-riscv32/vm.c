@@ -70,7 +70,7 @@
 #define SNAPSHOT_MAGIC_1 'C'
 #define SNAPSHOT_MAGIC_2 'Z'
 #define SNAPSHOT_MAGIC_3 'T'
-#define SNAPSHOT_VERSION 9U
+#define SNAPSHOT_VERSION 10U
 #define SNAPSHOT_COMPATIBILITY_PROFILE "RV32MVP1"
 #define DEBUG_DUMP_RENDER_COUNTERS_BYTE 0x1fU
 #define GC_TEMP_ROOT_LIMIT 8U
@@ -17360,7 +17360,7 @@ static void load_snapshot_state(const uint8_t *blob, uint32_t size) {
     }
     if (read_u16_le(blob + 4U) != SNAPSHOT_VERSION) {
         machine_panic(
-            "snapshot version mismatch: expected RV32MVP1 snapshot v9; "
+            "snapshot version mismatch: expected RV32MVP1 snapshot v10; "
             "stale dev snapshot, use dev-reset or dev-restore"
         );
     }

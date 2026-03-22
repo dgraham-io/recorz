@@ -106,7 +106,7 @@ def _build_snapshot(
     struct.pack_into("<H", header, 6, len(objects))
     struct.pack_into("<H", header, 12, len(named_objects))
     struct.pack_into("<I", header, 18, len(string_section))
-    struct.pack_into("<I", header, 50, total_size)
+    struct.pack_into("<I", header, 60, total_size)
 
     return bytes(
         header

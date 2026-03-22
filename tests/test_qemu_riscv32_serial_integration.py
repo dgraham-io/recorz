@@ -3646,6 +3646,23 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("SNAP", output)
             self.assertNotIn("panic:", output)
 
+    def test_workspace_development_home_memory_report_can_return_after_returning_from_workspace(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-report-after-workspace-") as temp_dir:
+            output = _run_development_home_boot_session(
+                Path(temp_dir),
+                input_steps=(
+                    ("\x18", ("RECORZ WORKSPACE EDITOR", "SOURCE EDITOR :: MODIFIED")),
+                    ("\x0f", "OPENING MENU"),
+                    ("\x0e\x0e\x0e\x18", "PROFILE DEV"),
+                    ("\x0f", "OPENING MENU"),
+                ),
+            )
+
+            self.assertIn("RECORZ WORKSPACE EDITOR", output)
+            self.assertIn("PROFILE DEV", output)
+            self.assertGreaterEqual(output.count("OPENING MENU"), 2)
+            self.assertNotIn("panic:", output)
+
     def test_workspace_development_home_menu_can_open_the_runtime_metadata_browser_and_return(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-runtime-metadata-") as temp_dir:
             build_dir = Path(temp_dir)
@@ -3712,6 +3729,23 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("SELS", output)
             self.assertIn("METH", output)
             self.assertIn("PRIM", output)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_development_home_runtime_metadata_can_return_after_returning_from_workspace(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-runtime-after-workspace-") as temp_dir:
+            output = _run_development_home_boot_session(
+                Path(temp_dir),
+                input_steps=(
+                    ("\x18", ("RECORZ WORKSPACE EDITOR", "SOURCE EDITOR :: MODIFIED")),
+                    ("\x0f", "OPENING MENU"),
+                    ("\x0e\x0e\x0e\x0e\x0e\x0e\x18", ("RUNTIME METADATA", "Runtime MetadataR")),
+                    ("\x0f", "OPENING MENU"),
+                ),
+            )
+
+            self.assertIn("RECORZ WORKSPACE EDITOR", output)
+            self.assertIn("RUNTIME METADATA", output)
+            self.assertGreaterEqual(output.count("OPENING MENU"), 2)
             self.assertNotIn("panic:", output)
 
     def test_workspace_development_home_opening_menu_lists_object_inspector_and_context_debugger_entries(self) -> None:
