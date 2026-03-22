@@ -78,8 +78,7 @@ As of `2026-03-22`, the project begins this plan from the following base:
 
 Immediate next queue:
 
-1. `DS4.1` Closure matrix
-2. `DS4.2` Handoff note
+- Plan complete. See `/Users/david/repos/recorz/docs/deeper_self_hosting_stage4_handoff_note.md` for the next program.
 
 ## Working Lanes
 
@@ -359,7 +358,7 @@ Close the deeper self-hosting tranche cleanly and decide the next program.
 
 ### Open Tasks
 
-- [ ] `DS4.1` Closure matrix
+- [x] `DS4.1` Closure matrix
   Files:
   - `/Users/david/repos/recorz/tests/`
   - `/Users/david/repos/recorz/docs/`
@@ -377,7 +376,7 @@ Close the deeper self-hosting tranche cleanly and decide the next program.
   - `DS-BUNDLE-REGEN`
   - recorded closure matrix
 
-- [ ] `DS4.2` Handoff note
+- [x] `DS4.2` Handoff note
   Files:
   - `/Users/david/repos/recorz/docs/`
   Outputs:
