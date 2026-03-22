@@ -78,9 +78,9 @@ As of `2026-03-22`, the project begins this plan from the following base:
 
 Immediate next queue:
 
-1. `DS2.1` Runtime-metadata surface expansion
-2. `DS2.2` Image-visible runtime-binding summary
-3. `DS2.3` Regenerated-source browser coherence
+1. `DS3.1` Selector/source manifest candidate extraction
+2. `DS3.2` Host marshalling boundary shrink
+3. `DS3.3` Regeneration authority recheck
 
 ## Working Lanes
 
@@ -250,7 +250,7 @@ Make the live image able to browse the state that the host currently emits.
 
 ### Open Tasks
 
-- [ ] `DS2.1` Runtime-metadata surface expansion
+- [x] `DS2.1` Runtime-metadata surface expansion
   Files:
   - `/Users/david/repos/recorz/kernel/mvp/Workspace.rz`
   - `/Users/david/repos/recorz/kernel/textui/WidgetBootstrap.rz`
@@ -268,7 +268,7 @@ Make the live image able to browse the state that the host currently emits.
   Verify:
   - serial and render metadata tests
 
-- [ ] `DS2.2` Image-visible runtime-binding summary
+- [x] `DS2.2` Image-visible runtime-binding summary
   Files:
   - `/Users/david/repos/recorz/kernel/mvp/Workspace.rz`
   - `/Users/david/repos/recorz/kernel/textui/WidgetBootstrap.rz`
@@ -284,7 +284,7 @@ Make the live image able to browse the state that the host currently emits.
   - regeneration and serial metadata tests
   - `DS-BUNDLE-REGEN`
 
-- [ ] `DS2.3` Regenerated-source browser coherence
+- [x] `DS2.3` Regenerated-source browser coherence
   Files:
   - `/Users/david/repos/recorz/kernel/textui/WidgetBootstrap.rz`
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_snapshot_integration.py`

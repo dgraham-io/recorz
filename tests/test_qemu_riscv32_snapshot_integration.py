@@ -205,6 +205,34 @@ def _write_development_home_tool_snapshot_example(
     return example_path
 
 
+def _write_development_home_runtime_metadata_regenerated_source_snapshot_example(
+    temp_path: Path,
+    name: str,
+    *,
+    anchor_byte: int,
+) -> Path:
+    example_path = temp_path / name
+    lines = [
+        "| session form |",
+        "Display clear.",
+        "Workspace developmentHome.",
+        "session := KernelInstaller objectNamed: 'BootWorkspaceSession'.",
+        "form := Display defaultForm.",
+        "session handleByte: 14 onForm: form.",
+        "session handleByte: 14 onForm: form.",
+        "session handleByte: 14 onForm: form.",
+        "session handleByte: 14 onForm: form.",
+        "session handleByte: 14 onForm: form.",
+        "session handleByte: 14 onForm: form.",
+        "session handleByte: 24 onForm: form.",
+        f"session handleByte: {anchor_byte} onForm: form.",
+        "KernelInstaller configureStartup: Workspace selectorNamed: 'reopen'.",
+        "KernelInstaller saveSnapshot.",
+    ]
+    example_path.write_text("\n".join(lines), encoding="utf-8")
+    return example_path
+
+
 SNAPSHOT_SAVE_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-snapshot-save-test"
 SNAPSHOT_RELOAD_BUILD_DIR = ROOT / "misc" / "qemu-riscv32-snapshot-reload-test"
 SNAPSHOT_OUTPUT_PATH = ROOT / "misc" / "qemu-riscv32-snapshots" / "saved-live-image.bin"
@@ -1237,6 +1265,43 @@ class QemuRiscv32SnapshotIntegrationTests(unittest.TestCase):
             self.assertIn("PROC 0ACTS 0", output)
             self.assertIn("OPENING MENU", output)
             self.assertNotIn("panic:", output)
+
+    def test_snapshot_can_reopen_runtime_metadata_regenerated_kernel_source_and_return(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-runtime-metadata-regen-return-", dir="/tmp") as temp_dir:
+            temp_path = Path(temp_dir)
+            snapshot_output = temp_path / "runtime-metadata-regenerated-kernel-live-image.bin"
+            save_example_path = _write_development_home_runtime_metadata_regenerated_source_snapshot_example(
+                temp_path,
+                "runtime_metadata_regenerated_kernel_snapshot_demo.rz",
+                anchor_byte=7,
+            )
+
+            save_log = self.save_snapshot(
+                build_dir=temp_path / "save-build",
+                example_path=save_example_path,
+                snapshot_output=snapshot_output,
+            )
+            self.assertIn("recorz-snapshot-begin", save_log)
+            self.assertTrue(snapshot_output.exists())
+            workspace_summary = self.inspect_workspace_snapshot(snapshot_path=snapshot_output)
+            self.assertEqual(workspace_summary["current_view_kind"], 17)
+
+            reload_log, width, height, data = self.render_demo(
+                build_dir=temp_path / "reload-build",
+                example_path=SNAPSHOT_WORKSPACE_IDLE_DEMO_PATH,
+                snapshot_payload=snapshot_output,
+            )
+
+            self.assertEqual((width, height), (1024, 768))
+            self.assertIn("recorz qemu-riscv32 mvp: loaded snapshot", reload_log)
+            self.assertIn("recorz qemu-riscv32 mvp: rendered", reload_log)
+            self.assertIn("RecorzKernelClass: #Class", reload_log)
+            self.assertIn("STATUS: SOURCE EDITOR", reload_log)
+            self.assertNotIn("panic:", reload_log)
+            self.assertGreater(
+                _region_histogram(data, width, 24, 126, 980, 700)[TEXT_FOREGROUND],
+                1800,
+            )
 
     def test_snapshot_preserves_scheduler_state_and_can_resume_a_saved_process(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qemu-riscv32-scheduler-snapshot-") as temp_dir:

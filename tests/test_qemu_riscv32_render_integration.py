@@ -1,5 +1,6 @@
 import hashlib
 import re
+import select
 import socket
 import shutil
 import subprocess
@@ -117,6 +118,37 @@ def _region_non_background_pixels(
 ) -> int:
     histogram = _region_histogram(data, width, x0, y0, x1, y1)
     return sum(count for color, count in histogram.items() if color != background)
+
+
+def _read_until(process: subprocess.Popen[str], marker: str, *, timeout: float) -> str:
+    if process.stdout is None:
+        raise AssertionError("QEMU process stdout is not available")
+
+    output = ""
+    deadline = time.monotonic() + timeout
+    while marker not in output:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise AssertionError(f"timed out waiting for {marker!r}\ncurrent output:\n{output}")
+        ready, _, _ = select.select([process.stdout], [], [], remaining)
+        if not ready:
+            continue
+        chunk = process.stdout.read(1)
+        if chunk == "":
+            break
+        output += chunk
+    if marker not in output:
+        raise AssertionError(f"did not observe {marker!r}\ncurrent output:\n{output}")
+    return output
+
+
+def _wait_for_nonempty_file(path: Path, *, timeout: float, description: str) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if path.exists() and path.stat().st_size > 0:
+            return
+        time.sleep(0.05)
+    raise AssertionError(f"timed out waiting for {description}: {path}")
 
 
 def _region_diff_pixels_with_offsets(
@@ -290,6 +322,7 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         monitor_command_delay: float = 0.8,
         final_monitor_delay: float = 4.0,
         initial_settle_delay: float = 0.0,
+        pre_input_settle_delay: float = 0.0,
     ) -> tuple[str, int, int, bytes]:
         digest_key = (
             f"{example_path.stem}|interactive|{file_in_payload!r}|{snapshot_payload!r}|{input_chunks!r}|{post_input_chunks!r}|{monitor_commands!r}|"
@@ -374,10 +407,15 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
             try:
                 monitor = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                 time.sleep(2.0 if monitor_commands else 1.0)
+                if pre_input_settle_delay > 0.0:
+                    time.sleep(pre_input_settle_delay)
                 for chunk in input_chunks:
                     assert process.stdin is not None
-                    process.stdin.write(chunk)
-                    process.stdin.flush()
+                    try:
+                        process.stdin.write(chunk)
+                        process.stdin.flush()
+                    except BrokenPipeError:
+                        break
                     time.sleep(0.35)
                 if input_chunks:
                     time.sleep(4.0)
@@ -424,10 +462,121 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
                 else:
                     process.wait(timeout=5)
                 if process.stdin is not None:
-                    process.stdin.close()
+                    try:
+                        process.stdin.close()
+                    except BrokenPipeError:
+                        pass
         qemu_log = qemu_log_path.read_text(encoding="utf-8", errors="ignore")
         width, height, data = _read_ppm(ppm_path)
         return qemu_log, width, height, data
+
+    def render_development_home_serial_frame(
+        self,
+        *,
+        serial_input: str,
+        ready_marker: str,
+    ) -> tuple[str, int, int, bytes]:
+        digest = hashlib.sha1(f"{serial_input}|{ready_marker}".encode("utf-8")).hexdigest()[:10]
+        build_dir = ROOT / "misc" / f"qirv32-devhome-{digest}"
+        ppm_path = build_dir / "recorz-qemu-riscv32-mvp.ppm"
+        qemu_log_path = build_dir / "qemu.log"
+        monitor_path = build_dir / "qemu.monitor"
+        elf_path = build_dir / "recorz-qemu-riscv32-mvp.elf"
+        build_command = [
+            "make",
+            "-C",
+            str(ROOT / "platform" / "qemu-riscv32"),
+            f"BUILD_DIR={build_dir}",
+            f"EXAMPLE={WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE}",
+            "clean",
+            "all",
+        ]
+        build_result = subprocess.run(
+            build_command,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        if build_result.returncode != 0:
+            self.fail(
+                "QEMU RV32 development-home build failed\n"
+                f"stdout:\n{build_result.stdout}\n"
+                f"stderr:\n{build_result.stderr}"
+            )
+        build_dir.mkdir(parents=True, exist_ok=True)
+        for path in (ppm_path, qemu_log_path, monitor_path):
+            if path.exists():
+                path.unlink()
+        process = subprocess.Popen(
+            [
+                "qemu-system-riscv32",
+                "-machine",
+                "virt",
+                "-m",
+                "32M",
+                "-smp",
+                "1",
+                "-kernel",
+                str(elf_path),
+                "-serial",
+                "stdio",
+                "-monitor",
+                f"unix:{monitor_path},server,nowait",
+                "-display",
+                "none",
+                "-device",
+                "ramfb",
+            ],
+            cwd=ROOT,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        output = ""
+        try:
+            output = _read_until(process, "OPENING MENU", timeout=8.0)
+            if process.stdin is None:
+                self.fail("QEMU process stdin is not available")
+            process.stdin.write(serial_input)
+            process.stdin.flush()
+            output += _read_until(process, ready_marker, timeout=20.0)
+            time.sleep(0.5)
+            for _ in range(200):
+                if monitor_path.exists():
+                    break
+                time.sleep(0.05)
+            else:
+                self.fail("QEMU development-home monitor socket did not appear")
+            monitor = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            try:
+                for _ in range(100):
+                    try:
+                        monitor.connect(str(monitor_path))
+                        break
+                    except OSError:
+                        time.sleep(0.05)
+                else:
+                    self.fail("QEMU development-home monitor socket did not accept a connection")
+                monitor.sendall(f"screendump {ppm_path}\n".encode("utf-8"))
+                _wait_for_nonempty_file(ppm_path, timeout=3.0, description="QEMU development-home screendump")
+                monitor.sendall(b"quit\n")
+            finally:
+                monitor.close()
+            process.wait(timeout=10.0)
+            if process.stdout is not None:
+                output += process.stdout.read() or ""
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait(timeout=5.0)
+            if process.stdout is not None:
+                process.stdout.close()
+            if process.stdin is not None:
+                process.stdin.close()
+        qemu_log_path.write_text(output, encoding="utf-8")
+        width, height, data = _read_ppm(ppm_path)
+        return output, width, height, data
 
     def assert_interactive_page_down_keeps_source_visible(
         self,
@@ -774,13 +923,13 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
             (),
             initial_settle_delay=3.0,
         )
-        metadata_log, metadata_width, metadata_height, metadata_data = self.render_interactive_example(
-            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
-            (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18"),
+        metadata_log, metadata_width, metadata_height, metadata_data = self.render_development_home_serial_frame(
+            serial_input="\x0e\x0e\x0e\x0e\x0e\x0e\x18",
+            ready_marker="RUNTIME METADATA",
         )
-        returned_log, returned_width, returned_height, returned_data = self.render_interactive_example(
-            WORKSPACE_DEVELOPMENT_HOME_BOOT_EXAMPLE,
-            (b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x0e", b"\x18", b"\x0f"),
+        returned_log, returned_width, returned_height, returned_data = self.render_development_home_serial_frame(
+            serial_input="\x0e\x0e\x0e\x0e\x0e\x0e\x18\x0f",
+            ready_marker="OPENING MENU",
         )
 
         normalized_menu_log = menu_log.replace("\r", "")
@@ -798,9 +947,43 @@ class QemuRiscv32RenderIntegrationTests(unittest.TestCase):
         self.assertIn("IMG RV64MVP1", normalized_metadata_log)
         self.assertIn("SELS", normalized_metadata_log)
         self.assertIn("PRIM", normalized_metadata_log)
+        self.assertIn("SRCS", normalized_metadata_log)
+        self.assertIn("BOWN", normalized_metadata_log)
+        self.assertIn("AUTH HOST EMITS IMG/HDR", normalized_metadata_log)
+        self.assertIn("G KERN L BOOT Q FILE", normalized_metadata_log)
         self.assertIn("OPENING MENU", normalized_returned_log)
         self.assertGreater(_region_diff_pixels(menu_data, metadata_data, menu_width, 40, 136, 960, 592), 3500)
         self.assertGreater(_region_diff_pixels(metadata_data, returned_data, metadata_width, 40, 136, 960, 592), 3500)
+
+    def test_development_home_runtime_metadata_can_open_regenerated_kernel_source_and_return(self) -> None:
+        metadata_log, metadata_width, metadata_height, metadata_data = self.render_development_home_serial_frame(
+            serial_input="\x0e\x0e\x0e\x0e\x0e\x0e\x18",
+            ready_marker="RUNTIME METADATA",
+        )
+        kernel_log, kernel_width, kernel_height, kernel_data = self.render_development_home_serial_frame(
+            serial_input="\x0e\x0e\x0e\x0e\x0e\x0e\x18\x07",
+            ready_marker="SOURCE: KERNEL",
+        )
+        returned_log, returned_width, returned_height, returned_data = self.render_development_home_serial_frame(
+            serial_input="\x0e\x0e\x0e\x0e\x0e\x0e\x18\x07\x0f",
+            ready_marker="RUNTIME METADATA",
+        )
+
+        normalized_metadata_log = metadata_log.replace("\r", "")
+        normalized_kernel_log = kernel_log.replace("\r", "")
+        normalized_returned_log = returned_log.replace("\r", "")
+        self.assertEqual((metadata_width, metadata_height), (1024, 768))
+        self.assertEqual((kernel_width, kernel_height), (1024, 768))
+        self.assertEqual((returned_width, returned_height), (1024, 768))
+        self.assertNotIn("panic:", normalized_metadata_log)
+        self.assertNotIn("panic:", normalized_kernel_log)
+        self.assertNotIn("panic:", normalized_returned_log)
+        self.assertIn("RUNTIME METADATA", normalized_metadata_log)
+        self.assertIn("SOURCE: KERNEL", normalized_kernel_log)
+        self.assertIn("VIEW: REGEN", normalized_kernel_log)
+        self.assertIn("RUNTIME METADATA", normalized_returned_log)
+        self.assertGreater(_region_diff_pixels(metadata_data, kernel_data, metadata_width, 40, 136, 960, 592), 3500)
+        self.assertGreater(_region_diff_pixels(kernel_data, returned_data, kernel_width, 40, 136, 960, 592), 2500)
 
     def test_development_home_workspace_renders_and_returns_to_the_opening_menu(self) -> None:
         menu_log, menu_width, menu_height, menu_data = self.render_interactive_example(

@@ -3743,6 +3743,11 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
             self.assertIn("SELS", output)
             self.assertIn("METH", output)
             self.assertIn("PRIM", output)
+            self.assertIn("SRCS", output)
+            self.assertIn("BOWN", output)
+            self.assertIn("SELS registry ids", output)
+            self.assertIn("AUTH HOST EMITS IMG/HDR", output)
+            self.assertIn("G KERN L BOOT Q FILE", output)
             self.assertNotIn("panic:", output)
 
     def test_workspace_development_home_runtime_metadata_can_return_after_returning_from_workspace(self) -> None:
@@ -3774,6 +3779,22 @@ class QemuRiscv32SerialIntegrationTests(unittest.TestCase):
 
             self.assertIn("RUNTIME METADATA", output)
             self.assertIn("OPENING MENU", output)
+            self.assertNotIn("panic:", output)
+
+    def test_workspace_development_home_runtime_metadata_can_browse_regenerated_kernel_source_and_return(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qemu-riscv32-workspace-development-home-runtime-anchors-") as temp_dir:
+            output = _run_development_home_boot_session(
+                Path(temp_dir),
+                input_steps=(
+                    ("\x0e\x0e\x0e\x0e\x0e\x0e\x18", ("RUNTIME METADATA", "Runtime MetadataR")),
+                    ("\x07", "SOURCE: KERNEL"),
+                    ("\x0f", "RUNTIME METADATA"),
+                ),
+            )
+
+            self.assertIn("RUNTIME METADATA", output)
+            self.assertIn("SOURCE: KERNEL", output)
+            self.assertGreaterEqual(output.count("RUNTIME METADATA"), 2)
             self.assertNotIn("panic:", output)
 
     def test_workspace_development_home_opening_menu_lists_object_inspector_and_context_debugger_entries(self) -> None:

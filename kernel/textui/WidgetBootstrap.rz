@@ -1589,7 +1589,7 @@ currentFeedbackText
     viewKind = 18 ifTrue: [
         workspace currentTargetName = 'Memory Report' ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  O RETURN']].
     viewKind = 18 ifTrue: [
-        workspace currentTargetName = 'Runtime Metadata' ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  O RETURN']].
+        workspace currentTargetName = 'Runtime Metadata' ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  G KERN  L BOOT  Q FILE  O RETURN']].
     viewKind = 5 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
     viewKind = 7 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
     viewKind = 8 ifTrue: [^'A/E LINE  H/F EDGE  B/V PAGE  X ACCEPT  Y REVERT  O RETURN'].
@@ -1993,6 +1993,19 @@ handleEditorByte: aByte tool: tool
     aByte = 2 ifTrue: [^self scrollEditorPageBy: -1].
     aByte = 22 ifTrue: [^self scrollEditorPageBy: 1].
     self isReadOnlyDetailTarget ifTrue: [
+        workspace currentTargetName = 'Runtime Metadata' ifTrue: [
+            aByte = 7 ifTrue: [
+                tool setBrowserReturnViewKind: 18 targetName: 'Runtime Metadata'.
+                tool browseRegeneratedKernelSource.
+                ^4].
+            aByte = 12 ifTrue: [
+                tool setBrowserReturnViewKind: 18 targetName: 'Runtime Metadata'.
+                tool browseRegeneratedBootSource.
+                ^4].
+            aByte = 17 ifTrue: [
+                tool setBrowserReturnViewKind: 18 targetName: 'Runtime Metadata'.
+                tool browseRegeneratedFileInSource.
+                ^4]].
         aByte = 15 ifTrue: [^tool dispatchCommandOnForm: aByte].
         aByte = 1 ifTrue: [
             workspace moveCursorToLineStart.

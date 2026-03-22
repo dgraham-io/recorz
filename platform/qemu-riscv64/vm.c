@@ -23,7 +23,7 @@
 #define METHOD_SOURCE_CHUNK_LIMIT 3072U
 #define PACKAGE_SOURCE_BUFFER_LIMIT 65536U
 #define FILE_IN_SOURCE_BUFFER_LIMIT 131072U
-#define REGENERATED_SOURCE_BUFFER_LIMIT 65536U
+#define REGENERATED_SOURCE_BUFFER_LIMIT FILE_IN_SOURCE_BUFFER_LIMIT
 #define WORKSPACE_INPUT_MONITOR_STATE_LIMIT METHOD_SOURCE_CHUNK_LIMIT
 #define WORKSPACE_INPUT_MONITOR_STATUS_LIMIT 64U
 #define WORKSPACE_INPUT_MONITOR_FEEDBACK_LIMIT 1024U
@@ -12218,6 +12218,14 @@ static const char *workspace_runtime_metadata_text(void) {
         (uint32_t)(sizeof(recorz_mvp_generated_seed_class_sources) /
                    sizeof(recorz_mvp_generated_seed_class_sources[0])) -
         1U;
+    uint32_t selector_record_count =
+        (uint32_t)(sizeof(recorz_mvp_generated_selectors) /
+                   sizeof(recorz_mvp_generated_selectors[0])) -
+        1U;
+    uint32_t primitive_binding_owner_count =
+        (uint32_t)(sizeof(recorz_mvp_generated_primitive_binding_owners) /
+                   sizeof(recorz_mvp_generated_primitive_binding_owners[0])) -
+        1U;
 
     buffer[0] = '\0';
     append_memory_report_text(buffer, &offset, "RUNTIME METADATA\n");
@@ -12232,6 +12240,17 @@ static const char *workspace_runtime_metadata_text(void) {
     append_memory_report_stat(buffer, &offset, "PKGS", package_count);
     append_memory_report_stat(buffer, &offset, "DCLS", dynamic_class_count);
     append_memory_report_stat(buffer, &offset, "MSRC", live_method_source_count);
+    append_memory_report_stat(buffer, &offset, "SRCS", seed_class_count);
+    append_memory_report_stat(buffer, &offset, "BOWN", primitive_binding_owner_count);
+    if (selector_record_count == (uint32_t)MAX_SELECTOR_ID) {
+        append_memory_report_text(buffer, &offset, "SELS registry ids\n");
+    } else {
+        append_memory_report_text(buffer, &offset, "SELS registry drift\n");
+    }
+    append_memory_report_text(buffer, &offset, "PRIM binding ids\n");
+    append_memory_report_text(buffer, &offset, "BOWN owner rows\n");
+    append_memory_report_text(buffer, &offset, "AUTH HOST EMITS IMG/HDR\n");
+    append_memory_report_text(buffer, &offset, "G KERN L BOOT Q FILE\n");
     return runtime_string_allocate_copy(buffer);
 }
 
