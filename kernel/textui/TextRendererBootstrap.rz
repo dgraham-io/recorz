@@ -149,7 +149,7 @@ drawCursorOnForm: form
     cursorY := originY + ((cursor line - Workspace visibleTopLine) * Display font metrics lineHeight * Display layout scale).
     lineHeight := (Display font metrics lineHeight * Display layout scale) - 1.
     active := Cursor current.
-    active = nil ifTrue: [
+    (active = nil) ifTrue: [
         BitBlt drawLineOnForm: form fromX: cursorX fromY: cursorY toX: cursorX toY: cursorY + lineHeight color: Display style foregroundColor.
         ^form].
     Cursor moveCursorToX: cursorX y: cursorY.

@@ -129,7 +129,7 @@ redrawOnForm: form
     visibleLines := self visibleEditorLines.
     visibleColumns := self visibleEditorColumns.
     renderText := text.
-    renderText = nil ifTrue: [renderText := ''].
+    (renderText = nil) ifTrue: [renderText := ''].
     flow := Display layout flow.
     oldWrapWidth := flow wrapWidth.
     oldTabWidth := flow tabWidth.
@@ -361,7 +361,7 @@ runCurrentTests
     TestRunner failed > 0 ifTrue: [
         Workspace captureDebugContext.
         browserModel := self namedObjectOrNil: 'BootWorkspaceBrowserModel'.
-        browserModel = nil ifTrue: [
+        (browserModel = nil) ifTrue: [
             browserModel := (KernelInstaller classNamed: 'WorkspaceBrowserModel') new.
             KernelInstaller rememberObject: browserModel named: 'BootWorkspaceBrowserModel'].
         frameCount := Workspace contextFrameCountNamed: 'BootActiveProcess'.
@@ -395,11 +395,11 @@ browseRegeneratedFileInSource
     ^Workspace browseRegeneratedFileInSource
 !
 statusText
-    statusText = nil ifTrue: [^''].
+    (statusText = nil) ifTrue: [^''].
     ^statusText
 !
 feedbackText
-    feedbackText = nil ifTrue: [^''].
+    (feedbackText = nil) ifTrue: [^''].
     ^feedbackText
 !
 workspaceName
@@ -410,7 +410,7 @@ setWorkspaceName: aWorkspaceName
     ^name
 !
 visibleOrigin
-    visibleOrigin = nil ifTrue: [
+    (visibleOrigin = nil) ifTrue: [
         visibleOrigin := (KernelInstaller classNamed: 'WorkspaceVisibleOrigin') new.
         visibleOrigin setVisibleOriginTop: 0 left: 0].
     ^visibleOrigin
@@ -418,23 +418,23 @@ visibleOrigin
 browserReturnViewKind
     | browserModel returnState |
     browserModel := self namedObjectOrNil: 'BootWorkspaceBrowserModel'.
-    browserModel = nil ifTrue: [^nil].
+    (browserModel = nil) ifTrue: [^nil].
     returnState := browserModel contents.
-    returnState = nil ifTrue: [^nil].
+    (returnState = nil) ifTrue: [^nil].
     ^returnState contents
 !
 browserReturnTargetName
     | browserModel returnState |
     browserModel := self namedObjectOrNil: 'BootWorkspaceBrowserModel'.
-    browserModel = nil ifTrue: [^nil].
+    (browserModel = nil) ifTrue: [^nil].
     returnState := browserModel contents.
-    returnState = nil ifTrue: [^nil].
+    (returnState = nil) ifTrue: [^nil].
     ^returnState cursor
 !
 setBrowserReturnViewKind: aViewKind targetName: aTargetName
     | browserModel |
     browserModel := self namedObjectOrNil: 'BootWorkspaceBrowserModel'.
-    browserModel = nil ifTrue: [
+    (browserModel = nil) ifTrue: [
         browserModel := (KernelInstaller classNamed: 'WorkspaceBrowserModel') new.
         KernelInstaller rememberObject: browserModel named: 'BootWorkspaceBrowserModel'].
     ^browserModel setBrowserReturnViewKind: aViewKind targetName: aTargetName
@@ -458,10 +458,10 @@ rememberPlainWorkspaceStateContents: plainContents
     originCopy setVisibleOriginTop: Workspace visibleTopLine left: Workspace visibleLeftColumn.
     editorModelClass := KernelInstaller classNamed: 'WorkspaceEditorModel'.
     editorModel := self namedObjectOrNil: 'BootWorkspacePlainState'.
-    editorModel = nil ifTrue: [
+    (editorModel = nil) ifTrue: [
         editorModel := editorModelClass new.
         KernelInstaller rememberObject: editorModel named: 'BootWorkspacePlainState'].
-    editorModel = nil ifFalse: [
+    (editorModel = nil) ifFalse: [
         (editorModel class = editorModelClass) ifFalse: [
             editorModel := editorModelClass new.
             KernelInstaller rememberObject: editorModel named: 'BootWorkspacePlainState']].
@@ -476,7 +476,7 @@ rememberPlainWorkspaceStateContents: plainContents
 restorePlainWorkspaceState
     | state |
     state := self namedObjectOrNil: 'BootWorkspacePlainState'.
-    state = nil ifTrue: [^0].
+    (state = nil) ifTrue: [^0].
     ^state restoreOn: Workspace tool: self
 !
 acceptCommandByte
@@ -520,11 +520,11 @@ dispatchWorkspaceCommandOnForm: aByte
     | plainContents plainState returnViewKind |
     aByte = 15 ifTrue: [
         returnViewKind := self browserReturnViewKind.
-        returnViewKind = nil ifFalse: [^self returnFromSourceEditor].
+        (returnViewKind = nil) ifFalse: [^self returnFromSourceEditor].
         plainState := self namedObjectOrNil: 'BootWorkspacePlainState'.
-        plainState = nil ifFalse: [
+        (plainState = nil) ifFalse: [
             plainContents := plainState contents.
-            plainContents = nil ifFalse: [^self restorePlainWorkspaceState]].
+            (plainContents = nil) ifFalse: [^self restorePlainWorkspaceState]].
         ^0].
     self isReadOnlyDetailTarget ifTrue: [^0].
     aByte = 24 ifTrue: [self acceptCurrent. ^1].
@@ -541,13 +541,13 @@ returnFromSourceEditor
     | browserModel plainContents plainState redrawCode |
     browserModel := self namedObjectOrNil: 'BootWorkspaceBrowserModel'.
     redrawCode := nil.
-    browserModel = nil ifFalse: [
+    (browserModel = nil) ifFalse: [
         redrawCode := browserModel restoreOn: Workspace tool: self].
-    redrawCode = nil ifFalse: [^redrawCode].
+    (redrawCode = nil) ifFalse: [^redrawCode].
     plainState := self namedObjectOrNil: 'BootWorkspacePlainState'.
-    plainState = nil ifFalse: [
+    (plainState = nil) ifFalse: [
         plainContents := plainState contents.
-        plainContents = nil ifFalse: [
+        (plainContents = nil) ifFalse: [
             ^self restorePlainWorkspaceState]].
     ^self sourceEditorFallbackReturn
 !
@@ -556,7 +556,7 @@ sourceEditorFallbackReturn
     targetName := Workspace currentTargetName.
     browserModel := self namedObjectOrNil: 'BootWorkspaceBrowserModel'.
     targetName = 'OBJECT INSPECTOR DETAIL' ifTrue: [
-        browserModel = nil ifFalse: [
+        (browserModel = nil) ifFalse: [
             browserModel setSelectedIndex: 0 listTop: 0.
             browserModel prepareListSelectionForCount: 6].
         Workspace setCurrentTargetName: 'OBJECT INSPECTOR'.
@@ -565,14 +565,14 @@ sourceEditorFallbackReturn
         self setFeedbackText: ''.
         ^4].
     targetName = 'Memory Report' ifTrue: [
-        browserModel = nil ifFalse: [browserModel setSelectedIndex: 0 listTop: 0].
+        (browserModel = nil) ifFalse: [browserModel setSelectedIndex: 0 listTop: 0].
         Workspace setCurrentTargetName: nil.
         Workspace setCurrentViewKind: 20.
         self setStatusText: ''.
         self setFeedbackText: ''.
         ^4].
     targetName = 'Runtime Metadata' ifTrue: [
-        browserModel = nil ifFalse: [browserModel setSelectedIndex: 0 listTop: 0].
+        (browserModel = nil) ifFalse: [browserModel setSelectedIndex: 0 listTop: 0].
         Workspace setCurrentTargetName: nil.
         Workspace setCurrentViewKind: 20.
         self setStatusText: ''.
@@ -582,7 +582,7 @@ sourceEditorFallbackReturn
     viewKind = 5 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
     viewKind = 7 ifTrue: [Workspace setCurrentTargetName: nil. Workspace setCurrentViewKind: 14. ^4].
     viewKind = 8 ifTrue: [
-        browserModel = nil ifFalse: [
+        (browserModel = nil) ifFalse: [
             browserModel prepareBrowserStateForMode: 3.
             browserModel prepareListSelectionForCount: Workspace classCount].
         Workspace setCurrentTargetName: nil.
@@ -591,7 +591,7 @@ sourceEditorFallbackReturn
         self setFeedbackText: ''.
         ^4].
     viewKind = 13 ifTrue: [
-        browserModel = nil ifFalse: [
+        (browserModel = nil) ifFalse: [
             browserModel prepareBrowserStateForMode: 2.
             browserModel prepareListSelectionForCount: Workspace packageCount].
         Workspace setCurrentTargetName: nil.
@@ -619,15 +619,15 @@ RecorzKernelDoIt:
 | tool toolClass |
 toolClass := KernelInstaller classNamed: 'WorkspaceTool'.
 tool := toolClass new namedObjectOrNil: 'BootWorkspaceTool'.
-tool = nil ifTrue: [KernelInstaller rememberObject: (toolClass new) named: 'BootWorkspaceTool'].
-tool = nil ifFalse: [
+(tool = nil) ifTrue: [KernelInstaller rememberObject: (toolClass new) named: 'BootWorkspaceTool'].
+(tool = nil) ifFalse: [
     (tool class = toolClass) ifFalse: [
         KernelInstaller rememberObject: (toolClass new) named: 'BootWorkspaceTool']].
 !
 RecorzKernelDoIt:
 | tool |
 tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
-tool workspaceName = nil ifTrue: [tool setWorkspaceName: 'Workspace'].
+(tool workspaceName = nil) ifTrue: [tool setWorkspaceName: 'Workspace'].
 !
 RecorzKernelClass: #TextCursor instanceVariableNames: 'index line column topLine'
 !
@@ -708,11 +708,11 @@ prepareListSelectionForCount: count
         self setSelectedIndex: 0 listTop: 0.
         ^0].
     nextSelectedIndex := selectedIndex.
-    nextSelectedIndex = nil ifTrue: [nextSelectedIndex := 0].
+    (nextSelectedIndex = nil) ifTrue: [nextSelectedIndex := 0].
     nextSelectedIndex < 0 ifTrue: [nextSelectedIndex := 0].
     nextSelectedIndex > (count - 1) ifTrue: [nextSelectedIndex := count - 1].
     nextListTop := listTopLine.
-    nextListTop = nil ifTrue: [nextListTop := 0].
+    (nextListTop = nil) ifTrue: [nextListTop := 0].
     nextListTop < 0 ifTrue: [nextListTop := 0].
     nextListTop > nextSelectedIndex ifTrue: [nextListTop := nextSelectedIndex].
     self setSelectedIndex: nextSelectedIndex listTop: nextListTop.
@@ -720,17 +720,17 @@ prepareListSelectionForCount: count
 !
 prepareBrowserStateForMode: aMode
     aMode = 1 ifTrue: [
-        selectedIndex = nil ifTrue: [selectedIndex := 0].
-        listTopLine = nil ifTrue: [listTopLine := 0].
+        (selectedIndex = nil) ifTrue: [selectedIndex := 0].
+        (listTopLine = nil) ifTrue: [listTopLine := 0].
         ^selectedIndex].
     self setSelectedIndex: 0 listTop: 0.
     ^0
 !
 setBrowserReturnViewKind: aViewKind targetName: aTargetName
-    aViewKind = nil ifTrue: [
+    (aViewKind = nil) ifTrue: [
         returnState := nil.
         ^nil].
-    returnState = nil ifTrue: [
+    (returnState = nil) ifTrue: [
         returnState := (KernelInstaller classNamed: 'WorkspaceReturnState') new].
     returnState setContents: aViewKind cursor: aTargetName selection: selectedIndex visibleOrigin: listTopLine.
     ^aViewKind
@@ -738,26 +738,26 @@ setBrowserReturnViewKind: aViewKind targetName: aTargetName
 rememberDebuggerProcess: processName frameIndex: frameIndex frameCount: frameCount
     | detailMode debuggerStateClass |
     debuggerStateClass := KernelInstaller classNamed: 'WorkspaceReturnState'.
-    debuggerState = nil ifTrue: [
+    (debuggerState = nil) ifTrue: [
         debuggerState := debuggerStateClass new].
     debuggerState class = debuggerStateClass ifFalse: [
         debuggerState := debuggerStateClass new].
     detailMode := debuggerState visibleOrigin.
-    detailMode = nil ifTrue: [detailMode := 'frame'].
+    (detailMode = nil) ifTrue: [detailMode := 'frame'].
     debuggerState setContents: processName cursor: frameIndex selection: frameCount visibleOrigin: detailMode.
     ^processName
 !
 restoreOn: workspace tool: tool
     | count returnListTop returnSelectedIndex returnTargetName returnViewKind |
-    returnState = nil ifTrue: [^nil].
+    (returnState = nil) ifTrue: [^nil].
     returnViewKind := returnState contents.
     returnTargetName := returnState cursor.
     returnSelectedIndex := 0.
     returnListTop := 0.
-    returnState selection = nil ifFalse: [returnSelectedIndex := returnState selection].
-    returnState visibleOrigin = nil ifFalse: [returnListTop := returnState visibleOrigin].
+    (returnState selection = nil) ifFalse: [returnSelectedIndex := returnState selection].
+    (returnState visibleOrigin = nil) ifFalse: [returnListTop := returnState visibleOrigin].
     returnState := nil.
-    returnViewKind = nil ifTrue: [^nil].
+    (returnViewKind = nil) ifTrue: [^nil].
     workspace setCurrentTargetName: returnTargetName.
     workspace setCurrentViewKind: returnViewKind.
     count := nil.
@@ -768,10 +768,10 @@ restoreOn: workspace tool: tool
         returnTargetName = 'OBJECT INSPECTOR' ifTrue: [count := 6].
         returnTargetName = 'PROCESS BROWSER' ifTrue: [count := Workspace processCount]].
     self setSelectedIndex: returnSelectedIndex listTop: returnListTop.
-    count = nil ifFalse: [self prepareListSelectionForCount: count].
+    (count = nil) ifFalse: [self prepareListSelectionForCount: count].
     tool setStatusText: ''.
     tool setFeedbackText: ''.
-    count = nil ifFalse: [^4].
+    (count = nil) ifFalse: [^4].
     Workspace reopen.
     ^9
 !
@@ -844,7 +844,7 @@ ensureProcessNamed: processName label: aLabel state: aState context: aContext
     | tool process |
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
     process := tool namedObjectOrNil: processName.
-    process = nil ifTrue: [
+    (process = nil) ifTrue: [
         process := (KernelInstaller classNamed: 'Process') new.
         KernelInstaller rememberObject: process named: processName].
     process setLabel: aLabel state: aState context: aContext.
@@ -904,12 +904,12 @@ setVisibleOriginTop: aTopLine left: aLeftColumn
 isModified
     | current |
     current := self contents.
-    current = nil ifTrue: [^false].
-    lastSource = nil ifTrue: [^current size > 0].
+    (current = nil) ifTrue: [^false].
+    (lastSource = nil) ifTrue: [^current size > 0].
     ^(current = lastSource) ifTrue: [false] ifFalse: [true]
 !
 currentTargetLabel
-    currentTargetName = nil ifTrue: [^self workspaceName].
+    (currentTargetName = nil) ifTrue: [^self workspaceName].
     ^currentTargetName
 !
 collapseSelectionToCursor
@@ -1085,9 +1085,9 @@ openOn: aWorkspace mode: aMode
     escape := 0.
     browserModelClass := KernelInstaller classNamed: 'WorkspaceBrowserModel'.
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
-    browserModel = nil ifTrue: [
+    (browserModel = nil) ifTrue: [
         browserModel := tool namedObjectOrNil: 'BootWorkspaceBrowserModel'].
-    browserModel = nil ifTrue: [
+    (browserModel = nil) ifTrue: [
         browserModel := browserModelClass new].
     browserModel class = browserModelClass ifFalse: [
         browserModel := browserModelClass new].
@@ -1111,7 +1111,7 @@ openOn: aWorkspace mode: aMode
         ^4].
     aMode = 3 ifTrue: [
         workspace setCurrentViewKind: 21.
-        workspace currentTargetName = nil ifTrue: [
+        (workspace currentTargetName = nil) ifTrue: [
             workspace setCurrentTargetName: nil.
             browserModel setSelectedIndex: 0 listTop: 0.
             Workspace cursor moveToIndex: 0 line: 0 column: 0 topLine: Workspace visibleTopLine.
@@ -1120,7 +1120,7 @@ openOn: aWorkspace mode: aMode
             ^4].
         self prepareBrowserStateForMode: 1.
         ^4].
-    workspace currentViewKind = nil ifTrue: [workspace setCurrentViewKind: 18].
+    (workspace currentViewKind = nil) ifTrue: [workspace setCurrentViewKind: 18].
     self browserListViewActive ifTrue: [
         self prepareBrowserStateForMode: 1.
         ^4].
@@ -1230,7 +1230,7 @@ openingMenuOptionCount
 isReadOnlyDetailTarget
     | targetName |
     targetName := workspace currentTargetName.
-    targetName = nil ifTrue: [^false].
+    (targetName = nil) ifTrue: [^false].
     targetName = 'OBJECT INSPECTOR DETAIL' ifTrue: [^true].
     targetName = 'DEBUGGER' ifTrue: [^true].
     targetName = 'Memory Report' ifTrue: [^true].
@@ -1260,8 +1260,8 @@ selectedProcessName
 currentDebuggerTargetName
     | state |
     state := self currentDebuggerState.
-    state = nil ifTrue: [^''].
-    state contents = nil ifTrue: [^''].
+    (state = nil) ifTrue: [^''].
+    (state contents = nil) ifTrue: [^''].
     ^state contents
 !
 currentDebuggerState
@@ -1270,7 +1270,7 @@ currentDebuggerState
 setDebuggerDetailMode: aDetailMode
     | count state |
     state := self currentDebuggerState.
-    state = nil ifTrue: [^4].
+    (state = nil) ifTrue: [^4].
     count := Workspace contextFrameCountNamed: self currentDebuggerTargetName.
     state setContents: state contents cursor: self selectedIndex + 1 selection: count visibleOrigin: aDetailMode.
     ^4
@@ -1278,10 +1278,10 @@ setDebuggerDetailMode: aDetailMode
 refreshDebuggerState
     | count detailMode frameIndex state |
     state := self currentDebuggerState.
-    state = nil ifTrue: [^4].
+    (state = nil) ifTrue: [^4].
     count := Workspace contextFrameCountNamed: self currentDebuggerTargetName.
     detailMode := state visibleOrigin.
-    detailMode = nil ifTrue: [detailMode := 'frame'].
+    (detailMode = nil) ifTrue: [detailMode := 'frame'].
     frameIndex := self selectedIndex + 1.
     count = 0 ifTrue: [frameIndex := 0].
     count > 0 ifTrue: [
@@ -1302,7 +1302,7 @@ debuggerProceed
         tool setFeedbackText: 'READ ONLY DEBUGGER'.
         ^4].
     process := KernelInstaller objectNamed: self currentDebuggerTargetName.
-    process = nil ifTrue: [^4].
+    (process = nil) ifTrue: [^4].
     tool setStatusText: ''.
     tool setFeedbackText: ''.
     process resume.
@@ -1323,7 +1323,7 @@ debuggerStepInto
         tool setFeedbackText: 'STEP FROM FRAME 1'.
         ^4].
     process := KernelInstaller objectNamed: self currentDebuggerTargetName.
-    process = nil ifTrue: [^4].
+    (process = nil) ifTrue: [^4].
     tool setStatusText: ''.
     tool setFeedbackText: ''.
     process stepInto.
@@ -1343,7 +1343,7 @@ debuggerStepOver
         tool setFeedbackText: 'STEP FROM FRAME 1'.
         ^4].
     process := KernelInstaller objectNamed: self currentDebuggerTargetName.
-    process = nil ifTrue: [^4].
+    (process = nil) ifTrue: [^4].
     tool setStatusText: ''.
     tool setFeedbackText: ''.
     process stepOver.
@@ -1363,14 +1363,14 @@ currentListCount
             state := self currentDebuggerState.
             frameIndex := 0.
             count > 0 ifTrue: [frameIndex := 1].
-            state = nil ifFalse: [
-                state cursor = nil ifFalse: [frameIndex := state cursor]].
+            (state = nil) ifFalse: [
+                (state cursor = nil) ifFalse: [frameIndex := state cursor]].
             count = 0 ifTrue: [
-                state = nil ifFalse: [
+                (state = nil) ifFalse: [
                     state setContents: self currentDebuggerTargetName cursor: 0 selection: 0 visibleOrigin: state visibleOrigin].
                 browserModel setSelectedIndex: 0 listTop: 0.
                 ^0].
-            state = nil ifFalse: [
+            (state = nil) ifFalse: [
                 state setContents: self currentDebuggerTargetName cursor: frameIndex selection: count visibleOrigin: state visibleOrigin].
             browserModel setSelectedIndex: frameIndex - 1 listTop: self listTopLine.
             browserModel prepareListSelectionForCount: count.
@@ -1387,11 +1387,11 @@ prepareListSelectionForCount: count
         browserModel setSelectedIndex: 0 listTop: 0.
         ^0].
     nextSelectedIndex := self selectedIndex.
-    nextSelectedIndex = nil ifTrue: [nextSelectedIndex := 0].
+    (nextSelectedIndex = nil) ifTrue: [nextSelectedIndex := 0].
     nextSelectedIndex < 0 ifTrue: [nextSelectedIndex := 0].
     nextSelectedIndex > (count - 1) ifTrue: [nextSelectedIndex := count - 1].
     nextListTop := self listTopLine.
-    nextListTop = nil ifTrue: [nextListTop := 0].
+    (nextListTop = nil) ifTrue: [nextListTop := 0].
     nextListTop < 0 ifTrue: [nextListTop := 0].
     nextListTop > nextSelectedIndex ifTrue: [nextListTop := nextSelectedIndex].
     browserModel setSelectedIndex: nextSelectedIndex listTop: nextListTop.
@@ -1399,8 +1399,8 @@ prepareListSelectionForCount: count
 !
 prepareBrowserStateForMode: aMode
     aMode = 1 ifTrue: [
-        self selectedIndex = nil ifTrue: [browserModel setSelectedIndex: 0 listTop: 0].
-        self listTopLine = nil ifTrue: [browserModel setSelectedIndex: self selectedIndex listTop: 0].
+        (self selectedIndex = nil) ifTrue: [browserModel setSelectedIndex: 0 listTop: 0].
+        (self listTopLine = nil) ifTrue: [browserModel setSelectedIndex: self selectedIndex listTop: 0].
         ^self prepareListSelectionForCount: self currentListCount].
     browserModel setSelectedIndex: 0 listTop: 0.
     ^self prepareListSelectionForCount: self currentListCount
@@ -1455,12 +1455,12 @@ currentBrowserSourceText
         self currentListCount = 0 ifTrue: [^'NO DEBUG FRAMES'].
         state := self currentDebuggerState.
         detailMode := 'frame'.
-        state = nil ifFalse: [
-            state visibleOrigin = nil ifFalse: [detailMode := state visibleOrigin]].
+        (state = nil) ifFalse: [
+            (state visibleOrigin = nil) ifFalse: [detailMode := state visibleOrigin]].
         detailMode = 'frame' ifTrue: [
             ^Workspace contextFrameDetailAt: self selectedIndex + 1 named: self currentDebuggerTargetName].
         context := Workspace contextFrameAt: self selectedIndex + 1 named: self currentDebuggerTargetName.
-        context = nil ifTrue: [^'NO DEBUG FRAMES'].
+        (context = nil) ifTrue: [^'NO DEBUG FRAMES'].
         detailMode = 'receiver' ifTrue: [^context receiverDetail].
         detailMode = 'sender' ifTrue: [^context senderDetail].
         detailMode = 'temporaries' ifTrue: [^context temporariesDetail].
@@ -1499,7 +1499,7 @@ moveListSelectionBy: delta
     browserModel setSelectedIndex: nextIndex listTop: nextListTop.
     workspace currentTargetName = 'DEBUGGER' ifTrue: [
         state := self currentDebuggerState.
-        state = nil ifFalse: [
+        (state = nil) ifFalse: [
             state setContents: state contents cursor: nextIndex + 1 selection: count visibleOrigin: state visibleOrigin].
         browserModel prepareListSelectionForCount: count].
     ^5
@@ -1554,7 +1554,7 @@ currentStatusText
         processName := self selectedProcessName.
         processName size = 0 ifTrue: [^'PROCESS BROWSER'].
         process := KernelInstaller objectNamed: processName.
-        process = nil ifTrue: [^'PROCESS BROWSER'].
+        (process = nil) ifTrue: [^'PROCESS BROWSER'].
         ^process state].
     self isObjectInspectorBrowser ifTrue: [^'OBJECT INSPECTOR'].
     viewKind = 14 ifTrue: [^'INTERACTIVE PACKAGE LIST'].
@@ -1717,11 +1717,11 @@ returnFromDebuggerBrowser
     | plainContents plainState redrawCode tool |
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
     redrawCode := browserModel restoreOn: workspace tool: tool.
-    redrawCode = nil ifTrue: [
+    (redrawCode = nil) ifTrue: [
         plainState := tool namedObjectOrNil: 'BootWorkspacePlainState'.
-        plainState = nil ifFalse: [
+        (plainState = nil) ifFalse: [
             plainContents := plainState contents.
-            plainContents = nil ifFalse: [^tool restorePlainWorkspaceState]].
+            (plainContents = nil) ifFalse: [^tool restorePlainWorkspaceState]].
         workspace currentTargetName = 'DEBUGGER' ifTrue: [
             workspace setCurrentTargetName: 'PROCESS BROWSER'.
             workspace setCurrentViewKind: 21.
@@ -1780,7 +1780,7 @@ handleBrowserByte: aByte
         ^self openSelectedPackageSource].
     aByte = 15 ifTrue: [
         workspace currentTargetName = 'DEBUGGER' ifTrue: [^self returnFromDebuggerBrowser].
-        browserModel contents = nil ifFalse: [^self returnFromDebuggerBrowser].
+        (browserModel contents = nil) ifFalse: [^self returnFromDebuggerBrowser].
         workspace currentViewKind = 20 ifTrue: [^9].
         tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
         workspace currentViewKind = 14 ifTrue: [
@@ -1800,7 +1800,7 @@ handleBrowserByte: aByte
         ^9].
     aByte = 4 ifTrue: [
         workspace currentTargetName = 'DEBUGGER' ifTrue: [^self returnFromDebuggerBrowser].
-        browserModel contents = nil ifFalse: [^self returnFromDebuggerBrowser].
+        (browserModel contents = nil) ifFalse: [^self returnFromDebuggerBrowser].
         workspace currentViewKind = 20 ifTrue: [^9].
         tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
         workspace currentViewKind = 14 ifTrue: [
@@ -1942,7 +1942,7 @@ openSelectedContextDebugger
     frameCount := Workspace contextFrameCountNamed: processName.
     frameIndex := frameCount = 0 ifTrue: [0] ifFalse: [1].
     browserState := tool namedObjectOrNil: 'BootWorkspaceBrowserModel'.
-    browserState = nil ifTrue: [
+    (browserState = nil) ifTrue: [
         browserState := (KernelInstaller classNamed: 'WorkspaceBrowserModel') new.
         KernelInstaller rememberObject: browserState named: 'BootWorkspaceBrowserModel'].
     browserState rememberDebuggerProcess: processName frameIndex: frameIndex frameCount: frameCount.
@@ -1958,9 +1958,9 @@ openSelectedContextDebugger
 !
 rememberCurrentPlainWorkspaceStateOnTool: tool
     | plainContents |
-    workspace currentTargetName = nil ifFalse: [^self].
+    (workspace currentTargetName = nil) ifFalse: [^self].
     plainContents := workspace contents.
-    plainContents = nil ifTrue: [plainContents := ''].
+    (plainContents = nil) ifTrue: [plainContents := ''].
     tool rememberPlainWorkspaceStateContents: plainContents.
     tool setBrowserReturnViewKind: nil targetName: nil.
     ^self
@@ -1969,8 +1969,8 @@ rememberPlainWorkspaceStateIfNeeded
     | tool plainState |
     tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
     plainState := tool namedObjectOrNil: 'BootWorkspacePlainState'.
-    plainState = nil ifTrue: [^self rememberCurrentPlainWorkspaceStateOnTool: tool].
-    plainState contents = nil ifTrue: [^self rememberCurrentPlainWorkspaceStateOnTool: tool].
+    (plainState = nil) ifTrue: [^self rememberCurrentPlainWorkspaceStateOnTool: tool].
+    (plainState contents = nil) ifTrue: [^self rememberCurrentPlainWorkspaceStateOnTool: tool].
     tool setBrowserReturnViewKind: nil targetName: nil.
     ^self
 !
@@ -1978,14 +1978,14 @@ packageSourceToOpenFor: packageName priorTarget: priorTarget
     | source |
     source := KernelInstaller fileOutPackageNamed: packageName.
     priorTarget = packageName ifFalse: [^source].
-    workspace contents = nil ifTrue: [^source].
+    (workspace contents = nil) ifTrue: [^source].
     ^workspace contents
 !
 classSourceToOpenFor: className priorTarget: priorTarget
     | source |
     source := KernelInstaller fileOutClassNamed: className.
     priorTarget = className ifFalse: [^source].
-    workspace contents = nil ifTrue: [^source].
+    (workspace contents = nil) ifTrue: [^source].
     ^workspace contents
 !
 handleEditorByte: aByte tool: tool
@@ -2047,8 +2047,8 @@ RecorzKernelDoIt:
 tool := KernelInstaller objectNamed: 'BootWorkspaceTool'.
 sessionClass := KernelInstaller classNamed: 'WorkspaceSession'.
 session := tool namedObjectOrNil: 'BootWorkspaceSession'.
-session = nil ifTrue: [KernelInstaller rememberObject: (sessionClass new) named: 'BootWorkspaceSession'].
-session = nil ifFalse: [
+(session = nil) ifTrue: [KernelInstaller rememberObject: (sessionClass new) named: 'BootWorkspaceSession'].
+(session = nil) ifFalse: [
     (session class = sessionClass) ifFalse: [
         KernelInstaller rememberObject: (sessionClass new) named: 'BootWorkspaceSession']].
 !
