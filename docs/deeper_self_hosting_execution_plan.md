@@ -78,9 +78,9 @@ As of `2026-03-22`, the project begins this plan from the following base:
 
 Immediate next queue:
 
-1. `DS0.1` Base stability recheck
-2. `DS0.2` RV64 validation guard
-3. `DS1.1` Host source-discovery and registry inventory
+1. `DS2.1` Runtime-metadata surface expansion
+2. `DS2.2` Image-visible runtime-binding summary
+3. `DS2.3` Regenerated-source browser coherence
 
 ## Working Lanes
 
@@ -151,7 +151,7 @@ Preserve the existing RV32 development loop while the self-hosting slice moves.
 
 ### Open Tasks
 
-- [ ] `DS0.1` Base stability recheck
+- [x] `DS0.1` Base stability recheck
   Files:
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_snapshot_integration.py`
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_serial_integration.py`
@@ -165,7 +165,7 @@ Preserve the existing RV32 development loop while the self-hosting slice moves.
   - `DS-BUNDLE-RV32-BASE`
   - recorded base stability bundle
 
-- [ ] `DS0.2` RV64 validation guard
+- [x] `DS0.2` RV64 validation guard
   Files:
   - `/Users/david/repos/recorz/tests/test_qemu_riscv64_validation_smoke.py`
   - `/Users/david/repos/recorz/tests/test_qemu_riscv_render_integration.py`
@@ -184,7 +184,7 @@ Classify what the host path truly needs to own.
 
 ### Open Tasks
 
-- [ ] `DS1.1` Host source-discovery and registry inventory
+- [x] `DS1.1` Host source-discovery and registry inventory
   Files:
   - `/Users/david/repos/recorz/tools/build_qemu_riscv_mvp_image.py`
   - `/Users/david/repos/recorz/docs/`
@@ -207,7 +207,7 @@ Classify what the host path truly needs to own.
   - updated stage 1 inventory note
   - `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv_mvp_lowering`
 
-- [ ] `DS1.2` Runtime-binding handoff inventory
+- [x] `DS1.2` Runtime-binding handoff inventory
   Files:
   - `/Users/david/repos/recorz/tools/generate_qemu_riscv_mvp_runtime_bindings_header.py`
   - `/Users/david/repos/recorz/tools/build_qemu_riscv_mvp_image.py`
@@ -227,7 +227,7 @@ Classify what the host path truly needs to own.
   - updated stage 1 inventory note
   - `python3 -m py_compile /Users/david/repos/recorz/tools/build_qemu_riscv_mvp_image.py /Users/david/repos/recorz/tools/generate_qemu_riscv_mvp_runtime_bindings_header.py`
 
-- [ ] `DS1.3` Stage 1 closure note
+- [x] `DS1.3` Stage 1 closure note
   Files:
   - `/Users/david/repos/recorz/docs/`
   Outputs:
