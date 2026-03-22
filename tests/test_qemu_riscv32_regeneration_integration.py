@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import tempfile
@@ -199,6 +200,58 @@ class QemuRiscv32RegenerationIntegrationTests(unittest.TestCase):
             )
         return output_path.read_text(encoding="utf-8")
 
+    def describe_runtime_binding_surface_from_kernel_source(self, *, kernel_source_path: Path) -> dict[str, object]:
+        env = dict(os.environ)
+        env["RECORZ_MVP_KERNEL_SOURCE_BUNDLE"] = str(kernel_source_path)
+        result = subprocess.run(
+            [
+                "python3",
+                "-c",
+                (
+                    "import json; "
+                    "import build_qemu_riscv_mvp_image as mvp; "
+                    "print(json.dumps(mvp.describe_generated_runtime_binding_surface()))"
+                ),
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        if result.returncode != 0:
+            self.fail(
+                "runtime binding surface description from regenerated kernel source failed\n"
+                f"stdout:\n{result.stdout}\n"
+                f"stderr:\n{result.stderr}"
+            )
+        return json.loads(result.stdout)
+
+    def describe_kernel_source_authority_for_bundle(self, *, kernel_source_path: Path) -> dict[str, object]:
+        env = dict(os.environ)
+        env["RECORZ_MVP_KERNEL_SOURCE_BUNDLE"] = str(kernel_source_path)
+        result = subprocess.run(
+            [
+                "python3",
+                "-c",
+                (
+                    "import json; "
+                    "import build_qemu_riscv_mvp_image as mvp; "
+                    "print(json.dumps(mvp.describe_kernel_source_authority()))"
+                ),
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        if result.returncode != 0:
+            self.fail(
+                "kernel source authority description from regenerated bundle failed\n"
+                f"stdout:\n{result.stdout}\n"
+                f"stderr:\n{result.stderr}"
+            )
+        return json.loads(result.stdout)
+
     def build_image_from_regenerated_sources(
         self,
         *,
@@ -302,6 +355,12 @@ class QemuRiscv32RegenerationIntegrationTests(unittest.TestCase):
                 kernel_source_path=regenerated_kernel_source_path,
                 output_path=bindings_output,
             )
+            surface_summary = self.describe_runtime_binding_surface_from_kernel_source(
+                kernel_source_path=regenerated_kernel_source_path,
+            )
+            authority = self.describe_kernel_source_authority_for_bundle(
+                kernel_source_path=regenerated_kernel_source_path,
+            )
             inspect_output = self.build_image_from_regenerated_sources(
                 kernel_source_path=regenerated_kernel_source_path,
                 boot_source_path=regenerated_source_path,
@@ -310,6 +369,29 @@ class QemuRiscv32RegenerationIntegrationTests(unittest.TestCase):
 
             self.assertIn("RECORZ_MVP_SELECTOR_SEED_BOOT_CONTENTS = 93", header_text)
             self.assertIn("struct recorz_mvp_seed_class_source_record {", header_text)
+            self.assertIn(
+                f"#define RECORZ_MVP_GENERATED_SELECTOR_RECORD_COUNT {surface_summary['selector_count'] + 1}U",
+                header_text,
+            )
+            self.assertIn(
+                (
+                    "#define RECORZ_MVP_GENERATED_PRIMITIVE_BINDING_OWNER_RECORD_COUNT "
+                    f"{surface_summary['primitive_binding_owner_count'] + 1}U"
+                ),
+                header_text,
+            )
+            self.assertEqual(
+                surface_summary["surface_names"],
+                [
+                    "seed_class_sources",
+                    "selectors",
+                    "primitive_bindings",
+                    "primitive_binding_owners",
+                ],
+            )
+            self.assertEqual(authority["mode"], "bundle+directory")
+            self.assertEqual(authority["registry_source"], str(regenerated_kernel_source_path))
+            self.assertEqual(authority["method_source"], str(ROOT / "kernel" / "mvp"))
             self.assertIn("RecorzKernelBootObject: #DefaultForm", _regenerated_kernel_source)
             self.assertIn("RecorzKernelRoot: #default_form", _regenerated_kernel_source)
             self.assertIn("RecorzKernelSelector: #show:", _regenerated_kernel_source)

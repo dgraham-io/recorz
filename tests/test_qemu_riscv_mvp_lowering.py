@@ -465,8 +465,10 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(summary.runtime_spec_path, str(mvp.RUNTIME_SPEC_PATH))
         self.assertEqual(summary.source_root, str(ROOT / "kernel" / "mvp"))
         self.assertIn("generated runtime bindings header", summary.generated_text_outputs)
+        self.assertIn("generated runtime binding surface summary", summary.generated_text_outputs)
         self.assertIn("image manifest", summary.generated_binary_outputs)
         self.assertIn("selector declarations", summary.derived_metadata_surfaces)
+        self.assertIn("explicit registry surface", summary.derived_metadata_surfaces)
         self.assertIn("primitive bindings", summary.derived_metadata_surfaces)
         self.assertEqual(layout.section_count, 3)
         self.assertEqual(layout.feature_flags, mvp.IMAGE_FEATURE_FNV1A32)
@@ -477,6 +479,52 @@ class QemuRiscvMvpLoweringTests(unittest.TestCase):
         self.assertEqual(layout.seed_offset, seed_section[2])
         self.assertEqual(layout.seed_length, seed_section[3])
         self.assertEqual(layout.seed_offset, layout.program_offset + layout.program_length)
+        self.assertEqual([section.kind for section in layout.sections], [
+            mvp.IMAGE_SECTION_ENTRY,
+            mvp.IMAGE_SECTION_PROGRAM,
+            mvp.IMAGE_SECTION_SEED,
+        ])
+        self.assertEqual([section.offset for section in layout.sections], [
+            layout.entry_offset,
+            layout.program_offset,
+            layout.seed_offset,
+        ])
+
+    def test_builds_explicit_runtime_binding_surface_summary(self) -> None:
+        surface = mvp.build_generated_runtime_binding_surface()
+        summary = mvp.describe_generated_runtime_binding_surface()
+        authority = mvp.describe_kernel_source_authority()
+        header = mvp.render_generated_runtime_bindings_header()
+
+        self.assertGreater(len(surface.seed_class_sources), 0)
+        self.assertGreater(len(surface.selectors), 0)
+        self.assertGreater(len(surface.primitive_bindings), 0)
+        self.assertGreater(len(surface.primitive_binding_owners), 0)
+        self.assertEqual(summary["seed_class_source_count"], len(surface.seed_class_sources))
+        self.assertEqual(summary["selector_count"], len(surface.selectors))
+        self.assertEqual(summary["primitive_binding_count"], len(surface.primitive_bindings))
+        self.assertEqual(summary["primitive_binding_owner_count"], len(surface.primitive_binding_owners))
+        self.assertEqual(summary["authority"], "host-emitted header from explicit registry surface")
+        self.assertEqual(
+            summary["surface_names"],
+            ("seed_class_sources", "selectors", "primitive_bindings", "primitive_binding_owners"),
+        )
+        self.assertEqual(authority["mode"], "directory")
+        self.assertEqual(authority["registry_source"], str(ROOT / "kernel" / "mvp"))
+        self.assertEqual(authority["method_source"], str(ROOT / "kernel" / "mvp"))
+        self.assertIn(
+            f"#define RECORZ_MVP_GENERATED_SELECTOR_RECORD_COUNT {len(surface.selectors) + 1}U",
+            header,
+        )
+        self.assertIn(
+            f"#define RECORZ_MVP_GENERATED_PRIMITIVE_BINDING_OWNER_RECORD_COUNT {len(surface.primitive_binding_owners) + 1}U",
+            header,
+        )
+        self.assertEqual(surface.selectors[0].value, min(record.value for record in surface.selectors))
+        self.assertEqual(
+            [record.value for record in surface.primitive_bindings],
+            sorted(record.value for record in surface.primitive_bindings),
+        )
 
     def test_compiles_kernel_method_source_to_tiny_compiled_method(self) -> None:
         self.assertEqual(

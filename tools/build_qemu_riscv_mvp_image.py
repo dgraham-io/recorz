@@ -278,6 +278,60 @@ class BuilderOwnershipSummary:
 
 
 @dataclass(frozen=True)
+class SeedClassSourceRegistryRecord:
+    class_name: str
+    relative_path: str
+    canonical_source: str
+    builder_source: str
+    descriptor_order: int
+    object_kind_order: int
+    source_boot_order: int | None
+    instance_variables: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class SelectorRegistryRecord:
+    selector: str
+    constant_name: str
+    relative_path: str
+    value: int
+    declaration_order: int
+
+
+@dataclass(frozen=True)
+class PrimitiveBindingRegistryRecord:
+    binding_name: str
+    constant_name: str
+    handler_name: str
+    value: int
+
+
+@dataclass(frozen=True)
+class PrimitiveBindingOwnerRegistryRecord:
+    primitive_binding_value: int
+    entry_name: str
+    class_name: str
+    selector: str
+    argument_count: int
+    relative_path: str
+
+
+@dataclass(frozen=True)
+class GeneratedRuntimeBindingSurface:
+    seed_class_sources: tuple[SeedClassSourceRegistryRecord, ...]
+    selectors: tuple[SelectorRegistryRecord, ...]
+    primitive_bindings: tuple[PrimitiveBindingRegistryRecord, ...]
+    primitive_binding_owners: tuple[PrimitiveBindingOwnerRegistryRecord, ...]
+
+
+@dataclass(frozen=True)
+class ImageManifestSectionLayout:
+    kind: int
+    offset: int
+    length: int
+
+
+@dataclass(frozen=True)
 class ImageManifestLayout:
     section_count: int
     feature_flags: int
@@ -287,6 +341,7 @@ class ImageManifestLayout:
     entry_length: int
     program_length: int
     seed_length: int
+    sections: tuple[ImageManifestSectionLayout, ...]
 
 
 @dataclass(frozen=True)
@@ -712,6 +767,21 @@ def load_kernel_source_units() -> list[KernelSourceUnit]:
     if bundle_path_text:
         return load_kernel_source_units_from_bundle(Path(bundle_path_text))
     return load_kernel_source_units_from_directory()
+
+
+def describe_kernel_source_authority() -> dict[str, object]:
+    bundle_path_text = os.environ.get(KERNEL_SOURCE_BUNDLE_ENV)
+    if bundle_path_text:
+        return {
+            "registry_source": str(Path(bundle_path_text)),
+            "method_source": str(KERNEL_MVP_ROOT),
+            "mode": "bundle+directory",
+        }
+    return {
+        "registry_source": str(KERNEL_MVP_ROOT),
+        "method_source": str(KERNEL_MVP_ROOT),
+        "mode": "directory",
+    }
 
 
 def parse_kernel_boot_object_field_specs(field_source: str, relative_path: str) -> tuple[tuple[str, object], ...]:
@@ -1824,7 +1894,75 @@ COMPILED_METHOD_ENTRY_ORDER = [
 ]
 
 
-def append_generated_seed_class_source_registry(lines: list[str]) -> None:
+def build_generated_runtime_binding_surface() -> GeneratedRuntimeBindingSurface:
+    return GeneratedRuntimeBindingSurface(
+        seed_class_sources=tuple(
+            SeedClassSourceRegistryRecord(
+                class_name=class_header.class_name,
+                relative_path=KERNEL_CLASS_RELATIVE_PATHS_BY_NAME[class_header.class_name],
+                canonical_source=KERNEL_CANONICAL_CLASS_SOURCES_BY_NAME[class_header.class_name],
+                builder_source=KERNEL_BUILDER_CLASS_SOURCES_BY_NAME[class_header.class_name],
+                descriptor_order=class_header.descriptor_order,
+                object_kind_order=class_header.object_kind_order,
+                source_boot_order=class_header.source_boot_order,
+                instance_variables=class_header.instance_variables,
+            )
+            for class_header in KERNEL_CLASS_HEADERS_IN_OBJECT_KIND_ORDER
+        ),
+        selectors=tuple(
+            SelectorRegistryRecord(
+                selector=declaration.selector,
+                constant_name=SELECTOR_IDS[declaration.selector],
+                relative_path=declaration.relative_path,
+                value=SELECTOR_VALUES[SELECTOR_IDS[declaration.selector]],
+                declaration_order=declaration.selector_order,
+            )
+            for declaration in KERNEL_SELECTOR_DECLARATIONS_IN_ORDER
+        ),
+        primitive_bindings=tuple(
+            PrimitiveBindingRegistryRecord(
+                binding_name=binding_name,
+                constant_name=kernel_primitive_binding_constant_name(binding_name),
+                handler_name=kernel_primitive_handler_name(binding_name),
+                value=binding_id,
+            )
+            for binding_name, binding_id in sorted(PRIMITIVE_BINDING_VALUES.items(), key=lambda item: item[1])
+        ),
+        primitive_binding_owners=tuple(
+            PrimitiveBindingOwnerRegistryRecord(
+                primitive_binding_value=PRIMITIVE_BINDING_VALUES[owner.binding_name],
+                entry_name=owner.entry_name,
+                class_name=owner.class_name,
+                selector=owner.selector,
+                argument_count=owner.argument_count,
+                relative_path=owner.relative_path,
+            )
+            for owner in PRIMITIVE_BINDING_OWNERS_IN_ENTRY_ORDER
+        ),
+    )
+
+
+def describe_generated_runtime_binding_surface() -> dict[str, object]:
+    surface = build_generated_runtime_binding_surface()
+    return {
+        "seed_class_source_count": len(surface.seed_class_sources),
+        "selector_count": len(surface.selectors),
+        "primitive_binding_count": len(surface.primitive_bindings),
+        "primitive_binding_owner_count": len(surface.primitive_binding_owners),
+        "authority": "host-emitted header from explicit registry surface",
+        "surface_names": (
+            "seed_class_sources",
+            "selectors",
+            "primitive_bindings",
+            "primitive_binding_owners",
+        ),
+    }
+
+
+def append_generated_seed_class_source_registry(
+    lines: list[str],
+    surface: GeneratedRuntimeBindingSurface,
+) -> None:
     lines.extend(
         [
             "struct recorz_mvp_seed_class_source_record {",
@@ -1843,23 +1981,23 @@ def append_generated_seed_class_source_registry(lines: list[str]) -> None:
             "    {0, 0, 0, 0, 0, 0, -1, 0, {0, 0, 0, 0}},",
         ]
     )
-    for class_header in KERNEL_CLASS_HEADERS_IN_OBJECT_KIND_ORDER:
-        instance_variable_literals = [json.dumps(name) for name in class_header.instance_variables]
+    for record in surface.seed_class_sources:
+        instance_variable_literals = [json.dumps(name) for name in record.instance_variables]
         while len(instance_variable_literals) < 4:
             instance_variable_literals.append("0")
-        source_boot_order = -1 if class_header.source_boot_order is None else class_header.source_boot_order
+        source_boot_order = -1 if record.source_boot_order is None else record.source_boot_order
         lines.append(
             "    {"
             + ", ".join(
                 [
-                    json.dumps(class_header.class_name),
-                    json.dumps(KERNEL_CLASS_RELATIVE_PATHS_BY_NAME[class_header.class_name]),
-                    json.dumps(KERNEL_CANONICAL_CLASS_SOURCES_BY_NAME[class_header.class_name]),
-                    json.dumps(KERNEL_BUILDER_CLASS_SOURCES_BY_NAME[class_header.class_name]),
-                    f"{class_header.descriptor_order}",
-                    f"{class_header.object_kind_order}",
+                    json.dumps(record.class_name),
+                    json.dumps(record.relative_path),
+                    json.dumps(record.canonical_source),
+                    json.dumps(record.builder_source),
+                    f"{record.descriptor_order}",
+                    f"{record.object_kind_order}",
                     f"{source_boot_order}",
-                    f"{len(class_header.instance_variables)}",
+                    f"{len(record.instance_variables)}",
                     "{" + ", ".join(instance_variable_literals) + "}",
                 ]
             )
@@ -1873,7 +2011,10 @@ def append_generated_seed_class_source_registry(lines: list[str]) -> None:
     )
 
 
-def append_generated_selector_registry(lines: list[str]) -> None:
+def append_generated_selector_registry(
+    lines: list[str],
+    surface: GeneratedRuntimeBindingSurface,
+) -> None:
     lines.extend(
         [
             "struct recorz_mvp_selector_record {",
@@ -1888,17 +2029,16 @@ def append_generated_selector_registry(lines: list[str]) -> None:
             "    {0, 0, 0, 0, 0},",
         ]
     )
-    for declaration in KERNEL_SELECTOR_DECLARATIONS_IN_ORDER:
-        constant_name = SELECTOR_IDS[declaration.selector]
+    for record in surface.selectors:
         lines.append(
             "    {"
             + ", ".join(
                 [
-                    json.dumps(declaration.selector),
-                    json.dumps(constant_name),
-                    json.dumps(declaration.relative_path),
-                    f"{SELECTOR_VALUES[constant_name]}",
-                    f"{declaration.selector_order}",
+                    json.dumps(record.selector),
+                    json.dumps(record.constant_name),
+                    json.dumps(record.relative_path),
+                    f"{record.value}",
+                    f"{record.declaration_order}",
                 ]
             )
             + "},"
@@ -1911,7 +2051,10 @@ def append_generated_selector_registry(lines: list[str]) -> None:
     )
 
 
-def append_generated_primitive_binding_registry(lines: list[str]) -> None:
+def append_generated_primitive_binding_registry(
+    lines: list[str],
+    surface: GeneratedRuntimeBindingSurface,
+) -> None:
     lines.extend(
         [
             "struct recorz_mvp_primitive_binding_record {",
@@ -1925,15 +2068,15 @@ def append_generated_primitive_binding_registry(lines: list[str]) -> None:
             "    {0, 0, 0, 0},",
         ]
     )
-    for binding_name, binding_id in sorted(PRIMITIVE_BINDING_VALUES.items(), key=lambda item: item[1]):
+    for record in surface.primitive_bindings:
         lines.append(
             "    {"
             + ", ".join(
                 [
-                    json.dumps(binding_name),
-                    json.dumps(kernel_primitive_binding_constant_name(binding_name)),
-                    json.dumps(kernel_primitive_handler_name(binding_name)),
-                    f"{binding_id}",
+                    json.dumps(record.binding_name),
+                    json.dumps(record.constant_name),
+                    json.dumps(record.handler_name),
+                    f"{record.value}",
                 ]
             )
             + "},"
@@ -1956,17 +2099,17 @@ def append_generated_primitive_binding_registry(lines: list[str]) -> None:
             "    {0, 0, 0, 0, 0, 0},",
         ]
     )
-    for owner in PRIMITIVE_BINDING_OWNERS_IN_ENTRY_ORDER:
+    for record in surface.primitive_binding_owners:
         lines.append(
             "    {"
             + ", ".join(
                 [
-                    f"{PRIMITIVE_BINDING_VALUES[owner.binding_name]}",
-                    json.dumps(owner.entry_name),
-                    json.dumps(owner.class_name),
-                    json.dumps(owner.selector),
-                    f"{owner.argument_count}",
-                    json.dumps(owner.relative_path),
+                    f"{record.primitive_binding_value}",
+                    json.dumps(record.entry_name),
+                    json.dumps(record.class_name),
+                    json.dumps(record.selector),
+                    f"{record.argument_count}",
+                    json.dumps(record.relative_path),
                 ]
             )
             + "},"
@@ -1980,6 +2123,7 @@ def append_generated_primitive_binding_registry(lines: list[str]) -> None:
 
 
 def render_generated_runtime_bindings_header() -> str:
+    surface = build_generated_runtime_binding_surface()
     lines = [
         "/* Auto-generated from kernel MVP method and primitive declarations. */",
         "#ifndef RECORZ_QEMU_RISCV64_GENERATED_RUNTIME_BINDINGS_H",
@@ -2047,15 +2191,15 @@ def render_generated_runtime_bindings_header() -> str:
     append_macro_definition(
         lines,
         "RECORZ_MVP_GENERATED_SEED_CLASS_SOURCE_RECORD_COUNT",
-        f"{len(KERNEL_CLASS_HEADERS_IN_OBJECT_KIND_ORDER) + 1}U",
+        f"{len(surface.seed_class_sources) + 1}U",
     )
-    append_generated_seed_class_source_registry(lines)
+    append_generated_seed_class_source_registry(lines, surface)
     append_macro_definition(
         lines,
         "RECORZ_MVP_GENERATED_SELECTOR_RECORD_COUNT",
-        f"{len(KERNEL_SELECTOR_DECLARATIONS_IN_ORDER) + 1}U",
+        f"{len(surface.selectors) + 1}U",
     )
-    append_generated_selector_registry(lines)
+    append_generated_selector_registry(lines, surface)
     lines.append("enum recorz_mvp_method_entry {")
     for entry_name in METHOD_ENTRY_ORDER:
         lines.append(f"    {entry_name} = {METHOD_ENTRY_VALUES[entry_name]},")
@@ -2074,15 +2218,15 @@ def render_generated_runtime_bindings_header() -> str:
         [
             "};",
             "",
-            f"#define RECORZ_MVP_GENERATED_PRIMITIVE_BINDING_RECORD_COUNT {len(PRIMITIVE_BINDING_VALUES) + 1}U",
+            f"#define RECORZ_MVP_GENERATED_PRIMITIVE_BINDING_RECORD_COUNT {len(surface.primitive_bindings) + 1}U",
             (
                 "#define RECORZ_MVP_GENERATED_PRIMITIVE_BINDING_OWNER_RECORD_COUNT "
-                f"{len(PRIMITIVE_BINDING_OWNERS_IN_ENTRY_ORDER) + 1}U"
+                f"{len(surface.primitive_binding_owners) + 1}U"
             ),
             "",
         ]
     )
-    append_generated_primitive_binding_registry(lines)
+    append_generated_primitive_binding_registry(lines, surface)
     lines.extend(
         [
             "#define RECORZ_MVP_GENERATED_PRIMITIVE_BINDING_HANDLERS \\",
@@ -3173,6 +3317,7 @@ def describe_builder_ownership() -> BuilderOwnershipSummary:
         source_root=str(KERNEL_MVP_ROOT),
         generated_text_outputs=(
             "generated runtime bindings header",
+            "generated runtime binding surface summary",
         ),
         generated_binary_outputs=(
             "image manifest",
@@ -3181,6 +3326,7 @@ def describe_builder_ownership() -> BuilderOwnershipSummary:
         derived_metadata_surfaces=(
             "class headers",
             "selector declarations",
+            "explicit registry surface",
             "root declarations",
             "object kinds",
             "method entries",
@@ -3199,6 +3345,11 @@ def describe_image_manifest(program: Program) -> ImageManifestLayout:
     entry_offset = header_size
     program_offset = entry_offset + entry_length
     seed_offset = program_offset + program_length
+    sections = (
+        ImageManifestSectionLayout(IMAGE_SECTION_ENTRY, entry_offset, entry_length),
+        ImageManifestSectionLayout(IMAGE_SECTION_PROGRAM, program_offset, program_length),
+        ImageManifestSectionLayout(IMAGE_SECTION_SEED, seed_offset, seed_length),
+    )
     return ImageManifestLayout(
         section_count=section_count,
         feature_flags=IMAGE_FEATURE_FNV1A32,
@@ -3208,6 +3359,7 @@ def describe_image_manifest(program: Program) -> ImageManifestLayout:
         entry_length=entry_length,
         program_length=program_length,
         seed_length=seed_length,
+        sections=sections,
     )
 
 
@@ -3224,6 +3376,11 @@ def build_image_manifest(program: Program) -> bytes:
     program_manifest = build_program_manifest(program)
     seed_manifest = build_seed_manifest()
     manifest_layout = describe_image_manifest(program)
+    section_payloads = {
+        IMAGE_SECTION_ENTRY: entry_manifest,
+        IMAGE_SECTION_PROGRAM: program_manifest,
+        IMAGE_SECTION_SEED: seed_manifest,
+    }
 
     manifest = bytearray(
         struct.pack(
@@ -3236,36 +3393,18 @@ def build_image_manifest(program: Program) -> bytes:
             IMAGE_PROFILE,
         )
     )
-    manifest.extend(
-        struct.pack(
-            IMAGE_SECTION_FORMAT,
-            IMAGE_SECTION_ENTRY,
-            0,
-            manifest_layout.entry_offset,
-            manifest_layout.entry_length,
+    for section in manifest_layout.sections:
+        manifest.extend(
+            struct.pack(
+                IMAGE_SECTION_FORMAT,
+                section.kind,
+                0,
+                section.offset,
+                section.length,
+            )
         )
-    )
-    manifest.extend(
-        struct.pack(
-            IMAGE_SECTION_FORMAT,
-            IMAGE_SECTION_PROGRAM,
-            0,
-            manifest_layout.program_offset,
-            manifest_layout.program_length,
-        )
-    )
-    manifest.extend(
-        struct.pack(
-            IMAGE_SECTION_FORMAT,
-            IMAGE_SECTION_SEED,
-            0,
-            manifest_layout.seed_offset,
-            manifest_layout.seed_length,
-        )
-    )
-    manifest.extend(entry_manifest)
-    manifest.extend(program_manifest)
-    manifest.extend(seed_manifest)
+    for section in manifest_layout.sections:
+        manifest.extend(section_payloads[section.kind])
     checksum = fnv1a32(manifest[struct.calcsize(IMAGE_HEADER_FORMAT) :])
     manifest[: struct.calcsize(IMAGE_HEADER_FORMAT)] = struct.pack(
         IMAGE_HEADER_FORMAT,

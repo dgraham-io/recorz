@@ -78,9 +78,8 @@ As of `2026-03-22`, the project begins this plan from the following base:
 
 Immediate next queue:
 
-1. `DS3.1` Selector/source manifest candidate extraction
-2. `DS3.2` Host marshalling boundary shrink
-3. `DS3.3` Regeneration authority recheck
+1. `DS4.1` Closure matrix
+2. `DS4.2` Handoff note
 
 ## Working Lanes
 
@@ -305,7 +304,7 @@ Reduce the amount of policy hidden in host Python.
 
 ### Open Tasks
 
-- [ ] `DS3.1` Selector/source manifest candidate extraction
+- [x] `DS3.1` Selector/source manifest candidate extraction
   Files:
   - `/Users/david/repos/recorz/tools/build_qemu_riscv_mvp_image.py`
   - `/Users/david/repos/recorz/kernel/mvp/`
@@ -325,7 +324,7 @@ Reduce the amount of policy hidden in host Python.
   - updated stage 3 boundary note
   - `PYTHONPATH=src:tools python3 -m unittest -q tests.test_qemu_riscv_mvp_lowering`
 
-- [ ] `DS3.2` Host marshalling boundary shrink
+- [x] `DS3.2` Host marshalling boundary shrink
   Files:
   - `/Users/david/repos/recorz/tools/build_qemu_riscv_mvp_image.py`
   - `/Users/david/repos/recorz/tools/generate_qemu_riscv_mvp_runtime_bindings_header.py`
@@ -341,7 +340,7 @@ Reduce the amount of policy hidden in host Python.
   - lowering tests
   - `python3 -m py_compile /Users/david/repos/recorz/tools/build_qemu_riscv_mvp_image.py /Users/david/repos/recorz/tools/generate_qemu_riscv_mvp_runtime_bindings_header.py`
 
-- [ ] `DS3.3` Regeneration authority recheck
+- [x] `DS3.3` Regeneration authority recheck
   Files:
   - `/Users/david/repos/recorz/tests/test_qemu_riscv32_regeneration_integration.py`
   Outputs:
